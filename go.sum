@@ -1,0 +1,4 @@
+github.com/frk/compare v0.0.0-20180731055043-34df2acea7c1 h1:Yw2SzVVRLEbJGH3jLbNvNJ0kwT7IKSHREoM4D6h0xyI=
+github.com/frk/compare v0.0.0-20180731055043-34df2acea7c1/go.mod h1:WmK8M0GNrI/MyWvwms9DkbAbO9b3oryqlRD6A1bvAqY=
+github.com/frk/tagutil v0.0.0-20190626082652-a41f4c5605cc h1:IitUeNUJbCFLBm6xSpbcP0+SdAI+ye6h5nSKn0L7O7c=
+github.com/frk/tagutil v0.0.0-20190626082652-a41f4c5605cc/go.mod h1:p9oLIpN9tDmOBisei3Ihy46DiCGsuykaIVV4Rxb6qYo=
