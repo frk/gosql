@@ -1,9 +1,6 @@
 package gosql
 
 import (
-	"go/ast"
-	"go/token"
-	"go/types"
 	"testing"
 
 	"github.com/frk/compare"
@@ -13,32 +10,13 @@ import (
 var tdata = testutil.ParseTestdata("testdata")
 
 func runAnalysis(name string, t *testing.T) (*command, error) {
-	for _, f := range tdata.Files {
-		for _, decl := range f.Decls {
-			gen, ok := decl.(*ast.GenDecl)
-			if !ok || gen.Tok != token.TYPE {
-				continue
-			}
-
-			for _, spec := range gen.Specs {
-				typ, ok := spec.(*ast.TypeSpec)
-				if !ok || typ.Name.Name != name {
-					continue
-				}
-				if obj, ok := tdata.Defs[typ.Name]; ok {
-					if tn, ok := obj.(*types.TypeName); ok {
-						if named, ok := tn.Type().(*types.Named); ok {
-							return analyze(named)
-						}
-					}
-				}
-			}
-		}
+	named := testutil.FindNamedType(name, tdata)
+	if named == nil {
+		// Stop the test if no type with the given name was found.
+		t.Fatal(name, " not found")
+		return nil, nil
 	}
-
-	// Stop the test if no type with the given name was found.
-	t.Fatal(name, " not found")
-	return nil, nil
+	return analyze(named)
 }
 
 func TestAnalysis_InsertCommand(t *testing.T) {
@@ -62,15 +40,13 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			typ: gotype{
 				name:       "User",
 				kind:       gokindStruct,
-				pkgPath:    "github.com/frk/gosql/testdata/common",
-				pkgName:    "common",
-				pkgLocal:   "common",
-				isImported: true,
-				isPointer:  true,
+				pkgpath:    "github.com/frk/gosql/testdata/common",
+				pkgname:    "common",
+				pkglocal:   "common",
+				isimported: true,
+				ispointer:  true,
 			},
-			rel: ident{
-				name: "users_table",
-			},
+			rel: relation{ident: ident{name: "users_table"}},
 		}},
 	}}
 

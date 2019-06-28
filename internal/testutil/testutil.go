@@ -39,6 +39,33 @@ func ParseTestdata(dir string) Testdata {
 	}
 }
 
+func FindNamedType(name string, tdata Testdata) *types.Named {
+	for _, f := range tdata.Files {
+		for _, decl := range f.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.TYPE {
+				continue
+			}
+
+			for _, spec := range gen.Specs {
+				typ, ok := spec.(*ast.TypeSpec)
+				if !ok || typ.Name.Name != name {
+					continue
+				}
+				if obj, ok := tdata.Defs[typ.Name]; ok {
+					if tn, ok := obj.(*types.TypeName); ok {
+						if named, ok := tn.Type().(*types.Named); ok {
+							return named
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 type testingImporter struct {
 	def types.Importer // default
 	src types.Importer // fallback
