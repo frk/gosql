@@ -2,6 +2,7 @@ package gosql
 
 import (
 	"go/types"
+	"regexp"
 	"strings"
 
 	"github.com/frk/gosql/internal/typesutil"
@@ -118,13 +119,11 @@ func (a *analyzer) analyzeDatatype(field *types.Var) error {
 			ftyp = ptr.Elem()
 			rel.datatype.ispointer = true
 		}
-		if named, ok = ftyp.(*types.Named); ok {
-			ftyp = named.Underlying()
-		}
-
-		// fail if still unnamed but is slice or pointer
-		if named == nil && (rel.datatype.isslice || rel.datatype.ispointer) {
-			return &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
+		if named, ok = ftyp.(*types.Named); !ok {
+			// fail if still unnamed but is slice or pointer
+			if rel.datatype.isslice || rel.datatype.ispointer {
+				return &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
+			}
 		}
 	}
 
@@ -139,6 +138,7 @@ func (a *analyzer) analyzeDatatype(field *types.Var) error {
 		rel.datatype.isvaluer = typesutil.ImplementsValuer(named)
 		rel.datatype.istime = typesutil.IsTime(named)
 		rel.datatype.isafterscanner = typesutil.ImplementsAfterScanner(named)
+		ftyp = named.Underlying()
 	}
 
 	rel.datatype.kind = a.analyzeKind(ftyp)
@@ -155,7 +155,8 @@ func (a *analyzer) analyzeFields(styp *types.Struct) error {
 	type iteration struct {
 		styp *types.Struct
 		typ  *typeinfo
-		idx  int
+		idx  int    // keep track of the field index
+		pfx  string // column prefix
 	}
 
 	// lifo stack
@@ -167,7 +168,7 @@ stackloop:
 		for i.idx < i.styp.NumFields() {
 			fld := i.styp.Field(i.idx)
 			tag := tagutil.New(i.styp.Tag(i.idx))
-			tagval := tag.First("sql")
+			sqltag := tag.First("sql")
 
 			// instead of incrementing the index in the for-statement
 			// it is done here manually to ensure that it is not skipped
@@ -176,9 +177,9 @@ stackloop:
 
 			// ignore field if:
 			// - no column name or sql tag was provided
-			if tagval == "" ||
+			if sqltag == "" ||
 				// - explicitly marked to be ignored
-				tagval == "-" ||
+				sqltag == "-" ||
 				// - has blank name, i.e. it's practically inaccessible
 				fld.Name() == "_" ||
 				// - it's unexported and the field's struct type is imported
@@ -198,6 +199,7 @@ stackloop:
 			f.writeonly = tag.HasOption("sql", "wo")
 			f.usejson = tag.HasOption("sql", "json")
 			f.binadd = tag.HasOption("sql", "+")
+			f.coalesce = a.analyzeCoalesceinfo(tag)
 
 			ftyp := fld.Type()
 			if slice, ok := ftyp.(*types.Slice); ok {
@@ -226,11 +228,14 @@ stackloop:
 			// if the field's type is a struct and the `sql` tag's
 			// value starts with the ">" (descend) marker, then
 			// analyze its fields as well
-			if f.typ.kind == kindStruct && strings.HasPrefix(tagval, ">") {
+			if f.typ.kind == kindStruct && strings.HasPrefix(sqltag, ">") && !f.typ.isslice {
 				j := &iteration{styp: ftyp.(*types.Struct), typ: &f.typ}
+				j.pfx = i.pfx + strings.TrimPrefix(sqltag, ">")
 				stack = append(stack, j)
 				continue stackloop
 			}
+
+			f.column.ident = a.analyzeIdent(i.pfx + sqltag)
 		}
 		stack = stack[:len(stack)-1]
 	}
@@ -315,6 +320,23 @@ func (a *analyzer) analyzeKind(typ types.Type) typekind {
 	return 0 // unsupported / unknown
 }
 
+var reCoalesceValue = regexp.MustCompile(`(?i)^coalesce$|^coalesce\((.*)\)$`)
+
+func (a *analyzer) analyzeCoalesceinfo(tag tagutil.Tag) *coalesceinfo {
+	if sqltag := tag["sql"]; len(sqltag) > 0 {
+		for _, opt := range sqltag[1:] {
+			if strings.HasPrefix(opt, "coalesce") {
+				cls := new(coalesceinfo)
+				if match := reCoalesceValue.FindStringSubmatch(opt); len(match) > 1 {
+					cls.defval = match[1]
+				}
+				return cls
+			}
+		}
+	}
+	return nil
+}
+
 type cmdtype uint
 
 const (
@@ -348,14 +370,6 @@ type datatype struct {
 	iter *iterator
 	// reports whether or not the type implements the afterscanner interface
 	isafterscanner bool
-}
-
-type column struct {
-	ident      ident  // the column identifier
-	found      bool   // indicates that the column was found in the associated relation
-	typname    string // name of the db type
-	typisenum  bool   // indicates that the column's type is an enum type
-	isnullable bool   // indicates that the column can be set to NULL
 }
 
 type iterator struct {
@@ -396,7 +410,7 @@ type fieldinfo struct {
 	// the field's parsed tag
 	tag tagutil.Tag
 	// the corresponding column
-	col column
+	column column
 	// identifies the field's corresponding column as a primary key
 	//
 	// NOTE(mkopriva): This is used by default for UPDATEs which don't specify
@@ -419,13 +433,24 @@ type fieldinfo struct {
 	// indicates that the column value should be marshaled/unmarshaled
 	// to/from json before/after being stored/retrieved.
 	usejson bool
-	// indicates that the column value should be wrapped
+	// if set it indicates that the column value should be wrapped
 	// in a COALESCE call when read from the db.
-	usecoalesce   bool
-	coalescevalue string
+	coalesce *coalesceinfo
 	// for UPDATEs, if set to true, it indicates that the provided field
 	// value should be added to the already existing column value.
 	binadd bool
+}
+
+type column struct {
+	ident      ident  // the column identifier
+	found      bool   // indicates that the column was found in the associated relation
+	typname    string // name of the db type
+	typisenum  bool   // indicates that the column's type is an enum type
+	isnullable bool   // indicates that the column can be set to NULL
+}
+
+type coalesceinfo struct {
+	defval string
 }
 
 type typekind uint
@@ -483,4 +508,25 @@ var basickindmap = map[types.BasicKind]typekind{
 	types.Complex128:    kindComplex128,
 	types.String:        kindString,
 	types.UnsafePointer: kindUnsafeptr,
+}
+
+var typekind2string = map[typekind]string{
+	// builtin basic only
+	kindBool:       "bool",
+	kindInt:        "int",
+	kindInt8:       "int8",
+	kindInt16:      "int16",
+	kindInt32:      "int32",
+	kindInt64:      "int64",
+	kindUint:       "uint",
+	kindUint8:      "uint8",
+	kindUint16:     "uint16",
+	kindUint32:     "uint32",
+	kindUint64:     "uint64",
+	kindUintptr:    "uintptr",
+	kindFloat32:    "float32",
+	kindFloat64:    "float64",
+	kindComplex64:  "complex64",
+	kindComplex128: "complex128",
+	kindString:     "string",
 }
