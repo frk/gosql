@@ -27,8 +27,8 @@ func TestIsError(t *testing.T) {
 				return
 			}
 
-			v := (named.Underlying().(*types.Struct)).Field(0)
-			got := IsError(v)
+			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
+			got := IsError(typ)
 			if got != tt.want {
 				t.Errorf("got=%t; want=%t", got, tt.want)
 			}
@@ -55,8 +55,8 @@ func TestIsEmptyInterface(t *testing.T) {
 				return
 			}
 
-			v := (named.Underlying().(*types.Struct)).Field(0)
-			got := IsEmptyInterface(v)
+			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
+			got := IsEmptyInterface(typ)
 			if got != tt.want {
 				t.Errorf("got=%t; want=%t", got, tt.want)
 			}
@@ -84,8 +84,8 @@ func TestIsTime(t *testing.T) {
 				return
 			}
 
-			v := (named.Underlying().(*types.Struct)).Field(0)
-			got := IsTime(v)
+			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
+			got := IsTime(typ)
 			if got != tt.want {
 				t.Errorf("got=%t; want=%t", got, tt.want)
 			}
@@ -111,8 +111,8 @@ func TestIsSqlDriverValue(t *testing.T) {
 				return
 			}
 
-			v := (named.Underlying().(*types.Struct)).Field(0)
-			got := IsSqlDriverValue(v)
+			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
+			got := IsSqlDriverValue(typ)
 			if got != tt.want {
 				t.Errorf("got=%t; want=%t", got, tt.want)
 			}
@@ -171,6 +171,62 @@ func TestImplementsValuer(t *testing.T) {
 			}
 
 			got := ImplementsValuer(named)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestImplementsAfterScanner(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "ImplementsAfterScannerTest1", want: false},
+		{name: "ImplementsAfterScannerTest2", want: false},
+		{name: "ImplementsAfterScannerTest3", want: false},
+		{name: "ImplementsAfterScannerTest4", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			got := ImplementsAfterScanner(named)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestImplementsErrorHandler(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "ImplementsErrorHandlerTest1", want: false},
+		{name: "ImplementsErrorHandlerTest2", want: false},
+		{name: "ImplementsErrorHandlerTest3", want: false},
+		{name: "ImplementsErrorHandlerTest4", want: false},
+		{name: "ImplementsErrorHandlerTest5", want: false},
+		{name: "ImplementsErrorHandlerTest6", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			got := ImplementsErrorHandler(named)
 			if got != tt.want {
 				t.Errorf("got=%t; want=%t", got, tt.want)
 			}

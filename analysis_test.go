@@ -5,6 +5,7 @@ import (
 
 	"github.com/frk/compare"
 	"github.com/frk/gosql/internal/testutil"
+	"github.com/frk/tagutil"
 )
 
 var tdata = testutil.ParseTestdata("testdata")
@@ -35,18 +36,66 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		err:  &analysisError{code: badRecordTypeError, args: args{"InsertTestBAD3"}},
 	}, {
 		name: "InsertTestOK1",
-		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rec: &record{
+		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rel: &relinfo{
 			field: "UserRec",
-			typ: gotype{
-				name:       "User",
-				kind:       gokindStruct,
-				pkgpath:    "github.com/frk/gosql/testdata/common",
-				pkgname:    "common",
-				pkglocal:   "common",
-				isimported: true,
-				ispointer:  true,
+			ident: ident{name: "users_table"},
+			datatype: datatype{
+				typeinfo: typeinfo{
+					name:       "User",
+					kind:       kindStruct,
+					pkgpath:    "github.com/frk/gosql/testdata/common",
+					pkgname:    "common",
+					pkglocal:   "common",
+					isimported: true,
+					ispointer:  true,
+					fields: []*fieldinfo{{
+						name:       "Id",
+						typ:        typeinfo{kind: kindInt},
+						isexported: true,
+						tag:        tagutil.Tag{"sql": []string{"id"}},
+					}, {
+						name:       "Email",
+						typ:        typeinfo{kind: kindString},
+						isexported: true,
+						tag:        tagutil.Tag{"sql": []string{"email"}},
+					}, {
+						name:       "FullName",
+						typ:        typeinfo{kind: kindString},
+						isexported: true,
+						tag:        tagutil.Tag{"sql": []string{"full_name"}},
+					}, {
+						name: "CreatedAt",
+						typ: typeinfo{
+							name:       "Time",
+							kind:       kindStruct,
+							pkgpath:    "time",
+							pkgname:    "time",
+							pkglocal:   "time",
+							isimported: true,
+							istime:     true,
+						},
+						isexported: true,
+						tag:        tagutil.Tag{"sql": []string{"created_at"}},
+					}},
+				},
 			},
-			rel: relation{ident: ident{name: "users_table"}},
+		}},
+	}, {
+		name: "InsertTestOK2",
+		want: &command{name: "InsertTestOK2", typ: cmdtypeInsert, rel: &relinfo{
+			field: "UserRec",
+			ident: ident{name: "users_table"},
+			datatype: datatype{
+				typeinfo: typeinfo{
+					kind: kindStruct,
+					fields: []*fieldinfo{{
+						name:       "Name3",
+						typ:        typeinfo{kind: kindString},
+						isexported: true,
+						tag:        tagutil.Tag{"sql": []string{"name"}},
+					}},
+				},
+			},
 		}},
 	}}
 

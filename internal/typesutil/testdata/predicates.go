@@ -156,3 +156,53 @@ func (ImplementsValuerTest6) Value() (error, driver.Value) { return nil, nil }
 type ImplementsValuerTest7 struct{}
 
 func (ImplementsValuerTest7) Value() (driver.Value, error) { return nil, nil }
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Does not implement the "gosql.AfterScanner" interface, should return false
+type ImplementsAfterScannerTest1 struct{}
+
+// Does not implement the "gosql.AfterScanner" interface, should return false
+type ImplementsAfterScannerTest2 struct{}
+
+func (ImplementsAfterScannerTest2) AfterScan() error { return nil }
+
+// Does not implement the "gosql.AfterScanner" interface, should return false
+type ImplementsAfterScannerTest3 struct{}
+
+func (ImplementsAfterScannerTest3) AfterScan(x interface{}) {}
+
+// Does implement the "gosql.AfterScanner" interface, should return true
+type ImplementsAfterScannerTest4 struct{}
+
+func (ImplementsAfterScannerTest4) AfterScan() {}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Does not implement the "gosql.ErrorHandler" interface, should return false
+type ImplementsErrorHandlerTest1 struct{}
+
+// Does not implement the "gosql.ErrorHandler" interface, should return false
+type ImplementsErrorHandlerTest2 struct{}
+
+func (ImplementsErrorHandlerTest2) HandleError() error { return nil }
+
+// Does not implement the "gosql.ErrorHandler" interface, should return false
+type ImplementsErrorHandlerTest3 struct{}
+
+func (ImplementsErrorHandlerTest3) HandleError(err error) {}
+
+// Does not implement the "gosql.ErrorHandler" interface, should return false
+type ImplementsErrorHandlerTest4 struct{}
+
+func (ImplementsErrorHandlerTest4) HandleError(err interface{}) error { return nil }
+
+// Does not implement the "gosql.ErrorHandler" interface, should return false
+type ImplementsErrorHandlerTest5 struct{}
+
+func (ImplementsErrorHandlerTest5) HandleError(err error) interface{} { return nil }
+
+// Does implement the "gosql.ErrorHandler" interface, should return true
+type ImplementsErrorHandlerTest6 struct{}
+
+func (ImplementsErrorHandlerTest6) HandleError(err error) error { return nil }

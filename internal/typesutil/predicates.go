@@ -4,9 +4,9 @@ import (
 	"go/types"
 )
 
-// IsError reports whether or not the given variable is of type "error".
-func IsError(v *types.Var) bool {
-	named, ok := v.Type().(*types.Named)
+// IsError reports whether or not the given type is the "error" type.
+func IsError(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
 	if !ok {
 		return false
 	}
@@ -15,20 +15,20 @@ func IsError(v *types.Var) bool {
 	return pkg == nil && name == "error"
 }
 
-// IsEmptyInterface reports whether or not the given variable is of type "interface{}".
-func IsEmptyInterface(v *types.Var) bool {
-	iface, ok := v.Type().(*types.Interface)
+// IsEmptyInterface reports whether or not the given type is the "interface{}" type.
+func IsEmptyInterface(typ types.Type) bool {
+	iface, ok := typ.(*types.Interface)
 	if !ok {
 		return false
 	}
 	return iface.NumMethods() == 0
 }
 
-// IsTime reports whether or not the given variable is of type "time.Time".
+// IsTime reports whether or not the given type is the "time.Time" type.
 // IsTime returns true also for types that embed "time.Time" directly, this
 // is to provide support for custom timestamp types.
-func IsTime(v *types.Var) bool {
-	named, ok := v.Type().(*types.Named)
+func IsTime(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
 	if !ok {
 		return false
 	}
@@ -61,10 +61,9 @@ func IsTime(v *types.Var) bool {
 	return false
 }
 
-// IsSqlDriverValue reports whether or not the given variable is
-// of type "database/sql/driver.Value".
-func IsSqlDriverValue(v *types.Var) bool {
-	named, ok := v.Type().(*types.Named)
+// IsSqlDriverValue reports whether or not the given type is the "database/sql/driver.Value" type.
+func IsSqlDriverValue(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
 	if !ok {
 		return false
 	}
@@ -92,10 +91,10 @@ func ImplementsScanner(named *types.Named) bool {
 		return false
 	}
 
-	if !IsEmptyInterface(sig.Params().At(0)) {
+	if !IsEmptyInterface(sig.Params().At(0).Type()) {
 		return false
 	}
-	return IsError(sig.Results().At(0))
+	return IsError(sig.Results().At(0).Type())
 }
 
 // ImplementsValuer reports whether or not the given named type implements
@@ -112,8 +111,38 @@ func ImplementsValuer(named *types.Named) bool {
 		return false
 	}
 
-	if !IsSqlDriverValue(sig.Results().At(0)) {
+	if !IsSqlDriverValue(sig.Results().At(0).Type()) {
 		return false
 	}
-	return IsError(sig.Results().At(1))
+	return IsError(sig.Results().At(1).Type())
+}
+
+// ImplementsAfterScanner reports whether or not the given named type
+// implements the "gosql.AfterScanner" interface.
+func ImplementsAfterScanner(named *types.Named) bool {
+	var sig *types.Signature
+	for i := 0; i < named.NumMethods(); i++ {
+		if m := named.Method(i); m.Name() == "AfterScan" {
+			sig = m.Type().(*types.Signature)
+			break
+		}
+	}
+	return sig != nil && sig.Params().Len() == 0 && sig.Results().Len() == 0
+}
+
+// ImplementsErrorHandler reports whether or not the given named type
+// implements the "gosql.ErrorHandler" interface.
+func ImplementsErrorHandler(named *types.Named) bool {
+	var sig *types.Signature
+	for i := 0; i < named.NumMethods(); i++ {
+		if m := named.Method(i); m.Name() == "HandleError" {
+			sig = m.Type().(*types.Signature)
+			break
+		}
+	}
+	if sig == nil || sig.Params().Len() != 1 || sig.Results().Len() != 1 {
+		return false
+	}
+
+	return IsError(sig.Params().At(0).Type()) && IsError(sig.Results().At(0).Type())
 }

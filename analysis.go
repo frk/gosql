@@ -48,62 +48,42 @@ func analyze(named *types.Named) (*command, error) {
 type analyzer struct {
 	pkg  string        // the package path of the command under analysis
 	ctyp *types.Struct // the struct type of the command under analysis
-	rtyp *types.Struct // the struct type of the record under analysis
+	rtyp *types.Struct // the struct type of the relation under analysis
 	cmd  *command      // the result of the analysis
 }
 
 func (a *analyzer) run() error {
 	for i := 0; i < a.ctyp.NumFields(); i++ {
-		f := a.ctyp.Field(i)
-
+		fld := a.ctyp.Field(i)
 		tag := tagutil.New(a.ctyp.Tag(i))
-		if rel := tag.First("rel"); len(rel) > 0 {
-			if a.cmd.rec != nil {
+
+		if reltag := tag.First("rel"); len(reltag) > 0 {
+			if a.cmd.rel != nil {
 				return &analysisError{code: manyRecordError, args: args{a.cmd.name}}
 			}
 
-			rec, err := a.analyzeRecord(f)
-			if err != nil {
+			a.cmd.rel = new(relinfo)
+			a.cmd.rel.field = fld.Name()
+			a.cmd.rel.ident = a.analyzeIdent(reltag)
+			if err := a.analyzeDatatype(fld); err != nil {
 				return err
 			}
-			rec.rel.ident = a.analyzeIdent(rel)
 
 			_ = a.rtyp // TODO analyze fields
-
-			a.cmd.rec = rec
 			continue
 		}
 	}
 
-	if a.cmd.rec == nil {
+	if a.cmd.rel == nil {
 		return &analysisError{code: noRecordError, args: args{a.cmd.name}}
 	}
 
 	return nil
 }
 
-// // analyze kind
-// switch x := ftyp.(type) {
-// case *types.Basic:
-// 	rec.typ.kind = basickindmap[x.Kind()]
-// case *types.Array:
-// 	rec.typ.kind = gokindArray
-// case *types.Slice:
-// 	rec.typ.kind = gokindSlice
-// case *types.Map:
-// 	rec.typ.kind = gokindMap
-// case *types.Pointer:
-// 	rec.typ.kind = gokindPtr
-// case *types.Struct:
-// 	rec.typ.kind = gokindStruct
-// default:
-// 	// *types.Chan, *types.Signature, *types.Interface ...
-// 	return &badRecordTypeError{fieldName: rec.field, cmdName: a.cmd.name}
-// }
-
-func (a *analyzer) analyzeRecord(field *types.Var) (*record, error) {
+func (a *analyzer) analyzeDatatype(field *types.Var) error {
 	var (
-		rec   = &record{field: field.Name()}
+		rel   = a.cmd.rel
 		ftyp  = field.Type()
 		named *types.Named
 		err   error
@@ -112,13 +92,19 @@ func (a *analyzer) analyzeRecord(field *types.Var) (*record, error) {
 	if named, ok = ftyp.(*types.Named); ok {
 		ftyp = named.Underlying()
 	}
-	if iface, ok := ftyp.(*types.Interface); ok { // check for iterator interface
-		if named, err = a.analyzeIterator(iface, rec); err != nil {
-			return nil, err
+
+	// Check whether the relation field's type is an interface or a function,
+	// if so, it is then expected to be a "valid" iterator, and it is analyzed as such.
+	//
+	// Failure of the iterator analysis will cause the whole analysis to exit
+	// as there's currently no support for non-iterator interfaces nor functions.
+	if iface, ok := ftyp.(*types.Interface); ok {
+		if named, err = a.analyzeIterator(iface, rel); err != nil {
+			return err
 		}
-	} else if sig, ok := ftyp.(*types.Signature); ok { // check for iterator func
-		if named, err = a.analyzeIteratorFunc(sig, rec); err != nil {
-			return nil, err
+	} else if sig, ok := ftyp.(*types.Signature); ok {
+		if named, err = a.analyzeIteratorFunc(sig, rel); err != nil {
+			return err
 		}
 	}
 
@@ -126,79 +112,168 @@ func (a *analyzer) analyzeRecord(field *types.Var) (*record, error) {
 	if named == nil {
 		if slice, ok := ftyp.(*types.Slice); ok { // allows []T
 			ftyp = slice.Elem()
-			rec.typ.isslice = true
+			rel.datatype.isslice = true
 		}
 		if ptr, ok := ftyp.(*types.Pointer); ok { // allows *T
 			ftyp = ptr.Elem()
-			rec.typ.ispointer = true
+			rel.datatype.ispointer = true
 		}
 		if named, ok = ftyp.(*types.Named); ok {
 			ftyp = named.Underlying()
 		}
 
 		// fail if still unnamed but is slice or pointer
-		if named == nil && (rec.typ.isslice || rec.typ.ispointer) {
-			return nil, &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
+		if named == nil && (rel.datatype.isslice || rel.datatype.ispointer) {
+			return &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
 		}
 	}
 
 	if named != nil {
 		pkg := named.Obj().Pkg()
-		rec.typ.name = named.Obj().Name()
-		rec.typ.pkgpath = pkg.Path()
-		rec.typ.pkgname = pkg.Name()
-		rec.typ.pkglocal = pkg.Name()
-		rec.typ.isimported = (pkg.Path() != a.pkg)
-		rec.typ.isscanner = false // TODO isscanner(named)
-		rec.typ.isvaluer = false  // TODO isvaluer(named)
-		rec.typ.istime = false    // TODO istime(named)
+		rel.datatype.name = named.Obj().Name()
+		rel.datatype.pkgpath = pkg.Path()
+		rel.datatype.pkgname = pkg.Name()
+		rel.datatype.pkglocal = pkg.Name()
+		rel.datatype.isimported = (pkg.Path() != a.pkg)
+		rel.datatype.isscanner = typesutil.ImplementsScanner(named)
+		rel.datatype.isvaluer = typesutil.ImplementsValuer(named)
+		rel.datatype.istime = typesutil.IsTime(named)
+		rel.datatype.isafterscanner = typesutil.ImplementsAfterScanner(named)
 	}
 
-	if a.rtyp, ok = ftyp.(*types.Struct); !ok {
-		return nil, &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
+	rel.datatype.kind = a.analyzeKind(ftyp)
+	if rel.datatype.kind != kindStruct {
+		// NOTE currently only the struct kind is supported as the relation's associated datatype
+		return &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
 	}
 
-	rec.typ.kind = gokindStruct
-	return rec, nil
+	styp := ftyp.(*types.Struct)
+	return a.analyzeFields(styp)
 }
 
-func (a *analyzer) analyzeIterator(iface *types.Interface, rec *record) (*types.Named, error) {
+func (a *analyzer) analyzeFields(styp *types.Struct) error {
+	type iteration struct {
+		styp *types.Struct
+		typ  *typeinfo
+		idx  int
+	}
+
+	// lifo stack
+	stack := []*iteration{{styp: styp, typ: &a.cmd.rel.datatype.typeinfo}}
+
+stackloop:
+	for len(stack) > 0 {
+		i := stack[len(stack)-1]
+		for i.idx < i.styp.NumFields() {
+			fld := i.styp.Field(i.idx)
+			tag := tagutil.New(i.styp.Tag(i.idx))
+			tagval := tag.First("sql")
+
+			// instead of incrementing the index in the for-statement
+			// it is done here manually to ensure that it is not skipped
+			// when continuing to the outer loop
+			i.idx++
+
+			// ignore field if:
+			// - no column name or sql tag was provided
+			if tagval == "" ||
+				// - explicitly marked to be ignored
+				tagval == "-" ||
+				// - has blank name, i.e. it's practically inaccessible
+				fld.Name() == "_" ||
+				// - it's unexported and the field's struct type is imported
+				(!fld.Exported() && i.typ.isimported) {
+				continue
+			}
+
+			f := new(fieldinfo)
+			f.name = fld.Name()
+			f.isembedded = fld.Embedded()
+			f.isexported = fld.Exported()
+			f.tag = tag
+			f.auto = tag.HasOption("sql", "auto")
+			f.ispkey = tag.HasOption("sql", "pk")
+			f.nullempty = tag.HasOption("sql", "nullempty")
+			f.readonly = tag.HasOption("sql", "ro")
+			f.writeonly = tag.HasOption("sql", "wo")
+			f.usejson = tag.HasOption("sql", "json")
+			f.binadd = tag.HasOption("sql", "+")
+
+			ftyp := fld.Type()
+			if slice, ok := ftyp.(*types.Slice); ok {
+				f.typ.isslice = true
+				ftyp = slice.Elem()
+			}
+			if ptr, ok := ftyp.(*types.Pointer); ok {
+				f.typ.ispointer = true
+				ftyp = ptr.Elem()
+			}
+			if named, ok := ftyp.(*types.Named); ok {
+				pkg := named.Obj().Pkg()
+				f.typ.name = named.Obj().Name()
+				f.typ.pkgpath = pkg.Path()
+				f.typ.pkgname = pkg.Name()
+				f.typ.pkglocal = pkg.Name()
+				f.typ.isimported = (pkg.Path() != a.pkg)
+				f.typ.isscanner = typesutil.ImplementsScanner(named)
+				f.typ.isvaluer = typesutil.ImplementsValuer(named)
+				f.typ.istime = typesutil.IsTime(named)
+				ftyp = named.Underlying()
+			}
+			f.typ.kind = a.analyzeKind(ftyp)
+			i.typ.fields = append(i.typ.fields, f)
+
+			// if the field's type is a struct and the `sql` tag's
+			// value starts with the ">" (descend) marker, then
+			// analyze its fields as well
+			if f.typ.kind == kindStruct && strings.HasPrefix(tagval, ">") {
+				j := &iteration{styp: ftyp.(*types.Struct), typ: &f.typ}
+				stack = append(stack, j)
+				continue stackloop
+			}
+		}
+		stack = stack[:len(stack)-1]
+	}
+	return nil
+}
+
+func (a *analyzer) analyzeIterator(iface *types.Interface, rel *relinfo) (*types.Named, error) {
 	if iface.NumExplicitMethods() != 1 {
-		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rec.field}}
+		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
 	}
 
 	mth := iface.ExplicitMethod(0)
 	sig := mth.Type().(*types.Signature)
-	named, err := a.analyzeIteratorFunc(sig, rec)
+	named, err := a.analyzeIteratorFunc(sig, rel)
 	if err != nil {
 		return nil, err
 	}
 
-	rec.iter.method = mth.Name()
+	rel.datatype.iter.method = mth.Name()
 	return named, nil
 }
 
-func (a *analyzer) analyzeIteratorFunc(sig *types.Signature, rec *record) (*types.Named, error) {
+func (a *analyzer) analyzeIteratorFunc(sig *types.Signature, rel *relinfo) (*types.Named, error) {
 	// must take 1 argument and return one value of type error. "func(T) error"
-	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0)) {
-		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rec.field}}
+	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
+		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
 	}
 
 	typ := sig.Params().At(0).Type()
 	if ptr, ok := typ.(*types.Pointer); ok { // allows *T
 		typ = ptr.Elem()
-		rec.typ.ispointer = true
+		rel.datatype.ispointer = true
 	}
 
 	// make sure that the argument type is a named struct type
 	named, ok := typ.(*types.Named)
 	if !ok {
-		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rec.field}}
+		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
 	} else if _, ok := named.Underlying().(*types.Struct); !ok {
-		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rec.field}}
+		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
 	}
 
-	rec.iter = new(iterator)
+	rel.datatype.iter = new(iterator)
 	return named, nil
 }
 
@@ -216,6 +291,30 @@ func (a *analyzer) analyzeIdent(val string) (id ident) {
 	return id
 }
 
+func (a *analyzer) analyzeKind(typ types.Type) typekind {
+	switch x := typ.(type) {
+	case *types.Basic:
+		return basickindmap[x.Kind()]
+	case *types.Array:
+		return kindArray
+	case *types.Chan:
+		return kindChan
+	case *types.Signature:
+		return kindFunc
+	case *types.Interface:
+		return kindInterface
+	case *types.Map:
+		return kindMap
+	case *types.Pointer:
+		return kindPtr
+	case *types.Slice:
+		return kindSlice
+	case *types.Struct:
+		return kindStruct
+	}
+	return 0 // unsupported / unknown
+}
+
 type cmdtype uint
 
 const (
@@ -229,29 +328,75 @@ const (
 type command struct {
 	name string  // name of the target struct type
 	typ  cmdtype // the type of the command
-	rec  *record
+	rel  *relinfo
 }
 
-// record holds the combined information on a go struct type and on the
+// relinfo holds the information on a go struct type and on the
 // db relation that's associated with that struct type.
-type record struct {
-	typ   gotype    // info about the record's go type
-	rel   relation  // the associated relation
-	field string    // name of the field that holds the record in the command's type
-	iter  *iterator // if set, indicates that the record is handled by an iterator
+type relinfo struct {
+	field    string // name of the field that references the relation in the command
+	ident    ident  // the relation identifier
+	datatype datatype
+	isview   bool // indicates that the relation is a table view
 }
 
-type relation struct {
-	ident  ident // the relation identifier
-	isview bool  // indicates that the relation is a table view
+// datatype holds information on the type of data a command should read from,
+// or write to, the associated database relation.
+type datatype struct {
+	typeinfo // type info on the datatype
+	// if set, indicates that the datatype is handled by an iterator
+	iter *iterator
+	// reports whether or not the type implements the afterscanner interface
+	isafterscanner bool
 }
 
-// attribute holds information about a record's struct field and the corresponding db column.
-type attribute struct {
-	typ   gotype    // info about the field's type
-	col   column    // the corresponding column
-	field string    // name of the struct field
-	path  fieldpath // a list of names of the field's parent structs, if any. (excluding the top record)
+type column struct {
+	ident      ident  // the column identifier
+	found      bool   // indicates that the column was found in the associated relation
+	typname    string // name of the db type
+	typisenum  bool   // indicates that the column's type is an enum type
+	isnullable bool   // indicates that the column can be set to NULL
+}
+
+type iterator struct {
+	method string
+}
+
+type ident struct {
+	qualifier string
+	name      string
+	alias     string
+}
+
+type typeinfo struct {
+	name       string   // the name of a named type or empty string for unnamed types
+	kind       typekind // the kind of the go type
+	pkgpath    string   // the package import path
+	pkgname    string   // the package's name
+	pkglocal   string   // the local package name (including ".")
+	isimported bool     // indicates whether or not the package is imported
+	isslice    bool     // reports whether or not the type's a slice type
+	ispointer  bool     // reports whether or not the type's a pointer type
+	isscanner  bool     // reports whether or not the type implements the sql.Scanner interface
+	isvaluer   bool     // reports whether or not the type implements the driver.Valuer interface
+	istime     bool     // reposrts whether or not the type is time.Time
+	// if the typeinfo represents a struct type then this slice will hold
+	// the info about the fields of that struct type
+	fields []*fieldinfo
+}
+
+// fieldinfo holds information about a record's struct field and the corresponding db column.
+type fieldinfo struct {
+	typ  typeinfo // info about the field's type
+	name string   // name of the struct field
+	// indicates whether or not the field is embedded
+	isembedded bool
+	// indicates whether or not the field is exported
+	isexported bool
+	// the field's parsed tag
+	tag tagutil.Tag
+	// the corresponding column
+	col column
 	// identifies the field's corresponding column as a primary key
 	//
 	// NOTE(mkopriva): This is used by default for UPDATEs which don't specify
@@ -281,102 +426,61 @@ type attribute struct {
 	// for UPDATEs, if set to true, it indicates that the provided field
 	// value should be added to the already existing column value.
 	binadd bool
-
-	// Tag  Tag
-	// // In the context of statements that support the RETURNING clause this
-	// // flag indicates that the field's column should be included in the clause
-	// // and it's value scanned to the record's field.
-	// Return    bool
-	// Key           string
 }
 
-type fieldpath []string
-
-type column struct {
-	ident      ident  // the column identifier
-	found      bool   // indicates that the column was found in the associated relation
-	typname    string // name of the db type
-	typisenum  bool   // indicates that the column's type is an enum type
-	isnullable bool   // indicates that the column can be set to NULL
-}
-
-type iterator struct {
-	method string
-}
-
-type ident struct {
-	qualifier string
-	name      string
-	alias     string
-}
-
-type gotype struct {
-	name       string // the name of a named type or empty string for unnamed types
-	kind       gokind // the kind of the go type
-	pkgpath    string // the package import path
-	pkgname    string // the package's name
-	pkglocal   string // the local package name (including ".")
-	isimported bool   // indicates whether or not the package is imported
-	isslice    bool   // reports whether or not the type's a slice type
-	ispointer  bool   // reports whether or not the type's a pointer type
-	isscanner  bool   // reports whether or not the type implements the sql.Scanner interface
-	isvaluer   bool   // reports whether or not the type implements the driver.Valuer interface
-	istime     bool   // reposrts whether or not the type is time.Time
-}
-
-type gokind uint
+type typekind uint
 
 const (
 	// basic
-	gokindInvalid gokind = iota
-	gokindBool
-	gokindInt
-	gokindInt8
-	gokindInt16
-	gokindInt32
-	gokindInt64
-	gokindUint
-	gokindUint8
-	gokindUint16
-	gokindUint32
-	gokindUint64
-	gokindUintptr
-	gokindFloat32
-	gokindFloat64
-	gokindComplex64
-	gokindComplex128
-	gokindString
-	gokindUnsafeptr
+	kindInvalid typekind = iota
+	kindBool
+	kindInt
+	kindInt8
+	kindInt16
+	kindInt32
+	kindInt64
+	kindUint
+	kindUint8
+	kindUint16
+	kindUint32
+	kindUint64
+	kindUintptr
+	kindFloat32
+	kindFloat64
+	kindComplex64
+	kindComplex128
+	kindString
+	kindUnsafeptr
 
 	// non-basic
-	gokindArray
-	gokindChan
-	gokindFunc
-	gokindInterface
-	gokindMap
-	gokindPtr
-	gokindSlice
-	gokindStruct
+	kindArray
+	kindChan
+	kindFunc
+	kindInterface
+	kindMap
+	kindPtr
+	kindSlice
+	kindStruct
 )
 
-var basickindmap = map[types.BasicKind]gokind{
-	types.Invalid:       gokindInvalid,
-	types.Bool:          gokindBool,
-	types.Int:           gokindInt,
-	types.Int8:          gokindInt8,
-	types.Int16:         gokindInt16,
-	types.Int32:         gokindInt32,
-	types.Int64:         gokindInt64,
-	types.Uint:          gokindUint,
-	types.Uint8:         gokindUint8,
-	types.Uint16:        gokindUint16,
-	types.Uint32:        gokindUint32,
-	types.Uint64:        gokindUint64,
-	types.Uintptr:       gokindUintptr,
-	types.Float32:       gokindFloat32,
-	types.Float64:       gokindFloat64,
-	types.Complex64:     gokindComplex64,
-	types.Complex128:    gokindComplex128,
-	types.String:        gokindString,
-	types.UnsafePointer: gokindUnsafeptr,
+var basickindmap = map[types.BasicKind]typekind{
+	types.Invalid:       kindInvalid,
+	types.Bool:          kindBool,
+	types.Int:           kindInt,
+	types.Int8:          kindInt8,
+	types.Int16:         kindInt16,
+	types.Int32:         kindInt32,
+	types.Int64:         kindInt64,
+	types.Uint:          kindUint,
+	types.Uint8:         kindUint8,
+	types.Uint16:        kindUint16,
+	types.Uint32:        kindUint32,
+	types.Uint64:        kindUint64,
+	types.Uintptr:       kindUintptr,
+	types.Float32:       kindFloat32,
+	types.Float64:       kindFloat64,
+	types.Complex64:     kindComplex64,
+	types.Complex128:    kindComplex128,
+	types.String:        kindString,
+	types.UnsafePointer: kindUnsafeptr,
 }
