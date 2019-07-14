@@ -2,6 +2,7 @@ package typesutil
 
 import (
 	"go/types"
+	"strings"
 )
 
 // IsError reports whether or not the given type is the "error" type.
@@ -75,6 +76,21 @@ func IsSqlDriverValue(typ types.Type) bool {
 		return path == "database/sql/driver" && name == "Value"
 	}
 	return false
+}
+
+// IsDirective reports whether or not the given type is a "github.com/frk/gosql" directive type.
+func IsDirective(ident string, typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+	name := named.Obj().Name()
+	if name != ident {
+		return false
+	}
+	path := named.Obj().Pkg().Path()
+	// Compare the suffix only to allow for vendor imports.
+	return strings.HasSuffix(path, "github.com/frk/gosql")
 }
 
 // ImplementsScanner reports whether or not the given named type implements

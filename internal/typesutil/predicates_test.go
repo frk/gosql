@@ -120,6 +120,35 @@ func TestIsSqlDriverValue(t *testing.T) {
 	}
 }
 
+func TestIsDirectiveValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		ident string
+		want  bool
+	}{
+		{name: "IsDirectiveTest1", ident: "Column", want: false},
+		{name: "IsDirectiveTest2", ident: "Column", want: false},
+		{name: "IsDirectiveTest3", ident: "Column", want: false},
+		{name: "IsDirectiveTest4", ident: "Column", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
+			got := IsDirective(tt.ident, typ)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestImplementsScanner(t *testing.T) {
 	tests := []struct {
 		name string

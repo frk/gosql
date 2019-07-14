@@ -405,24 +405,35 @@ func (a *analyzer) analyzeWhere(field *types.Var) error {
 		// an error should be returned indicating that that
 		// field is unreachable.
 
-		wf := new(wherefield)
-		wf.name = fld.Name()
-		wf.typ = a.analyzeTypeinfo(fld.Type())
-		wf.col = a.analyzeColref(sqltag)
-		wf.cmp = a.analyzeCmpop(tag.Second("sql"))
-		// looking for an optional modifier function in the tag
-		// if found, we can exit the loop
-		for _, v := range tag["sql"][1:] {
-			if fn, ok := string2function[strings.ToLower(v)]; ok {
-				wf.mod = fn
-				break
-			}
-		}
-
-		item := &whereitem{node: wf}
+		item := new(whereitem)
 		if len(where.items) > 0 {
 			item.op = booland
 		}
+
+		if fld.Name() == "_" {
+			if typesutil.IsDirective("Column", fld.Type()) {
+				wc := new(wherecolumn)
+				wc.col = a.analyzeColumnref(sqltag)
+				wc.pred = string2predicate[strings.ToLower(tag.Second("sql"))]
+				item.node = wc
+			}
+		} else {
+			wf := new(wherefield)
+			wf.name = fld.Name()
+			wf.typ = a.analyzeTypeinfo(fld.Type())
+			wf.col = a.analyzeColumnref(sqltag)
+			wf.cmp = a.analyzeCmpop(tag.Second("sql"))
+			// looking for an optional modifier function in the tag
+			// if found, we can exit the loop
+			for _, v := range tag["sql"][1:] {
+				if fn, ok := string2function[strings.ToLower(v)]; ok {
+					wf.mod = fn
+					break
+				}
+			}
+			item.node = wf
+		}
+
 		where.items = append(where.items, item)
 	}
 
@@ -430,7 +441,7 @@ func (a *analyzer) analyzeWhere(field *types.Var) error {
 	return nil
 }
 
-func (a *analyzer) analyzeColref(val string) (r colref) {
+func (a *analyzer) analyzeColumnref(val string) (r columnref) {
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		r.qualifier = val[:i]
 		val = val[i+1:]
@@ -560,7 +571,8 @@ type column struct {
 	isnullable bool   // indicates that the column can be set to NULL
 }
 
-type colref struct {
+// column reference
+type columnref struct {
 	qualifier string
 	name      string
 }
@@ -580,17 +592,17 @@ type whereitem struct {
 
 type wherefield struct {
 	name string
-	typ  typeinfo //
-	col  colref   //
-	cmp  cmpop    //
-	mod  function //
+	typ  typeinfo  //
+	col  columnref //
+	cmp  cmpop     //
+	mod  function  //
 }
 
-type whereexpr struct{}
-type wherelit struct{}
-type wherealias struct{}
-type wherenull struct{}
-type wherebool struct{}
+type wherecolumn struct {
+	col  columnref //
+	pred predicate
+}
+
 type wheregroup struct{}
 
 type boolop uint // boolop operation
@@ -626,14 +638,39 @@ var string2cmpop = map[string]cmpop{
 type function uint
 
 const (
-	_       function = iota
-	fnlower          // lower
-	fnupper          // upper
+	fnunknown function = iota
+	fnlower            // lower
+	fnupper            // upper
 )
 
 var string2function = map[string]function{
 	"lower": fnlower,
 	"upper": fnupper,
+}
+
+type predicate uint // comparison operation
+
+const (
+	_ predicate = iota
+	predisnull
+	prednotnull
+	predistrue
+	prednottrue
+	predisfalse
+	prednotfalse
+	predisunknown
+	prednotunknown
+)
+
+var string2predicate = map[string]predicate{
+	"isnull":     predisnull,
+	"notnull":    prednotnull,
+	"istrue":     predistrue,
+	"nottrue":    prednottrue,
+	"isfalse":    predisfalse,
+	"notfalse":   prednotfalse,
+	"isunknown":  predisunknown,
+	"notunknown": prednotunknown,
 }
 
 type typekind uint

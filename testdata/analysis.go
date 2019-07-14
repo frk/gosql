@@ -1,6 +1,7 @@
 package testdata
 
 import (
+	"github.com/frk/gosql"
 	"github.com/frk/gosql/testdata/common"
 )
 
@@ -87,5 +88,20 @@ type DeleteTestOK9 struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
 		ID int `sql:"id"`
+	}
+}
+
+//OK: where block with gosql.Column directive and all possible predicates
+type DeleteTestOK10 struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		_ gosql.Column `sql:"column_a,notnull"`
+		_ gosql.Column `sql:"column_b,isnull"`
+		_ gosql.Column `sql:"column_c,nottrue"`
+		_ gosql.Column `sql:"column_d,istrue"`
+		_ gosql.Column `sql:"column_e,notfalse"`
+		_ gosql.Column `sql:"column_f,isfalse"`
+		_ gosql.Column `sql:"column_g,notunknown"`
+		_ gosql.Column `sql:"column_h,isunknown"`
 	}
 }

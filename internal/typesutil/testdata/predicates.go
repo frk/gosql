@@ -3,6 +3,8 @@ package testdata
 import (
 	"database/sql/driver"
 	"time"
+
+	"github.com/frk/gosql"
 )
 
 // Var is not error type, should return false
@@ -95,6 +97,30 @@ type IsSqlDriverValueTest2 struct {
 // Var is driver.Value type, should return true
 type IsSqlDriverValueTest3 struct {
 	Var driver.Value
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Var is not gosql directive type, should return false
+type IsDirectiveTest1 struct {
+	Var string
+}
+
+// Var is not gosql directive type, should return false
+type IsDirectiveTest2 struct {
+	Var []gosql.Column
+}
+
+type Column struct{}
+
+// Var is not gosql directive type, should return false
+type IsDirectiveTest3 struct {
+	Var Column
+}
+
+// Var is gosql directive type, should return true
+type IsDirectiveTest4 struct {
+	Var gosql.Column
 }
 
 ////////////////////////////////////////////////////////////////////////////////

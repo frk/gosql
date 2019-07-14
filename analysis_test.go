@@ -272,10 +272,31 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				node: &wherefield{
 					name: "ID",
 					typ:  typeinfo{kind: kindInt},
-					col:  colref{name: "id"},
+					col:  columnref{name: "id"},
 					cmp:  cmpeq,
 				},
 			}}},
+		},
+	}, {
+		name: "DeleteTestOK10",
+		want: &command{
+			name: "DeleteTestOK10",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				ident:    ident{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{items: []*whereitem{
+				{node: &wherecolumn{col: columnref{name: "column_a"}, pred: prednotnull}},
+				{op: booland, node: &wherecolumn{col: columnref{name: "column_b"}, pred: predisnull}},
+				{op: booland, node: &wherecolumn{col: columnref{name: "column_c"}, pred: prednottrue}},
+				{op: booland, node: &wherecolumn{col: columnref{name: "column_d"}, pred: predistrue}},
+				{op: booland, node: &wherecolumn{col: columnref{name: "column_e"}, pred: prednotfalse}},
+				{op: booland, node: &wherecolumn{col: columnref{name: "column_f"}, pred: predisfalse}},
+				{op: booland, node: &wherecolumn{col: columnref{name: "column_g"}, pred: prednotunknown}},
+				{op: booland, node: &wherecolumn{col: columnref{name: "column_h"}, pred: predisunknown}},
+			}},
 		},
 	}}
 
