@@ -59,32 +59,41 @@ func (a *analyzer) run() error {
 		tag := tagutil.New(a.ctyp.Tag(i))
 
 		if reltag := tag.First("rel"); len(reltag) > 0 {
-			if a.cmd.rel != nil {
-				return &analysisError{code: manyRecordError, args: args{a.cmd.name}}
-			}
-
-			a.cmd.rel = new(relinfo)
-			a.cmd.rel.field = fld.Name()
-			a.cmd.rel.ident = a.analyzeIdent(reltag)
-			if err := a.analyzeDatatype(fld); err != nil {
+			rel := new(relinfo)
+			rel.field = fld.Name()
+			rel.ident = a.analyzeIdent(reltag)
+			if err := a.analyzeDatatype(rel, fld); err != nil {
 				return err
 			}
-
-			_ = a.rtyp // TODO analyze fields
+			a.cmd.rel = rel
 			continue
 		}
+
+		switch fld.Name() {
+		case "Where", "where":
+			if err := a.analyzeWhere(fld); err != nil {
+				return err
+			}
+		}
+
+		// errorhandler
+		// default columns
+		// return columns
+		// all (update|delete)
+		// order by
+		// offset
+		// override
+		// force
 	}
 
 	if a.cmd.rel == nil {
 		return &analysisError{code: noRecordError, args: args{a.cmd.name}}
 	}
-
 	return nil
 }
 
-func (a *analyzer) analyzeDatatype(field *types.Var) error {
+func (a *analyzer) analyzeDatatype(rel *relinfo, field *types.Var) error {
 	var (
-		rel   = a.cmd.rel
 		ftyp  = field.Type()
 		named *types.Named
 		err   error
@@ -148,32 +157,33 @@ func (a *analyzer) analyzeDatatype(field *types.Var) error {
 	}
 
 	styp := ftyp.(*types.Struct)
-	return a.analyzeFields(styp)
+	return a.analyzeFields(rel, styp)
 }
 
-func (a *analyzer) analyzeFields(styp *types.Struct) error {
-	type iteration struct {
-		styp *types.Struct
-		typ  *typeinfo
-		idx  int    // keep track of the field index
-		pfx  string // column prefix
+func (a *analyzer) analyzeFields(rel *relinfo, styp *types.Struct) error {
+	// the structloop type holds the state of a loop over a struct's fields
+	type structloop struct {
+		styp *types.Struct // the struct type whose fields are being analyzed
+		typ  *typeinfo     // info on the struct type; holds the resulting slice of analyzed fieldinfo
+		idx  int           // keeps track of the field index
+		pfx  string        // column prefix
 	}
 
-	// lifo stack
-	stack := []*iteration{{styp: styp, typ: &a.cmd.rel.datatype.typeinfo}}
+	// LIFO stack of struct loops
+	stack := []*structloop{{styp: styp, typ: &rel.datatype.typeinfo}}
 
-stackloop:
+stackloop: // depth first traversal of struct fields
 	for len(stack) > 0 {
-		i := stack[len(stack)-1]
-		for i.idx < i.styp.NumFields() {
-			fld := i.styp.Field(i.idx)
-			tag := tagutil.New(i.styp.Tag(i.idx))
+		loop := stack[len(stack)-1]
+		for loop.idx < loop.styp.NumFields() {
+			fld := loop.styp.Field(loop.idx)
+			tag := tagutil.New(loop.styp.Tag(loop.idx))
 			sqltag := tag.First("sql")
 
 			// instead of incrementing the index in the for-statement
 			// it is done here manually to ensure that it is not skipped
 			// when continuing to the outer loop
-			i.idx++
+			loop.idx++
 
 			// ignore field if:
 			// - no column name or sql tag was provided
@@ -183,24 +193,20 @@ stackloop:
 				// - has blank name, i.e. it's practically inaccessible
 				fld.Name() == "_" ||
 				// - it's unexported and the field's struct type is imported
-				(!fld.Exported() && i.typ.isimported) {
+				(!fld.Exported() && loop.typ.isimported) {
 				continue
 			}
 
 			f := new(fieldinfo)
+			f.tag = tag
 			f.name = fld.Name()
 			f.isembedded = fld.Embedded()
 			f.isexported = fld.Exported()
-			f.tag = tag
-			f.auto = tag.HasOption("sql", "auto")
-			f.ispkey = tag.HasOption("sql", "pk")
-			f.nullempty = tag.HasOption("sql", "nullempty")
-			f.readonly = tag.HasOption("sql", "ro")
-			f.writeonly = tag.HasOption("sql", "wo")
-			f.usejson = tag.HasOption("sql", "json")
-			f.binadd = tag.HasOption("sql", "+")
-			f.coalesce = a.analyzeCoalesceinfo(tag)
 
+			// Add the field to the list.
+			loop.typ.fields = append(loop.typ.fields, f)
+
+			// Analyze the field's type.
 			ftyp := fld.Type()
 			if slice, ok := ftyp.(*types.Slice); ok {
 				f.typ.isslice = true
@@ -223,23 +229,63 @@ stackloop:
 				ftyp = named.Underlying()
 			}
 			f.typ.kind = a.analyzeKind(ftyp)
-			i.typ.fields = append(i.typ.fields, f)
 
-			// if the field's type is a struct and the `sql` tag's
-			// value starts with the ">" (descend) marker, then
-			// analyze its fields as well
+			// If the field's type is a struct and the `sql` tag's
+			// value starts with the ">" (descend) marker, then it is
+			// considered to be a "branch" field whose child fields
+			// need to be analyzed as well.
 			if f.typ.kind == kindStruct && strings.HasPrefix(sqltag, ">") && !f.typ.isslice {
-				j := &iteration{styp: ftyp.(*types.Struct), typ: &f.typ}
-				j.pfx = i.pfx + strings.TrimPrefix(sqltag, ">")
-				stack = append(stack, j)
+				loop2 := new(structloop)
+				loop2.styp = ftyp.(*types.Struct)
+				loop2.typ = &f.typ
+				loop2.pfx = loop.pfx + strings.TrimPrefix(sqltag, ">")
+				stack = append(stack, loop2)
 				continue stackloop
+			} else {
+				// If the field is not a struct to be descended,
+				// it is considered to be a "leaf" field and as
+				// such the analysis of leaf-specific information
+				// needs to be carried out.
+				f.auto = tag.HasOption("sql", "auto")
+				f.ispkey = tag.HasOption("sql", "pk")
+				f.nullempty = tag.HasOption("sql", "nullempty")
+				f.readonly = tag.HasOption("sql", "ro")
+				f.writeonly = tag.HasOption("sql", "wo")
+				f.usejson = tag.HasOption("sql", "json")
+				f.binadd = tag.HasOption("sql", "+")
+				f.coalesce = a.analyzeCoalesceinfo(tag)
+				f.column.ident = a.analyzeIdent(loop.pfx + sqltag)
 			}
 
-			f.column.ident = a.analyzeIdent(i.pfx + sqltag)
 		}
 		stack = stack[:len(stack)-1]
 	}
 	return nil
+}
+
+func (a *analyzer) analyzeTypeinfo(tt types.Type) (typ typeinfo) {
+	if slice, ok := tt.(*types.Slice); ok {
+		typ.isslice = true
+		tt = slice.Elem()
+	}
+	if ptr, ok := tt.(*types.Pointer); ok {
+		typ.ispointer = true
+		tt = ptr.Elem()
+	}
+	if named, ok := tt.(*types.Named); ok {
+		pkg := named.Obj().Pkg()
+		typ.name = named.Obj().Name()
+		typ.pkgpath = pkg.Path()
+		typ.pkgname = pkg.Name()
+		typ.pkglocal = pkg.Name()
+		typ.isimported = (pkg.Path() != a.pkg)
+		typ.isscanner = typesutil.ImplementsScanner(named)
+		typ.isvaluer = typesutil.ImplementsValuer(named)
+		typ.istime = typesutil.IsTime(named)
+		tt = named.Underlying()
+	}
+	typ.kind = a.analyzeKind(tt)
+	return typ
 }
 
 func (a *analyzer) analyzeIterator(iface *types.Interface, rel *relinfo) (*types.Named, error) {
@@ -299,7 +345,7 @@ func (a *analyzer) analyzeIdent(val string) (id ident) {
 func (a *analyzer) analyzeKind(typ types.Type) typekind {
 	switch x := typ.(type) {
 	case *types.Basic:
-		return basickindmap[x.Kind()]
+		return basickind2typekind[x.Kind()]
 	case *types.Array:
 		return kindArray
 	case *types.Chan:
@@ -337,6 +383,70 @@ func (a *analyzer) analyzeCoalesceinfo(tag tagutil.Tag) *coalesceinfo {
 	return nil
 }
 
+func (a *analyzer) analyzeWhere(field *types.Var) error {
+	ns, err := typesutil.GetStruct(field)
+	if err != nil {
+		return err
+	}
+
+	where := new(whereblock)
+	for i := 0; i < ns.Struct.NumFields(); i++ {
+		fld := ns.Struct.Field(i)
+		tag := tagutil.New(ns.Struct.Tag(i))
+
+		sqltag := tag.First("sql")
+		if sqltag == "-" || sqltag == "" {
+			continue
+		}
+
+		// TODO(mkopriva):
+		// If the ns.Struct's type is imported and if one of
+		// its fields has an `sql` tag but it is unexported
+		// an error should be returned indicating that that
+		// field is unreachable.
+
+		wf := new(wherefield)
+		wf.name = fld.Name()
+		wf.typ = a.analyzeTypeinfo(fld.Type())
+		wf.col = a.analyzeColref(sqltag)
+		wf.cmp = a.analyzeCmpop(tag.Second("sql"))
+		// looking for an optional modifier function in the tag
+		// if found, we can exit the loop
+		for _, v := range tag["sql"][1:] {
+			if fn, ok := string2function[strings.ToLower(v)]; ok {
+				wf.mod = fn
+				break
+			}
+		}
+
+		item := &whereitem{node: wf}
+		if len(where.items) > 0 {
+			item.op = booland
+		}
+		where.items = append(where.items, item)
+	}
+
+	a.cmd.where = where
+	return nil
+}
+
+func (a *analyzer) analyzeColref(val string) (r colref) {
+	if i := strings.LastIndexByte(val, '.'); i > -1 {
+		r.qualifier = val[:i]
+		val = val[i+1:]
+	}
+	r.name = val
+	return r
+}
+
+func (a *analyzer) analyzeCmpop(val string) (cmp cmpop) {
+	var ok bool
+	if cmp, ok = string2cmpop[strings.ToLower(val)]; !ok {
+		cmp = cmpeq // default
+	}
+	return cmp
+}
+
 type cmdtype uint
 
 const (
@@ -348,9 +458,10 @@ const (
 )
 
 type command struct {
-	name string  // name of the target struct type
-	typ  cmdtype // the type of the command
-	rel  *relinfo
+	name  string  // name of the target struct type
+	typ   cmdtype // the type of the command
+	rel   *relinfo
+	where *whereblock
 }
 
 // relinfo holds the information on a go struct type and on the
@@ -449,8 +560,80 @@ type column struct {
 	isnullable bool   // indicates that the column can be set to NULL
 }
 
+type colref struct {
+	qualifier string
+	name      string
+}
+
 type coalesceinfo struct {
 	defval string
+}
+
+type whereblock struct {
+	items []*whereitem
+}
+
+type whereitem struct {
+	op   boolop
+	node interface{}
+}
+
+type wherefield struct {
+	name string
+	typ  typeinfo //
+	col  colref   //
+	cmp  cmpop    //
+	mod  function //
+}
+
+type whereexpr struct{}
+type wherelit struct{}
+type wherealias struct{}
+type wherenull struct{}
+type wherebool struct{}
+type wheregroup struct{}
+
+type boolop uint // boolop operation
+
+const (
+	boolnone boolop = iota // no bool
+	booland                // conjunction
+	boolor                 // disjunction
+	boolnot                // negation
+)
+
+type cmpop uint // comparison operation
+
+const (
+	_     cmpop = iota
+	cmpeq       // equals
+	cmpne       // not equals
+	cmplt       // less than
+	cmpgt       // greater than
+	cmple       // less than or equal
+	cmpge       // greater than or equal
+)
+
+var string2cmpop = map[string]cmpop{
+	"=":  cmpeq,
+	"<>": cmpne,
+	"<":  cmplt,
+	">":  cmpgt,
+	"<=": cmple,
+	">=": cmpge,
+}
+
+type function uint
+
+const (
+	_       function = iota
+	fnlower          // lower
+	fnupper          // upper
+)
+
+var string2function = map[string]function{
+	"lower": fnlower,
+	"upper": fnupper,
 }
 
 type typekind uint
@@ -488,7 +671,7 @@ const (
 	kindStruct
 )
 
-var basickindmap = map[types.BasicKind]typekind{
+var basickind2typekind = map[types.BasicKind]typekind{
 	types.Invalid:       kindInvalid,
 	types.Bool:          kindBool,
 	types.Int:           kindInt,

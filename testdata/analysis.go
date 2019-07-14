@@ -81,3 +81,11 @@ type InsertTestOK8 struct {
 		Foobar common.Foo `sql:">foo_"`
 	} `rel:"a_relation"`
 }
+
+//OK: where block
+type DeleteTestOK9 struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		ID int `sql:"id"`
+	}
+}

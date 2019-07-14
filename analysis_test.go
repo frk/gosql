@@ -258,6 +258,25 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				},
 			},
 		}},
+	}, {
+		name: "DeleteTestOK9",
+		want: &command{
+			name: "DeleteTestOK9",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				ident:    ident{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{items: []*whereitem{{
+				node: &wherefield{
+					name: "ID",
+					typ:  typeinfo{kind: kindInt},
+					col:  colref{name: "id"},
+					cmp:  cmpeq,
+				},
+			}}},
+		},
 	}}
 
 	for _, tt := range tests {
