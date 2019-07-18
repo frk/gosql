@@ -15,7 +15,7 @@ func analyze(named *types.Named) (*command, error) {
 	a.cmd = &command{name: named.Obj().Name()}
 
 	var ok bool
-	if a.ctyp, ok = named.Underlying().(*types.Struct); !ok {
+	if a.cmdtyp, ok = named.Underlying().(*types.Struct); !ok {
 		return nil, &analysisError{code: badCmdTypeError, args: args{a.cmd.name}}
 	}
 
@@ -47,22 +47,28 @@ func analyze(named *types.Named) (*command, error) {
 
 // analyzer holds the state of the analysis
 type analyzer struct {
-	pkg  string        // the package path of the command under analysis
-	ctyp *types.Struct // the struct type of the command under analysis
-	rtyp *types.Struct // the struct type of the relation under analysis
-	cmd  *command      // the result of the analysis
+	pkg    string        // the package path of the command under analysis
+	cmdtyp *types.Struct // the struct type of the command under analysis
+	reltyp *types.Struct // the struct type of the relation under analysis
+	cmd    *command      // the result of the analysis
 }
 
-func (a *analyzer) run() error {
-	for i := 0; i < a.ctyp.NumFields(); i++ {
-		fld := a.ctyp.Field(i)
-		tag := tagutil.New(a.ctyp.Tag(i))
+func (a *analyzer) run() (err error) {
+	for i := 0; i < a.cmdtyp.NumFields(); i++ {
+		fld := a.cmdtyp.Field(i)
+		tag := tagutil.New(a.cmdtyp.Tag(i))
 
 		if reltag := tag.First("rel"); len(reltag) > 0 {
+			relid, alias, err := a.objid(reltag)
+			if err != nil {
+				return err
+			}
+
 			rel := new(relinfo)
 			rel.field = fld.Name()
-			rel.ident = a.analyzeIdent(reltag)
-			if err := a.analyzeDatatype(rel, fld); err != nil {
+			rel.relid = relid
+			rel.alias = alias
+			if err := a.datatype(rel, fld); err != nil {
 				return err
 			}
 			a.cmd.rel = rel
@@ -71,7 +77,7 @@ func (a *analyzer) run() error {
 
 		switch fld.Name() {
 		case "Where", "where":
-			if err := a.analyzeWhere(fld); err != nil {
+			if err := a.whereblock(fld); err != nil {
 				return err
 			}
 		}
@@ -92,7 +98,7 @@ func (a *analyzer) run() error {
 	return nil
 }
 
-func (a *analyzer) analyzeDatatype(rel *relinfo, field *types.Var) error {
+func (a *analyzer) datatype(rel *relinfo, field *types.Var) error {
 	var (
 		ftyp  = field.Type()
 		named *types.Named
@@ -109,11 +115,11 @@ func (a *analyzer) analyzeDatatype(rel *relinfo, field *types.Var) error {
 	// Failure of the iterator analysis will cause the whole analysis to exit
 	// as there's currently no support for non-iterator interfaces nor functions.
 	if iface, ok := ftyp.(*types.Interface); ok {
-		if named, err = a.analyzeIterator(iface, rel); err != nil {
+		if named, err = a.iterator(iface, rel); err != nil {
 			return err
 		}
 	} else if sig, ok := ftyp.(*types.Signature); ok {
-		if named, err = a.analyzeIteratorFunc(sig, rel); err != nil {
+		if named, err = a.iteratorfunc(sig, rel); err != nil {
 			return err
 		}
 	}
@@ -150,7 +156,7 @@ func (a *analyzer) analyzeDatatype(rel *relinfo, field *types.Var) error {
 		ftyp = named.Underlying()
 	}
 
-	rel.datatype.kind = a.analyzeKind(ftyp)
+	rel.datatype.kind = a.typekind(ftyp)
 	if rel.datatype.kind != kindStruct {
 		// NOTE currently only the struct kind is supported as the relation's associated datatype
 		return &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
@@ -208,27 +214,7 @@ stackloop: // depth first traversal of struct fields
 
 			// Analyze the field's type.
 			ftyp := fld.Type()
-			if slice, ok := ftyp.(*types.Slice); ok {
-				f.typ.isslice = true
-				ftyp = slice.Elem()
-			}
-			if ptr, ok := ftyp.(*types.Pointer); ok {
-				f.typ.ispointer = true
-				ftyp = ptr.Elem()
-			}
-			if named, ok := ftyp.(*types.Named); ok {
-				pkg := named.Obj().Pkg()
-				f.typ.name = named.Obj().Name()
-				f.typ.pkgpath = pkg.Path()
-				f.typ.pkgname = pkg.Name()
-				f.typ.pkglocal = pkg.Name()
-				f.typ.isimported = (pkg.Path() != a.pkg)
-				f.typ.isscanner = typesutil.ImplementsScanner(named)
-				f.typ.isvaluer = typesutil.ImplementsValuer(named)
-				f.typ.istime = typesutil.IsTime(named)
-				ftyp = named.Underlying()
-			}
-			f.typ.kind = a.analyzeKind(ftyp)
+			f.typ, ftyp = a.typeinfo(ftyp)
 
 			// If the field's type is a struct and the `sql` tag's
 			// value starts with the ">" (descend) marker, then it is
@@ -253,8 +239,13 @@ stackloop: // depth first traversal of struct fields
 				f.writeonly = tag.HasOption("sql", "wo")
 				f.usejson = tag.HasOption("sql", "json")
 				f.binadd = tag.HasOption("sql", "+")
-				f.coalesce = a.analyzeCoalesceinfo(tag)
-				f.column.ident = a.analyzeIdent(loop.pfx + sqltag)
+				f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
+
+				colid, _, err := a.objid(loop.pfx + sqltag)
+				if err != nil {
+					return err
+				}
+				f.colid = colid
 			}
 
 		}
@@ -263,16 +254,19 @@ stackloop: // depth first traversal of struct fields
 	return nil
 }
 
-func (a *analyzer) analyzeTypeinfo(tt types.Type) (typ typeinfo) {
-	if slice, ok := tt.(*types.Slice); ok {
+// typeinfo analyzes the given type and returns the resulting info.
+// The second return value is the base type of the given type.
+func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
+	base = tt
+	if slice, ok := base.(*types.Slice); ok {
 		typ.isslice = true
-		tt = slice.Elem()
+		base = slice.Elem()
 	}
-	if ptr, ok := tt.(*types.Pointer); ok {
+	if ptr, ok := base.(*types.Pointer); ok {
 		typ.ispointer = true
-		tt = ptr.Elem()
+		base = ptr.Elem()
 	}
-	if named, ok := tt.(*types.Named); ok {
+	if named, ok := base.(*types.Named); ok {
 		pkg := named.Obj().Pkg()
 		typ.name = named.Obj().Name()
 		typ.pkgpath = pkg.Path()
@@ -282,29 +276,29 @@ func (a *analyzer) analyzeTypeinfo(tt types.Type) (typ typeinfo) {
 		typ.isscanner = typesutil.ImplementsScanner(named)
 		typ.isvaluer = typesutil.ImplementsValuer(named)
 		typ.istime = typesutil.IsTime(named)
-		tt = named.Underlying()
+		base = named.Underlying()
 	}
-	typ.kind = a.analyzeKind(tt)
-	return typ
+	typ.kind = a.typekind(base)
+	return typ, base
 }
 
-func (a *analyzer) analyzeIterator(iface *types.Interface, rel *relinfo) (*types.Named, error) {
+func (a *analyzer) iterator(iface *types.Interface, rel *relinfo) (*types.Named, error) {
 	if iface.NumExplicitMethods() != 1 {
 		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
 	}
 
 	mth := iface.ExplicitMethod(0)
 	sig := mth.Type().(*types.Signature)
-	named, err := a.analyzeIteratorFunc(sig, rel)
+	named, err := a.iteratorfunc(sig, rel)
 	if err != nil {
 		return nil, err
 	}
 
-	rel.datatype.iter.method = mth.Name()
+	rel.datatype.itermethod = mth.Name()
 	return named, nil
 }
 
-func (a *analyzer) analyzeIteratorFunc(sig *types.Signature, rel *relinfo) (*types.Named, error) {
+func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relinfo) (*types.Named, error) {
 	// must take 1 argument and return one value of type error. "func(T) error"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
 		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
@@ -324,25 +318,11 @@ func (a *analyzer) analyzeIteratorFunc(sig *types.Signature, rel *relinfo) (*typ
 		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
 	}
 
-	rel.datatype.iter = new(iterator)
+	rel.datatype.useiter = true
 	return named, nil
 }
 
-// Used to analyze the value of the `rel` tag, the expected format is: "[qualifier.]name[:alias]".
-func (a *analyzer) analyzeIdent(val string) (id ident) {
-	if i := strings.LastIndexByte(val, '.'); i > -1 {
-		id.qualifier = val[:i]
-		val = val[i+1:]
-	}
-	if i := strings.LastIndexByte(val, ':'); i > -1 {
-		id.alias = val[i+1:]
-		val = val[:i]
-	}
-	id.name = val
-	return id
-}
-
-func (a *analyzer) analyzeKind(typ types.Type) typekind {
+func (a *analyzer) typekind(typ types.Type) typekind {
 	switch x := typ.(type) {
 	case *types.Basic:
 		return basickind2typekind[x.Kind()]
@@ -368,86 +348,141 @@ func (a *analyzer) analyzeKind(typ types.Type) typekind {
 
 var reCoalesceValue = regexp.MustCompile(`(?i)^coalesce$|^coalesce\((.*)\)$`)
 
-func (a *analyzer) analyzeCoalesceinfo(tag tagutil.Tag) *coalesceinfo {
+func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 	if sqltag := tag["sql"]; len(sqltag) > 0 {
 		for _, opt := range sqltag[1:] {
 			if strings.HasPrefix(opt, "coalesce") {
-				cls := new(coalesceinfo)
+				use = true
 				if match := reCoalesceValue.FindStringSubmatch(opt); len(match) > 1 {
-					cls.defval = match[1]
+					val = match[1]
 				}
-				return cls
+				break
 			}
 		}
 	}
-	return nil
+	return use, val
 }
 
-func (a *analyzer) analyzeWhere(field *types.Var) error {
+func (a *analyzer) whereblock(field *types.Var) error {
+	// the structloop type holds the state of a loop over a struct's fields
+	type structloop struct {
+		wb  *whereblock
+		ns  *typesutil.NamedStruct // the struct type of the whereblock
+		idx int                    // keeps track of the field index
+	}
+
+	wb := new(whereblock)
+	wb.name = field.Name()
 	ns, err := typesutil.GetStruct(field)
 	if err != nil {
 		return err
 	}
 
-	where := new(whereblock)
-	for i := 0; i < ns.Struct.NumFields(); i++ {
-		fld := ns.Struct.Field(i)
-		tag := tagutil.New(ns.Struct.Tag(i))
+	// LIFO stack of struct loops
+	stack := []*structloop{{wb: wb, ns: ns}}
 
-		sqltag := tag.First("sql")
-		if sqltag == "-" || sqltag == "" {
-			continue
-		}
+stackloop: // depth first traversal of struct fields
+	for len(stack) > 0 {
+		loop := stack[len(stack)-1]
+		for loop.idx < loop.ns.Struct.NumFields() {
+			fld := loop.ns.Struct.Field(loop.idx)
+			tag := tagutil.New(loop.ns.Struct.Tag(loop.idx))
+			sqltag := tag.First("sql")
 
-		// TODO(mkopriva):
-		// If the ns.Struct's type is imported and if one of
-		// its fields has an `sql` tag but it is unexported
-		// an error should be returned indicating that that
-		// field is unreachable.
+			// instead of incrementing the index in the for-statement
+			// it is done here manually to ensure that it is not skipped
+			// when continuing to the outer loop
+			loop.idx++
 
-		item := new(whereitem)
-		if len(where.items) > 0 {
-			item.op = booland
-		}
-
-		if fld.Name() == "_" {
-			if typesutil.IsDirective("Column", fld.Type()) {
-				wc := new(wherecolumn)
-				wc.col = a.analyzeColumnref(sqltag)
-				wc.pred = string2predicate[strings.ToLower(tag.Second("sql"))]
-				item.node = wc
+			if sqltag == "-" || sqltag == "" {
+				continue
 			}
-		} else {
-			wf := new(wherefield)
-			wf.name = fld.Name()
-			wf.typ = a.analyzeTypeinfo(fld.Type())
-			wf.col = a.analyzeColumnref(sqltag)
-			wf.cmp = a.analyzeCmpop(tag.Second("sql"))
-			// looking for an optional modifier function in the tag
-			// if found, we can exit the loop
-			for _, v := range tag["sql"][1:] {
+
+			// TODO(mkopriva):
+			// If the ns.Struct's type is imported and if one of
+			// its fields has an `sql` tag but it is unexported it
+			// should be skipped, unless it is one of the directive
+			// fields that do not need to be accessed during runtime.
+
+			item := new(whereitem)
+			loop.wb.items = append(loop.wb.items, item)
+
+			// Analyze the bool operattion for any but the first item
+			// in a whereblock. If the value is not "or" and not "and"
+			// it is deemed invalid. If it is "and" no need to do
+			// anything since "and" is used by default.
+			if len(loop.wb.items) > 1 {
+				item.op = booland
+				if booltag := tag.First("bool"); len(booltag) > 0 {
+					v := strings.ToLower(booltag)
+					if v == "or" {
+						item.op = boolor
+					} else if v != "and" {
+						return &analysisError{code: badBoolTagError} //
+					}
+				}
+			}
+
+			// Nested whereblocks are marked with ">" and should be
+			// analyzed before any other fields in the current block.
+			if sqltag == ">" {
+				ns, err := typesutil.GetStruct(fld)
+				if err != nil {
+					return err
+				}
+
+				wb := new(whereblock)
+				wb.name = fld.Name()
+				item.node = wb
+
+				loop2 := new(structloop)
+				loop2.wb = wb
+				loop2.ns = ns
+				stack = append(stack, loop2)
+				continue stackloop
+			}
+
+			// Analyze directive where item.
+			if fld.Name() == "_" {
+				if typesutil.IsDirective("Column", fld.Type()) {
+					colid, _, err := a.objid(sqltag)
+					if err != nil {
+						return err
+					}
+
+					wn := new(wherecolumn)
+					wn.colid = colid
+					wn.pred = string2predicate[strings.ToLower(tag.Second("sql"))]
+					item.node = wn
+				}
+				continue
+			}
+
+			// Analyze plain field where item.
+			colid, _, err := a.objid(sqltag)
+			if err != nil {
+				return err
+			}
+
+			wn := new(wherefield)
+			wn.name = fld.Name()
+			wn.colid = colid
+			wn.typ, _ = a.typeinfo(fld.Type())
+			wn.cmp = a.analyzeCmpop(tag.Second("sql"))
+			for _, v := range tag["sql"][1:] { // look for the optional modifier function
 				if fn, ok := string2function[strings.ToLower(v)]; ok {
-					wf.mod = fn
+					wn.mod = fn
 					break
 				}
 			}
-			item.node = wf
+			item.node = wn
+
 		}
-
-		where.items = append(where.items, item)
+		stack = stack[:len(stack)-1]
 	}
 
-	a.cmd.where = where
+	a.cmd.where = wb
 	return nil
-}
-
-func (a *analyzer) analyzeColumnref(val string) (r columnref) {
-	if i := strings.LastIndexByte(val, '.'); i > -1 {
-		r.qualifier = val[:i]
-		val = val[i+1:]
-	}
-	r.name = val
-	return r
 }
 
 func (a *analyzer) analyzeCmpop(val string) (cmp cmpop) {
@@ -456,6 +491,27 @@ func (a *analyzer) analyzeCmpop(val string) (cmp cmpop) {
 		cmp = cmpeq // default
 	}
 	return cmp
+}
+
+var reobjid = regexp.MustCompile(`^(?:\w+\.)?\w+(?:\:\w+)?$`)
+
+// parses the given string and returns an objid and optionally an alias,
+// if the value's format is invalid an error will be returned instead.
+// The expected format is: "[qualifier.]name[:alias]".
+func (a *analyzer) objid(val string) (id objid, alias string, err error) {
+	if !reobjid.MatchString(val) {
+		return id, "", &analysisError{code: badObjIdError}
+	}
+	if i := strings.LastIndexByte(val, '.'); i > -1 {
+		id.qual = val[:i]
+		val = val[i+1:]
+	}
+	if i := strings.LastIndexByte(val, ':'); i > -1 {
+		alias = val[i+1:]
+		val = val[:i]
+	}
+	id.name = val
+	return id, alias, nil
 }
 
 type cmdtype uint
@@ -475,11 +531,17 @@ type command struct {
 	where *whereblock
 }
 
+type objid struct {
+	qual string
+	name string
+}
+
 // relinfo holds the information on a go struct type and on the
 // db relation that's associated with that struct type.
 type relinfo struct {
 	field    string // name of the field that references the relation in the command
-	ident    ident  // the relation identifier
+	relid    objid  // the relation identifier
+	alias    string
 	datatype datatype
 	isview   bool // indicates that the relation is a table view
 }
@@ -489,19 +551,11 @@ type relinfo struct {
 type datatype struct {
 	typeinfo // type info on the datatype
 	// if set, indicates that the datatype is handled by an iterator
-	iter *iterator
+	useiter bool
+	// if set the value will hold the method name of the iterator interface
+	itermethod string
 	// reports whether or not the type implements the afterscanner interface
 	isafterscanner bool
-}
-
-type iterator struct {
-	method string
-}
-
-type ident struct {
-	qualifier string
-	name      string
-	alias     string
 }
 
 type typeinfo struct {
@@ -531,8 +585,8 @@ type fieldinfo struct {
 	isexported bool
 	// the field's parsed tag
 	tag tagutil.Tag
-	// the corresponding column
-	column column
+	// the id of the corresponding column
+	colid objid
 	// identifies the field's corresponding column as a primary key
 	//
 	// NOTE(mkopriva): This is used by default for UPDATEs which don't specify
@@ -555,55 +609,51 @@ type fieldinfo struct {
 	// indicates that the column value should be marshaled/unmarshaled
 	// to/from json before/after being stored/retrieved.
 	usejson bool
-	// if set it indicates that the column value should be wrapped
+	// if set to true it indicates that the column value should be wrapped
 	// in a COALESCE call when read from the db.
-	coalesce *coalesceinfo
+	usecoalesce bool
+	coalesceval string
 	// for UPDATEs, if set to true, it indicates that the provided field
 	// value should be added to the already existing column value.
 	binadd bool
 }
 
-type column struct {
-	ident      ident  // the column identifier
-	found      bool   // indicates that the column was found in the associated relation
-	typname    string // name of the db type
-	typisenum  bool   // indicates that the column's type is an enum type
-	isnullable bool   // indicates that the column can be set to NULL
-}
-
-// column reference
-type columnref struct {
-	qualifier string
-	name      string
-}
-
-type coalesceinfo struct {
-	defval string
-}
-
+// TODO:
+// - allow for column-to-column comparison, like sometimes used in UPDATE-FROM-WHERE clauses
+// - allow for column-to-literal comparison
+// - allow for specifying the boolean operator by using additional tag
+// - allow for nested where blocks that would generate parenthesized search_conditions
+//
+// - add support for comparison predicates:
+//   - (NOT) BETWEEN (SYMETRIC)
+//   - IS (NOT) DISTINCT FROM
+// - add support for row-wise comparison:
+//   - (NOT) IN
+//   - ANY / SOME
+//   - ALL
 type whereblock struct {
+	name  string
 	items []*whereitem
 }
 
 type whereitem struct {
 	op   boolop
-	node interface{}
+	node interface{} // wherefield, wherecolumn, whereblock
 }
 
 type wherefield struct {
-	name string
-	typ  typeinfo  //
-	col  columnref //
-	cmp  cmpop     //
-	mod  function  //
+	name  string
+	typ   typeinfo //
+	colid objid    //
+	cmp   cmpop    //
+	mod   function //
 }
 
+// wherecolumn is produced from a gosql.Column directive
 type wherecolumn struct {
-	col  columnref //
-	pred predicate
+	colid objid //
+	pred  predicate
 }
-
-type wheregroup struct{}
 
 type boolop uint // boolop operation
 

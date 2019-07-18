@@ -63,7 +63,7 @@ type SelectTestOK6 struct {
 	User namedIterator `rel:"users_table"`
 }
 
-//OK: tag options
+//OK: tag options with boolean operators
 type SelectTestOK7 struct {
 	Rel struct {
 		a int `sql:"a,pk,auto"`
@@ -96,12 +96,35 @@ type DeleteTestOK10 struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
 		_ gosql.Column `sql:"column_a,notnull"`
-		_ gosql.Column `sql:"column_b,isnull"`
-		_ gosql.Column `sql:"column_c,nottrue"`
+		_ gosql.Column `sql:"column_b,isnull" bool:"and"`
+		_ gosql.Column `sql:"column_c,nottrue" bool:"or"`
 		_ gosql.Column `sql:"column_d,istrue"`
-		_ gosql.Column `sql:"column_e,notfalse"`
-		_ gosql.Column `sql:"column_f,isfalse"`
+		_ gosql.Column `sql:"column_e,notfalse" bool:"or"`
+		_ gosql.Column `sql:"column_f,isfalse" bool:"or"`
 		_ gosql.Column `sql:"column_g,notunknown"`
 		_ gosql.Column `sql:"column_h,isunknown"`
+	}
+}
+
+//OK: nested where blocks
+type DeleteTestOK11 struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		x struct {
+			foo int          `sql:"column_foo"`
+			_   gosql.Column `sql:"column_a,isnull"`
+		} `sql:">"`
+		y struct {
+			_   gosql.Column `sql:"column_b,nottrue"`
+			bar string       `sql:"column_bar" bool:"or"`
+			z   struct {
+				baz  bool         `sql:"column_baz"`
+				quux string       `sql:"column_quux"`
+				_    gosql.Column `sql:"column_c,istrue" bool:"or"`
+			} `sql:">"`
+		} `sql:">" bool:"or"`
+		_   gosql.Column `sql:"column_d,notfalse" bool:"or"`
+		_   gosql.Column `sql:"column_e,isfalse"`
+		foo int          `sql:"column_foo"`
 	}
 }

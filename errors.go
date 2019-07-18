@@ -26,6 +26,8 @@ const (
 	manyRecordError
 	badRecordTypeError
 	badIteratorTypeError
+	badObjIdError
+	badBoolTagError
 )
 
 var errorCodeMessageFormats = map[errorCode]string{
@@ -38,4 +40,5 @@ var errorCodeMessageFormats = map[errorCode]string{
 	manyRecordError:      "",
 	badRecordTypeError:   "",
 	badIteratorTypeError: "",
+	badObjIdError:        "",
 }

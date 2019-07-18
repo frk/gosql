@@ -35,19 +35,19 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			name:       "Id",
 			typ:        typeinfo{kind: kindInt},
 			isexported: true,
-			column:     column{ident: ident{name: "id"}},
+			colid:      objid{name: "id"},
 			tag:        tagutil.Tag{"sql": {"id"}},
 		}, {
 			name:       "Email",
 			typ:        typeinfo{kind: kindString},
 			isexported: true,
-			column:     column{ident: ident{name: "email"}},
+			colid:      objid{name: "email"},
 			tag:        tagutil.Tag{"sql": {"email"}},
 		}, {
 			name:       "FullName",
 			typ:        typeinfo{kind: kindString},
 			isexported: true,
-			column:     column{ident: ident{name: "full_name"}},
+			colid:      objid{name: "full_name"},
 			tag:        tagutil.Tag{"sql": {"full_name"}},
 		}, {
 			name: "CreatedAt",
@@ -61,7 +61,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				istime:     true,
 			},
 			isexported: true,
-			column:     column{ident: ident{name: "created_at"}},
+			colid:      objid{name: "created_at"},
 			tag:        tagutil.Tag{"sql": {"created_at"}},
 		}},
 	}
@@ -83,14 +83,14 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		name: "InsertTestOK1",
 		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rel: &relinfo{
 			field:    "UserRec",
-			ident:    ident{name: "users_table"},
+			relid:    objid{name: "users_table"},
 			datatype: datatype{typeinfo: commonUserTypeinfo},
 		}},
 	}, {
 		name: "InsertTestOK2",
 		want: &command{name: "InsertTestOK2", typ: cmdtypeInsert, rel: &relinfo{
 			field: "UserRec",
-			ident: ident{name: "users_table"},
+			relid: objid{name: "users_table"},
 			datatype: datatype{
 				typeinfo: typeinfo{
 					kind: kindStruct,
@@ -98,7 +98,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 						name:       "Name3",
 						typ:        typeinfo{kind: kindString},
 						isexported: true,
-						column:     column{ident: ident{name: "name"}},
+						colid:      objid{name: "name"},
 						tag:        tagutil.Tag{"sql": {"name"}},
 					}},
 				},
@@ -108,94 +108,97 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		name: "SelectTestOK3",
 		want: &command{name: "SelectTestOK3", typ: cmdtypeSelect, rel: &relinfo{
 			field: "User",
-			ident: ident{name: "users_table"},
+			relid: objid{name: "users_table"},
 			datatype: datatype{
 				typeinfo: commonUserTypeinfo,
-				iter:     &iterator{},
+				useiter:  true,
 			},
 		}},
 	}, {
 		name: "SelectTestOK4",
 		want: &command{name: "SelectTestOK4", typ: cmdtypeSelect, rel: &relinfo{
 			field: "User",
-			ident: ident{name: "users_table"},
+			relid: objid{name: "users_table"},
 			datatype: datatype{
 				typeinfo: commonUserTypeinfo,
-				iter:     &iterator{},
+				useiter:  true,
 			},
 		}},
 	}, {
 		name: "SelectTestOK5",
 		want: &command{name: "SelectTestOK5", typ: cmdtypeSelect, rel: &relinfo{
 			field: "User",
-			ident: ident{name: "users_table"},
+			relid: objid{name: "users_table"},
 			datatype: datatype{
-				typeinfo: commonUserTypeinfo,
-				iter:     &iterator{method: "Fn"},
+				typeinfo:   commonUserTypeinfo,
+				useiter:    true,
+				itermethod: "Fn",
 			},
 		}},
 	}, {
 		name: "SelectTestOK6",
 		want: &command{name: "SelectTestOK6", typ: cmdtypeSelect, rel: &relinfo{
 			field: "User",
-			ident: ident{name: "users_table"},
+			relid: objid{name: "users_table"},
 			datatype: datatype{
-				typeinfo: commonUserTypeinfo,
-				iter:     &iterator{method: "Fn"},
+				typeinfo:   commonUserTypeinfo,
+				useiter:    true,
+				itermethod: "Fn",
 			},
 		}},
 	}, {
 		name: "SelectTestOK7",
 		want: &command{name: "SelectTestOK7", typ: cmdtypeSelect, rel: &relinfo{
 			field: "Rel",
-			ident: ident{name: "a_relation"},
+			relid: objid{name: "a_relation"},
 			datatype: datatype{
 				typeinfo: typeinfo{
 					kind: kindStruct,
 					fields: []*fieldinfo{{
 						name:   "a",
 						typ:    typeinfo{kind: kindInt},
-						column: column{ident: ident{name: "a"}},
+						colid:  objid{name: "a"},
 						tag:    tagutil.Tag{"sql": {"a", "pk", "auto"}},
 						ispkey: true,
 						auto:   true,
 					}, {
 						name:      "b",
 						typ:       typeinfo{kind: kindInt},
-						column:    column{ident: ident{name: "b"}},
+						colid:     objid{name: "b"},
 						tag:       tagutil.Tag{"sql": {"b", "nullempty"}},
 						nullempty: true,
 					}, {
 						name:     "c",
 						typ:      typeinfo{kind: kindInt},
-						column:   column{ident: ident{name: "c"}},
+						colid:    objid{name: "c"},
 						tag:      tagutil.Tag{"sql": {"c", "ro", "json"}},
 						readonly: true,
 						usejson:  true,
 					}, {
 						name:      "d",
 						typ:       typeinfo{kind: kindInt},
-						column:    column{ident: ident{name: "d"}},
+						colid:     objid{name: "d"},
 						tag:       tagutil.Tag{"sql": {"d", "wo"}},
 						writeonly: true,
 					}, {
 						name:   "e",
 						typ:    typeinfo{kind: kindInt},
-						column: column{ident: ident{name: "e"}},
+						colid:  objid{name: "e"},
 						tag:    tagutil.Tag{"sql": {"e", "+"}},
 						binadd: true,
 					}, {
-						name:     "f",
-						typ:      typeinfo{kind: kindInt},
-						column:   column{ident: ident{name: "f"}},
-						tag:      tagutil.Tag{"sql": {"f", "coalesce"}},
-						coalesce: &coalesceinfo{},
+						name:        "f",
+						typ:         typeinfo{kind: kindInt},
+						colid:       objid{name: "f"},
+						tag:         tagutil.Tag{"sql": {"f", "coalesce"}},
+						usecoalesce: true,
 					}, {
-						name:     "g",
-						typ:      typeinfo{kind: kindInt},
-						column:   column{ident: ident{name: "g"}},
-						tag:      tagutil.Tag{"sql": {"g", "coalesce(-1)"}},
-						coalesce: &coalesceinfo{"-1"},
+						name:        "g",
+						typ:         typeinfo{kind: kindInt},
+						colid:       objid{name: "g"},
+						tag:         tagutil.Tag{"sql": {"g", "coalesce(-1)"}},
+						usecoalesce: true,
+						coalesceval: "-1",
 					}},
 				},
 			},
@@ -204,7 +207,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		name: "InsertTestOK8",
 		want: &command{name: "InsertTestOK8", typ: cmdtypeInsert, rel: &relinfo{
 			field: "Rel",
-			ident: ident{name: "a_relation"},
+			relid: objid{name: "a_relation"},
 			datatype: datatype{
 				typeinfo: typeinfo{
 					kind: kindStruct,
@@ -243,7 +246,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 												name:       "Val",
 												isexported: true,
 												typ:        typeinfo{kind: kindString},
-												column:     column{ident: ident{name: "foo_bar_baz_val"}},
+												colid:      objid{name: "foo_bar_baz_val"},
 												tag:        tagutil.Tag{"sql": {"val"}},
 											}},
 										},
@@ -265,15 +268,15 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			typ:  cmdtypeDelete,
 			rel: &relinfo{
 				field:    "Rel",
-				ident:    ident{name: "a_relation"},
+				relid:    objid{name: "a_relation"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
 			},
-			where: &whereblock{items: []*whereitem{{
+			where: &whereblock{name: "Where", items: []*whereitem{{
 				node: &wherefield{
-					name: "ID",
-					typ:  typeinfo{kind: kindInt},
-					col:  columnref{name: "id"},
-					cmp:  cmpeq,
+					name:  "ID",
+					colid: objid{name: "id"},
+					typ:   typeinfo{kind: kindInt},
+					cmp:   cmpeq,
 				},
 			}}},
 		},
@@ -284,18 +287,72 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			typ:  cmdtypeDelete,
 			rel: &relinfo{
 				field:    "Rel",
-				ident:    ident{name: "a_relation"},
+				relid:    objid{name: "a_relation"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
 			},
-			where: &whereblock{items: []*whereitem{
-				{node: &wherecolumn{col: columnref{name: "column_a"}, pred: prednotnull}},
-				{op: booland, node: &wherecolumn{col: columnref{name: "column_b"}, pred: predisnull}},
-				{op: booland, node: &wherecolumn{col: columnref{name: "column_c"}, pred: prednottrue}},
-				{op: booland, node: &wherecolumn{col: columnref{name: "column_d"}, pred: predistrue}},
-				{op: booland, node: &wherecolumn{col: columnref{name: "column_e"}, pred: prednotfalse}},
-				{op: booland, node: &wherecolumn{col: columnref{name: "column_f"}, pred: predisfalse}},
-				{op: booland, node: &wherecolumn{col: columnref{name: "column_g"}, pred: prednotunknown}},
-				{op: booland, node: &wherecolumn{col: columnref{name: "column_h"}, pred: predisunknown}},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherecolumn{colid: objid{name: "column_a"}, pred: prednotnull}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_b"}, pred: predisnull}},
+				{op: boolor, node: &wherecolumn{colid: objid{name: "column_c"}, pred: prednottrue}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_d"}, pred: predistrue}},
+				{op: boolor, node: &wherecolumn{colid: objid{name: "column_e"}, pred: prednotfalse}},
+				{op: boolor, node: &wherecolumn{colid: objid{name: "column_f"}, pred: predisfalse}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_g"}, pred: prednotunknown}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_h"}, pred: predisunknown}},
+			}},
+		},
+	}, {
+		name: "DeleteTestOK11",
+		want: &command{
+			name: "DeleteTestOK11",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    objid{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &whereblock{name: "x", items: []*whereitem{
+					{node: &wherefield{
+						name:  "foo",
+						typ:   typeinfo{kind: kindInt},
+						colid: objid{name: "column_foo"},
+						cmp:   cmpeq,
+					}},
+					{op: booland, node: &wherecolumn{colid: objid{name: "column_a"}, pred: predisnull}},
+				}}},
+				{op: boolor, node: &whereblock{name: "y", items: []*whereitem{
+					{node: &wherecolumn{colid: objid{name: "column_b"}, pred: prednottrue}},
+					{op: boolor, node: &wherefield{
+						name:  "bar",
+						typ:   typeinfo{kind: kindString},
+						colid: objid{name: "column_bar"},
+						cmp:   cmpeq,
+					}},
+					{op: booland, node: &whereblock{name: "z", items: []*whereitem{
+						{node: &wherefield{
+							name:  "baz",
+							typ:   typeinfo{kind: kindBool},
+							colid: objid{name: "column_baz"},
+							cmp:   cmpeq,
+						}},
+						{op: booland, node: &wherefield{
+							name:  "quux",
+							typ:   typeinfo{kind: kindString},
+							colid: objid{name: "column_quux"},
+							cmp:   cmpeq,
+						}},
+						{op: boolor, node: &wherecolumn{colid: objid{name: "column_c"}, pred: predistrue}},
+					}}},
+				}}},
+				{op: boolor, node: &wherecolumn{colid: objid{name: "column_d"}, pred: prednotfalse}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_e"}, pred: predisfalse}},
+				{op: booland, node: &wherefield{
+					name:  "foo",
+					typ:   typeinfo{kind: kindInt},
+					colid: objid{name: "column_foo"},
+					cmp:   cmpeq,
+				}},
 			}},
 		},
 	}}
