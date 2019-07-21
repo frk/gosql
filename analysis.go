@@ -2,6 +2,7 @@ package gosql
 
 import (
 	"go/types"
+	"log"
 	"regexp"
 	"strings"
 
@@ -9,6 +10,9 @@ import (
 	"github.com/frk/tagutil"
 )
 
+// TODO(mkopriva): to provide more detailed error messages either pass in the
+// details about the file being analyzed, or make sure that the caller has that
+// information and appends it to the error.
 func analyze(named *types.Named) (*command, error) {
 	a := new(analyzer)
 	a.pkg = named.Obj().Pkg().Path()
@@ -16,7 +20,8 @@ func analyze(named *types.Named) (*command, error) {
 
 	var ok bool
 	if a.cmdtyp, ok = named.Underlying().(*types.Struct); !ok {
-		return nil, &analysisError{code: badCmdTypeError, args: args{a.cmd.name}}
+		typ := named.Underlying().String()
+		return nil, newerr(errBadCmdType, a.cmd.name, typ)
 	}
 
 	key := strings.ToLower(a.cmd.name)
@@ -36,7 +41,7 @@ func analyze(named *types.Named) (*command, error) {
 	case "filter":
 		a.cmd.typ = cmdtypeFilter
 	default:
-		return nil, &analysisError{code: badCmdNameError, args: args{a.cmd.name}}
+		return nil, newerr(errBadCmdName, a.cmd.name)
 	}
 
 	if err := a.run(); err != nil {
@@ -68,7 +73,7 @@ func (a *analyzer) run() (err error) {
 			rel.field = fld.Name()
 			rel.relid = relid
 			rel.alias = alias
-			if err := a.datatype(rel, fld); err != nil {
+			if err := a.reldatatype(rel, fld); err != nil {
 				return err
 			}
 			a.cmd.rel = rel
@@ -93,12 +98,12 @@ func (a *analyzer) run() (err error) {
 	}
 
 	if a.cmd.rel == nil {
-		return &analysisError{code: noRecordError, args: args{a.cmd.name}}
+		return newerr(errNoRelation, a.cmd.name)
 	}
 	return nil
 }
 
-func (a *analyzer) datatype(rel *relinfo, field *types.Var) error {
+func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 	var (
 		ftyp  = field.Type()
 		named *types.Named
@@ -115,7 +120,7 @@ func (a *analyzer) datatype(rel *relinfo, field *types.Var) error {
 	// Failure of the iterator analysis will cause the whole analysis to exit
 	// as there's currently no support for non-iterator interfaces nor functions.
 	if iface, ok := ftyp.(*types.Interface); ok {
-		if named, err = a.iterator(iface, rel); err != nil {
+		if named, err = a.iterator(iface, named, rel); err != nil {
 			return err
 		}
 	} else if sig, ok := ftyp.(*types.Signature); ok {
@@ -124,9 +129,9 @@ func (a *analyzer) datatype(rel *relinfo, field *types.Var) error {
 		}
 	}
 
-	// if unnamed and not an iterator, check for slices and pointers
+	// If unnamed and not an iterator, check for slices and pointers.
 	if named == nil {
-		if slice, ok := ftyp.(*types.Slice); ok { // allows []T
+		if slice, ok := ftyp.(*types.Slice); ok { // allows []T / []*T
 			ftyp = slice.Elem()
 			rel.datatype.isslice = true
 		}
@@ -135,9 +140,10 @@ func (a *analyzer) datatype(rel *relinfo, field *types.Var) error {
 			rel.datatype.ispointer = true
 		}
 		if named, ok = ftyp.(*types.Named); !ok {
-			// fail if still unnamed but is slice or pointer
+			// Fail if the type is a slice or a pointer and its base type
+			// is unnamed because such a type would be a PITA to initialize.
 			if rel.datatype.isslice || rel.datatype.ispointer {
-				return &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
+				return newerr(errBadRelationType, a.cmd.name, rel.field)
 			}
 		}
 	}
@@ -158,15 +164,16 @@ func (a *analyzer) datatype(rel *relinfo, field *types.Var) error {
 
 	rel.datatype.kind = a.typekind(ftyp)
 	if rel.datatype.kind != kindStruct {
-		// NOTE currently only the struct kind is supported as the relation's associated datatype
-		return &analysisError{code: badRecordTypeError, args: args{a.cmd.name}}
+		// Currently only the struct kind is supported as the
+		// relation's associated base datatype.
+		return newerr(errBadRelationType, a.cmd.name, rel.field)
 	}
 
 	styp := ftyp.(*types.Struct)
-	return a.analyzeFields(rel, styp)
+	return a.relfields(rel, styp)
 }
 
-func (a *analyzer) analyzeFields(rel *relinfo, styp *types.Struct) error {
+func (a *analyzer) relfields(rel *relinfo, styp *types.Struct) error {
 	// the structloop type holds the state of a loop over a struct's fields
 	type structloop struct {
 		styp *types.Struct // the struct type whose fields are being analyzed
@@ -282,12 +289,20 @@ func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 	return typ, base
 }
 
-func (a *analyzer) iterator(iface *types.Interface, rel *relinfo) (*types.Named, error) {
+func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *relinfo) (*types.Named, error) {
 	if iface.NumExplicitMethods() != 1 {
-		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
+		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
 
 	mth := iface.ExplicitMethod(0)
+
+	// Make sure that the method is exported or, if it's not, then at least
+	// ensure that the receiver type is local, i.e. not imported, otherwise
+	// the method will not be callable.
+	if !mth.Exported() && named != nil && (named.Obj().Pkg().Path() != a.pkg) {
+		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
+	}
+
 	sig := mth.Type().(*types.Signature)
 	named, err := a.iteratorfunc(sig, rel)
 	if err != nil {
@@ -301,7 +316,7 @@ func (a *analyzer) iterator(iface *types.Interface, rel *relinfo) (*types.Named,
 func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relinfo) (*types.Named, error) {
 	// must take 1 argument and return one value of type error. "func(T) error"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
-		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
+		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
 
 	typ := sig.Params().At(0).Type()
@@ -313,9 +328,9 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relinfo) (*types.Name
 	// make sure that the argument type is a named struct type
 	named, ok := typ.(*types.Named)
 	if !ok {
-		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
+		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
 	} else if _, ok := named.Underlying().(*types.Struct); !ok {
-		return nil, &analysisError{code: badIteratorTypeError, args: args{a.cmd.name, rel.field}}
+		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
 
 	rel.datatype.useiter = true
@@ -398,19 +413,20 @@ stackloop: // depth first traversal of struct fields
 				continue
 			}
 
-			// TODO(mkopriva):
-			// If the ns.Struct's type is imported and if one of
-			// its fields has an `sql` tag but it is unexported it
-			// should be skipped, unless it is one of the directive
-			// fields that do not need to be accessed during runtime.
+			// Skip the field if it's unexported and the ns.Struct's
+			// type is imported. Unless it is one of the directive
+			// fields that do not require direct access at runtime.
+			if fld.Name() != "_" && !fld.Exported() && a.isimported(ns.Named) {
+				continue
+			}
 
 			item := new(whereitem)
 			loop.wb.items = append(loop.wb.items, item)
 
 			// Analyze the bool operattion for any but the first item
-			// in a whereblock. If the value is not "or" and not "and"
-			// it is deemed invalid. If it is "and" no need to do
-			// anything since "and" is used by default.
+			// in a whereblock. If the value isnt's empty and also not
+			// "or" and not "and" it is deemed invalid. If it is "and"
+			// no need to do anything since "and" is used by default.
 			if len(loop.wb.items) > 1 {
 				item.op = booland
 				if booltag := tag.First("bool"); len(booltag) > 0 {
@@ -418,7 +434,7 @@ stackloop: // depth first traversal of struct fields
 					if v == "or" {
 						item.op = boolor
 					} else if v != "and" {
-						return &analysisError{code: badBoolTagError} //
+						return newerr(errBadBoolTag) //
 					}
 				}
 			}
@@ -444,17 +460,52 @@ stackloop: // depth first traversal of struct fields
 
 			// Analyze directive where item.
 			if fld.Name() == "_" {
-				if typesutil.IsDirective("Column", fld.Type()) {
-					colid, _, err := a.objid(sqltag)
+				if !typesutil.IsDirective("Column", fld.Type()) {
+					continue
+				}
+
+				// Check for a column comparison expression. Only
+				// column-to-column and column-to-literal expressions
+				// are allowed. The LHS of the expression is expected
+				// to ALWAYS be a column while the RHS can be either a
+				// column or a literal expression.
+				if recmpexpr.MatchString(sqltag) {
+					lhs, op, rhs := a.splitcmpexpr(sqltag)
+
+					colid, err := a.colid(lhs)
 					if err != nil {
 						return err
 					}
 
 					wn := new(wherecolumn)
 					wn.colid = colid
-					wn.pred = string2predicate[strings.ToLower(tag.Second("sql"))]
+					wn.cmp = a.cmpop(op)
+
+					// column or literal?
+					if recolid.MatchString(rhs) {
+						colid2, err := a.colid(rhs)
+						if err != nil {
+							return err
+						}
+						wn.colid2 = colid2
+					} else {
+						wn.lit = rhs
+					}
+
 					item.node = wn
+					continue
 				}
+
+				// column with predicate
+				colid, err := a.colid(sqltag)
+				if err != nil {
+					return err
+				}
+
+				wn := new(wherecolumn)
+				wn.colid = colid
+				wn.pred = string2predicate[strings.ToLower(tag.Second("sql"))]
+				item.node = wn
 				continue
 			}
 
@@ -468,7 +519,7 @@ stackloop: // depth first traversal of struct fields
 			wn.name = fld.Name()
 			wn.colid = colid
 			wn.typ, _ = a.typeinfo(fld.Type())
-			wn.cmp = a.analyzeCmpop(tag.Second("sql"))
+			wn.cmp = a.cmpop(tag.Second("sql"))
 			for _, v := range tag["sql"][1:] { // look for the optional modifier function
 				if fn, ok := string2function[strings.ToLower(v)]; ok {
 					wn.mod = fn
@@ -485,7 +536,7 @@ stackloop: // depth first traversal of struct fields
 	return nil
 }
 
-func (a *analyzer) analyzeCmpop(val string) (cmp cmpop) {
+func (a *analyzer) cmpop(val string) (cmp cmpop) {
 	var ok bool
 	if cmp, ok = string2cmpop[strings.ToLower(val)]; !ok {
 		cmp = cmpeq // default
@@ -493,14 +544,19 @@ func (a *analyzer) analyzeCmpop(val string) (cmp cmpop) {
 	return cmp
 }
 
-var reobjid = regexp.MustCompile(`^(?:\w+\.)?\w+(?:\:\w+)?$`)
+func (a *analyzer) isimported(named *types.Named) bool {
+	return named != nil && named.Obj().Pkg().Path() != a.pkg
+}
+
+var reobjid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*(?:\:[A-Za-z_]\w*)?$`)
 
 // parses the given string and returns an objid and optionally an alias,
 // if the value's format is invalid an error will be returned instead.
 // The expected format is: "[qualifier.]name[:alias]".
 func (a *analyzer) objid(val string) (id objid, alias string, err error) {
 	if !reobjid.MatchString(val) {
-		return id, "", &analysisError{code: badObjIdError}
+		log.Println("not objid =>", val)
+		return id, "", newerr(errBadObjId)
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.qual = val[:i]
@@ -512,6 +568,58 @@ func (a *analyzer) objid(val string) (id objid, alias string, err error) {
 	}
 	id.name = val
 	return id, alias, nil
+}
+
+var recolid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*$`)
+
+func (a *analyzer) colid(val string) (id objid, err error) {
+	if !recolid.MatchString(val) {
+		log.Println("not colid =>", val)
+		return id, newerr(errBadColId)
+	}
+	if i := strings.LastIndexByte(val, '.'); i > -1 {
+		id.qual = val[:i]
+		val = val[i+1:]
+	}
+	id.name = val
+	return id, nil
+}
+
+// column to column comparison
+var recolcmp = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*\s*(?:=|<>|<=?|>=?)(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*$`)
+
+// column to {column or literal} comparison expression
+var recmpexpr = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*\s*(?:=|<>|<=?|>=?)\s*\S.+$`)
+
+func (a *analyzer) splitcmpexpr(x string) (lhs, op, rhs string) {
+	for i := range x {
+		switch x[i] {
+		case '=':
+			lhs, op, rhs = x[:i], x[i:i+1], x[i+1:]
+		case '<':
+			if j := i + 1; len(x) > i && (x[j] == '=' || x[j] == '>') {
+				lhs, op, rhs = x[:i], x[i:j+1], x[j+1:]
+			} else {
+				lhs, op, rhs = x[:i], x[i:i+1], x[i+1:]
+			}
+		case '>':
+			if j := i + 1; len(x) > i && x[j] == '=' {
+				lhs, op, rhs = x[:i], x[i:j+1], x[j+1:]
+			} else {
+				lhs, op, rhs = x[:i], x[i:i+1], x[i+1:]
+			}
+		default:
+			continue
+		}
+
+		// if default wasn't hit we're done
+		break
+	}
+
+	lhs = strings.TrimSpace(lhs)
+	op = strings.TrimSpace(op)
+	rhs = strings.TrimSpace(rhs)
+	return lhs, op, rhs
 }
 
 type cmdtype uint
@@ -621,8 +729,6 @@ type fieldinfo struct {
 // TODO:
 // - allow for column-to-column comparison, like sometimes used in UPDATE-FROM-WHERE clauses
 // - allow for column-to-literal comparison
-// - allow for specifying the boolean operator by using additional tag
-// - allow for nested where blocks that would generate parenthesized search_conditions
 //
 // - add support for comparison predicates:
 //   - (NOT) BETWEEN (SYMETRIC)
@@ -631,6 +737,10 @@ type fieldinfo struct {
 //   - (NOT) IN
 //   - ANY / SOME
 //   - ALL
+// - add support for pattern matching:
+//   - LIKE
+//   - SIMILAR TO
+//   - ~ (regexp)
 type whereblock struct {
 	name  string
 	items []*whereitem
@@ -649,31 +759,45 @@ type wherefield struct {
 	mod   function //
 }
 
-// wherecolumn is produced from a gosql.Column directive
+// wherecolumn is produced from a gosql.Column directive and its tag value.
+// wherecolumn represents either a column with a comparison predicate,
+// a column-to-column comparison, or a column-to-literal comparison.
 type wherecolumn struct {
-	colid objid //
-	pred  predicate
+	// The target column of the wherecolumn item.
+	colid objid
+	// If set, it will hold the comparison predicate that should be
+	// applied to the target column.
+	pred predicate
+	// If set, it will hold the comparison operator to be used to compare
+	// the target column against the colid2 column or the lit value.
+	cmp cmpop
+	// If set, it will hold the id of the column that should be compared
+	// to the target column.
+	colid2 objid
+	// If set, it will hold the literal value that should be compared
+	// to the target column.
+	lit string
 }
 
 type boolop uint // boolop operation
 
 const (
-	boolnone boolop = iota // no bool
-	booland                // conjunction
-	boolor                 // disjunction
-	boolnot                // negation
+	_       boolop = iota // no bool
+	booland               // conjunction
+	boolor                // disjunction
+	boolnot               // negation
 )
 
 type cmpop uint // comparison operation
 
 const (
-	_     cmpop = iota
-	cmpeq       // equals
-	cmpne       // not equals
-	cmplt       // less than
-	cmpgt       // greater than
-	cmple       // less than or equal
-	cmpge       // greater than or equal
+	_     cmpop = iota // no comparison
+	cmpeq              // equals
+	cmpne              // not equals
+	cmplt              // less than
+	cmpgt              // greater than
+	cmple              // less than or equal
+	cmpge              // greater than or equal
 )
 
 var string2cmpop = map[string]cmpop{
@@ -688,9 +812,9 @@ var string2cmpop = map[string]cmpop{
 type function uint
 
 const (
-	fnunknown function = iota
-	fnlower            // lower
-	fnupper            // upper
+	_       function = iota // no function
+	fnlower                 // lower
+	fnupper                 // upper
 )
 
 var string2function = map[string]function{
@@ -698,10 +822,10 @@ var string2function = map[string]function{
 	"upper": fnupper,
 }
 
-type predicate uint // comparison operation
+type predicate uint // comparison predicates
 
 const (
-	_ predicate = iota
+	_ predicate = iota // no predicate
 	predisnull
 	prednotnull
 	predistrue
@@ -758,6 +882,13 @@ const (
 	kindStruct
 )
 
+func (k typekind) String() string {
+	if s, ok := typekind2string[k]; ok {
+		return s
+	}
+	return "<invalid>"
+}
+
 var basickind2typekind = map[types.BasicKind]typekind{
 	types.Invalid:       kindInvalid,
 	types.Bool:          kindBool,
@@ -781,7 +912,7 @@ var basickind2typekind = map[types.BasicKind]typekind{
 }
 
 var typekind2string = map[typekind]string{
-	// builtin basic only
+	// builtin basic
 	kindBool:       "bool",
 	kindInt:        "int",
 	kindInt8:       "int8",
@@ -799,4 +930,14 @@ var typekind2string = map[typekind]string{
 	kindComplex64:  "complex64",
 	kindComplex128: "complex128",
 	kindString:     "string",
+
+	// non-basic
+	kindArray:     "<array>",
+	kindChan:      "<chan>",
+	kindFunc:      "<func>",
+	kindInterface: "<interface>",
+	kindMap:       "<map>",
+	kindPtr:       "<pointer>",
+	kindSlice:     "<slice>",
+	kindStruct:    "<struct>",
 }

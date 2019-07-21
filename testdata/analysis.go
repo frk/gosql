@@ -128,3 +128,29 @@ type DeleteTestOK11 struct {
 		foo int          `sql:"column_foo"`
 	}
 }
+
+//OK: where block with field items and specific comparison operators
+type DeleteTestOK12 struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		a int `sql:"column_a,<"`
+		b int `sql:"column_b,>"`
+		c int `sql:"column_c,<="`
+		d int `sql:"column_d,>="`
+		e int `sql:"column_e,="`
+		f int `sql:"column_f,<>"`
+		g int `sql:"column_g"` // defaults to "="
+	}
+}
+
+//OK: where block with gosql.Column directive and comparison expressions
+type DeleteTestOK13 struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		_ gosql.Column `sql:"column_a<>column_b"`
+		_ gosql.Column `sql:"t.column_c = u.column_d"`
+		_ gosql.Column `sql:"t.column_e > 123"`
+		_ gosql.Column `sql:"t.column_f = 'active'"`
+		_ gosql.Column `sql:"t.column_g <> true"`
+	}
+}

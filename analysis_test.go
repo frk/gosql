@@ -72,13 +72,13 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		err  error
 	}{{
 		name: "InsertTestBAD1",
-		err:  &analysisError{code: noRecordError, args: args{"InsertTestBAD1"}},
+		err:  &analysisError{code: errNoRelation, args: []interface{}{"InsertTestBAD1"}},
 	}, {
 		name: "InsertTestBAD2",
-		err:  &analysisError{code: noRecordError, args: args{"InsertTestBAD2"}},
+		err:  &analysisError{code: errNoRelation, args: []interface{}{"InsertTestBAD2"}},
 	}, {
 		name: "InsertTestBAD3",
-		err:  &analysisError{code: badRecordTypeError, args: args{"InsertTestBAD3"}},
+		err:  &analysisError{code: errBadRelationType, args: []interface{}{"InsertTestBAD3", "User"}},
 	}, {
 		name: "InsertTestOK1",
 		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rel: &relinfo{
@@ -353,6 +353,48 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 					colid: objid{name: "column_foo"},
 					cmp:   cmpeq,
 				}},
+			}},
+		},
+	}, {
+		name: "DeleteTestOK12",
+		want: &command{
+			name: "DeleteTestOK12",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    objid{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherefield{name: "a", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_a"}, cmp: cmplt}},
+				{op: booland, node: &wherefield{name: "b", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_b"}, cmp: cmpgt}},
+				{op: booland, node: &wherefield{name: "c", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_c"}, cmp: cmple}},
+				{op: booland, node: &wherefield{name: "d", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_d"}, cmp: cmpge}},
+				{op: booland, node: &wherefield{name: "e", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_e"}, cmp: cmpeq}},
+				{op: booland, node: &wherefield{name: "f", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_f"}, cmp: cmpne}},
+				{op: booland, node: &wherefield{name: "g", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_g"}, cmp: cmpeq}},
+			}},
+		},
+	}, {
+		name: "DeleteTestOK13",
+		want: &command{
+			name: "DeleteTestOK13",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    objid{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherecolumn{colid: objid{name: "column_a"}, cmp: cmpne, colid2: objid{name: "column_b"}}},
+				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_c"}, cmp: cmpeq, colid2: objid{qual: "u", name: "column_d"}}},
+				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_e"}, cmp: cmpgt, lit: "123"}},
+				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_f"}, cmp: cmpeq, lit: "'active'"}},
+				// TODO this needs fixing, or maybe it should just be documented and
+				// a workaround suggested? For example in this case the nottrue predicate
+				// could be used... To implement a complete fix might require handling
+				// of all reserved identifiers & keywords, not just true / false...
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_g"}, cmp: cmpne, lit: "true"}},
 			}},
 		},
 	}}
