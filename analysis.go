@@ -134,15 +134,19 @@ func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 		if slice, ok := ftyp.(*types.Slice); ok { // allows []T / []*T
 			ftyp = slice.Elem()
 			rel.datatype.isslice = true
+		} else if array, ok := ftyp.(*types.Array); ok { // allows [N]T / [N]*T
+			ftyp = array.Elem()
+			rel.datatype.isarray = true
+			rel.datatype.arraylen = array.Len()
 		}
 		if ptr, ok := ftyp.(*types.Pointer); ok { // allows *T
 			ftyp = ptr.Elem()
 			rel.datatype.ispointer = true
 		}
 		if named, ok = ftyp.(*types.Named); !ok {
-			// Fail if the type is a slice or a pointer and its base type
-			// is unnamed because such a type would be a PITA to initialize.
-			if rel.datatype.isslice || rel.datatype.ispointer {
+			// Fail if the type is a slice, an array, or a pointer
+			// while its base type is unnamed.
+			if rel.datatype.isslice || rel.datatype.isarray || rel.datatype.ispointer {
 				return newerr(errBadRelationType, a.cmd.name, rel.field)
 			}
 		}
@@ -227,7 +231,7 @@ stackloop: // depth first traversal of struct fields
 			// value starts with the ">" (descend) marker, then it is
 			// considered to be a "branch" field whose child fields
 			// need to be analyzed as well.
-			if f.typ.kind == kindStruct && strings.HasPrefix(sqltag, ">") && !f.typ.isslice {
+			if f.typ.kind == kindStruct && strings.HasPrefix(sqltag, ">") && (!f.typ.isslice && !f.typ.isarray) {
 				loop2 := new(structloop)
 				loop2.styp = ftyp.(*types.Struct)
 				loop2.typ = &f.typ
@@ -266,12 +270,16 @@ stackloop: // depth first traversal of struct fields
 func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 	base = tt
 	if slice, ok := base.(*types.Slice); ok {
-		typ.isslice = true
 		base = slice.Elem()
+		typ.isslice = true
+	} else if array, ok := base.(*types.Array); ok {
+		base = array.Elem()
+		typ.isarray = true
+		typ.arraylen = array.Len()
 	}
 	if ptr, ok := base.(*types.Pointer); ok {
-		typ.ispointer = true
 		base = ptr.Elem()
+		typ.ispointer = true
 	}
 	if named, ok := base.(*types.Named); ok {
 		pkg := named.Obj().Pkg()
@@ -750,6 +758,8 @@ type typeinfo struct {
 	pkgname    string   // the package's name
 	pkglocal   string   // the local package name (including ".")
 	isimported bool     // indicates whether or not the package is imported
+	isarray    bool     // reports whether or not the type's an array type
+	arraylen   int64    // if it's an array type, this field will hold the array's length
 	isslice    bool     // reports whether or not the type's a slice type
 	ispointer  bool     // reports whether or not the type's a pointer type
 	isscanner  bool     // reports whether or not the type implements the sql.Scanner interface
