@@ -154,7 +154,7 @@ func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 		rel.datatype.pkgpath = pkg.Path()
 		rel.datatype.pkgname = pkg.Name()
 		rel.datatype.pkglocal = pkg.Name()
-		rel.datatype.isimported = (pkg.Path() != a.pkg)
+		rel.datatype.isimported = a.isimported(named)
 		rel.datatype.isscanner = typesutil.ImplementsScanner(named)
 		rel.datatype.isvaluer = typesutil.ImplementsValuer(named)
 		rel.datatype.istime = typesutil.IsTime(named)
@@ -198,7 +198,7 @@ stackloop: // depth first traversal of struct fields
 			// when continuing to the outer loop
 			loop.idx++
 
-			// ignore field if:
+			// ignore the field if:
 			// - no column name or sql tag was provided
 			if sqltag == "" ||
 				// - explicitly marked to be ignored
@@ -279,7 +279,7 @@ func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 		typ.pkgpath = pkg.Path()
 		typ.pkgname = pkg.Name()
 		typ.pkglocal = pkg.Name()
-		typ.isimported = (pkg.Path() != a.pkg)
+		typ.isimported = a.isimported(named)
 		typ.isscanner = typesutil.ImplementsScanner(named)
 		typ.isvaluer = typesutil.ImplementsValuer(named)
 		typ.istime = typesutil.IsTime(named)
@@ -378,7 +378,18 @@ func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 	return use, val
 }
 
-func (a *analyzer) whereblock(field *types.Var) error {
+// TODO:
+// - add support for comparison predicates:
+//   - IS (NOT) DISTINCT FROM
+// - add support for row-wise comparison:
+//   - (NOT) IN
+//   - ANY / SOME
+//   - ALL
+// - add support for pattern matching:
+//   - LIKE
+//   - SIMILAR TO
+//   - ~ (regexp)
+func (a *analyzer) whereblock(field *types.Var) (err error) {
 	// the structloop type holds the state of a loop over a struct's fields
 	type structloop struct {
 		wb  *whereblock
@@ -393,10 +404,10 @@ func (a *analyzer) whereblock(field *types.Var) error {
 		return err
 	}
 
-	// LIFO stack of struct loops
+	// LIFO stack of struct loops used for depth first traversal of struct fields.
 	stack := []*structloop{{wb: wb, ns: ns}}
 
-stackloop: // depth first traversal of struct fields
+stackloop:
 	for len(stack) > 0 {
 		loop := stack[len(stack)-1]
 		for loop.idx < loop.ns.Struct.NumFields() {
@@ -404,9 +415,9 @@ stackloop: // depth first traversal of struct fields
 			tag := tagutil.New(loop.ns.Struct.Tag(loop.idx))
 			sqltag := tag.First("sql")
 
-			// instead of incrementing the index in the for-statement
+			// Instead of incrementing the index in the for-statement
 			// it is done here manually to ensure that it is not skipped
-			// when continuing to the outer loop
+			// when continuing to the outer loop.
 			loop.idx++
 
 			if sqltag == "-" || sqltag == "" {
@@ -416,25 +427,24 @@ stackloop: // depth first traversal of struct fields
 			// Skip the field if it's unexported and the ns.Struct's
 			// type is imported. Unless it is one of the directive
 			// fields that do not require direct access at runtime.
-			if fld.Name() != "_" && !fld.Exported() && a.isimported(ns.Named) {
+			if fld.Name() != "_" && !a.isaccessible(fld, ns.Named) {
 				continue
 			}
 
 			item := new(whereitem)
 			loop.wb.items = append(loop.wb.items, item)
 
-			// Analyze the bool operattion for any but the first item
-			// in a whereblock. If the value isnt's empty and also not
-			// "or" and not "and" it is deemed invalid. If it is "and"
-			// no need to do anything since "and" is used by default.
+			// Analyze the bool operation for any but the first
+			// item in a whereblock. Fail if a value was provided
+			// but it is not "or" nor "and".
 			if len(loop.wb.items) > 1 {
-				item.op = booland
+				item.op = booland // default to "and"
 				if booltag := tag.First("bool"); len(booltag) > 0 {
 					v := strings.ToLower(booltag)
 					if v == "or" {
 						item.op = boolor
 					} else if v != "and" {
-						return newerr(errBadBoolTag) //
+						return newerr(errBadBoolTag)
 					}
 				}
 			}
@@ -509,7 +519,70 @@ stackloop: // depth first traversal of struct fields
 				continue
 			}
 
-			// Analyze plain field where item.
+			// Check whether the field is supposed to be used to
+			// produce a [NOT] BETWEEN [SYMMETRIC] predicate clause.
+			//
+			// A valid "between" field MUST be of type struct with
+			// the number of fields equal to 2, where each of the
+			// fields is marked with an "x" or a "y" in their `sql`
+			// tag to indicate their position in the clause.
+			sqltag2 := strings.ToLower(tag.Second("sql"))
+			if strings.Contains(sqltag2, "between") {
+				ns, err := typesutil.GetStruct(fld)
+				if err != nil {
+					return newerr(errBadBetweenType)
+				} else if ns.Struct.NumFields() != 2 {
+					return newerr(errBadBetweenType)
+				}
+
+				var x, y interface{}
+				for i := 0; i < 2; i++ {
+					fld := ns.Struct.Field(i)
+					tag := tagutil.New(ns.Struct.Tag(i))
+					sqltag := tag.First("sql")
+					sqltag2 := strings.ToLower(tag.Second("sql"))
+
+					if fld.Name() == "_" && typesutil.IsDirective("Column", fld.Type()) {
+						colid, _, err := a.objid(sqltag)
+						if err != nil {
+							return err
+						}
+						if sqltag2 == "x" {
+							x = colid
+						} else if sqltag2 == "y" {
+							y = colid
+						}
+						continue
+					}
+
+					if a.isaccessible(fld, ns.Named) {
+						v := new(varinfo)
+						v.name = fld.Name()
+						v.typ, _ = a.typeinfo(fld.Type())
+
+						if sqltag2 == "x" {
+							x = v
+						} else if sqltag2 == "y" {
+							y = v
+						}
+					}
+				}
+
+				colid, _, err := a.objid(sqltag)
+				if err != nil {
+					return err
+				}
+
+				bw := new(wherebetween)
+				bw.name = fld.Name()
+				bw.colid = colid
+				bw.pred = string2betweenpredicate[sqltag2]
+				bw.x, bw.y = x, y
+				item.node = bw
+				continue
+			}
+
+			// Analyze field where item.
 			colid, _, err := a.objid(sqltag)
 			if err != nil {
 				return err
@@ -546,6 +619,10 @@ func (a *analyzer) cmpop(val string) (cmp cmpop) {
 
 func (a *analyzer) isimported(named *types.Named) bool {
 	return named != nil && named.Obj().Pkg().Path() != a.pkg
+}
+
+func (a *analyzer) isaccessible(fld *types.Var, named *types.Named) bool {
+	return fld.Name() != "_" && (fld.Exported() || !a.isimported(named))
 }
 
 var reobjid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*(?:\:[A-Za-z_]\w*)?$`)
@@ -726,21 +803,11 @@ type fieldinfo struct {
 	binadd bool
 }
 
-// TODO:
-// - allow for column-to-column comparison, like sometimes used in UPDATE-FROM-WHERE clauses
-// - allow for column-to-literal comparison
-//
-// - add support for comparison predicates:
-//   - (NOT) BETWEEN (SYMETRIC)
-//   - IS (NOT) DISTINCT FROM
-// - add support for row-wise comparison:
-//   - (NOT) IN
-//   - ANY / SOME
-//   - ALL
-// - add support for pattern matching:
-//   - LIKE
-//   - SIMILAR TO
-//   - ~ (regexp)
+type varinfo struct {
+	name string
+	typ  typeinfo
+}
+
 type whereblock struct {
 	name  string
 	items []*whereitem
@@ -777,6 +844,13 @@ type wherecolumn struct {
 	// If set, it will hold the literal value that should be compared
 	// to the target column.
 	lit string
+}
+
+type wherebetween struct {
+	name  string
+	colid objid
+	pred  predicate
+	x, y  interface{}
 }
 
 type boolop uint // boolop operation
@@ -834,6 +908,11 @@ const (
 	prednotfalse
 	predisunknown
 	prednotunknown
+
+	predbetween
+	prednotbetween
+	predbetweensym
+	prednotbetweensym
 )
 
 var string2predicate = map[string]predicate{
@@ -845,6 +924,13 @@ var string2predicate = map[string]predicate{
 	"notfalse":   prednotfalse,
 	"isunknown":  predisunknown,
 	"notunknown": prednotunknown,
+}
+
+var string2betweenpredicate = map[string]predicate{
+	"between":       predbetween,
+	"notbetween":    prednotbetween,
+	"betweensym":    predbetweensym,
+	"notbetweensym": prednotbetweensym,
 }
 
 type typekind uint

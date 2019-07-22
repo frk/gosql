@@ -151,6 +151,25 @@ type DeleteTestOK13 struct {
 		_ gosql.Column `sql:"t.column_c = u.column_d"`
 		_ gosql.Column `sql:"t.column_e > 123"`
 		_ gosql.Column `sql:"t.column_f = 'active'"`
-		_ gosql.Column `sql:"t.column_g <> true"`
+		// _ gosql.Column `sql:"t.column_g <> true"`
+	}
+}
+
+//OK: where block with "between" predicates
+type DeleteTestOK14 struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		a struct {
+			x int `sql:",x"`
+			y int `sql:",y"`
+		} `sql:"column_a,between"`
+		b struct {
+			_ gosql.Column `sql:"column_x,x"`
+			_ gosql.Column `sql:"column_y,y"`
+		} `sql:"column_b,betweensym"`
+		c struct {
+			_ gosql.Column `sql:"column_z,x"`
+			z int          `sql:",y"`
+		} `sql:"column_c,notbetweensym"`
 	}
 }

@@ -390,11 +390,47 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_c"}, cmp: cmpeq, colid2: objid{qual: "u", name: "column_d"}}},
 				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_e"}, cmp: cmpgt, lit: "123"}},
 				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_f"}, cmp: cmpeq, lit: "'active'"}},
-				// TODO this needs fixing, or maybe it should just be documented and
+
+				// TODO: this needs fixing, or maybe it should just be documented and
 				// a workaround suggested? For example in this case the nottrue predicate
 				// could be used... To implement a complete fix might require handling
 				// of all reserved identifiers & keywords, not just true / false...
-				{op: booland, node: &wherecolumn{colid: objid{name: "column_g"}, cmp: cmpne, lit: "true"}},
+				//
+				// {op: booland, node: &wherecolumn{colid: objid{name: "column_g"}, cmp: cmpne, lit: "true"}},
+			}},
+		},
+	}, {
+		name: "DeleteTestOK14",
+		want: &command{
+			name: "DeleteTestOK14",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    objid{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherebetween{
+					name:  "a",
+					colid: objid{name: "column_a"},
+					pred:  predbetween,
+					x:     &varinfo{name: "x", typ: typeinfo{kind: kindInt}},
+					y:     &varinfo{name: "y", typ: typeinfo{kind: kindInt}},
+				}},
+				{op: booland, node: &wherebetween{
+					name:  "b",
+					colid: objid{name: "column_b"},
+					pred:  predbetweensym,
+					x:     objid{name: "column_x"},
+					y:     objid{name: "column_y"},
+				}},
+				{op: booland, node: &wherebetween{
+					name:  "c",
+					colid: objid{name: "column_c"},
+					pred:  prednotbetweensym,
+					x:     objid{name: "column_z"},
+					y:     &varinfo{name: "z", typ: typeinfo{kind: kindInt}},
+				}},
 			}},
 		},
 	}}

@@ -26,6 +26,7 @@ const (
 	errBadObjId
 	errBadColId
 	errBadBoolTag
+	errBadBetweenType
 
 	errBadKind
 	errBadType
@@ -58,9 +59,10 @@ var errorCodeMessageFormats = map[errorCode]string{
 		"type and it MUST return exactly one value of type error, when it's an " +
 		"interface, it MUST have exactly one method whose signature MUST be the " +
 		"same as that of the function described above.",
-	errBadObjId:   "",
-	errBadColId:   "",
-	errBadBoolTag: "",
+	errBadObjId:       "",
+	errBadColId:       "",
+	errBadBoolTag:     "",
+	errBadBetweenType: "",
 
 	errBadType: "",
 	errBadKind: "",
