@@ -27,6 +27,7 @@ const (
 	errBadColId
 	errBadBoolTag
 	errBadBetweenType
+	errBadDistinctPredicate
 
 	errBadKind
 	errBadType

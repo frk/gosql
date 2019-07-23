@@ -171,5 +171,21 @@ type DeleteTestOK14 struct {
 			_ gosql.Column `sql:"column_z,x"`
 			z int          `sql:",y"`
 		} `sql:"column_c,notbetweensym"`
+		d struct {
+			z int          `sql:",x"`
+			_ gosql.Column `sql:"column_z,y"`
+		} `sql:"column_d,notbetween"`
+	}
+}
+
+//OK: where block with "distinct from" predicates
+type DeleteTestOK15 struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		a int `sql:"column_a,distinct"`
+		b int `sql:"column_b,notdistinct"`
+
+		_ gosql.Column `sql:"column_c,distinct,column_x"`
+		_ gosql.Column `sql:"column_d,notdistinct,column_y"`
 	}
 }

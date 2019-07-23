@@ -369,14 +369,14 @@ func (a *analyzer) typekind(typ types.Type) typekind {
 	return 0 // unsupported / unknown
 }
 
-var reCoalesceValue = regexp.MustCompile(`(?i)^coalesce$|^coalesce\((.*)\)$`)
+var recoalesce = regexp.MustCompile(`(?i)^coalesce$|^coalesce\((.*)\)$`)
 
 func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 	if sqltag := tag["sql"]; len(sqltag) > 0 {
 		for _, opt := range sqltag[1:] {
 			if strings.HasPrefix(opt, "coalesce") {
 				use = true
-				if match := reCoalesceValue.FindStringSubmatch(opt); len(match) > 1 {
+				if match := recoalesce.FindStringSubmatch(opt); len(match) > 1 {
 					val = match[1]
 				}
 				break
@@ -387,8 +387,6 @@ func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 }
 
 // TODO:
-// - add support for comparison predicates:
-//   - IS (NOT) DISTINCT FROM
 // - add support for row-wise comparison:
 //   - (NOT) IN
 //   - ANY / SOME
@@ -422,6 +420,7 @@ stackloop:
 			fld := loop.ns.Struct.Field(loop.idx)
 			tag := tagutil.New(loop.ns.Struct.Tag(loop.idx))
 			sqltag := tag.First("sql")
+			sqltag2 := strings.ToLower(tag.Second("sql"))
 
 			// Instead of incrementing the index in the for-statement
 			// it is done here manually to ensure that it is not skipped
@@ -482,6 +481,35 @@ stackloop:
 					continue
 				}
 
+				// Check whether the column directive is supposed
+				// to be used to produce a IS [NOT] DISTINCT FROM
+				// comparison predicate.
+				//
+				// A valid "distinct" predicate directive is expected
+				// to have 3 tag values in this order: the LHS column,
+				// the predicate, and then the RHS column.
+				if strings.Contains(sqltag2, "distinct") {
+					if len(tag["sql"]) < 3 {
+						return newerr(errBadDistinctPredicate)
+					}
+
+					colid, err := a.colid(sqltag)
+					if err != nil {
+						return err
+					}
+					colid2, err := a.colid(tag["sql"][2])
+					if err != nil {
+						return err
+					}
+
+					wn := new(wherecolumn)
+					wn.colid = colid
+					wn.cmp = a.cmpop(sqltag2)
+					wn.colid2 = colid2
+					item.node = wn
+					continue
+				}
+
 				// Check for a column comparison expression. Only
 				// column-to-column and column-to-literal expressions
 				// are allowed. The LHS of the expression is expected
@@ -514,7 +542,7 @@ stackloop:
 					continue
 				}
 
-				// column with predicate
+				// Column with unary predicate.
 				colid, err := a.colid(sqltag)
 				if err != nil {
 					return err
@@ -522,7 +550,7 @@ stackloop:
 
 				wn := new(wherecolumn)
 				wn.colid = colid
-				wn.pred = string2predicate[strings.ToLower(tag.Second("sql"))]
+				wn.pred = string2predicate[sqltag2]
 				item.node = wn
 				continue
 			}
@@ -534,7 +562,6 @@ stackloop:
 			// the number of fields equal to 2, where each of the
 			// fields is marked with an "x" or a "y" in their `sql`
 			// tag to indicate their position in the clause.
-			sqltag2 := strings.ToLower(tag.Second("sql"))
 			if strings.Contains(sqltag2, "between") {
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
@@ -600,7 +627,7 @@ stackloop:
 			wn.name = fld.Name()
 			wn.colid = colid
 			wn.typ, _ = a.typeinfo(fld.Type())
-			wn.cmp = a.cmpop(tag.Second("sql"))
+			wn.cmp = a.cmpop(sqltag2)
 			for _, v := range tag["sql"][1:] { // look for the optional modifier function
 				if fn, ok := string2function[strings.ToLower(v)]; ok {
 					wn.mod = fn
@@ -882,15 +909,19 @@ const (
 	cmpgt              // greater than
 	cmple              // less than or equal
 	cmpge              // greater than or equal
+	cmpdi              // distinct from
+	cmpnd              // not distinct from
 )
 
 var string2cmpop = map[string]cmpop{
-	"=":  cmpeq,
-	"<>": cmpne,
-	"<":  cmplt,
-	">":  cmpgt,
-	"<=": cmple,
-	">=": cmpge,
+	"=":           cmpeq,
+	"<>":          cmpne,
+	"<":           cmplt,
+	">":           cmpgt,
+	"<=":          cmple,
+	">=":          cmpge,
+	"distinct":    cmpdi,
+	"notdistinct": cmpnd,
 }
 
 type function uint

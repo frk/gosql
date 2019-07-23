@@ -431,6 +431,40 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 					x:     objid{name: "column_z"},
 					y:     &varinfo{name: "z", typ: typeinfo{kind: kindInt}},
 				}},
+				{op: booland, node: &wherebetween{
+					name:  "d",
+					colid: objid{name: "column_d"},
+					pred:  prednotbetween,
+					x:     &varinfo{name: "z", typ: typeinfo{kind: kindInt}},
+					y:     objid{name: "column_z"},
+				}},
+			}},
+		},
+	}, {
+		name: "DeleteTestOK15",
+		want: &command{
+			name: "DeleteTestOK15",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    objid{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherefield{
+					name:  "a",
+					typ:   typeinfo{kind: kindInt},
+					colid: objid{name: "column_a"},
+					cmp:   cmpdi,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "b",
+					typ:   typeinfo{kind: kindInt},
+					colid: objid{name: "column_b"},
+					cmp:   cmpnd,
+				}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_c"}, cmp: cmpdi, colid2: objid{name: "column_x"}}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_d"}, cmp: cmpnd, colid2: objid{name: "column_y"}}},
 			}},
 		},
 	}}
