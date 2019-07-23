@@ -80,8 +80,8 @@ func (a *analyzer) run() (err error) {
 			continue
 		}
 
-		switch fld.Name() {
-		case "Where", "where":
+		switch strings.ToLower(fld.Name()) {
+		case "where":
 			if err := a.whereblock(fld); err != nil {
 				return err
 			}
@@ -186,10 +186,10 @@ func (a *analyzer) relfields(rel *relinfo, styp *types.Struct) error {
 		pfx  string        // column prefix
 	}
 
-	// LIFO stack of struct loops
+	// LIFO stack of structloops used for depth first traversal of struct fields.
 	stack := []*structloop{{styp: styp, typ: &rel.datatype.typeinfo}}
 
-stackloop: // depth first traversal of struct fields
+stackloop:
 	for len(stack) > 0 {
 		loop := stack[len(stack)-1]
 		for loop.idx < loop.styp.NumFields() {
@@ -387,10 +387,6 @@ func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 }
 
 // TODO:
-// - add support for row-wise comparison:
-//   - (NOT) IN
-//   - ANY / SOME
-//   - ALL
 // - add support for pattern matching:
 //   - LIKE
 //   - SIMILAR TO
@@ -628,13 +624,14 @@ stackloop:
 			wn.colid = colid
 			wn.typ, _ = a.typeinfo(fld.Type())
 			wn.cmp = a.cmpop(sqltag2)
-			for _, v := range tag["sql"][1:] { // look for the optional modifier function
-				if fn, ok := string2function[strings.ToLower(v)]; ok {
-					wn.mod = fn
-					break
-				}
-			}
+			wn.saop = a.scalarrop(tag["sql"][1:])
+			wn.mod = a.modfn(tag["sql"][1:])
 			item.node = wn
+
+			// TODO(mkopriva): make sure that, if a scalarrop was
+			// provided, the fields type is either slice or arrays
+			// and that the cmpop is an operator that can actually
+			// be used with a scalarrop.
 
 		}
 		stack = stack[:len(stack)-1]
@@ -650,6 +647,24 @@ func (a *analyzer) cmpop(val string) (cmp cmpop) {
 		cmp = cmpeq // default
 	}
 	return cmp
+}
+
+func (a *analyzer) scalarrop(tagvals []string) scalarrop {
+	for _, v := range tagvals {
+		if op, ok := string2scalarrop[strings.ToLower(v)]; ok {
+			return op
+		}
+	}
+	return 0
+}
+
+func (a *analyzer) modfn(tagvals []string) function {
+	for _, v := range tagvals {
+		if fn, ok := string2function[strings.ToLower(v)]; ok {
+			return fn
+		}
+	}
+	return 0
 }
 
 func (a *analyzer) isimported(named *types.Named) bool {
@@ -860,6 +875,7 @@ type wherefield struct {
 	typ   typeinfo //
 	colid objid    //
 	cmp   cmpop    //
+	saop  scalarrop
 	mod   function //
 }
 
@@ -909,8 +925,14 @@ const (
 	cmpgt              // greater than
 	cmple              // less than or equal
 	cmpge              // greater than or equal
-	cmpdi              // distinct from
-	cmpnd              // not distinct from
+
+	// IS [NOT] DISTINCT FROM
+	cmpdi // is distinct from
+	cmpnd // is not distinct from
+
+	// [NOT] IN
+	cmpin // in
+	cmpni // not in
 )
 
 var string2cmpop = map[string]cmpop{
@@ -922,6 +944,23 @@ var string2cmpop = map[string]cmpop{
 	">=":          cmpge,
 	"distinct":    cmpdi,
 	"notdistinct": cmpnd,
+	"in":          cmpin,
+	"notin":       cmpni,
+}
+
+type scalarrop uint // scalar array operator
+
+const (
+	_           scalarrop = iota // no operator
+	scalarrany                   // ANY
+	scalarrsome                  // SOME
+	scalarrall                   // ALL
+)
+
+var string2scalarrop = map[string]scalarrop{
+	"any":  scalarrany,
+	"some": scalarrsome,
+	"all":  scalarrall,
 }
 
 type function uint

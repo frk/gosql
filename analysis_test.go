@@ -467,6 +467,52 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				{op: booland, node: &wherecolumn{colid: objid{name: "column_d"}, cmp: cmpnd, colid2: objid{name: "column_y"}}},
 			}},
 		},
+	}, {
+		name: "DeleteTestOK16",
+		want: &command{
+			name: "DeleteTestOK16",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    objid{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherefield{
+					name:  "a",
+					typ:   typeinfo{kind: kindInt, isslice: true},
+					colid: objid{name: "column_a"},
+					cmp:   cmpin,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "b",
+					typ:   typeinfo{kind: kindInt, isarray: true, arraylen: 5},
+					colid: objid{name: "column_b"},
+					cmp:   cmpni,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "c",
+					typ:   typeinfo{kind: kindInt, isslice: true},
+					colid: objid{name: "column_c"},
+					cmp:   cmpeq,
+					saop:  scalarrany,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "d",
+					typ:   typeinfo{kind: kindInt, isarray: true, arraylen: 10},
+					colid: objid{name: "column_d"},
+					cmp:   cmpgt,
+					saop:  scalarrsome,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "e",
+					typ:   typeinfo{kind: kindInt, isslice: true},
+					colid: objid{name: "column_e"},
+					cmp:   cmple,
+					saop:  scalarrall,
+				}},
+			}},
+		},
 	}}
 
 	for _, tt := range tests {

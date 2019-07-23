@@ -189,3 +189,15 @@ type DeleteTestOK15 struct {
 		_ gosql.Column `sql:"column_d,notdistinct,column_y"`
 	}
 }
+
+//OK: where block with array comparisons
+type DeleteTestOK16 struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		a []int   `sql:"column_a,in"`
+		b [5]int  `sql:"column_b,notin"`
+		c []int   `sql:"column_c,=,any"`
+		d [10]int `sql:"column_d,>,some"`
+		e []int   `sql:"column_e,<=,all"`
+	}
+}
