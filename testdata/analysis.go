@@ -160,8 +160,8 @@ type DeleteTestOK14 struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
 		a struct {
-			x int `sql:",x"`
-			y int `sql:",y"`
+			x int `sql:"x"`
+			y int `sql:"y"`
 		} `sql:"column_a,between"`
 		b struct {
 			_ gosql.Column `sql:"column_x,x"`
@@ -169,10 +169,10 @@ type DeleteTestOK14 struct {
 		} `sql:"column_b,betweensym"`
 		c struct {
 			_ gosql.Column `sql:"column_z,x"`
-			z int          `sql:",y"`
+			z int          `sql:"y"`
 		} `sql:"column_c,notbetweensym"`
 		d struct {
-			z int          `sql:",x"`
+			z int          `sql:"x"`
 			_ gosql.Column `sql:"column_z,y"`
 		} `sql:"column_d,notbetween"`
 	}

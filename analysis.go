@@ -540,9 +540,10 @@ stackloop:
 					fld := ns.Struct.Field(i)
 					tag := tagutil.New(ns.Struct.Tag(i))
 					sqltag := tag.First("sql")
-					sqltag2 := strings.ToLower(tag.Second("sql"))
 
 					if fld.Name() == "_" && typesutil.IsDirective("Column", fld.Type()) {
+						sqltag2 := strings.ToLower(tag.Second("sql"))
+
 						colid, _, err := a.objid(sqltag)
 						if err != nil {
 							return err
@@ -560,9 +561,9 @@ stackloop:
 						v.name = fld.Name()
 						v.typ, _ = a.typeinfo(fld.Type())
 
-						if sqltag2 == "x" {
+						if sqltag == "x" {
 							x = v
-						} else if sqltag2 == "y" {
+						} else if sqltag == "y" {
 							y = v
 						}
 					}
