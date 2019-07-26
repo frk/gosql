@@ -477,68 +477,37 @@ stackloop:
 					continue
 				}
 
-				// Check whether the column directive is supposed
-				// to be used to produce a IS [NOT] DISTINCT FROM
-				// comparison predicate.
-				//
-				// A valid "distinct" predicate directive is expected
-				// to have 3 tag values in this order: the LHS column,
-				// the predicate, and then the RHS column.
-				if strings.Contains(sqltag2, "distinct") {
-					if len(tag["sql"]) < 3 {
-						return newerr(errBadDistinctPredicate)
-					}
+				// In a gosql.Column directive the 3rd tag value,
+				// if present, will be either another column or
+				// a value-literal to which the main column should
+				// be compared.
+				if len(tag["sql"]) > 2 {
+					sqltag3 := tag["sql"][2]
 
 					colid, err := a.colid(sqltag)
 					if err != nil {
 						return err
 					}
-					colid2, err := a.colid(tag["sql"][2])
-					if err != nil {
-						return err
-					}
 
 					wn := new(wherecolumn)
 					wn.colid = colid
-					wn.cmp = a.cmpop(sqltag2)
-					wn.colid2 = colid2
-					item.node = wn
-					continue
-				}
+					wn.cmp, wn.saop = a.cmpop(sqltag2)
 
-				// Check for a column comparison expression. Only
-				// column-to-column and column-to-literal expressions
-				// are allowed. The LHS of the expression is expected
-				// to ALWAYS be a column while the RHS can be either a
-				// column or a literal expression.
-				if recmpexpr.MatchString(sqltag) {
-					lhs, op, rhs := a.splitcmpexpr(sqltag)
-
-					colid, err := a.colid(lhs)
-					if err != nil {
-						return err
-					}
-
-					wn := new(wherecolumn)
-					wn.colid = colid
-					wn.cmp = a.cmpop(op)
-
-					// column or literal?
-					if recolid.MatchString(rhs) {
-						colid2, err := a.colid(rhs)
+					if recolid.MatchString(sqltag3) {
+						colid2, err := a.colid(sqltag3)
 						if err != nil {
 							return err
 						}
 						wn.colid2 = colid2
 					} else {
-						wn.lit = rhs
+						wn.lit = sqltag3 // assume literal expression
 					}
 
 					item.node = wn
 					continue
 				}
 
-				// Column with unary predicate.
+				// Assume column with unary predicate.
 				colid, err := a.colid(sqltag)
 				if err != nil {
 					return err
@@ -623,13 +592,12 @@ stackloop:
 			wn.name = fld.Name()
 			wn.colid = colid
 			wn.typ, _ = a.typeinfo(fld.Type())
-			wn.cmp = a.cmpop(sqltag2)
-			wn.saop = a.scalarrop(tag["sql"][1:])
+			wn.cmp, wn.saop = a.cmpop(sqltag2)
 			wn.mod = a.modfn(tag["sql"][1:])
 			item.node = wn
 
 			// TODO(mkopriva): make sure that, if a scalarrop was
-			// provided, the fields type is either slice or arrays
+			// provided, the fields type is either slice or array
 			// and that the cmpop is an operator that can actually
 			// be used with a scalarrop.
 
@@ -641,21 +609,73 @@ stackloop:
 	return nil
 }
 
-func (a *analyzer) cmpop(val string) (cmp cmpop) {
-	var ok bool
-	if cmp, ok = string2cmpop[strings.ToLower(val)]; !ok {
-		cmp = cmpeq // default
-	}
-	return cmp
-}
+func (a *analyzer) cmpop(val string) (op1 cmpop, op2 scalarrop) {
+	val = strings.ToLower(strings.TrimSpace(val))
 
-func (a *analyzer) scalarrop(tagvals []string) scalarrop {
-	for _, v := range tagvals {
-		if op, ok := string2scalarrop[strings.ToLower(v)]; ok {
-			return op
+	var cmp, saop string
+	if len(val) > 0 {
+		switch val[0] {
+		case '=': // =
+			cmp, saop = val[:1], val[1:]
+		case '!': // !=
+			if len(val) > 1 && val[1] == '=' {
+				cmp, saop = val[:2], val[2:]
+			}
+		case '<': // < or <= or <>
+			if len(val) > 1 && (val[1] == '=' || val[1] == '>') {
+				cmp, saop = val[:2], val[2:]
+			} else {
+				cmp, saop = val[:1], val[1:]
+			}
+		case '>': // > or >=
+			if len(val) > 1 && val[1] == '=' {
+				cmp, saop = val[:2], val[2:]
+			} else {
+				cmp, saop = val[:1], val[1:]
+			}
+		case 'd': // distinct
+			n := len("distinct")
+			if len(val) >= n && val[:n] == "distinct" {
+				cmp, saop = val[:n], val[n:]
+			}
+		case 'i': // in
+			if len(val) > 1 && val[1] == 'n' {
+				cmp = val[:2] // does not support scalarrop
+			}
+		case 'n': // notdistinct or notin
+			n := len("notdistinct")
+			if len(val) >= n && val[:n] == "notdistinct" {
+				cmp, saop = val[:n], val[n:]
+			} else if n = len("notin"); len(val) >= n && val[:n] == "notin" {
+				cmp = val[:n] // does not support scalarrop
+			}
+		case 'a', 's': // any or some or all
+			saop = val
 		}
 	}
-	return 0
+
+	// If saop was obtained from any but the last case above it may be prefixed
+	// with a space that separated it from the cmpop, remove that space.
+	saop = strings.TrimSpace(saop)
+
+	// Defualt to "is equal" if no cmpop was provided.
+	if len(cmp) == 0 {
+		cmp = "="
+	}
+
+	// TODO(mkopriva): if cmp and saop are both empty but val isn't that means
+	// that an invalid val was provided and an error should be returned.
+
+	var ok bool
+	if op1, ok = string2cmpop[cmp]; !ok {
+		// TODO(mkopriva): return an error, although considering the fact
+		// that cmp is set to a valid value if empty this probably should
+		// never happen, unless the map is missing a key-value pair.
+	}
+	if op2, ok = string2scalarrop[saop]; !ok && len(saop) > 0 {
+		// TODO(mkopriva): return an error if no match found in map
+	}
+	return op1, op2
 }
 
 func (a *analyzer) modfn(tagvals []string) function {
@@ -710,43 +730,6 @@ func (a *analyzer) colid(val string) (id objid, err error) {
 	}
 	id.name = val
 	return id, nil
-}
-
-// column to column comparison
-var recolcmp = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*\s*(?:=|<>|<=?|>=?)(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*$`)
-
-// column to {column or literal} comparison expression
-var recmpexpr = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*\s*(?:=|<>|<=?|>=?)\s*\S.+$`)
-
-func (a *analyzer) splitcmpexpr(x string) (lhs, op, rhs string) {
-	for i := range x {
-		switch x[i] {
-		case '=':
-			lhs, op, rhs = x[:i], x[i:i+1], x[i+1:]
-		case '<':
-			if j := i + 1; len(x) > i && (x[j] == '=' || x[j] == '>') {
-				lhs, op, rhs = x[:i], x[i:j+1], x[j+1:]
-			} else {
-				lhs, op, rhs = x[:i], x[i:i+1], x[i+1:]
-			}
-		case '>':
-			if j := i + 1; len(x) > i && x[j] == '=' {
-				lhs, op, rhs = x[:i], x[i:j+1], x[j+1:]
-			} else {
-				lhs, op, rhs = x[:i], x[i:i+1], x[i+1:]
-			}
-		default:
-			continue
-		}
-
-		// if default wasn't hit we're done
-		break
-	}
-
-	lhs = strings.TrimSpace(lhs)
-	op = strings.TrimSpace(op)
-	rhs = strings.TrimSpace(rhs)
-	return lhs, op, rhs
 }
 
 type cmdtype uint
@@ -890,7 +873,8 @@ type wherecolumn struct {
 	pred predicate
 	// If set, it will hold the comparison operator to be used to compare
 	// the target column against the colid2 column or the lit value.
-	cmp cmpop
+	cmp  cmpop
+	saop scalarrop
 	// If set, it will hold the id of the column that should be compared
 	// to the target column.
 	colid2 objid

@@ -60,13 +60,13 @@ var errorCodeMessageFormats = map[errorCode]string{
 		"type and it MUST return exactly one value of type error, when it's an " +
 		"interface, it MUST have exactly one method whose signature MUST be the " +
 		"same as that of the function described above.",
-	errBadObjId:       "",
-	errBadColId:       "",
-	errBadBoolTag:     "",
-	errBadBetweenType: "",
+	errBadObjId:       "bad object id",
+	errBadColId:       "bad column id",
+	errBadBoolTag:     "bad boolean tag",
+	errBadBetweenType: "bad between type",
 
-	errBadType: "",
-	errBadKind: "",
+	errBadType: "bad type",
+	errBadKind: "bad kind",
 
 	errBadCmdType: "The %s command type must be a struct, instead got %s. " +
 		"If this type should be ignored by gosql you can add the \"ignore\" comment marker " +

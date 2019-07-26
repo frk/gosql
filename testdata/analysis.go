@@ -147,10 +147,10 @@ type DeleteTestOK12 struct {
 type DeleteTestOK13 struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
-		_ gosql.Column `sql:"column_a<>column_b"`
-		_ gosql.Column `sql:"t.column_c = u.column_d"`
-		_ gosql.Column `sql:"t.column_e > 123"`
-		_ gosql.Column `sql:"t.column_f = 'active'"`
+		_ gosql.Column `sql:"column_a,<>,column_b"`
+		_ gosql.Column `sql:"t.column_c,=,u.column_d"`
+		_ gosql.Column `sql:"t.column_e,>,123"`
+		_ gosql.Column `sql:"t.column_f,=,'active'"`
 		// _ gosql.Column `sql:"t.column_g <> true"`
 	}
 }
@@ -196,8 +196,8 @@ type DeleteTestOK16 struct {
 	Where struct {
 		a []int   `sql:"column_a,in"`
 		b [5]int  `sql:"column_b,notin"`
-		c []int   `sql:"column_c,=,any"`
-		d [10]int `sql:"column_d,>,some"`
-		e []int   `sql:"column_e,<=,all"`
+		c []int   `sql:"column_c,=any"`
+		d [10]int `sql:"column_d,>some"`
+		e []int   `sql:"column_e,<=all"`
 	}
 }

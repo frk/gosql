@@ -519,7 +519,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := runAnalysis(tt.name, t)
 			if e := compare.Compare(err, tt.err); e != nil {
-				t.Errorf("%v - %#v", e, err)
+				t.Errorf("%v - %#v %v", e, err, err)
 			}
 			if e := compare.Compare(got, tt.want); e != nil {
 				t.Error(e)
