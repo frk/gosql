@@ -179,7 +179,7 @@ type DeleteTestOK14 struct {
 }
 
 //OK: where block with "distinct from" predicates
-type DeleteTestOK15 struct {
+type DeleteTestOK_DistinctFrom struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
 		a int `sql:"column_a,distinct"`
@@ -191,7 +191,7 @@ type DeleteTestOK15 struct {
 }
 
 //OK: where block with array comparisons
-type DeleteTestOK16 struct {
+type DeleteTestOK_ArrayComparisons struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
 		a []int   `sql:"column_a,in"`
@@ -199,5 +199,20 @@ type DeleteTestOK16 struct {
 		c []int   `sql:"column_c,=any"`
 		d [10]int `sql:"column_d,>some"`
 		e []int   `sql:"column_e,<=all"`
+	}
+}
+
+//OK: where block with pattern matching
+type DeleteTestOK_PatternMatching struct {
+	Rel   struct{} `rel:"a_relation"`
+	Where struct {
+		a string `sql:"column_a,like"`
+		b string `sql:"column_b,notlike"`
+		c string `sql:"column_c,similar"`
+		d string `sql:"column_d,notsimilar"`
+		e string `sql:"column_e,~"`
+		f string `sql:"column_f,~*"`
+		g string `sql:"column_g,!~"`
+		h string `sql:"column_h,!~*"`
 	}
 }

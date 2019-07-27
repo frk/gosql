@@ -386,11 +386,6 @@ func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 	return use, val
 }
 
-// TODO:
-// - add support for pattern matching:
-//   - LIKE
-//   - SIMILAR TO
-//   - ~ (regexp)
 func (a *analyzer) whereblock(field *types.Var) (err error) {
 	// the structloop type holds the state of a loop over a struct's fields
 	type structloop struct {
@@ -618,8 +613,10 @@ func (a *analyzer) cmpop(val string) (op1 cmpop, op2 scalarrop) {
 		switch val[0] {
 		case '=': // =
 			cmp, saop = val[:1], val[1:]
-		case '!': // !=
-			if len(val) > 1 && val[1] == '=' {
+		case '!': // != or !~ or !~*
+			if len(val) > 2 && (val[1] == '~' && val[2] == '*') {
+				cmp, saop = val[:3], val[3:]
+			} else if len(val) > 1 && (val[1] == '=' || val[1] == '~') {
 				cmp, saop = val[:2], val[2:]
 			}
 		case '<': // < or <= or <>
@@ -634,6 +631,12 @@ func (a *analyzer) cmpop(val string) (op1 cmpop, op2 scalarrop) {
 			} else {
 				cmp, saop = val[:1], val[1:]
 			}
+		case '~': // ~ or ~*
+			if len(val) > 1 && val[1] == '*' {
+				cmp, saop = val[:2], val[2:]
+			} else {
+				cmp, saop = val[:1], val[1:]
+			}
 		case 'd': // distinct
 			n := len("distinct")
 			if len(val) >= n && val[:n] == "distinct" {
@@ -643,14 +646,29 @@ func (a *analyzer) cmpop(val string) (op1 cmpop, op2 scalarrop) {
 			if len(val) > 1 && val[1] == 'n' {
 				cmp = val[:2] // does not support scalarrop
 			}
-		case 'n': // notdistinct or notin
-			n := len("notdistinct")
-			if len(val) >= n && val[:n] == "notdistinct" {
+		case 'l': // like
+			n := len("like")
+			if len(val) >= n && val[:n] == "like" {
 				cmp, saop = val[:n], val[n:]
-			} else if n = len("notin"); len(val) >= n && val[:n] == "notin" {
-				cmp = val[:n] // does not support scalarrop
 			}
-		case 'a', 's': // any or some or all
+		case 'n': // notdistinct or notin or notlike or notsimilar
+			if n := len("notin"); len(val) >= n && val[:n] == "notin" {
+				cmp = val[:n] // does not support scalarrop
+			} else if n := len("notlike"); len(val) >= n && val[:n] == "notlike" {
+				cmp, saop = val[:n], val[n:]
+			} else if n := len("notsimilar"); len(val) >= n && val[:n] == "notsimilar" {
+				cmp, saop = val[:n], val[n:]
+			} else if n := len("notdistinct"); len(val) >= n && val[:n] == "notdistinct" {
+				cmp, saop = val[:n], val[n:]
+			}
+		case 's': // similar or some
+			n := len("similar")
+			if len(val) >= n && val[:n] == "similar" {
+				cmp, saop = val[:n], val[n:]
+			} else {
+				saop = val // assume some
+			}
+		case 'a': // any or all
 			saop = val
 		}
 	}
@@ -903,13 +921,14 @@ const (
 type cmpop uint // comparison operation
 
 const (
-	_     cmpop = iota // no comparison
-	cmpeq              // equals
-	cmpne              // not equals
-	cmplt              // less than
-	cmpgt              // greater than
-	cmple              // less than or equal
-	cmpge              // greater than or equal
+	_      cmpop = iota // no comparison
+	cmpeq               // equals
+	cmpne               // not equals
+	cmpne2              // not equals
+	cmplt               // less than
+	cmpgt               // greater than
+	cmple               // less than or equal
+	cmpge               // greater than or equal
 
 	// IS [NOT] DISTINCT FROM
 	cmpdi // is distinct from
@@ -918,11 +937,22 @@ const (
 	// [NOT] IN
 	cmpin // in
 	cmpni // not in
+
+	// pattern matching
+	cmplike
+	cmpnotlike
+	cmpsimilar
+	cmpnotsimilar
+	cmprexp
+	cmprexpi
+	cmpnotrexp
+	cmpnotrexpi
 )
 
 var string2cmpop = map[string]cmpop{
 	"=":           cmpeq,
 	"<>":          cmpne,
+	"!=":          cmpne2,
 	"<":           cmplt,
 	">":           cmpgt,
 	"<=":          cmple,
@@ -931,6 +961,14 @@ var string2cmpop = map[string]cmpop{
 	"notdistinct": cmpnd,
 	"in":          cmpin,
 	"notin":       cmpni,
+	"like":        cmplike,
+	"notlike":     cmpnotlike,
+	"similar":     cmpsimilar,
+	"notsimilar":  cmpnotsimilar,
+	"~":           cmprexp,
+	"~*":          cmprexpi,
+	"!~":          cmpnotrexp,
+	"!~*":         cmpnotrexpi,
 }
 
 type scalarrop uint // scalar array operator

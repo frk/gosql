@@ -441,9 +441,9 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK15",
+		name: "DeleteTestOK_DistinctFrom",
 		want: &command{
-			name: "DeleteTestOK15",
+			name: "DeleteTestOK_DistinctFrom",
 			typ:  cmdtypeDelete,
 			rel: &relinfo{
 				field:    "Rel",
@@ -468,9 +468,9 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK16",
+		name: "DeleteTestOK_ArrayComparisons",
 		want: &command{
-			name: "DeleteTestOK16",
+			name: "DeleteTestOK_ArrayComparisons",
 			typ:  cmdtypeDelete,
 			rel: &relinfo{
 				field:    "Rel",
@@ -510,6 +510,67 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 					colid: objid{name: "column_e"},
 					cmp:   cmple,
 					saop:  scalarrall,
+				}},
+			}},
+		},
+	}, {
+		name: "DeleteTestOK_PatternMatching",
+		want: &command{
+			name: "DeleteTestOK_PatternMatching",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    objid{name: "a_relation"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherefield{
+					name:  "a",
+					typ:   typeinfo{kind: kindString},
+					colid: objid{name: "column_a"},
+					cmp:   cmplike,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "b",
+					typ:   typeinfo{kind: kindString},
+					colid: objid{name: "column_b"},
+					cmp:   cmpnotlike,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "c",
+					typ:   typeinfo{kind: kindString},
+					colid: objid{name: "column_c"},
+					cmp:   cmpsimilar,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "d",
+					typ:   typeinfo{kind: kindString},
+					colid: objid{name: "column_d"},
+					cmp:   cmpnotsimilar,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "e",
+					typ:   typeinfo{kind: kindString},
+					colid: objid{name: "column_e"},
+					cmp:   cmprexp,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "f",
+					typ:   typeinfo{kind: kindString},
+					colid: objid{name: "column_f"},
+					cmp:   cmprexpi,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "g",
+					typ:   typeinfo{kind: kindString},
+					colid: objid{name: "column_g"},
+					cmp:   cmpnotrexp,
+				}},
+				{op: booland, node: &wherefield{
+					name:  "h",
+					typ:   typeinfo{kind: kindString},
+					colid: objid{name: "column_h"},
+					cmp:   cmpnotrexpi,
 				}},
 			}},
 		},
