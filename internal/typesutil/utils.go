@@ -3,6 +3,7 @@ package typesutil
 import (
 	"errors"
 	"go/types"
+	"strings"
 )
 
 var ErrBadType = errors.New("bad type")
@@ -29,4 +30,27 @@ func GetStruct(v *types.Var) (*NamedStruct, error) {
 		return nil, ErrBadType
 	}
 	return ns, nil
+}
+
+// GetDirectiveName returns the name of the gosql directive type of the given
+// variable. If the type of the given variable is not a directive an empty
+// string will be returned instead.
+func GetDirectiveName(v *types.Var) string {
+	named, ok := v.Type().(*types.Named)
+	if !ok {
+		return ""
+	}
+
+	path := named.Obj().Pkg().Path()
+	if !strings.HasSuffix(path, "github.com/frk/gosql") {
+		return ""
+	}
+
+	st, ok := named.Underlying().(*types.Struct)
+	if !ok || st.NumFields() != 1 {
+		return ""
+	} else if st.Field(0).Name() != "_isdir" {
+		return ""
+	}
+	return named.Obj().Name()
 }

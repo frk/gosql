@@ -73,19 +73,19 @@ type SelectTestOK7 struct {
 		e int `sql:"e,+"`
 		f int `sql:"f,coalesce"`
 		g int `sql:"g,coalesce(-1)"`
-	} `rel:"a_relation"`
+	} `rel:"relation_a"`
 }
 
 //OK: nested fields
 type InsertTestOK8 struct {
 	Rel struct {
 		Foobar common.Foo `sql:">foo_"`
-	} `rel:"a_relation"`
+	} `rel:"relation_a"`
 }
 
 //OK: where block
 type DeleteTestOK9 struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		ID int `sql:"id"`
 	}
@@ -93,7 +93,7 @@ type DeleteTestOK9 struct {
 
 //OK: where block with gosql.Column directive and all possible predicates
 type DeleteTestOK10 struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		_ gosql.Column `sql:"column_a notnull"`
 		_ gosql.Column `sql:"column_b isnull" bool:"and"`
@@ -108,7 +108,7 @@ type DeleteTestOK10 struct {
 
 //OK: nested where blocks
 type DeleteTestOK11 struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		x struct {
 			foo int          `sql:"column_foo"`
@@ -131,7 +131,7 @@ type DeleteTestOK11 struct {
 
 //OK: where block with field items and specific comparison operators
 type DeleteTestOK12 struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		a int `sql:"column_a <"`
 		b int `sql:"column_b >"`
@@ -145,7 +145,7 @@ type DeleteTestOK12 struct {
 
 //OK: where block with gosql.Column directive and comparison expressions
 type DeleteTestOK13 struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		_ gosql.Column `sql:"column_a <> column_b"`
 		_ gosql.Column `sql:"t.column_c=u.column_d"`
@@ -157,7 +157,7 @@ type DeleteTestOK13 struct {
 
 //OK: where block with "between" predicates
 type DeleteTestOK14 struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		a struct {
 			x int `sql:"x"`
@@ -180,7 +180,7 @@ type DeleteTestOK14 struct {
 
 //OK: where block with "distinct from" predicates
 type DeleteTestOK_DistinctFrom struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		a int `sql:"column_a isdistinct"`
 		b int `sql:"column_b notdistinct"`
@@ -192,7 +192,7 @@ type DeleteTestOK_DistinctFrom struct {
 
 //OK: where block with array comparisons
 type DeleteTestOK_ArrayComparisons struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		a []int   `sql:"column_a isin"`
 		b [5]int  `sql:"column_b notin"`
@@ -204,7 +204,7 @@ type DeleteTestOK_ArrayComparisons struct {
 
 //OK: where block with pattern matching
 type DeleteTestOK_PatternMatching struct {
-	Rel   struct{} `rel:"a_relation"`
+	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		a string `sql:"column_a islike"`
 		b string `sql:"column_b notlike"`
@@ -214,5 +214,50 @@ type DeleteTestOK_PatternMatching struct {
 		f string `sql:"column_f~*"`
 		g string `sql:"column_g!~"`
 		h string `sql:"column_h !~*"`
+	}
+}
+
+//OK: DELETE with Using joinblock
+type DeleteTestOK_Using struct {
+	Rel   struct{} `rel:"relation_a:a"`
+	Using struct {
+		_ gosql.Relation  `sql:"relation_b:b"`
+		_ gosql.LeftJoin  `sql:"relation_c:c,c.b_id = b.id"`
+		_ gosql.RightJoin `sql:"relation_d:d,d.c_id = c.id;d.num > b.num"`
+		_ gosql.FullJoin  `sql:"relation_e:e,e.d_id = d.id,e.is_foo isfalse"`
+		_ gosql.CrossJoin `sql:"relation_f:f"`
+	}
+	Where struct {
+		_ gosql.Column `sql:"a.id = d.a_id"`
+	}
+}
+
+//OK: UPDATE with From joinblock
+type UpdateTestOK_From struct {
+	Rel  struct{} `rel:"relation_a:a"`
+	From struct {
+		_ gosql.Relation  `sql:"relation_b:b"`
+		_ gosql.LeftJoin  `sql:"relation_c:c,c.b_id = b.id"`
+		_ gosql.RightJoin `sql:"relation_d:d,d.c_id = c.id;d.num > b.num"`
+		_ gosql.FullJoin  `sql:"relation_e:e,e.d_id = d.id,e.is_foo isfalse"`
+		_ gosql.CrossJoin `sql:"relation_f:f"`
+	}
+	Where struct {
+		_ gosql.Column `sql:"a.id = d.a_id"`
+	}
+}
+
+//OK: SELECT with Join joinblock
+type SelectTestOK_Join struct {
+	Rel  struct{} `rel:"relation_a:a"`
+	Join struct {
+		_ gosql.LeftJoin  `sql:"relation_b:b,b.a_id = a.id"`
+		_ gosql.LeftJoin  `sql:"relation_c:c,c.b_id = b.id"`
+		_ gosql.RightJoin `sql:"relation_d:d,d.c_id = c.id;d.num > b.num"`
+		_ gosql.FullJoin  `sql:"relation_e:e,e.d_id = d.id,e.is_foo isfalse"`
+		_ gosql.CrossJoin `sql:"relation_f:f"`
+	}
+	Where struct {
+		_ gosql.Column `sql:"a.id = d.a_id"`
 	}
 }

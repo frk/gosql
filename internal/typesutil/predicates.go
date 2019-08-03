@@ -88,9 +88,15 @@ func IsDirective(ident string, typ types.Type) bool {
 	if name != ident {
 		return false
 	}
-	path := named.Obj().Pkg().Path()
+
 	// Compare the suffix only to allow for vendor imports.
-	return strings.HasSuffix(path, "github.com/frk/gosql")
+	path := named.Obj().Pkg().Path()
+	if !strings.HasSuffix(path, "github.com/frk/gosql") {
+		return false
+	}
+
+	st, ok := named.Underlying().(*types.Struct)
+	return ok && st.NumFields() == 1 && st.Field(0).Name() == "_isdir"
 }
 
 // ImplementsScanner reports whether or not the given named type implements

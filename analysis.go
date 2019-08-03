@@ -64,15 +64,14 @@ func (a *analyzer) run() (err error) {
 		tag := tagutil.New(a.cmdtyp.Tag(i))
 
 		if reltag := tag.First("rel"); len(reltag) > 0 {
-			relid, alias, err := a.objid(reltag)
+			rid, err := a.relid(reltag)
 			if err != nil {
 				return err
 			}
 
 			rel := new(relinfo)
 			rel.field = fld.Name()
-			rel.relid = relid
-			rel.alias = alias
+			rel.relid = rid
 			if err := a.reldatatype(rel, fld); err != nil {
 				return err
 			}
@@ -83,6 +82,10 @@ func (a *analyzer) run() (err error) {
 		switch strings.ToLower(fld.Name()) {
 		case "where":
 			if err := a.whereblock(fld); err != nil {
+				return err
+			}
+		case "join", "from", "using":
+			if err := a.joinblock(fld); err != nil {
 				return err
 			}
 		}
@@ -253,7 +256,7 @@ stackloop:
 			f.binadd = tag.HasOption("sql", "+")
 			f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
 
-			colid, _, err := a.objid(loop.pfx + sqltag)
+			colid, err := a.colid(loop.pfx + sqltag)
 			if err != nil {
 				return err
 			}
@@ -485,7 +488,7 @@ stackloop:
 					wn := new(wherecolumn)
 					wn.colid = colid
 					wn.cmp = string2cmpop[op]
-					wn.saop = string2scalarrop[op2]
+					wn.sop = string2scalarrop[op2]
 
 					if a.iscolid(rhs) {
 						colid2, err := a.colid(rhs)
@@ -510,7 +513,7 @@ stackloop:
 				wn := new(wherecolumn)
 				wn.colid = colid
 				wn.cmp = string2cmpop[op]
-				wn.saop = string2scalarrop[op2]
+				wn.sop = string2scalarrop[op2]
 				item.node = wn
 				continue
 			}
@@ -539,7 +542,7 @@ stackloop:
 					if fld.Name() == "_" && typesutil.IsDirective("Column", fld.Type()) {
 						sqltag2 := strings.ToLower(tag.Second("sql"))
 
-						colid, _, err := a.objid(sqltag)
+						colid, err := a.colid(sqltag)
 						if err != nil {
 							return err
 						}
@@ -564,7 +567,7 @@ stackloop:
 					}
 				}
 
-				colid, _, err := a.objid(lhs)
+				colid, err := a.colid(lhs)
 				if err != nil {
 					return err
 				}
@@ -579,7 +582,7 @@ stackloop:
 			}
 
 			// Analyze field where item.
-			colid, _, err := a.objid(lhs)
+			colid, err := a.colid(lhs)
 			if err != nil {
 				return err
 			}
@@ -589,7 +592,7 @@ stackloop:
 			wn.colid = colid
 			wn.typ, _ = a.typeinfo(fld.Type())
 			wn.cmp = string2cmpop[op]
-			wn.saop = string2scalarrop[op2]
+			wn.sop = string2scalarrop[op2]
 			wn.mod = a.modfn(tag["sql"][1:])
 			item.node = wn
 
@@ -603,6 +606,86 @@ stackloop:
 	}
 
 	a.cmd.where = wb
+	return nil
+}
+
+func (a *analyzer) joinblock(field *types.Var) (err error) {
+	join := new(joinblock)
+	ns, err := typesutil.GetStruct(field)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < ns.Struct.NumFields(); i++ {
+		fld := ns.Struct.Field(i)
+		tag := tagutil.New(ns.Struct.Tag(i))
+		sqltag := tag.First("sql")
+
+		if sqltag == "-" || sqltag == "" {
+			continue
+		}
+
+		// In a joinblock all fields are expected to be directives
+		// with the blank identifier as their name.
+		if fld.Name() != "_" {
+			continue
+		}
+
+		switch dirname := typesutil.GetDirectiveName(fld); dirname {
+		case "Relation":
+			id, err := a.relid(sqltag)
+			if err != nil {
+				return err
+			}
+			join.rel = id
+		case "LeftJoin", "RightJoin", "FullJoin", "CrossJoin":
+			id, err := a.relid(sqltag)
+			if err != nil {
+				return err
+			}
+
+			var conds []*joincond
+			for _, val := range tag["sql"][1:] {
+				vals := strings.Split(val, ";")
+				for i, val := range vals {
+
+					cond := new(joincond)
+					if len(conds) > 0 && i == 0 {
+						cond.op = booland
+					} else if len(conds) > 0 && i > 0 {
+						cond.op = boolor
+					}
+
+					lhs, op, op2, rhs := a.splitcmpexpr(val)
+					if cond.col1, err = a.colid(lhs); err != nil {
+						return err
+					}
+
+					// optional right-hand side
+					if a.iscolid(rhs) {
+						if cond.col2, err = a.colid(rhs); err != nil {
+							return err
+						}
+					} else {
+						cond.lit = rhs
+					}
+
+					cond.cmp = string2cmpop[op]
+					cond.sop = string2scalarrop[op2]
+					conds = append(conds, cond)
+				}
+			}
+
+			item := new(joinitem)
+			item.typ = string2jointype[dirname]
+			item.rel = id
+			item.conds = conds
+			join.items = append(join.items, item)
+		}
+
+	}
+
+	a.cmd.join = join
 	return nil
 }
 
@@ -726,30 +809,27 @@ func (a *analyzer) isaccessible(fld *types.Var, named *types.Named) bool {
 	return fld.Name() != "_" && (fld.Exported() || !a.isimported(named))
 }
 
-var reobjid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*(?:\:[A-Za-z_]\w*)?$`)
+var rerelid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*(?:\:[A-Za-z_]\w*)?$`)
 
-// parses the given string and returns an objid and optionally an alias,
-// if the value's format is invalid an error will be returned instead.
-// The expected format is: "[qualifier.]name[:alias]".
-func (a *analyzer) objid(val string) (id objid, alias string, err error) {
-	if !reobjid.MatchString(val) {
-		log.Println("not objid =>", val)
-		return id, "", newerr(errBadObjId)
+// parses the given string and returns a relid, if the value's format is invalid
+// an error will be returned instead. The expected format is: "[qualifier.]name[:alias]".
+func (a *analyzer) relid(val string) (id relid, err error) {
+	if !rerelid.MatchString(val) {
+		return id, newerr(errBadObjId)
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.qual = val[:i]
 		val = val[i+1:]
 	}
 	if i := strings.LastIndexByte(val, ':'); i > -1 {
-		alias = val[i+1:]
+		id.alias = val[i+1:]
 		val = val[:i]
 	}
 	id.name = val
-	return id, alias, nil
+	return id, nil
 }
 
 var recolid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*$`)
-
 var rereserved = regexp.MustCompile(`^(?i:true|false|` +
 	`current_date|current_time|current_timestamp|` +
 	`current_role|current_schema|current_user|` +
@@ -760,7 +840,9 @@ func (a *analyzer) iscolid(val string) bool {
 	return recolid.MatchString(val) && !rereserved.MatchString(val)
 }
 
-func (a *analyzer) colid(val string) (id objid, err error) {
+// parses the given string and returns a colid, if the value's format is invalid
+// an error will be returned instead. The expected format is: "[qualifier.]name".
+func (a *analyzer) colid(val string) (id colid, err error) {
 	if !a.iscolid(val) {
 		log.Println("not colid =>", val)
 		return id, newerr(errBadColId)
@@ -787,10 +869,17 @@ type command struct {
 	name  string  // name of the target struct type
 	typ   cmdtype // the type of the command
 	rel   *relinfo
+	join  *joinblock
 	where *whereblock
 }
 
-type objid struct {
+type relid struct {
+	qual  string
+	name  string
+	alias string
+}
+
+type colid struct {
 	qual string
 	name string
 }
@@ -799,7 +888,7 @@ type objid struct {
 // db relation that's associated with that struct type.
 type relinfo struct {
 	field    string // name of the field that references the relation in the command
-	relid    objid  // the relation identifier
+	relid    relid  // the relation identifier
 	alias    string
 	datatype datatype
 	isview   bool // indicates that the relation is a table view
@@ -847,7 +936,7 @@ type fieldinfo struct {
 	// the field's parsed tag
 	tag tagutil.Tag
 	// the id of the corresponding column
-	colid objid
+	colid colid
 	// identifies the field's corresponding column as a primary key
 	//
 	// NOTE(mkopriva): This is used by default for UPDATEs which don't specify
@@ -879,6 +968,28 @@ type fieldinfo struct {
 	binadd bool
 }
 
+type joinblock struct {
+	// The relid of the top relation in a DELETE-USING / UPDATE-FROM
+	// clause, empty in SELECT commands.
+	rel   relid
+	items []*joinitem
+}
+
+type joinitem struct {
+	typ   jointype
+	rel   relid
+	conds []*joincond
+}
+
+type joincond struct {
+	op   boolop
+	col1 colid // the target column of the join condition.
+	col2 colid // the optional 2nd column to be compared to col1.
+	lit  string
+	cmp  cmpop // the comparison operator of the join condition
+	sop  scalarrop
+}
+
 type varinfo struct {
 	name string
 	typ  typeinfo
@@ -897,9 +1008,9 @@ type whereitem struct {
 type wherefield struct {
 	name  string
 	typ   typeinfo //
-	colid objid    //
+	colid colid    //
 	cmp   cmpop    //
-	saop  scalarrop
+	sop   scalarrop
 	mod   function //
 }
 
@@ -908,15 +1019,15 @@ type wherefield struct {
 // a column-to-column comparison, or a column-to-literal comparison.
 type wherecolumn struct {
 	// The target column of the wherecolumn item.
-	colid objid
+	colid colid
 	// If set, it will hold the comparison operator to be used to compare
 	// the target column either using a predicate unary operator, or a binary
 	// operator comparing against the colid2 column or the lit value.
-	cmp  cmpop
-	saop scalarrop
+	cmp cmpop
+	sop scalarrop
 	// If set, it will hold the id of the column that should be compared
 	// to the target column.
-	colid2 objid
+	colid2 colid
 	// If set, it will hold the literal value that should be compared
 	// to the target column.
 	lit string
@@ -924,7 +1035,7 @@ type wherecolumn struct {
 
 type wherebetween struct {
 	name  string
-	colid objid
+	colid colid
 	cmp   cmpop
 	x, y  interface{}
 }
@@ -1070,6 +1181,23 @@ const (
 var string2function = map[string]function{
 	"lower": fnlower,
 	"upper": fnupper,
+}
+
+type jointype uint
+
+const (
+	_         jointype = iota // no join
+	joinleft                  // LEFT JOIN
+	joinright                 // RIGHT JOIN
+	joinfull                  // FULL JOIN
+	joincross                 // CROSS JOIN
+)
+
+var string2jointype = map[string]jointype{
+	"LeftJoin":  joinleft,
+	"RightJoin": joinright,
+	"FullJoin":  joinfull,
+	"CrossJoin": joincross,
 }
 
 type typekind uint
