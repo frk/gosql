@@ -708,6 +708,30 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				}},
 			}},
 		},
+	}, {
+		name: "UpdateTestOK_All",
+		want: &command{
+			name: "UpdateTestOK_All",
+			typ:  cmdtypeUpdate,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			all: true,
+		},
+	}, {
+		name: "DeleteTestOK_All",
+		want: &command{
+			name: "DeleteTestOK_All",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			all: true,
+		},
 	}}
 
 	for _, tt := range tests {

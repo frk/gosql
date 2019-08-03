@@ -261,3 +261,15 @@ type SelectTestOK_Join struct {
 		_ gosql.Column `sql:"a.id = d.a_id"`
 	}
 }
+
+//OK: Update with All directive
+type UpdateTestOK_All struct {
+	Rel struct{} `rel:"relation_a:a"`
+	_   gosql.All
+}
+
+//OK: Delete with All directive
+type DeleteTestOK_All struct {
+	Rel struct{} `rel:"relation_a:a"`
+	_   gosql.All
+}

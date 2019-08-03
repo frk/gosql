@@ -90,10 +90,16 @@ func (a *analyzer) run() (err error) {
 			}
 		}
 
+		if dirname := typesutil.GetDirectiveName(fld); len(dirname) > 0 {
+			switch strings.ToLower(dirname) {
+			case "all":
+				a.cmd.all = true
+			}
+		}
+
 		// errorhandler
 		// default columns
 		// return columns
-		// all (update|delete)
 		// order by
 		// offset
 		// override
@@ -871,6 +877,9 @@ type command struct {
 	rel   *relinfo
 	join  *joinblock
 	where *whereblock
+	// Indicates that the command should be executed against all the rows
+	// of the relation.
+	all bool
 }
 
 type relid struct {
@@ -983,10 +992,10 @@ type joinitem struct {
 
 type joincond struct {
 	op   boolop
-	col1 colid // the target column of the join condition.
-	col2 colid // the optional 2nd column to be compared to col1.
-	lit  string
-	cmp  cmpop // the comparison operator of the join condition
+	col1 colid  // the target column of the join condition
+	col2 colid  // the optional 2nd column to be compared to col1
+	lit  string // the optional literal value
+	cmp  cmpop  // the comparison operator of the join condition
 	sop  scalarrop
 }
 
