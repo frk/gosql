@@ -115,7 +115,7 @@ func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 	}
 
 	// Check whether the relation field's type is an interface or a function,
-	// if so, it is then expected to be a "valid" iterator, and it is analyzed as such.
+	// if so, it is then expected to be an iterator, and it is analyzed as such.
 	//
 	// Failure of the iterator analysis will cause the whole analysis to exit
 	// as there's currently no support for non-iterator interfaces nor functions.
@@ -145,7 +145,7 @@ func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 		}
 		if named, ok = ftyp.(*types.Named); !ok {
 			// Fail if the type is a slice, an array, or a pointer
-			// while its base type is unnamed.
+			// while its base type remains unnamed.
 			if rel.datatype.isslice || rel.datatype.isarray || rel.datatype.ispointer {
 				return newerr(errBadRelationType, a.cmd.name, rel.field)
 			}
@@ -167,7 +167,7 @@ func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 	}
 
 	rel.datatype.kind = a.typekind(ftyp)
-	if rel.datatype.kind != kindStruct {
+	if rel.datatype.kind != kindstruct {
 		// Currently only the struct kind is supported as the
 		// relation's associated base datatype.
 		return newerr(errBadRelationType, a.cmd.name, rel.field)
@@ -178,7 +178,7 @@ func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 }
 
 func (a *analyzer) relfields(rel *relinfo, styp *types.Struct) error {
-	// the structloop type holds the state of a loop over a struct's fields
+	// The structloop type holds the state of a loop over a struct's fields.
 	type structloop struct {
 		styp *types.Struct // the struct type whose fields are being analyzed
 		typ  *typeinfo     // info on the struct type; holds the resulting slice of analyzed fieldinfo
@@ -197,12 +197,12 @@ stackloop:
 			tag := tagutil.New(loop.styp.Tag(loop.idx))
 			sqltag := tag.First("sql")
 
-			// instead of incrementing the index in the for-statement
+			// Instead of incrementing the index in the for-statement
 			// it is done here manually to ensure that it is not skipped
-			// when continuing to the outer loop
+			// when continuing to the outer loop.
 			loop.idx++
 
-			// ignore the field if:
+			// Ignore the field if:
 			// - no column name or sql tag was provided
 			if sqltag == "" ||
 				// - explicitly marked to be ignored
@@ -231,34 +231,33 @@ stackloop:
 			// value starts with the ">" (descend) marker, then it is
 			// considered to be a "branch" field whose child fields
 			// need to be analyzed as well.
-			if f.typ.kind == kindStruct && strings.HasPrefix(sqltag, ">") && (!f.typ.isslice && !f.typ.isarray) {
+			if f.typ.kind == kindstruct && strings.HasPrefix(sqltag, ">") && (!f.typ.isslice && !f.typ.isarray) {
 				loop2 := new(structloop)
 				loop2.styp = ftyp.(*types.Struct)
 				loop2.typ = &f.typ
 				loop2.pfx = loop.pfx + strings.TrimPrefix(sqltag, ">")
 				stack = append(stack, loop2)
 				continue stackloop
-			} else {
-				// If the field is not a struct to be descended,
-				// it is considered to be a "leaf" field and as
-				// such the analysis of leaf-specific information
-				// needs to be carried out.
-				f.auto = tag.HasOption("sql", "auto")
-				f.ispkey = tag.HasOption("sql", "pk")
-				f.nullempty = tag.HasOption("sql", "nullempty")
-				f.readonly = tag.HasOption("sql", "ro")
-				f.writeonly = tag.HasOption("sql", "wo")
-				f.usejson = tag.HasOption("sql", "json")
-				f.binadd = tag.HasOption("sql", "+")
-				f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
-
-				colid, _, err := a.objid(loop.pfx + sqltag)
-				if err != nil {
-					return err
-				}
-				f.colid = colid
 			}
 
+			// If the field is not a struct to be descended,
+			// it is considered to be a "leaf" field and as
+			// such the analysis of leaf-specific information
+			// needs to be carried out.
+			f.auto = tag.HasOption("sql", "auto")
+			f.ispkey = tag.HasOption("sql", "pk")
+			f.nullempty = tag.HasOption("sql", "nullempty")
+			f.readonly = tag.HasOption("sql", "ro")
+			f.writeonly = tag.HasOption("sql", "wo")
+			f.usejson = tag.HasOption("sql", "json")
+			f.binadd = tag.HasOption("sql", "+")
+			f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
+
+			colid, _, err := a.objid(loop.pfx + sqltag)
+			if err != nil {
+				return err
+			}
+			f.colid = colid
 		}
 		stack = stack[:len(stack)-1]
 	}
@@ -306,7 +305,7 @@ func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *rel
 
 	// Make sure that the method is exported or, if it's not, then at least
 	// ensure that the receiver type is local, i.e. not imported, otherwise
-	// the method will not be callable.
+	// the method will not be accessible.
 	if !mth.Exported() && named != nil && (named.Obj().Pkg().Path() != a.pkg) {
 		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
@@ -322,7 +321,7 @@ func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *rel
 }
 
 func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relinfo) (*types.Named, error) {
-	// must take 1 argument and return one value of type error. "func(T) error"
+	// Must take 1 argument and return one value of type error. "func(T) error"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
 		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
@@ -333,7 +332,7 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relinfo) (*types.Name
 		rel.datatype.ispointer = true
 	}
 
-	// make sure that the argument type is a named struct type
+	// Make sure that the argument type is a named struct type.
 	named, ok := typ.(*types.Named)
 	if !ok {
 		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
@@ -350,21 +349,21 @@ func (a *analyzer) typekind(typ types.Type) typekind {
 	case *types.Basic:
 		return basickind2typekind[x.Kind()]
 	case *types.Array:
-		return kindArray
+		return kindarray
 	case *types.Chan:
-		return kindChan
+		return kindchan
 	case *types.Signature:
-		return kindFunc
+		return kindfunc
 	case *types.Interface:
-		return kindInterface
+		return kindinterface
 	case *types.Map:
-		return kindMap
+		return kindmap
 	case *types.Pointer:
-		return kindPtr
+		return kindptr
 	case *types.Slice:
-		return kindSlice
+		return kindslice
 	case *types.Struct:
-		return kindStruct
+		return kindstruct
 	}
 	return 0 // unsupported / unknown
 }
@@ -387,7 +386,7 @@ func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 }
 
 func (a *analyzer) whereblock(field *types.Var) (err error) {
-	// the structloop type holds the state of a loop over a struct's fields
+	// The structloop type holds the state of a loop over a struct's fields.
 	type structloop struct {
 		wb  *whereblock
 		ns  *typesutil.NamedStruct // the struct type of the whereblock
@@ -411,7 +410,6 @@ stackloop:
 			fld := loop.ns.Struct.Field(loop.idx)
 			tag := tagutil.New(loop.ns.Struct.Tag(loop.idx))
 			sqltag := tag.First("sql")
-			sqltag2 := strings.ToLower(tag.Second("sql"))
 
 			// Instead of incrementing the index in the for-statement
 			// it is done here manually to ensure that it is not skipped
@@ -466,36 +464,37 @@ stackloop:
 				continue stackloop
 			}
 
+			lhs, op, op2, rhs := a.splitcmpexpr(sqltag)
+
 			// Analyze directive where item.
 			if fld.Name() == "_" {
 				if !typesutil.IsDirective("Column", fld.Type()) {
 					continue
 				}
 
-				// In a gosql.Column directive the 3rd tag value,
-				// if present, will be either another column or
-				// a value-literal to which the main column should
-				// be compared.
-				if len(tag["sql"]) > 2 {
-					sqltag3 := tag["sql"][2]
-
-					colid, err := a.colid(sqltag)
+				// If the expression in a gosql.Column tag's value
+				// contains a right-hand-side, it is expected to be
+				// either another column or a value-literal to which
+				// the main column should be compared.
+				if len(rhs) > 0 {
+					colid, err := a.colid(lhs)
 					if err != nil {
 						return err
 					}
 
 					wn := new(wherecolumn)
 					wn.colid = colid
-					wn.cmp, wn.saop = a.cmpop(sqltag2)
+					wn.cmp = string2cmpop[op]
+					wn.saop = string2scalarrop[op2]
 
-					if recolid.MatchString(sqltag3) {
-						colid2, err := a.colid(sqltag3)
+					if a.iscolid(rhs) {
+						colid2, err := a.colid(rhs)
 						if err != nil {
 							return err
 						}
 						wn.colid2 = colid2
 					} else {
-						wn.lit = sqltag3 // assume literal expression
+						wn.lit = rhs // assume literal expression
 					}
 
 					item.node = wn
@@ -503,14 +502,15 @@ stackloop:
 				}
 
 				// Assume column with unary predicate.
-				colid, err := a.colid(sqltag)
+				colid, err := a.colid(lhs)
 				if err != nil {
 					return err
 				}
 
 				wn := new(wherecolumn)
 				wn.colid = colid
-				wn.pred = string2predicate[sqltag2]
+				wn.cmp = string2cmpop[op]
+				wn.saop = string2scalarrop[op2]
 				item.node = wn
 				continue
 			}
@@ -522,7 +522,7 @@ stackloop:
 			// the number of fields equal to 2, where each of the
 			// fields is marked with an "x" or a "y" in their `sql`
 			// tag to indicate their position in the clause.
-			if strings.Contains(sqltag2, "between") {
+			if strings.Contains(op, "between") {
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
 					return newerr(errBadBetweenType)
@@ -564,7 +564,7 @@ stackloop:
 					}
 				}
 
-				colid, _, err := a.objid(sqltag)
+				colid, _, err := a.objid(lhs)
 				if err != nil {
 					return err
 				}
@@ -572,14 +572,14 @@ stackloop:
 				bw := new(wherebetween)
 				bw.name = fld.Name()
 				bw.colid = colid
-				bw.pred = string2betweenpredicate[sqltag2]
+				bw.cmp = string2cmpop[op]
 				bw.x, bw.y = x, y
 				item.node = bw
 				continue
 			}
 
 			// Analyze field where item.
-			colid, _, err := a.objid(sqltag)
+			colid, _, err := a.objid(lhs)
 			if err != nil {
 				return err
 			}
@@ -588,7 +588,8 @@ stackloop:
 			wn.name = fld.Name()
 			wn.colid = colid
 			wn.typ, _ = a.typeinfo(fld.Type())
-			wn.cmp, wn.saop = a.cmpop(sqltag2)
+			wn.cmp = string2cmpop[op]
+			wn.saop = string2scalarrop[op2]
 			wn.mod = a.modfn(tag["sql"][1:])
 			item.node = wn
 
@@ -605,96 +606,107 @@ stackloop:
 	return nil
 }
 
-func (a *analyzer) cmpop(val string) (op1 cmpop, op2 scalarrop) {
-	val = strings.ToLower(strings.TrimSpace(val))
+// Parses the given string as a comparison expression and returns the
+// individual elements of that expression. The expected format is:
+// { column [ comparison-operator [ scalar-operator ] { column | literal } ] }
+func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
+	expr = strings.TrimSpace(expr)
 
-	var cmp, saop string
-	if len(val) > 0 {
-		switch val[0] {
+	for i := range expr {
+		switch expr[i] {
 		case '=': // =
-			cmp, saop = val[:1], val[1:]
-		case '!': // != or !~ or !~*
-			if len(val) > 2 && (val[1] == '~' && val[2] == '*') {
-				cmp, saop = val[:3], val[3:]
-			} else if len(val) > 1 && (val[1] == '=' || val[1] == '~') {
-				cmp, saop = val[:2], val[2:]
+			lhs, cop, rhs = expr[:i], expr[i:i+1], expr[i+1:]
+		case '!': // !=, !~, !~*
+			if len(expr[i:]) > 2 && (expr[i+1] == '~' && expr[i+2] == '*') {
+				lhs, cop, rhs = expr[:i], expr[i:i+3], expr[i+3:]
+			} else if len(expr[i:]) > 1 && (expr[i+1] == '=' || expr[i+1] == '~') {
+				lhs, cop, rhs = expr[:i], expr[i:i+2], expr[i+2:]
 			}
-		case '<': // < or <= or <>
-			if len(val) > 1 && (val[1] == '=' || val[1] == '>') {
-				cmp, saop = val[:2], val[2:]
+		case '<': // <, <=, <>
+			if len(expr[i:]) > 1 && (expr[i+1] == '=' || expr[i+1] == '>') {
+				lhs, cop, rhs = expr[:i], expr[i:i+2], expr[i+2:]
 			} else {
-				cmp, saop = val[:1], val[1:]
+				lhs, cop, rhs = expr[:i], expr[i:i+1], expr[i+1:]
 			}
-		case '>': // > or >=
-			if len(val) > 1 && val[1] == '=' {
-				cmp, saop = val[:2], val[2:]
+		case '>': // >, >=
+			if len(expr[i:]) > 1 && expr[i+1] == '=' {
+				lhs, cop, rhs = expr[:i], expr[i:i+2], expr[i+2:]
 			} else {
-				cmp, saop = val[:1], val[1:]
+				lhs, cop, rhs = expr[:i], expr[i:i+1], expr[i+1:]
 			}
-		case '~': // ~ or ~*
-			if len(val) > 1 && val[1] == '*' {
-				cmp, saop = val[:2], val[2:]
+		case '~': // ~, ~*
+			if len(expr[i:]) > 1 && expr[i+1] == '*' {
+				lhs, cop, rhs = expr[:i], expr[i:i+2], expr[i+2:]
 			} else {
-				cmp, saop = val[:1], val[1:]
+				lhs, cop, rhs = expr[:i], expr[i:i+1], expr[i+1:]
 			}
-		case 'd': // distinct
-			n := len("distinct")
-			if len(val) >= n && val[:n] == "distinct" {
-				cmp, saop = val[:n], val[n:]
+		case ' ':
+
+			var (
+				j     = i + 1
+				x     = strings.ToLower(expr)
+				pred1 string // 1st part of predicate (not | is)
+				pred2 string // 2nd part of predicate (distinct | true | null | ...)
+			)
+
+			if n := len(x[j:]); n > 3 && x[j:j+3] == "not" {
+				pred1, pred2 = x[j:j+3], x[j+3:]
+			} else if n := len(x[j:]); n > 2 && x[j:j+2] == "is" {
+				pred1, pred2 = x[j:j+2], x[j+2:]
 			}
-		case 'i': // in
-			if len(val) > 1 && val[1] == 'n' {
-				cmp = val[:2] // does not support scalarrop
+
+			if len(pred2) > 0 {
+				for _, adj := range predicateadjectives {
+					if pred2[0] != adj[0] {
+						continue
+					}
+					if n := len(adj); len(pred2) >= n && pred2[:n] == adj && (len(pred2) == n || pred2[n] == ' ') {
+						lhs = expr[:i]
+						cop = pred1 + pred2[:n]
+						rhs = expr[j+len(cop):]
+						break
+					}
+				}
 			}
-		case 'l': // like
-			n := len("like")
-			if len(val) >= n && val[:n] == "like" {
-				cmp, saop = val[:n], val[n:]
+
+			if len(cop) == 0 {
+				continue
 			}
-		case 'n': // notdistinct or notin or notlike or notsimilar
-			if n := len("notin"); len(val) >= n && val[:n] == "notin" {
-				cmp = val[:n] // does not support scalarrop
-			} else if n := len("notlike"); len(val) >= n && val[:n] == "notlike" {
-				cmp, saop = val[:n], val[n:]
-			} else if n := len("notsimilar"); len(val) >= n && val[:n] == "notsimilar" {
-				cmp, saop = val[:n], val[n:]
-			} else if n := len("notdistinct"); len(val) >= n && val[:n] == "notdistinct" {
-				cmp, saop = val[:n], val[n:]
-			}
-		case 's': // similar or some
-			n := len("similar")
-			if len(val) >= n && val[:n] == "similar" {
-				cmp, saop = val[:n], val[n:]
-			} else {
-				saop = val // assume some
-			}
-		case 'a': // any or all
-			saop = val
+		default:
+			continue
 		}
+
+		break // if "continue" wasn't executed, exit the loop
 	}
 
-	// If saop was obtained from any but the last case above it may be prefixed
-	// with a space that separated it from the cmpop, remove that space.
-	saop = strings.TrimSpace(saop)
+	lhs = strings.TrimSpace(lhs)
+	cop = strings.TrimSpace(cop)
+	rhs = strings.TrimSpace(rhs)
 
-	// Defualt to "is equal" if no cmpop was provided.
-	if len(cmp) == 0 {
-		cmp = "="
+	if len(rhs) > 0 {
+		x := strings.ToLower(rhs)
+		switch x[0] {
+		case 'a': // ANY or ALL
+			n := len("any") // any and all have the same length so we test against both at the same time
+			if len(x) >= n && (x[:n] == "any" || x[:n] == "all") && (len(x) == n || x[n] == ' ') {
+				sop, rhs = x[:n], rhs[n:]
+			}
+		case 's': // SOME
+			n := len("some")
+			if len(x) >= n && x[:n] == "some" && (len(x) == n || x[n] == ' ') {
+				sop, rhs = x[:n], rhs[n:]
+			}
+		}
+
+		sop = strings.TrimSpace(sop)
+		rhs = strings.TrimSpace(rhs)
 	}
 
-	// TODO(mkopriva): if cmp and saop are both empty but val isn't that means
-	// that an invalid val was provided and an error should be returned.
+	if len(lhs) == 0 {
+		return expr, "=", "", "" // default
+	}
 
-	var ok bool
-	if op1, ok = string2cmpop[cmp]; !ok {
-		// TODO(mkopriva): return an error, although considering the fact
-		// that cmp is set to a valid value if empty this probably should
-		// never happen, unless the map is missing a key-value pair.
-	}
-	if op2, ok = string2scalarrop[saop]; !ok && len(saop) > 0 {
-		// TODO(mkopriva): return an error if no match found in map
-	}
-	return op1, op2
+	return lhs, cop, sop, rhs
 }
 
 func (a *analyzer) modfn(tagvals []string) function {
@@ -738,8 +750,18 @@ func (a *analyzer) objid(val string) (id objid, alias string, err error) {
 
 var recolid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*$`)
 
+var rereserved = regexp.MustCompile(`^(?i:true|false|` +
+	`current_date|current_time|current_timestamp|` +
+	`current_role|current_schema|current_user|` +
+	`localtime|localtimestamp|` +
+	`session_user)$`)
+
+func (a *analyzer) iscolid(val string) bool {
+	return recolid.MatchString(val) && !rereserved.MatchString(val)
+}
+
 func (a *analyzer) colid(val string) (id objid, err error) {
-	if !recolid.MatchString(val) {
+	if !a.iscolid(val) {
 		log.Println("not colid =>", val)
 		return id, newerr(errBadColId)
 	}
@@ -887,11 +909,9 @@ type wherefield struct {
 type wherecolumn struct {
 	// The target column of the wherecolumn item.
 	colid objid
-	// If set, it will hold the comparison predicate that should be
-	// applied to the target column.
-	pred predicate
 	// If set, it will hold the comparison operator to be used to compare
-	// the target column against the colid2 column or the lit value.
+	// the target column either using a predicate unary operator, or a binary
+	// operator comparing against the colid2 column or the lit value.
 	cmp  cmpop
 	saop scalarrop
 	// If set, it will hold the id of the column that should be compared
@@ -905,7 +925,7 @@ type wherecolumn struct {
 type wherebetween struct {
 	name  string
 	colid objid
-	pred  predicate
+	cmp   cmpop
 	x, y  interface{}
 }
 
@@ -921,54 +941,107 @@ const (
 type cmpop uint // comparison operation
 
 const (
-	_      cmpop = iota // no comparison
-	cmpeq               // equals
-	cmpne               // not equals
-	cmpne2              // not equals
-	cmplt               // less than
-	cmpgt               // greater than
-	cmple               // less than or equal
-	cmpge               // greater than or equal
+	_ cmpop = iota // no comparison
 
-	// IS [NOT] DISTINCT FROM
-	cmpdi // is distinct from
-	cmpnd // is not distinct from
+	// binary comparison operators
+	cmpeq  // equals
+	cmpne  // not equals
+	cmpne2 // not equals
+	cmplt  // less than
+	cmpgt  // greater than
+	cmple  // less than or equal
+	cmpge  // greater than or equal
 
-	// [NOT] IN
-	cmpin // in
-	cmpni // not in
+	// binary comparison predicates
+	cmpisdistinct  // IS DISTINCT FROM
+	cmpnotdistinct // IS NOT DISTINCT FROM
 
-	// pattern matching
-	cmplike
-	cmpnotlike
-	cmpsimilar
-	cmpnotsimilar
-	cmprexp
-	cmprexpi
-	cmpnotrexp
-	cmpnotrexpi
+	// unary comparison predicates
+	cmpisnull     // IS NULL
+	cmpnotnull    // IS NOT NULL
+	cmpistrue     // IS TRUE
+	cmpnottrue    // IS NOT TRUE
+	cmpisfalse    // IS FALSE
+	cmpnotfalse   // IS NOT FALSE
+	cmpisunknown  // IS UNKNOWN
+	cmpnotunknown // IS NOT UNKNOWN
+
+	// range comparison operators
+	cmpisbetween     // BETWEEN x AND y
+	cmpnotbetween    // NOT BETWEEN x AND y
+	cmpisbetweensym  // BETWEEN SYMMETRIC x AND y
+	cmpnotbetweensym // NOT BETWEEN SYMMETRIC x AND y
+
+	// array comparison operators
+	cmpisin  // IN
+	cmpnotin // NOT IN
+
+	// pattern matching operators
+	cmprexp       // match regular expression
+	cmprexpi      // match regular expression (case insensitive)
+	cmpnotrexp    // not match regular expression
+	cmpnotrexpi   // not match regular expression (case insensitive)
+	cmpislike     // LIKE
+	cmpnotlike    // NOT LIKE
+	cmpisilike    // ILIKE
+	cmpnotilike   // NOT ILIKE
+	cmpissimilar  // IS SIMILAR TO
+	cmpnotsimilar // IS NOT SIMILAR TO
 )
 
 var string2cmpop = map[string]cmpop{
-	"=":           cmpeq,
-	"<>":          cmpne,
-	"!=":          cmpne2,
-	"<":           cmplt,
-	">":           cmpgt,
-	"<=":          cmple,
-	">=":          cmpge,
-	"distinct":    cmpdi,
-	"notdistinct": cmpnd,
-	"in":          cmpin,
-	"notin":       cmpni,
-	"like":        cmplike,
-	"notlike":     cmpnotlike,
-	"similar":     cmpsimilar,
-	"notsimilar":  cmpnotsimilar,
-	"~":           cmprexp,
-	"~*":          cmprexpi,
-	"!~":          cmpnotrexp,
-	"!~*":         cmpnotrexpi,
+	"=":  cmpeq,
+	"<>": cmpne,
+	"!=": cmpne2,
+	"<":  cmplt,
+	">":  cmpgt,
+	"<=": cmple,
+	">=": cmpge,
+
+	"isdistinct":  cmpisdistinct,
+	"notdistinct": cmpnotdistinct,
+
+	"isnull":     cmpisnull,
+	"notnull":    cmpnotnull,
+	"istrue":     cmpistrue,
+	"nottrue":    cmpnottrue,
+	"isfalse":    cmpisfalse,
+	"notfalse":   cmpnotfalse,
+	"isunknown":  cmpisunknown,
+	"notunknown": cmpnotunknown,
+
+	"isbetween":     cmpisbetween,
+	"notbetween":    cmpnotbetween,
+	"isbetweensym":  cmpisbetweensym,
+	"notbetweensym": cmpnotbetweensym,
+
+	"isin":  cmpisin,
+	"notin": cmpnotin,
+
+	"~":          cmprexp,
+	"~*":         cmprexpi,
+	"!~":         cmpnotrexp,
+	"!~*":        cmpnotrexpi,
+	"islike":     cmpislike,
+	"notlike":    cmpnotlike,
+	"isilike":    cmpisilike,
+	"notilike":   cmpnotilike,
+	"issimilar":  cmpissimilar,
+	"notsimilar": cmpnotsimilar,
+}
+
+var predicateadjectives = []string{ // and adverbs
+	"between",
+	"betweensym",
+	"distinct",
+	"false",
+	"ilike",
+	"in",
+	"like",
+	"null",
+	"similar",
+	"true",
+	"unknown",
 }
 
 type scalarrop uint // scalar array operator
@@ -999,76 +1072,39 @@ var string2function = map[string]function{
 	"upper": fnupper,
 }
 
-type predicate uint // comparison predicates
-
-const (
-	_ predicate = iota // no predicate
-	predisnull
-	prednotnull
-	predistrue
-	prednottrue
-	predisfalse
-	prednotfalse
-	predisunknown
-	prednotunknown
-
-	predbetween
-	prednotbetween
-	predbetweensym
-	prednotbetweensym
-)
-
-var string2predicate = map[string]predicate{
-	"isnull":     predisnull,
-	"notnull":    prednotnull,
-	"istrue":     predistrue,
-	"nottrue":    prednottrue,
-	"isfalse":    predisfalse,
-	"notfalse":   prednotfalse,
-	"isunknown":  predisunknown,
-	"notunknown": prednotunknown,
-}
-
-var string2betweenpredicate = map[string]predicate{
-	"between":       predbetween,
-	"notbetween":    prednotbetween,
-	"betweensym":    predbetweensym,
-	"notbetweensym": prednotbetweensym,
-}
-
 type typekind uint
 
 const (
 	// basic
-	kindInvalid typekind = iota
-	kindBool
-	kindInt
-	kindInt8
-	kindInt16
-	kindInt32
-	kindInt64
-	kindUint
-	kindUint8
-	kindUint16
-	kindUint32
-	kindUint64
-	kindUintptr
-	kindFloat32
-	kindFloat64
-	kindComplex64
-	kindComplex128
-	kindString
-	kindUnsafeptr
+	kindinvalid typekind = iota
+	kindbool
+	kindint
+	kindint8
+	kindint16
+	kindint32
+	kindint64
+	kinduint
+	kinduint8
+	kinduint16
+	kinduint32
+	kinduint64
+	kinduintptr
+	kindfloat32
+	kindfloat64
+	kindcomplex64
+	kindcomplex128
+	kindstring
+	kindunsafeptr
 
 	// non-basic
-	kindArray
-	kindChan
-	kindFunc
-	kindInterface
-	kindMap
-	kindPtr
-	kindSlice
-	kindStruct
+	kindarray
+	kindchan
+	kindfunc
+	kindinterface
+	kindmap
+	kindptr
+	kindslice
+	kindstruct
 )
 
 func (k typekind) String() string {
@@ -1079,54 +1115,54 @@ func (k typekind) String() string {
 }
 
 var basickind2typekind = map[types.BasicKind]typekind{
-	types.Invalid:       kindInvalid,
-	types.Bool:          kindBool,
-	types.Int:           kindInt,
-	types.Int8:          kindInt8,
-	types.Int16:         kindInt16,
-	types.Int32:         kindInt32,
-	types.Int64:         kindInt64,
-	types.Uint:          kindUint,
-	types.Uint8:         kindUint8,
-	types.Uint16:        kindUint16,
-	types.Uint32:        kindUint32,
-	types.Uint64:        kindUint64,
-	types.Uintptr:       kindUintptr,
-	types.Float32:       kindFloat32,
-	types.Float64:       kindFloat64,
-	types.Complex64:     kindComplex64,
-	types.Complex128:    kindComplex128,
-	types.String:        kindString,
-	types.UnsafePointer: kindUnsafeptr,
+	types.Invalid:       kindinvalid,
+	types.Bool:          kindbool,
+	types.Int:           kindint,
+	types.Int8:          kindint8,
+	types.Int16:         kindint16,
+	types.Int32:         kindint32,
+	types.Int64:         kindint64,
+	types.Uint:          kinduint,
+	types.Uint8:         kinduint8,
+	types.Uint16:        kinduint16,
+	types.Uint32:        kinduint32,
+	types.Uint64:        kinduint64,
+	types.Uintptr:       kinduintptr,
+	types.Float32:       kindfloat32,
+	types.Float64:       kindfloat64,
+	types.Complex64:     kindcomplex64,
+	types.Complex128:    kindcomplex128,
+	types.String:        kindstring,
+	types.UnsafePointer: kindunsafeptr,
 }
 
 var typekind2string = map[typekind]string{
 	// builtin basic
-	kindBool:       "bool",
-	kindInt:        "int",
-	kindInt8:       "int8",
-	kindInt16:      "int16",
-	kindInt32:      "int32",
-	kindInt64:      "int64",
-	kindUint:       "uint",
-	kindUint8:      "uint8",
-	kindUint16:     "uint16",
-	kindUint32:     "uint32",
-	kindUint64:     "uint64",
-	kindUintptr:    "uintptr",
-	kindFloat32:    "float32",
-	kindFloat64:    "float64",
-	kindComplex64:  "complex64",
-	kindComplex128: "complex128",
-	kindString:     "string",
+	kindbool:       "bool",
+	kindint:        "int",
+	kindint8:       "int8",
+	kindint16:      "int16",
+	kindint32:      "int32",
+	kindint64:      "int64",
+	kinduint:       "uint",
+	kinduint8:      "uint8",
+	kinduint16:     "uint16",
+	kinduint32:     "uint32",
+	kinduint64:     "uint64",
+	kinduintptr:    "uintptr",
+	kindfloat32:    "float32",
+	kindfloat64:    "float64",
+	kindcomplex64:  "complex64",
+	kindcomplex128: "complex128",
+	kindstring:     "string",
 
 	// non-basic
-	kindArray:     "<array>",
-	kindChan:      "<chan>",
-	kindFunc:      "<func>",
-	kindInterface: "<interface>",
-	kindMap:       "<map>",
-	kindPtr:       "<pointer>",
-	kindSlice:     "<slice>",
-	kindStruct:    "<struct>",
+	kindarray:     "<array>",
+	kindchan:      "<chan>",
+	kindfunc:      "<func>",
+	kindinterface: "<interface>",
+	kindmap:       "<map>",
+	kindptr:       "<pointer>",
+	kindslice:     "<slice>",
+	kindstruct:    "<struct>",
 }

@@ -95,14 +95,14 @@ type DeleteTestOK9 struct {
 type DeleteTestOK10 struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
-		_ gosql.Column `sql:"column_a,notnull"`
-		_ gosql.Column `sql:"column_b,isnull" bool:"and"`
-		_ gosql.Column `sql:"column_c,nottrue" bool:"or"`
-		_ gosql.Column `sql:"column_d,istrue"`
-		_ gosql.Column `sql:"column_e,notfalse" bool:"or"`
-		_ gosql.Column `sql:"column_f,isfalse" bool:"or"`
-		_ gosql.Column `sql:"column_g,notunknown"`
-		_ gosql.Column `sql:"column_h,isunknown"`
+		_ gosql.Column `sql:"column_a notnull"`
+		_ gosql.Column `sql:"column_b isnull" bool:"and"`
+		_ gosql.Column `sql:"column_c nottrue" bool:"or"`
+		_ gosql.Column `sql:"column_d istrue"`
+		_ gosql.Column `sql:"column_e notfalse" bool:"or"`
+		_ gosql.Column `sql:"column_f isfalse" bool:"or"`
+		_ gosql.Column `sql:"column_g notunknown"`
+		_ gosql.Column `sql:"column_h isunknown"`
 	}
 }
 
@@ -112,19 +112,19 @@ type DeleteTestOK11 struct {
 	Where struct {
 		x struct {
 			foo int          `sql:"column_foo"`
-			_   gosql.Column `sql:"column_a,isnull"`
+			_   gosql.Column `sql:"column_a isnull"`
 		} `sql:">"`
 		y struct {
-			_   gosql.Column `sql:"column_b,nottrue"`
+			_   gosql.Column `sql:"column_b nottrue"`
 			bar string       `sql:"column_bar" bool:"or"`
 			z   struct {
 				baz  bool         `sql:"column_baz"`
 				quux string       `sql:"column_quux"`
-				_    gosql.Column `sql:"column_c,istrue" bool:"or"`
+				_    gosql.Column `sql:"column_c istrue" bool:"or"`
 			} `sql:">"`
 		} `sql:">" bool:"or"`
-		_   gosql.Column `sql:"column_d,notfalse" bool:"or"`
-		_   gosql.Column `sql:"column_e,isfalse"`
+		_   gosql.Column `sql:"column_d notfalse" bool:"or"`
+		_   gosql.Column `sql:"column_e isfalse"`
 		foo int          `sql:"column_foo"`
 	}
 }
@@ -133,12 +133,12 @@ type DeleteTestOK11 struct {
 type DeleteTestOK12 struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
-		a int `sql:"column_a,<"`
-		b int `sql:"column_b,>"`
-		c int `sql:"column_c,<="`
-		d int `sql:"column_d,>="`
-		e int `sql:"column_e,="`
-		f int `sql:"column_f,<>"`
+		a int `sql:"column_a <"`
+		b int `sql:"column_b >"`
+		c int `sql:"column_c <="`
+		d int `sql:"column_d >="`
+		e int `sql:"column_e ="`
+		f int `sql:"column_f <>"`
 		g int `sql:"column_g"` // defaults to "="
 	}
 }
@@ -147,11 +147,11 @@ type DeleteTestOK12 struct {
 type DeleteTestOK13 struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
-		_ gosql.Column `sql:"column_a,<>,column_b"`
-		_ gosql.Column `sql:"t.column_c,=,u.column_d"`
-		_ gosql.Column `sql:"t.column_e,>,123"`
-		_ gosql.Column `sql:"t.column_f,=,'active'"`
-		// _ gosql.Column `sql:"t.column_g <> true"`
+		_ gosql.Column `sql:"column_a <> column_b"`
+		_ gosql.Column `sql:"t.column_c=u.column_d"`
+		_ gosql.Column `sql:"t.column_e>123"`
+		_ gosql.Column `sql:"t.column_f = 'active'"`
+		_ gosql.Column `sql:"t.column_g <> true"`
 	}
 }
 
@@ -162,19 +162,19 @@ type DeleteTestOK14 struct {
 		a struct {
 			x int `sql:"x"`
 			y int `sql:"y"`
-		} `sql:"column_a,between"`
+		} `sql:"column_a isbetween"`
 		b struct {
 			_ gosql.Column `sql:"column_x,x"`
 			_ gosql.Column `sql:"column_y,y"`
-		} `sql:"column_b,betweensym"`
+		} `sql:"column_b isbetweensym"`
 		c struct {
 			_ gosql.Column `sql:"column_z,x"`
 			z int          `sql:"y"`
-		} `sql:"column_c,notbetweensym"`
+		} `sql:"column_c notbetweensym"`
 		d struct {
 			z int          `sql:"x"`
 			_ gosql.Column `sql:"column_z,y"`
-		} `sql:"column_d,notbetween"`
+		} `sql:"column_d notbetween"`
 	}
 }
 
@@ -182,11 +182,11 @@ type DeleteTestOK14 struct {
 type DeleteTestOK_DistinctFrom struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
-		a int `sql:"column_a,distinct"`
-		b int `sql:"column_b,notdistinct"`
+		a int `sql:"column_a isdistinct"`
+		b int `sql:"column_b notdistinct"`
 
-		_ gosql.Column `sql:"column_c,distinct,column_x"`
-		_ gosql.Column `sql:"column_d,notdistinct,column_y"`
+		_ gosql.Column `sql:"column_c isdistinct column_x"`
+		_ gosql.Column `sql:"column_d notdistinct column_y"`
 	}
 }
 
@@ -194,11 +194,11 @@ type DeleteTestOK_DistinctFrom struct {
 type DeleteTestOK_ArrayComparisons struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
-		a []int   `sql:"column_a,in"`
-		b [5]int  `sql:"column_b,notin"`
-		c []int   `sql:"column_c,=any"`
-		d [10]int `sql:"column_d,>some"`
-		e []int   `sql:"column_e,<=all"`
+		a []int   `sql:"column_a isin"`
+		b [5]int  `sql:"column_b notin"`
+		c []int   `sql:"column_c=any"`
+		d [10]int `sql:"column_d >some"`
+		e []int   `sql:"column_e <= all"`
 	}
 }
 
@@ -206,13 +206,13 @@ type DeleteTestOK_ArrayComparisons struct {
 type DeleteTestOK_PatternMatching struct {
 	Rel   struct{} `rel:"a_relation"`
 	Where struct {
-		a string `sql:"column_a,like"`
-		b string `sql:"column_b,notlike"`
-		c string `sql:"column_c,similar"`
-		d string `sql:"column_d,notsimilar"`
-		e string `sql:"column_e,~"`
-		f string `sql:"column_f,~*"`
-		g string `sql:"column_g,!~"`
-		h string `sql:"column_h,!~*"`
+		a string `sql:"column_a islike"`
+		b string `sql:"column_b notlike"`
+		c string `sql:"column_c issimilar"`
+		d string `sql:"column_d notsimilar"`
+		e string `sql:"column_e ~"`
+		f string `sql:"column_f~*"`
+		g string `sql:"column_g!~"`
+		h string `sql:"column_h !~*"`
 	}
 }

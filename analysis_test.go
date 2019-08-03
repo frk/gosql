@@ -25,7 +25,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 	// for reuse, analyzed common.User typeinfo
 	commonUserTypeinfo := typeinfo{
 		name:       "User",
-		kind:       kindStruct,
+		kind:       kindstruct,
 		pkgpath:    "github.com/frk/gosql/testdata/common",
 		pkgname:    "common",
 		pkglocal:   "common",
@@ -33,19 +33,19 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		ispointer:  true,
 		fields: []*fieldinfo{{
 			name:       "Id",
-			typ:        typeinfo{kind: kindInt},
+			typ:        typeinfo{kind: kindint},
 			isexported: true,
 			colid:      objid{name: "id"},
 			tag:        tagutil.Tag{"sql": {"id"}},
 		}, {
 			name:       "Email",
-			typ:        typeinfo{kind: kindString},
+			typ:        typeinfo{kind: kindstring},
 			isexported: true,
 			colid:      objid{name: "email"},
 			tag:        tagutil.Tag{"sql": {"email"}},
 		}, {
 			name:       "FullName",
-			typ:        typeinfo{kind: kindString},
+			typ:        typeinfo{kind: kindstring},
 			isexported: true,
 			colid:      objid{name: "full_name"},
 			tag:        tagutil.Tag{"sql": {"full_name"}},
@@ -53,7 +53,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			name: "CreatedAt",
 			typ: typeinfo{
 				name:       "Time",
-				kind:       kindStruct,
+				kind:       kindstruct,
 				pkgpath:    "time",
 				pkgname:    "time",
 				pkglocal:   "time",
@@ -93,10 +93,10 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			relid: objid{name: "users_table"},
 			datatype: datatype{
 				typeinfo: typeinfo{
-					kind: kindStruct,
+					kind: kindstruct,
 					fields: []*fieldinfo{{
 						name:       "Name3",
-						typ:        typeinfo{kind: kindString},
+						typ:        typeinfo{kind: kindstring},
 						isexported: true,
 						colid:      objid{name: "name"},
 						tag:        tagutil.Tag{"sql": {"name"}},
@@ -153,48 +153,48 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			relid: objid{name: "a_relation"},
 			datatype: datatype{
 				typeinfo: typeinfo{
-					kind: kindStruct,
+					kind: kindstruct,
 					fields: []*fieldinfo{{
 						name:   "a",
-						typ:    typeinfo{kind: kindInt},
+						typ:    typeinfo{kind: kindint},
 						colid:  objid{name: "a"},
 						tag:    tagutil.Tag{"sql": {"a", "pk", "auto"}},
 						ispkey: true,
 						auto:   true,
 					}, {
 						name:      "b",
-						typ:       typeinfo{kind: kindInt},
+						typ:       typeinfo{kind: kindint},
 						colid:     objid{name: "b"},
 						tag:       tagutil.Tag{"sql": {"b", "nullempty"}},
 						nullempty: true,
 					}, {
 						name:     "c",
-						typ:      typeinfo{kind: kindInt},
+						typ:      typeinfo{kind: kindint},
 						colid:    objid{name: "c"},
 						tag:      tagutil.Tag{"sql": {"c", "ro", "json"}},
 						readonly: true,
 						usejson:  true,
 					}, {
 						name:      "d",
-						typ:       typeinfo{kind: kindInt},
+						typ:       typeinfo{kind: kindint},
 						colid:     objid{name: "d"},
 						tag:       tagutil.Tag{"sql": {"d", "wo"}},
 						writeonly: true,
 					}, {
 						name:   "e",
-						typ:    typeinfo{kind: kindInt},
+						typ:    typeinfo{kind: kindint},
 						colid:  objid{name: "e"},
 						tag:    tagutil.Tag{"sql": {"e", "+"}},
 						binadd: true,
 					}, {
 						name:        "f",
-						typ:         typeinfo{kind: kindInt},
+						typ:         typeinfo{kind: kindint},
 						colid:       objid{name: "f"},
 						tag:         tagutil.Tag{"sql": {"f", "coalesce"}},
 						usecoalesce: true,
 					}, {
 						name:        "g",
-						typ:         typeinfo{kind: kindInt},
+						typ:         typeinfo{kind: kindint},
 						colid:       objid{name: "g"},
 						tag:         tagutil.Tag{"sql": {"g", "coalesce(-1)"}},
 						usecoalesce: true,
@@ -210,13 +210,13 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			relid: objid{name: "a_relation"},
 			datatype: datatype{
 				typeinfo: typeinfo{
-					kind: kindStruct,
+					kind: kindstruct,
 					fields: []*fieldinfo{{
 						name:       "Foobar",
 						isexported: true,
 						typ: typeinfo{
 							name:       "Foo",
-							kind:       kindStruct,
+							kind:       kindstruct,
 							pkgpath:    "github.com/frk/gosql/testdata/common",
 							pkgname:    "common",
 							pkglocal:   "common",
@@ -226,7 +226,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 								isexported: true,
 								typ: typeinfo{
 									name:       "Bar",
-									kind:       kindStruct,
+									kind:       kindstruct,
 									pkgpath:    "github.com/frk/gosql/testdata/common",
 									pkgname:    "common",
 									pkglocal:   "common",
@@ -237,7 +237,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 										isembedded: true,
 										typ: typeinfo{
 											name:       "Baz",
-											kind:       kindStruct,
+											kind:       kindstruct,
 											pkgpath:    "github.com/frk/gosql/testdata/common",
 											pkgname:    "common",
 											pkglocal:   "common",
@@ -245,7 +245,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 											fields: []*fieldinfo{{
 												name:       "Val",
 												isexported: true,
-												typ:        typeinfo{kind: kindString},
+												typ:        typeinfo{kind: kindstring},
 												colid:      objid{name: "foo_bar_baz_val"},
 												tag:        tagutil.Tag{"sql": {"val"}},
 											}},
@@ -269,13 +269,13 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{{
 				node: &wherefield{
 					name:  "ID",
 					colid: objid{name: "id"},
-					typ:   typeinfo{kind: kindInt},
+					typ:   typeinfo{kind: kindint},
 					cmp:   cmpeq,
 				},
 			}}},
@@ -288,17 +288,17 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherecolumn{colid: objid{name: "column_a"}, pred: prednotnull}},
-				{op: booland, node: &wherecolumn{colid: objid{name: "column_b"}, pred: predisnull}},
-				{op: boolor, node: &wherecolumn{colid: objid{name: "column_c"}, pred: prednottrue}},
-				{op: booland, node: &wherecolumn{colid: objid{name: "column_d"}, pred: predistrue}},
-				{op: boolor, node: &wherecolumn{colid: objid{name: "column_e"}, pred: prednotfalse}},
-				{op: boolor, node: &wherecolumn{colid: objid{name: "column_f"}, pred: predisfalse}},
-				{op: booland, node: &wherecolumn{colid: objid{name: "column_g"}, pred: prednotunknown}},
-				{op: booland, node: &wherecolumn{colid: objid{name: "column_h"}, pred: predisunknown}},
+				{node: &wherecolumn{colid: objid{name: "column_a"}, cmp: cmpnotnull}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_b"}, cmp: cmpisnull}},
+				{op: boolor, node: &wherecolumn{colid: objid{name: "column_c"}, cmp: cmpnottrue}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_d"}, cmp: cmpistrue}},
+				{op: boolor, node: &wherecolumn{colid: objid{name: "column_e"}, cmp: cmpnotfalse}},
+				{op: boolor, node: &wherecolumn{colid: objid{name: "column_f"}, cmp: cmpisfalse}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_g"}, cmp: cmpnotunknown}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_h"}, cmp: cmpisunknown}},
 			}},
 		},
 	}, {
@@ -309,47 +309,47 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &whereblock{name: "x", items: []*whereitem{
 					{node: &wherefield{
 						name:  "foo",
-						typ:   typeinfo{kind: kindInt},
+						typ:   typeinfo{kind: kindint},
 						colid: objid{name: "column_foo"},
 						cmp:   cmpeq,
 					}},
-					{op: booland, node: &wherecolumn{colid: objid{name: "column_a"}, pred: predisnull}},
+					{op: booland, node: &wherecolumn{colid: objid{name: "column_a"}, cmp: cmpisnull}},
 				}}},
 				{op: boolor, node: &whereblock{name: "y", items: []*whereitem{
-					{node: &wherecolumn{colid: objid{name: "column_b"}, pred: prednottrue}},
+					{node: &wherecolumn{colid: objid{name: "column_b"}, cmp: cmpnottrue}},
 					{op: boolor, node: &wherefield{
 						name:  "bar",
-						typ:   typeinfo{kind: kindString},
+						typ:   typeinfo{kind: kindstring},
 						colid: objid{name: "column_bar"},
 						cmp:   cmpeq,
 					}},
 					{op: booland, node: &whereblock{name: "z", items: []*whereitem{
 						{node: &wherefield{
 							name:  "baz",
-							typ:   typeinfo{kind: kindBool},
+							typ:   typeinfo{kind: kindbool},
 							colid: objid{name: "column_baz"},
 							cmp:   cmpeq,
 						}},
 						{op: booland, node: &wherefield{
 							name:  "quux",
-							typ:   typeinfo{kind: kindString},
+							typ:   typeinfo{kind: kindstring},
 							colid: objid{name: "column_quux"},
 							cmp:   cmpeq,
 						}},
-						{op: boolor, node: &wherecolumn{colid: objid{name: "column_c"}, pred: predistrue}},
+						{op: boolor, node: &wherecolumn{colid: objid{name: "column_c"}, cmp: cmpistrue}},
 					}}},
 				}}},
-				{op: boolor, node: &wherecolumn{colid: objid{name: "column_d"}, pred: prednotfalse}},
-				{op: booland, node: &wherecolumn{colid: objid{name: "column_e"}, pred: predisfalse}},
+				{op: boolor, node: &wherecolumn{colid: objid{name: "column_d"}, cmp: cmpnotfalse}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_e"}, cmp: cmpisfalse}},
 				{op: booland, node: &wherefield{
 					name:  "foo",
-					typ:   typeinfo{kind: kindInt},
+					typ:   typeinfo{kind: kindint},
 					colid: objid{name: "column_foo"},
 					cmp:   cmpeq,
 				}},
@@ -363,16 +363,16 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherefield{name: "a", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_a"}, cmp: cmplt}},
-				{op: booland, node: &wherefield{name: "b", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_b"}, cmp: cmpgt}},
-				{op: booland, node: &wherefield{name: "c", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_c"}, cmp: cmple}},
-				{op: booland, node: &wherefield{name: "d", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_d"}, cmp: cmpge}},
-				{op: booland, node: &wherefield{name: "e", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_e"}, cmp: cmpeq}},
-				{op: booland, node: &wherefield{name: "f", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_f"}, cmp: cmpne}},
-				{op: booland, node: &wherefield{name: "g", typ: typeinfo{kind: kindInt}, colid: objid{name: "column_g"}, cmp: cmpeq}},
+				{node: &wherefield{name: "a", typ: typeinfo{kind: kindint}, colid: objid{name: "column_a"}, cmp: cmplt}},
+				{op: booland, node: &wherefield{name: "b", typ: typeinfo{kind: kindint}, colid: objid{name: "column_b"}, cmp: cmpgt}},
+				{op: booland, node: &wherefield{name: "c", typ: typeinfo{kind: kindint}, colid: objid{name: "column_c"}, cmp: cmple}},
+				{op: booland, node: &wherefield{name: "d", typ: typeinfo{kind: kindint}, colid: objid{name: "column_d"}, cmp: cmpge}},
+				{op: booland, node: &wherefield{name: "e", typ: typeinfo{kind: kindint}, colid: objid{name: "column_e"}, cmp: cmpeq}},
+				{op: booland, node: &wherefield{name: "f", typ: typeinfo{kind: kindint}, colid: objid{name: "column_f"}, cmp: cmpne}},
+				{op: booland, node: &wherefield{name: "g", typ: typeinfo{kind: kindint}, colid: objid{name: "column_g"}, cmp: cmpeq}},
 			}},
 		},
 	}, {
@@ -383,20 +383,14 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: objid{name: "column_a"}, cmp: cmpne, colid2: objid{name: "column_b"}}},
 				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_c"}, cmp: cmpeq, colid2: objid{qual: "u", name: "column_d"}}},
 				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_e"}, cmp: cmpgt, lit: "123"}},
 				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_f"}, cmp: cmpeq, lit: "'active'"}},
-
-				// TODO: this needs fixing, or maybe it should just be documented and
-				// a workaround suggested? For example in this case the nottrue predicate
-				// could be used... To implement a complete fix might require handling
-				// of all reserved identifiers & keywords, not just true / false...
-				//
-				// {op: booland, node: &wherecolumn{colid: objid{name: "column_g"}, cmp: cmpne, lit: "true"}},
+				{op: booland, node: &wherecolumn{colid: objid{qual: "t", name: "column_g"}, cmp: cmpne, lit: "true"}},
 			}},
 		},
 	}, {
@@ -407,35 +401,35 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherebetween{
 					name:  "a",
 					colid: objid{name: "column_a"},
-					pred:  predbetween,
-					x:     &varinfo{name: "x", typ: typeinfo{kind: kindInt}},
-					y:     &varinfo{name: "y", typ: typeinfo{kind: kindInt}},
+					cmp:   cmpisbetween,
+					x:     &varinfo{name: "x", typ: typeinfo{kind: kindint}},
+					y:     &varinfo{name: "y", typ: typeinfo{kind: kindint}},
 				}},
 				{op: booland, node: &wherebetween{
 					name:  "b",
 					colid: objid{name: "column_b"},
-					pred:  predbetweensym,
+					cmp:   cmpisbetweensym,
 					x:     objid{name: "column_x"},
 					y:     objid{name: "column_y"},
 				}},
 				{op: booland, node: &wherebetween{
 					name:  "c",
 					colid: objid{name: "column_c"},
-					pred:  prednotbetweensym,
+					cmp:   cmpnotbetweensym,
 					x:     objid{name: "column_z"},
-					y:     &varinfo{name: "z", typ: typeinfo{kind: kindInt}},
+					y:     &varinfo{name: "z", typ: typeinfo{kind: kindint}},
 				}},
 				{op: booland, node: &wherebetween{
 					name:  "d",
 					colid: objid{name: "column_d"},
-					pred:  prednotbetween,
-					x:     &varinfo{name: "z", typ: typeinfo{kind: kindInt}},
+					cmp:   cmpnotbetween,
+					x:     &varinfo{name: "z", typ: typeinfo{kind: kindint}},
 					y:     objid{name: "column_z"},
 				}},
 			}},
@@ -448,23 +442,23 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
 					name:  "a",
-					typ:   typeinfo{kind: kindInt},
+					typ:   typeinfo{kind: kindint},
 					colid: objid{name: "column_a"},
-					cmp:   cmpdi,
+					cmp:   cmpisdistinct,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "b",
-					typ:   typeinfo{kind: kindInt},
+					typ:   typeinfo{kind: kindint},
 					colid: objid{name: "column_b"},
-					cmp:   cmpnd,
+					cmp:   cmpnotdistinct,
 				}},
-				{op: booland, node: &wherecolumn{colid: objid{name: "column_c"}, cmp: cmpdi, colid2: objid{name: "column_x"}}},
-				{op: booland, node: &wherecolumn{colid: objid{name: "column_d"}, cmp: cmpnd, colid2: objid{name: "column_y"}}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_c"}, cmp: cmpisdistinct, colid2: objid{name: "column_x"}}},
+				{op: booland, node: &wherecolumn{colid: objid{name: "column_d"}, cmp: cmpnotdistinct, colid2: objid{name: "column_y"}}},
 			}},
 		},
 	}, {
@@ -475,38 +469,38 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
 					name:  "a",
-					typ:   typeinfo{kind: kindInt, isslice: true},
+					typ:   typeinfo{kind: kindint, isslice: true},
 					colid: objid{name: "column_a"},
-					cmp:   cmpin,
+					cmp:   cmpisin,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "b",
-					typ:   typeinfo{kind: kindInt, isarray: true, arraylen: 5},
+					typ:   typeinfo{kind: kindint, isarray: true, arraylen: 5},
 					colid: objid{name: "column_b"},
-					cmp:   cmpni,
+					cmp:   cmpnotin,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "c",
-					typ:   typeinfo{kind: kindInt, isslice: true},
+					typ:   typeinfo{kind: kindint, isslice: true},
 					colid: objid{name: "column_c"},
 					cmp:   cmpeq,
 					saop:  scalarrany,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "d",
-					typ:   typeinfo{kind: kindInt, isarray: true, arraylen: 10},
+					typ:   typeinfo{kind: kindint, isarray: true, arraylen: 10},
 					colid: objid{name: "column_d"},
 					cmp:   cmpgt,
 					saop:  scalarrsome,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "e",
-					typ:   typeinfo{kind: kindInt, isslice: true},
+					typ:   typeinfo{kind: kindint, isslice: true},
 					colid: objid{name: "column_e"},
 					cmp:   cmple,
 					saop:  scalarrall,
@@ -521,54 +515,54 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relinfo{
 				field:    "Rel",
 				relid:    objid{name: "a_relation"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindStruct}},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
 					name:  "a",
-					typ:   typeinfo{kind: kindString},
+					typ:   typeinfo{kind: kindstring},
 					colid: objid{name: "column_a"},
-					cmp:   cmplike,
+					cmp:   cmpislike,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "b",
-					typ:   typeinfo{kind: kindString},
+					typ:   typeinfo{kind: kindstring},
 					colid: objid{name: "column_b"},
 					cmp:   cmpnotlike,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "c",
-					typ:   typeinfo{kind: kindString},
+					typ:   typeinfo{kind: kindstring},
 					colid: objid{name: "column_c"},
-					cmp:   cmpsimilar,
+					cmp:   cmpissimilar,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "d",
-					typ:   typeinfo{kind: kindString},
+					typ:   typeinfo{kind: kindstring},
 					colid: objid{name: "column_d"},
 					cmp:   cmpnotsimilar,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "e",
-					typ:   typeinfo{kind: kindString},
+					typ:   typeinfo{kind: kindstring},
 					colid: objid{name: "column_e"},
 					cmp:   cmprexp,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "f",
-					typ:   typeinfo{kind: kindString},
+					typ:   typeinfo{kind: kindstring},
 					colid: objid{name: "column_f"},
 					cmp:   cmprexpi,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "g",
-					typ:   typeinfo{kind: kindString},
+					typ:   typeinfo{kind: kindstring},
 					colid: objid{name: "column_g"},
 					cmp:   cmpnotrexp,
 				}},
 				{op: booland, node: &wherefield{
 					name:  "h",
-					typ:   typeinfo{kind: kindString},
+					typ:   typeinfo{kind: kindstring},
 					colid: objid{name: "column_h"},
 					cmp:   cmpnotrexpi,
 				}},
