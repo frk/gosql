@@ -50,7 +50,7 @@ type (
 	// The Default directive produces the DEFAULT marker in place of values
 	// of those columns that are listed in the directive's field tag. This can
 	// be used to specify those columns of an INSERT/UPDATE command that should
-	// have their value set to the default as defined by the database table.
+	// have their value set to their default as defined by the database table.
 	Default directive
 )
 
