@@ -88,18 +88,28 @@ func (a *analyzer) run() (err error) {
 			if err := a.joinblock(fld); err != nil {
 				return err
 			}
+
 		}
 
 		if dirname := typesutil.GetDirectiveName(fld); len(dirname) > 0 {
 			switch strings.ToLower(dirname) {
 			case "all":
 				a.cmd.all = true
+			case "return":
+				// TODO(mkopriva): provide the ability to specify
+				// a "result block" which would override the return
+				// directive.
+				//
+				// This is useful for queries that return more rows
+				// than they were provided with by the `rel` field.
+				if a.cmd.returning, err = a.collist(tag["sql"]); err != nil {
+					return err
+				}
 			}
 		}
 
 		// errorhandler
 		// default columns
-		// return columns
 		// order by
 		// offset
 		// override
@@ -861,6 +871,24 @@ func (a *analyzer) colid(val string) (id colid, err error) {
 	return id, nil
 }
 
+func (a *analyzer) collist(tag []string) (*collist, error) {
+	cl := new(collist)
+	if len(tag) == 1 && tag[0] == "*" {
+		cl.all = true
+		return cl, nil
+	}
+
+	cl.list = make([]colid, len(tag))
+	for i, val := range tag {
+		id, err := a.colid(val)
+		if err != nil {
+			return nil, err
+		}
+		cl.list[i] = id
+	}
+	return cl, nil
+}
+
 type cmdtype uint
 
 const (
@@ -877,6 +905,8 @@ type command struct {
 	rel   *relinfo
 	join  *joinblock
 	where *whereblock
+
+	returning *collist
 	// Indicates that the command should be executed against all the rows
 	// of the relation.
 	all bool
@@ -891,6 +921,11 @@ type relid struct {
 type colid struct {
 	qual string
 	name string
+}
+
+type collist struct {
+	all  bool
+	list []colid
 }
 
 // relinfo holds the information on a go struct type and on the

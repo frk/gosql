@@ -732,6 +732,48 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			},
 			all: true,
 		},
+	}, {
+		name: "DeleteTestOK_Return",
+		want: &command{
+			name: "DeleteTestOK_Return",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			returning: &collist{all: true},
+		},
+	}, {
+		name: "InsertTestOK_Return",
+		want: &command{
+			name: "InsertTestOK_Return",
+			typ:  cmdtypeInsert,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			returning: &collist{list: []colid{
+				{qual: "a", name: "foo"},
+				{qual: "a", name: "bar"},
+				{qual: "a", name: "baz"}}},
+		},
+	}, {
+		name: "UpdateTestOK_Return",
+		want: &command{
+			name: "UpdateTestOK_Return",
+			typ:  cmdtypeUpdate,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			returning: &collist{list: []colid{
+				{qual: "a", name: "foo"},
+				{qual: "a", name: "bar"},
+				{qual: "a", name: "baz"}}},
+		},
 	}}
 
 	for _, tt := range tests {

@@ -273,3 +273,21 @@ type DeleteTestOK_All struct {
 	Rel struct{} `rel:"relation_a:a"`
 	_   gosql.All
 }
+
+//OK: Delete with Return directive
+type DeleteTestOK_Return struct {
+	Rel struct{}     `rel:"relation_a:a"`
+	_   gosql.Return `sql:"*"`
+}
+
+//OK: Insert with Return directive
+type InsertTestOK_Return struct {
+	Rel struct{}     `rel:"relation_a:a"`
+	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
+}
+
+//OK: Update with Return directive
+type UpdateTestOK_Return struct {
+	Rel struct{}     `rel:"relation_a:a"`
+	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
+}
