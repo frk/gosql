@@ -383,3 +383,15 @@ type SelectTestOK_OrderByDirective struct {
 	Rel []T           `rel:"relation_a:a"`
 	_   gosql.OrderBy `sql:"a.foo:nullsfirst,-a.bar:nullsfirst,-a.baz,a.quux:nullslast"`
 }
+
+//OK: Insert with Override directive
+type InsertTestOK_OverrideDirective struct {
+	Rel []T            `rel:"relation_a:a"`
+	_   gosql.Override `sql:"system"`
+}
+
+//OK: Filter with TextSearch directive
+type FilterTestOK_TextSearchDirective struct {
+	Rel []T              `rel:"relation_a:a"`
+	_   gosql.TextSearch `sql:"a.ts_document"`
+}

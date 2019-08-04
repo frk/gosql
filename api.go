@@ -88,6 +88,14 @@ type (
 	// The optional :nullsfirst and :nullslast produce the NULLS FIRST and
 	// NULLS LAST options respectively.
 	OrderBy directive
+
+	// The Override directive can be used in an Insert command to produce
+	// the OVERRIDING { SYSTEM | USER } VALUE clause.
+	Override directive
+
+	// The TextSearch directive can be used in a Filter command to specify
+	// the document column that will be used for full-text search.
+	TextSearch directive
 )
 
 type AfterScanner interface {

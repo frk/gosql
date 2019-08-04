@@ -66,6 +66,19 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}
 
+	reldummyslice := &relinfo{
+		field: "Rel",
+		relid: relid{name: "relation_a", alias: "a"},
+		datatype: datatype{typeinfo: typeinfo{
+			kind:     kindstruct,
+			name:     "T",
+			pkgpath:  "path/to/test",
+			pkgname:  "testdata",
+			pkglocal: "testdata",
+			isslice:  true,
+		}},
+	}
+
 	tests := []struct {
 		name string
 		want *command
@@ -899,77 +912,33 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 	}, {
 		name: "SelectTestOK_LimitDirective",
 		want: &command{
-			name: "SelectTestOK_LimitDirective",
-			typ:  cmdtypeSelect,
-			rel: &relinfo{
-				field: "Rel",
-				relid: relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{
-					kind:     kindstruct,
-					name:     "T",
-					pkgpath:  "path/to/test",
-					pkgname:  "testdata",
-					pkglocal: "testdata",
-					isslice:  true,
-				}},
-			},
+			name:  "SelectTestOK_LimitDirective",
+			typ:   cmdtypeSelect,
+			rel:   reldummyslice,
 			limit: &limitvar{value: 25},
 		},
 	}, {
 		name: "SelectTestOK_LimitField",
 		want: &command{
-			name: "SelectTestOK_LimitField",
-			typ:  cmdtypeSelect,
-			rel: &relinfo{
-				field: "Rel",
-				relid: relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{
-					kind:     kindstruct,
-					name:     "T",
-					pkgpath:  "path/to/test",
-					pkgname:  "testdata",
-					pkglocal: "testdata",
-					isslice:  true,
-				}},
-			},
+			name:  "SelectTestOK_LimitField",
+			typ:   cmdtypeSelect,
+			rel:   reldummyslice,
 			limit: &limitvar{value: 10, field: "Limit"},
 		},
 	}, {
 		name: "SelectTestOK_OffsetDirective",
 		want: &command{
-			name: "SelectTestOK_OffsetDirective",
-			typ:  cmdtypeSelect,
-			rel: &relinfo{
-				field: "Rel",
-				relid: relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{
-					kind:     kindstruct,
-					name:     "T",
-					pkgpath:  "path/to/test",
-					pkgname:  "testdata",
-					pkglocal: "testdata",
-					isslice:  true,
-				}},
-			},
+			name:   "SelectTestOK_OffsetDirective",
+			typ:    cmdtypeSelect,
+			rel:    reldummyslice,
 			offset: &offsetvar{value: 25},
 		},
 	}, {
 		name: "SelectTestOK_OffsetField",
 		want: &command{
-			name: "SelectTestOK_OffsetField",
-			typ:  cmdtypeSelect,
-			rel: &relinfo{
-				field: "Rel",
-				relid: relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{
-					kind:     kindstruct,
-					name:     "T",
-					pkgpath:  "path/to/test",
-					pkgname:  "testdata",
-					pkglocal: "testdata",
-					isslice:  true,
-				}},
-			},
+			name:   "SelectTestOK_OffsetField",
+			typ:    cmdtypeSelect,
+			rel:    reldummyslice,
 			offset: &offsetvar{value: 10, field: "Offset"},
 		},
 	}, {
@@ -977,24 +946,29 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "SelectTestOK_OrderByDirective",
 			typ:  cmdtypeSelect,
-			rel: &relinfo{
-				field: "Rel",
-				relid: relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{
-					kind:     kindstruct,
-					name:     "T",
-					pkgpath:  "path/to/test",
-					pkgname:  "testdata",
-					pkglocal: "testdata",
-					isslice:  true,
-				}},
-			},
+			rel:  reldummyslice,
 			orderby: &orderbylist{items: []*orderbyitem{
 				{col: colid{qual: "a", name: "foo"}, dir: orderasc, nulls: nullsfirst},
 				{col: colid{qual: "a", name: "bar"}, dir: orderdesc, nulls: nullsfirst},
 				{col: colid{qual: "a", name: "baz"}, dir: orderdesc, nulls: 0},
 				{col: colid{qual: "a", name: "quux"}, dir: orderasc, nulls: nullslast},
 			}},
+		},
+	}, {
+		name: "InsertTestOK_OverrideDirective",
+		want: &command{
+			name:     "InsertTestOK_OverrideDirective",
+			typ:      cmdtypeInsert,
+			rel:      reldummyslice,
+			override: overridingsystem,
+		},
+	}, {
+		name: "FilterTestOK_TextSearchDirective",
+		want: &command{
+			name:       "FilterTestOK_TextSearchDirective",
+			typ:        cmdtypeFilter,
+			rel:        reldummyslice,
+			textsearch: &colid{qual: "a", name: "ts_document"},
 		},
 	}}
 

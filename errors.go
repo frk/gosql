@@ -33,6 +33,7 @@ const (
 	errBadOffsetType
 	errBadOffsetValue
 	errBadNullsOrderOption
+	errBadOverrideKind
 
 	errBadKind
 	errBadType

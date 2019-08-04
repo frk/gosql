@@ -127,12 +127,16 @@ func (a *analyzer) run() (err error) {
 				if err := a.orderbylist(tag["sql"]); err != nil {
 					return err
 				}
+			case "override":
+				if err := a.overridedir(tag.First("sql")); err != nil {
+					return err
+				}
+			case "textsearch":
+				if err := a.textsearch(tag.First("sql")); err != nil {
+					return err
+				}
 			}
 			continue
-
-			// TODO(mkopriva):
-			// - override directive
-			// - textsearch directive (filter command type)
 		}
 
 		// fields with reserved names
@@ -913,7 +917,7 @@ func (a *analyzer) offsetvar(field *types.Var, tag string) error {
 func (a *analyzer) orderbylist(tags []string) (err error) {
 	list := new(orderbylist)
 	for _, val := range tags {
-		val := strings.TrimSpace(val)
+		val = strings.TrimSpace(val)
 		if len(val) == 0 {
 			continue
 		}
@@ -942,6 +946,30 @@ func (a *analyzer) orderbylist(tags []string) (err error) {
 	}
 
 	a.cmd.orderby = list
+	return nil
+}
+
+func (a *analyzer) overridedir(tag string) error {
+	val := strings.ToLower(strings.TrimSpace(tag))
+	switch val {
+	case "system":
+		a.cmd.override = overridingsystem
+	case "user":
+		a.cmd.override = overridinguser
+	default:
+		return newerr(errBadOverrideKind)
+	}
+	return nil
+}
+
+func (a *analyzer) textsearch(tag string) error {
+	val := strings.ToLower(strings.TrimSpace(tag))
+	cid, err := a.colid(val)
+	if err != nil {
+		return err
+	}
+
+	a.cmd.textsearch = &cid
 	return nil
 }
 
@@ -1088,13 +1116,15 @@ type command struct {
 	typ  cmdtype // the type of the command
 	// If the command is a Select command this field indicates the
 	// specific kind of the select.
-	sel     selkind
-	rel     *relinfo
-	join    *joinblock
-	where   *whereblock
-	limit   *limitvar
-	offset  *offsetvar
-	orderby *orderbylist
+	sel        selkind
+	rel        *relinfo
+	join       *joinblock
+	where      *whereblock
+	limit      *limitvar
+	offset     *offsetvar
+	orderby    *orderbylist
+	override   overridingkind
+	textsearch *colid
 
 	defaults  *collist
 	force     *collist
@@ -1470,6 +1500,14 @@ const (
 	_          nullsposition = iota // none specified, i.e. default
 	nullsfirst                      // NULLS FIRST
 	nullslast                       // NULLS LAST
+)
+
+type overridingkind uint8
+
+const (
+	_                overridingkind = iota // no overriding
+	overridingsystem                       // OVERRIDING SYSTEM VALUE
+	overridinguser                         // OVERRIDING USER VALUE
 )
 
 type function uint
