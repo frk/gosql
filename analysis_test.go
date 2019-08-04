@@ -896,6 +896,44 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				isreldir: true,
 			},
 		},
+	}, {
+		name: "SelectTestOK_LimitDirective",
+		want: &command{
+			name: "SelectTestOK_LimitDirective",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{
+					kind:     kindstruct,
+					name:     "T",
+					pkgpath:  "path/to/test",
+					pkgname:  "testdata",
+					pkglocal: "testdata",
+					isslice:  true,
+				}},
+			},
+			limit: &limitvar{value: 25},
+		},
+	}, {
+		name: "SelectTestOK_LimitField",
+		want: &command{
+			name: "SelectTestOK_LimitField",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{
+					kind:     kindstruct,
+					name:     "T",
+					pkgpath:  "path/to/test",
+					pkgname:  "testdata",
+					pkglocal: "testdata",
+					isslice:  true,
+				}},
+			},
+			limit: &limitvar{value: 10, field: "Limit"},
+		},
 	}}
 
 	for _, tt := range tests {

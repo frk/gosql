@@ -5,6 +5,8 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
+type T struct{} // stub type
+
 //BAD: missing relation field
 type InsertTestBAD1 struct {
 	// no record type ...
@@ -350,4 +352,16 @@ type SelectTestOK_NotExists struct {
 //OK: Delete with Relation directive
 type DeleteTestOK_Relation struct {
 	_ gosql.Relation `rel:"relation_a:a"`
+}
+
+//OK: Select with Limit directive
+type SelectTestOK_LimitDirective struct {
+	Rel []T         `rel:"relation_a:a"`
+	_   gosql.Limit `sql:"25"`
+}
+
+//OK: Select with Limit field
+type SelectTestOK_LimitField struct {
+	Rel   []T `rel:"relation_a:a"`
+	Limit int `sql:"10"`
 }

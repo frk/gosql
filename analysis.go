@@ -4,6 +4,7 @@ import (
 	"go/types"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/frk/gosql/internal/typesutil"
@@ -114,11 +115,14 @@ func (a *analyzer) run() (err error) {
 				if a.cmd.returning, err = a.collist(tag["sql"]); err != nil {
 					return err
 				}
+			case "limit":
+				if err := a.limitdirective(tag.First("sql")); err != nil {
+					return err
+				}
 			}
 			continue
 
 			// TODO(mkopriva):
-			// - limit directive
 			// - offset directive
 			// - orderby directive
 			// - override directive
@@ -134,6 +138,10 @@ func (a *analyzer) run() (err error) {
 				}
 			case "join", "from", "using":
 				if err := a.joinblock(fld); err != nil {
+					return err
+				}
+			case "limit":
+				if err := a.limitfield(fld, tag.First("sql")); err != nil {
 					return err
 				}
 			}
@@ -152,7 +160,7 @@ func (a *analyzer) run() (err error) {
 		// fields with specific types
 		if a.isaccessible(fld, a.named) {
 			switch {
-			case a.iserrorhandler(fld):
+			case a.iserrorhandler(fld.Type()):
 				a.cmd.erh = fld.Name()
 			}
 			continue
@@ -854,6 +862,29 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
 	return lhs, cop, sop, rhs
 }
 
+func (a *analyzer) limitdirective(tag string) error {
+	u64, err := strconv.ParseUint(tag, 10, 64)
+	if err != nil {
+		return err
+	}
+	a.cmd.limit = new(limitvar)
+	a.cmd.limit.value = u64
+	return nil
+
+	// TODO(mkopriva): a value of 0 should return an error
+}
+
+func (a *analyzer) limitfield(field *types.Var, tag string) error {
+	u64, err := strconv.ParseUint(tag, 10, 64)
+	if err != nil {
+		return err
+	}
+	a.cmd.limit = new(limitvar)
+	a.cmd.limit.value = u64
+	a.cmd.limit.field = field.Name()
+	return nil
+}
+
 func (a *analyzer) modfn(tagvals []string) function {
 	for _, v := range tagvals {
 		if fn, ok := string2function[strings.ToLower(v)]; ok {
@@ -935,8 +966,9 @@ func (a *analyzer) isaccessible(fld *types.Var, named *types.Named) bool {
 	return fld.Name() != "_" && (fld.Exported() || !a.isimported(named))
 }
 
-func (a *analyzer) iserrorhandler(field *types.Var) bool {
-	named, ok := field.Type().(*types.Named)
+// iserrorhandler returns true if the given type implements the ErrorHandler interface.
+func (a *analyzer) iserrorhandler(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
 	if !ok {
 		return false
 	}
@@ -1000,10 +1032,12 @@ type command struct {
 	rel   *relinfo
 	join  *joinblock
 	where *whereblock
+	limit *limitvar
 
 	defaults  *collist
 	force     *collist
 	returning *collist
+
 	// Indicates that the command should be executed against all the rows
 	// of the relation.
 	all bool
@@ -1184,11 +1218,22 @@ type wherebetween struct {
 	x, y  interface{}
 }
 
+// The limitvar is produced from either a Limit directive or from a valid "limit"
+// field, it is then, in turn, used to produce a LIMIT clause in a SELECT query.
+type limitvar struct {
+	// The value provided in the Limit field's / directive's `sql` tag.
+	value uint64
+	// The name of the Limit field, if empty it indicates that the limitvar
+	// was produced from the directive.
+	field string
+}
+
 var reservedfields = stringlist{
 	"where",
 	"using",
 	"from",
 	"join",
+	"limit",
 }
 
 type boolop uint // boolop operation

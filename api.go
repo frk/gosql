@@ -65,6 +65,11 @@ type (
 	// be used to specify those columns of an INSERT/UPDATE command that should
 	// have their value set to their default as defined by the database table.
 	Default directive
+
+	// The Limit directive can be used inside a Select command to produce
+	// a LIMIT clause for the SELECT query. The limit value must be specified
+	// in the directive field's `sql` tag.
+	Limit directive
 )
 
 type AfterScanner interface {
