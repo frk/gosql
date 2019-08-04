@@ -118,8 +118,17 @@ type IsDirectiveTest3 struct {
 	Var Column
 }
 
-// Var is gosql directive type, should return true
+type Relation struct {
+	gosql.Relation
+}
+
+// Var is not gosql directive type, should return false
 type IsDirectiveTest4 struct {
+	Var Relation
+}
+
+// Var is gosql directive type, should return true
+type IsDirectiveTest5 struct {
 	Var gosql.Column
 }
 

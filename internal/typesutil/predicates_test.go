@@ -129,7 +129,8 @@ func TestIsDirectiveValue(t *testing.T) {
 		{name: "IsDirectiveTest1", ident: "Column", want: false},
 		{name: "IsDirectiveTest2", ident: "Column", want: false},
 		{name: "IsDirectiveTest3", ident: "Column", want: false},
-		{name: "IsDirectiveTest4", ident: "Column", want: true},
+		{name: "IsDirectiveTest4", ident: "Relation", want: false},
+		{name: "IsDirectiveTest5", ident: "Column", want: true},
 	}
 
 	for _, tt := range tests {
