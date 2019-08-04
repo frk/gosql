@@ -315,3 +315,19 @@ type UpdateTestOK_Force struct {
 	Rel struct{}    `rel:"relation_a:a"`
 	_   gosql.Force `sql:"a.foo,a.bar,a.baz"`
 }
+
+type myerrorhandler struct{}
+
+func (myerrorhandler) HandleError(e error) error { return e }
+
+//OK: Select with ErrorHandler field
+type SelectTestOK_ErrorHandler struct {
+	Rel struct{} `rel:"relation_a:a"`
+	eh  myerrorhandler
+}
+
+//OK: Insert with embedded ErrorHandler field
+type InsertTestOK_ErrorHandler struct {
+	Rel struct{} `rel:"relation_a:a"`
+	myerrorhandler
+}

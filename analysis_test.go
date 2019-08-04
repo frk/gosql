@@ -828,6 +828,30 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				{qual: "a", name: "bar"},
 				{qual: "a", name: "baz"}}},
 		},
+	}, {
+		name: "SelectTestOK_ErrorHandler",
+		want: &command{
+			name: "SelectTestOK_ErrorHandler",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			erh: "eh",
+		},
+	}, {
+		name: "InsertTestOK_ErrorHandler",
+		want: &command{
+			name: "InsertTestOK_ErrorHandler",
+			typ:  cmdtypeInsert,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			erh: "myerrorhandler",
+		},
 	}}
 
 	for _, tt := range tests {

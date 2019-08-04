@@ -16,6 +16,7 @@ import (
 func analyze(named *types.Named) (*command, error) {
 	a := new(analyzer)
 	a.pkg = named.Obj().Pkg().Path()
+	a.named = named
 	a.cmd = &command{name: named.Obj().Name()}
 
 	var ok bool
@@ -53,6 +54,7 @@ func analyze(named *types.Named) (*command, error) {
 // analyzer holds the state of the analysis
 type analyzer struct {
 	pkg    string        // the package path of the command under analysis
+	named  *types.Named  // the named type of the command under analysis
 	cmdtyp *types.Struct // the struct type of the command under analysis
 	reltyp *types.Struct // the struct type of the relation under analysis
 	cmd    *command      // the result of the analysis
@@ -79,19 +81,8 @@ func (a *analyzer) run() (err error) {
 			continue
 		}
 
-		switch strings.ToLower(fld.Name()) {
-		case "where":
-			if err := a.whereblock(fld); err != nil {
-				return err
-			}
-		case "join", "from", "using":
-			if err := a.joinblock(fld); err != nil {
-				return err
-			}
-
-		}
-
-		if dirname := typesutil.GetDirectiveName(fld); len(dirname) > 0 {
+		// fields with gosql directive types
+		if dirname := typesutil.GetDirectiveName(fld); fld.Name() == "_" && len(dirname) > 0 {
 			switch strings.ToLower(dirname) {
 			case "all":
 				a.cmd.all = true
@@ -114,12 +105,44 @@ func (a *analyzer) run() (err error) {
 					return err
 				}
 			}
+			continue
 		}
 
-		// errorhandler
-		// order by
-		// offset
-		// override
+		// fields with reserved names
+		if fname := strings.ToLower(fld.Name()); reservedfields.contains(fname) {
+			switch fname {
+			case "where":
+				if err := a.whereblock(fld); err != nil {
+					return err
+				}
+			case "join", "from", "using":
+				if err := a.joinblock(fld); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		// fields with specific types
+		if a.isaccessible(fld, a.named) {
+			switch {
+			case a.iserrorhandler(fld):
+				a.cmd.erh = fld.Name()
+			}
+			continue
+		}
+
+		// TODO(mkopriva):
+		// - allow Delete commands to have use _ gosql.Relation `rel:"..."`
+		//   instead of having them to use the corresponding Go struct type.
+		// - errorhandler
+		// - order by
+		// - limit
+		// - offset
+		// - override
+
+		// TODO(mkopriva): allow for embedding a struct with "common feature fields",
+		// and make sure to also allow imported and local-unexported struct types.
 	}
 
 	if a.cmd.rel == nil {
@@ -653,14 +676,14 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 			continue
 		}
 
-		switch dirname := typesutil.GetDirectiveName(fld); dirname {
-		case "Relation":
+		switch dirname := strings.ToLower(typesutil.GetDirectiveName(fld)); dirname {
+		case "relation":
 			id, err := a.relid(sqltag)
 			if err != nil {
 				return err
 			}
 			join.rel = id
-		case "LeftJoin", "RightJoin", "FullJoin", "CrossJoin":
+		case "leftjoin", "rightjoin", "fulljoin", "crossjoin":
 			id, err := a.relid(sqltag)
 			if err != nil {
 				return err
@@ -823,14 +846,6 @@ func (a *analyzer) modfn(tagvals []string) function {
 	return 0
 }
 
-func (a *analyzer) isimported(named *types.Named) bool {
-	return named != nil && named.Obj().Pkg().Path() != a.pkg
-}
-
-func (a *analyzer) isaccessible(fld *types.Var, named *types.Named) bool {
-	return fld.Name() != "_" && (fld.Exported() || !a.isimported(named))
-}
-
 var rerelid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*(?:\:[A-Za-z_]\w*)?$`)
 
 // parses the given string and returns a relid, if the value's format is invalid
@@ -895,6 +910,22 @@ func (a *analyzer) collist(tag []string) (*collist, error) {
 	return cl, nil
 }
 
+func (a *analyzer) isimported(named *types.Named) bool {
+	return named != nil && named.Obj().Pkg().Path() != a.pkg
+}
+
+func (a *analyzer) isaccessible(fld *types.Var, named *types.Named) bool {
+	return fld.Name() != "_" && (fld.Exported() || !a.isimported(named))
+}
+
+func (a *analyzer) iserrorhandler(field *types.Var) bool {
+	named, ok := field.Type().(*types.Named)
+	if !ok {
+		return false
+	}
+	return typesutil.ImplementsErrorHandler(named)
+}
+
 type cmdtype uint
 
 const (
@@ -918,6 +949,8 @@ type command struct {
 	// Indicates that the command should be executed against all the rows
 	// of the relation.
 	all bool
+	// The name of the field that implements the ErrorHandler interface, if any.
+	erh string
 }
 
 type relid struct {
@@ -1092,6 +1125,13 @@ type wherebetween struct {
 	x, y  interface{}
 }
 
+var reservedfields = stringlist{
+	"where",
+	"using",
+	"from",
+	"join",
+}
+
 type boolop uint // boolop operation
 
 const (
@@ -1246,10 +1286,10 @@ const (
 )
 
 var string2jointype = map[string]jointype{
-	"LeftJoin":  joinleft,
-	"RightJoin": joinright,
-	"FullJoin":  joinfull,
-	"CrossJoin": joincross,
+	"leftjoin":  joinleft,
+	"rightjoin": joinright,
+	"fulljoin":  joinfull,
+	"crossjoin": joincross,
 }
 
 type typekind uint
