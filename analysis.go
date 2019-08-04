@@ -116,18 +116,21 @@ func (a *analyzer) run() (err error) {
 					return err
 				}
 			case "limit":
-				if err := a.limitdirective(tag.First("sql")); err != nil {
+				if err := a.limitvar(fld, tag.First("sql")); err != nil {
 					return err
 				}
 			case "offset":
-				if err := a.offsetdirective(tag.First("sql")); err != nil {
+				if err := a.offsetvar(fld, tag.First("sql")); err != nil {
+					return err
+				}
+			case "orderby":
+				if err := a.orderbylist(tag["sql"]); err != nil {
 					return err
 				}
 			}
 			continue
 
 			// TODO(mkopriva):
-			// - orderby directive
 			// - override directive
 			// - textsearch directive (filter command type)
 		}
@@ -144,11 +147,11 @@ func (a *analyzer) run() (err error) {
 					return err
 				}
 			case "limit":
-				if err := a.limitfield(fld, tag.First("sql")); err != nil {
+				if err := a.limitvar(fld, tag.First("sql")); err != nil {
 					return err
 				}
 			case "offset":
-				if err := a.offsetfield(fld, tag.First("sql")); err != nil {
+				if err := a.offsetvar(fld, tag.First("sql")); err != nil {
 					return err
 				}
 			}
@@ -867,27 +870,15 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
 	return lhs, cop, sop, rhs
 }
 
-func (a *analyzer) limitdirective(tag string) error {
+func (a *analyzer) limitvar(field *types.Var, tag string) error {
 	limit := new(limitvar)
-	if len(tag) > 0 {
-		u64, err := strconv.ParseUint(tag, 10, 64)
-		if err != nil {
-			return newerr(errBadLimitValue)
+	if fname := field.Name(); fname != "_" {
+		if !a.isint(field.Type()) {
+			return newerr(errBadLimitType)
 		}
-		limit.value = u64
+		limit.field = fname
 	}
 
-	a.cmd.limit = limit
-	return nil
-}
-
-func (a *analyzer) limitfield(field *types.Var, tag string) error {
-	if !a.isint(field.Type()) {
-		return newerr(errBadLimitType)
-	}
-
-	limit := new(limitvar)
-	limit.field = field.Name()
 	if len(tag) > 0 {
 		u64, err := strconv.ParseUint(tag, 10, 64)
 		if err != nil {
@@ -899,8 +890,15 @@ func (a *analyzer) limitfield(field *types.Var, tag string) error {
 	return nil
 }
 
-func (a *analyzer) offsetdirective(tag string) error {
+func (a *analyzer) offsetvar(field *types.Var, tag string) error {
 	offset := new(offsetvar)
+	if fname := field.Name(); fname != "_" {
+		if !a.isint(field.Type()) {
+			return newerr(errBadOffsetType)
+		}
+		offset.field = fname
+	}
+
 	if len(tag) > 0 {
 		u64, err := strconv.ParseUint(tag, 10, 64)
 		if err != nil {
@@ -908,26 +906,42 @@ func (a *analyzer) offsetdirective(tag string) error {
 		}
 		offset.value = u64
 	}
-
 	a.cmd.offset = offset
 	return nil
 }
 
-func (a *analyzer) offsetfield(field *types.Var, tag string) error {
-	if !a.isint(field.Type()) {
-		return newerr(errBadOffsetType)
+func (a *analyzer) orderbylist(tags []string) (err error) {
+	list := new(orderbylist)
+	for _, val := range tags {
+		val := strings.TrimSpace(val)
+		if len(val) == 0 {
+			continue
+		}
+
+		item := new(orderbyitem)
+		if val[0] == '-' {
+			item.dir = orderdesc
+			val = val[1:]
+		}
+		if i := strings.Index(val, ":"); i > -1 {
+			if val[i+1:] == "nullsfirst" {
+				item.nulls = nullsfirst
+			} else if val[i+1:] == "nullslast" {
+				item.nulls = nullslast
+			} else {
+				return newerr(errBadNullsOrderOption)
+			}
+			val = val[:i]
+		}
+
+		if item.col, err = a.colid(val); err != nil {
+			return err
+		}
+
+		list.items = append(list.items, item)
 	}
 
-	offset := new(offsetvar)
-	offset.field = field.Name()
-	if len(tag) > 0 {
-		u64, err := strconv.ParseUint(tag, 10, 64)
-		if err != nil {
-			return newerr(errBadOffsetValue)
-		}
-		offset.value = u64
-	}
-	a.cmd.offset = offset
+	a.cmd.orderby = list
 	return nil
 }
 
@@ -993,13 +1007,13 @@ func (a *analyzer) collist(tag []string) (*collist, error) {
 		return cl, nil
 	}
 
-	cl.list = make([]colid, len(tag))
+	cl.items = make([]colid, len(tag))
 	for i, val := range tag {
 		id, err := a.colid(val)
 		if err != nil {
 			return nil, err
 		}
-		cl.list[i] = id
+		cl.items[i] = id
 	}
 	return cl, nil
 }
@@ -1074,12 +1088,13 @@ type command struct {
 	typ  cmdtype // the type of the command
 	// If the command is a Select command this field indicates the
 	// specific kind of the select.
-	sel    selkind
-	rel    *relinfo
-	join   *joinblock
-	where  *whereblock
-	limit  *limitvar
-	offset *offsetvar
+	sel     selkind
+	rel     *relinfo
+	join    *joinblock
+	where   *whereblock
+	limit   *limitvar
+	offset  *offsetvar
+	orderby *orderbylist
 
 	defaults  *collist
 	force     *collist
@@ -1104,8 +1119,8 @@ type colid struct {
 }
 
 type collist struct {
-	all  bool
-	list []colid
+	all   bool
+	items []colid
 }
 
 // relinfo holds the information on a go struct type and on the
@@ -1293,6 +1308,16 @@ type offsetvar struct {
 	field string
 }
 
+type orderbylist struct {
+	items []*orderbyitem
+}
+
+type orderbyitem struct {
+	col   colid
+	dir   orderdirection
+	nulls nullsposition
+}
+
 var reservedfields = stringlist{
 	"where",
 	"using",
@@ -1417,7 +1442,7 @@ var predicateadjectives = []string{ // and adverbs
 	"unknown",
 }
 
-type scalarrop uint // scalar array operator
+type scalarrop uint8 // scalar array operator
 
 const (
 	_           scalarrop = iota // no operator
@@ -1431,6 +1456,21 @@ var string2scalarrop = map[string]scalarrop{
 	"some": scalarrsome,
 	"all":  scalarrall,
 }
+
+type orderdirection uint8
+
+const (
+	orderasc  orderdirection = iota // ASC, default
+	orderdesc                       // DESC
+)
+
+type nullsposition uint8
+
+const (
+	_          nullsposition = iota // none specified, i.e. default
+	nullsfirst                      // NULLS FIRST
+	nullslast                       // NULLS LAST
+)
 
 type function uint
 

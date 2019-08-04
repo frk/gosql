@@ -32,6 +32,7 @@ const (
 	errBadLimitValue
 	errBadOffsetType
 	errBadOffsetValue
+	errBadNullsOrderOption
 
 	errBadKind
 	errBadType

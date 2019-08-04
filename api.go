@@ -75,6 +75,19 @@ type (
 	// an OFFSET clause for the SELECT query. The offset value must be specified
 	// in the directive field's `sql` tag.
 	Offset directive
+
+	// The OrderBy directive can be used inside a Select command to produce
+	// an ORDER BY clause for the SELECT query. The list of columns by which
+	// to order should be specified in the directive's tag.
+	//
+	// The expected format for each item in the directive's tag is:
+	// [ - ][ qualifier. ]column_name[ :nullsfirst | :nullslast ]
+	//
+	// The optional preceding "-" produces the DESC sort direction option, if
+	// no "-" is provided ASC is produced instead.
+	// The optional :nullsfirst and :nullslast produce the NULLS FIRST and
+	// NULLS LAST options respectively.
+	OrderBy directive
 )
 
 type AfterScanner interface {

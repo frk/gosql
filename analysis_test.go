@@ -754,7 +754,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
-			returning: &collist{list: []colid{
+			returning: &collist{items: []colid{
 				{qual: "a", name: "foo"},
 				{qual: "a", name: "bar"},
 				{qual: "a", name: "baz"}}},
@@ -769,7 +769,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
-			returning: &collist{list: []colid{
+			returning: &collist{items: []colid{
 				{qual: "a", name: "foo"},
 				{qual: "a", name: "bar"},
 				{qual: "a", name: "baz"}}},
@@ -796,7 +796,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
-			defaults: &collist{list: []colid{
+			defaults: &collist{items: []colid{
 				{qual: "a", name: "foo"},
 				{qual: "a", name: "bar"},
 				{qual: "a", name: "baz"}}},
@@ -823,7 +823,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
 			},
-			force: &collist{list: []colid{
+			force: &collist{items: []colid{
 				{qual: "a", name: "foo"},
 				{qual: "a", name: "bar"},
 				{qual: "a", name: "baz"}}},
@@ -971,6 +971,30 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				}},
 			},
 			offset: &offsetvar{value: 10, field: "Offset"},
+		},
+	}, {
+		name: "SelectTestOK_OrderByDirective",
+		want: &command{
+			name: "SelectTestOK_OrderByDirective",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{
+					kind:     kindstruct,
+					name:     "T",
+					pkgpath:  "path/to/test",
+					pkgname:  "testdata",
+					pkglocal: "testdata",
+					isslice:  true,
+				}},
+			},
+			orderby: &orderbylist{items: []*orderbyitem{
+				{col: colid{qual: "a", name: "foo"}, dir: orderasc, nulls: nullsfirst},
+				{col: colid{qual: "a", name: "bar"}, dir: orderdesc, nulls: nullsfirst},
+				{col: colid{qual: "a", name: "baz"}, dir: orderdesc, nulls: 0},
+				{col: colid{qual: "a", name: "quux"}, dir: orderasc, nulls: nullslast},
+			}},
 		},
 	}}
 

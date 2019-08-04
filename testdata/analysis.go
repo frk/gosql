@@ -377,3 +377,9 @@ type SelectTestOK_OffsetField struct {
 	Rel    []T `rel:"relation_a:a"`
 	Offset int `sql:"10"`
 }
+
+//OK: Select with OrderBy directive
+type SelectTestOK_OrderByDirective struct {
+	Rel []T           `rel:"relation_a:a"`
+	_   gosql.OrderBy `sql:"a.foo:nullsfirst,-a.bar:nullsfirst,-a.baz,a.quux:nullslast"`
+}
