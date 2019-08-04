@@ -365,3 +365,15 @@ type SelectTestOK_LimitField struct {
 	Rel   []T `rel:"relation_a:a"`
 	Limit int `sql:"10"`
 }
+
+//OK: Select with Offset directive
+type SelectTestOK_OffsetDirective struct {
+	Rel []T          `rel:"relation_a:a"`
+	_   gosql.Offset `sql:"25"`
+}
+
+//OK: Select with Offset field
+type SelectTestOK_OffsetField struct {
+	Rel    []T `rel:"relation_a:a"`
+	Offset int `sql:"10"`
+}

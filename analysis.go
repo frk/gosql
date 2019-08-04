@@ -119,11 +119,14 @@ func (a *analyzer) run() (err error) {
 				if err := a.limitdirective(tag.First("sql")); err != nil {
 					return err
 				}
+			case "offset":
+				if err := a.offsetdirective(tag.First("sql")); err != nil {
+					return err
+				}
 			}
 			continue
 
 			// TODO(mkopriva):
-			// - offset directive
 			// - orderby directive
 			// - override directive
 			// - textsearch directive (filter command type)
@@ -144,6 +147,10 @@ func (a *analyzer) run() (err error) {
 				if err := a.limitfield(fld, tag.First("sql")); err != nil {
 					return err
 				}
+			case "offset":
+				if err := a.offsetfield(fld, tag.First("sql")); err != nil {
+					return err
+				}
 			}
 			continue
 
@@ -153,8 +160,6 @@ func (a *analyzer) run() (err error) {
 			// would override the return directive. This is useful for
 			// queries that return more rows than they were provided
 			// with by the `rel` field.
-			// - limit field
-			// - offset field
 		}
 
 		// fields with specific types
@@ -863,25 +868,66 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
 }
 
 func (a *analyzer) limitdirective(tag string) error {
-	u64, err := strconv.ParseUint(tag, 10, 64)
-	if err != nil {
-		return err
+	limit := new(limitvar)
+	if len(tag) > 0 {
+		u64, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return newerr(errBadLimitValue)
+		}
+		limit.value = u64
 	}
-	a.cmd.limit = new(limitvar)
-	a.cmd.limit.value = u64
-	return nil
 
-	// TODO(mkopriva): a value of 0 should return an error
+	a.cmd.limit = limit
+	return nil
 }
 
 func (a *analyzer) limitfield(field *types.Var, tag string) error {
-	u64, err := strconv.ParseUint(tag, 10, 64)
-	if err != nil {
-		return err
+	if !a.isint(field.Type()) {
+		return newerr(errBadLimitType)
 	}
-	a.cmd.limit = new(limitvar)
-	a.cmd.limit.value = u64
-	a.cmd.limit.field = field.Name()
+
+	limit := new(limitvar)
+	limit.field = field.Name()
+	if len(tag) > 0 {
+		u64, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return newerr(errBadLimitValue)
+		}
+		limit.value = u64
+	}
+	a.cmd.limit = limit
+	return nil
+}
+
+func (a *analyzer) offsetdirective(tag string) error {
+	offset := new(offsetvar)
+	if len(tag) > 0 {
+		u64, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return newerr(errBadOffsetValue)
+		}
+		offset.value = u64
+	}
+
+	a.cmd.offset = offset
+	return nil
+}
+
+func (a *analyzer) offsetfield(field *types.Var, tag string) error {
+	if !a.isint(field.Type()) {
+		return newerr(errBadOffsetType)
+	}
+
+	offset := new(offsetvar)
+	offset.field = field.Name()
+	if len(tag) > 0 {
+		u64, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return newerr(errBadOffsetValue)
+		}
+		offset.value = u64
+	}
+	a.cmd.offset = offset
 	return nil
 }
 
@@ -1028,11 +1074,12 @@ type command struct {
 	typ  cmdtype // the type of the command
 	// If the command is a Select command this field indicates the
 	// specific kind of the select.
-	sel   selkind
-	rel   *relinfo
-	join  *joinblock
-	where *whereblock
-	limit *limitvar
+	sel    selkind
+	rel    *relinfo
+	join   *joinblock
+	where  *whereblock
+	limit  *limitvar
+	offset *offsetvar
 
 	defaults  *collist
 	force     *collist
@@ -1222,9 +1269,27 @@ type wherebetween struct {
 // field, it is then, in turn, used to produce a LIMIT clause in a SELECT query.
 type limitvar struct {
 	// The value provided in the Limit field's / directive's `sql` tag.
+	// If the limitvar was produced from a directive the value is used as
+	// a constant, but if limitvar was instead produced from a field the
+	// value will only be used if the field's actual value is empty during
+	// the query's execution, essentially acting as a default fallback.
 	value uint64
 	// The name of the Limit field, if empty it indicates that the limitvar
-	// was produced from the directive.
+	// was produced from the Limit directive.
+	field string
+}
+
+// The offsetvar is produced from either an Offset directive or from a valid "offset"
+// field, it is then, in turn, used to produce an OFFSET clause in a SELECT query.
+type offsetvar struct {
+	// The value provided in the Offset field's / directive's `sql` tag.
+	// If the offsetvar was produced from a directive the value is used as
+	// a constant, but if offsetvar was instead produced from a field the
+	// value will only be used if the field's actual value is empty during
+	// the query's execution, essentially acting as a default fallback.
+	value uint64
+	// The name of the Offset field, if empty it indicates that the offsetvar
+	// was produced from the Offset directive.
 	field string
 }
 
@@ -1234,6 +1299,7 @@ var reservedfields = stringlist{
 	"from",
 	"join",
 	"limit",
+	"offset",
 }
 
 type boolop uint // boolop operation

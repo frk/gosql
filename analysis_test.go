@@ -934,6 +934,44 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			},
 			limit: &limitvar{value: 10, field: "Limit"},
 		},
+	}, {
+		name: "SelectTestOK_OffsetDirective",
+		want: &command{
+			name: "SelectTestOK_OffsetDirective",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{
+					kind:     kindstruct,
+					name:     "T",
+					pkgpath:  "path/to/test",
+					pkgname:  "testdata",
+					pkglocal: "testdata",
+					isslice:  true,
+				}},
+			},
+			offset: &offsetvar{value: 25},
+		},
+	}, {
+		name: "SelectTestOK_OffsetField",
+		want: &command{
+			name: "SelectTestOK_OffsetField",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{
+					kind:     kindstruct,
+					name:     "T",
+					pkgpath:  "path/to/test",
+					pkgname:  "testdata",
+					pkglocal: "testdata",
+					isslice:  true,
+				}},
+			},
+			offset: &offsetvar{value: 10, field: "Offset"},
+		},
 	}}
 
 	for _, tt := range tests {

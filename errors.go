@@ -28,6 +28,10 @@ const (
 	errBadBoolTag
 	errBadBetweenType
 	errBadDistinctPredicate
+	errBadLimitType
+	errBadLimitValue
+	errBadOffsetType
+	errBadOffsetValue
 
 	errBadKind
 	errBadType
@@ -64,6 +68,7 @@ var errorCodeMessageFormats = map[errorCode]string{
 	errBadColId:       "bad column id",
 	errBadBoolTag:     "bad boolean tag",
 	errBadBetweenType: "bad between type",
+	errBadLimitType:   "bad limit type",
 
 	errBadType: "bad type",
 	errBadKind: "bad kind",

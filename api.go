@@ -70,6 +70,11 @@ type (
 	// a LIMIT clause for the SELECT query. The limit value must be specified
 	// in the directive field's `sql` tag.
 	Limit directive
+
+	// The Offset directive can be used inside a Select command to produce
+	// an OFFSET clause for the SELECT query. The offset value must be specified
+	// in the directive field's `sql` tag.
+	Offset directive
 )
 
 type AfterScanner interface {
