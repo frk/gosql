@@ -82,6 +82,8 @@ func (a *analyzer) run() (err error) {
 				a.cmd.sel = selexists
 			case fname == "notexists" && a.isbool(fld.Type()):
 				a.cmd.sel = selnotexists
+			case fname == "_" && typesutil.IsDirective("Relation", fld.Type()):
+				rel.isreldir = true
 			default:
 				if err := a.reldatatype(rel, fld); err != nil {
 					return err
@@ -90,10 +92,6 @@ func (a *analyzer) run() (err error) {
 
 			a.cmd.rel = rel
 			continue
-
-			// TODO(mkopriva):
-			// - allow Delete commands to have use _ gosql.Relation `rel:"..."`
-			//   instead of having them to use the corresponding Go struct type.
 		}
 
 		// TODO(mkopriva): allow for embedding a struct with "common feature fields",
@@ -1037,6 +1035,7 @@ type relinfo struct {
 	alias    string
 	datatype datatype
 	isview   bool // indicates that the relation is a table view
+	isreldir bool // indicates that the gosql.Relation directive was used
 }
 
 // datatype holds information on the type of data a command should read from,

@@ -885,6 +885,17 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			},
 			sel: selnotexists,
 		},
+	}, {
+		name: "DeleteTestOK_Relation",
+		want: &command{
+			name: "DeleteTestOK_Relation",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "_",
+				relid:    relid{name: "relation_a", alias: "a"},
+				isreldir: true,
+			},
+		},
 	}}
 
 	for _, tt := range tests {

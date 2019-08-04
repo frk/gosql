@@ -21,7 +21,20 @@ type (
 	// every single rows in a table.
 	All directive
 
-	Relation  directive
+	// The Relation directive has two potential use cases:
+	//
+	// (1) It can be used in a Delete command as the mount for the `rel` tag.
+	// This can be useful for Delete commands that have no Return directive,
+	// since such commands produce a DELETE query that takes no input other
+	// than the optional WHERE clause parameters, nor does it generate any
+	// output, and it therefore then becomes unnecessary to provide
+	// a proper Go struct representation of the target relation.
+	//
+	// (2) It can be used as the first directive in a Using or From block
+	// to specify the primary target relation for the two clauses produced
+	// from those two blocks.
+	Relation directive
+
 	LeftJoin  directive
 	RightJoin directive
 	FullJoin  directive

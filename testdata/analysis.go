@@ -346,3 +346,8 @@ type SelectTestOK_Exists struct {
 type SelectTestOK_NotExists struct {
 	NotExists bool `rel:"relation_a:a"`
 }
+
+//OK: Delete with Relation directive
+type DeleteTestOK_Relation struct {
+	_ gosql.Relation `rel:"relation_a:a"`
+}
