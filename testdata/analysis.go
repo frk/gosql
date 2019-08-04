@@ -331,3 +331,18 @@ type InsertTestOK_ErrorHandler struct {
 	Rel struct{} `rel:"relation_a:a"`
 	myerrorhandler
 }
+
+//OK: Select with Count field
+type SelectTestOK_Count struct {
+	Count int `rel:"relation_a:a"`
+}
+
+//OK: Select with Exists field
+type SelectTestOK_Exists struct {
+	Exists bool `rel:"relation_a:a"`
+}
+
+//OK: Select with NotExists field
+type SelectTestOK_NotExists struct {
+	NotExists bool `rel:"relation_a:a"`
+}

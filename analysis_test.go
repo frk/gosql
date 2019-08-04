@@ -852,6 +852,39 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			},
 			erh: "myerrorhandler",
 		},
+	}, {
+		name: "SelectTestOK_Count",
+		want: &command{
+			name: "SelectTestOK_Count",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field: "Count",
+				relid: relid{name: "relation_a", alias: "a"},
+			},
+			sel: selcount,
+		},
+	}, {
+		name: "SelectTestOK_Exists",
+		want: &command{
+			name: "SelectTestOK_Exists",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field: "Exists",
+				relid: relid{name: "relation_a", alias: "a"},
+			},
+			sel: selexists,
+		},
+	}, {
+		name: "SelectTestOK_NotExists",
+		want: &command{
+			name: "SelectTestOK_NotExists",
+			typ:  cmdtypeSelect,
+			rel: &relinfo{
+				field: "NotExists",
+				relid: relid{name: "relation_a", alias: "a"},
+			},
+			sel: selnotexists,
+		},
 	}}
 
 	for _, tt := range tests {

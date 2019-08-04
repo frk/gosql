@@ -74,12 +74,30 @@ func (a *analyzer) run() (err error) {
 			rel := new(relinfo)
 			rel.field = fld.Name()
 			rel.relid = rid
-			if err := a.reldatatype(rel, fld); err != nil {
-				return err
+
+			switch fname := strings.ToLower(rel.field); {
+			case fname == "count" && a.isint(fld.Type()):
+				a.cmd.sel = selcount
+			case fname == "exists" && a.isbool(fld.Type()):
+				a.cmd.sel = selexists
+			case fname == "notexists" && a.isbool(fld.Type()):
+				a.cmd.sel = selnotexists
+			default:
+				if err := a.reldatatype(rel, fld); err != nil {
+					return err
+				}
 			}
+
 			a.cmd.rel = rel
 			continue
+
+			// TODO(mkopriva):
+			// - allow Delete commands to have use _ gosql.Relation `rel:"..."`
+			//   instead of having them to use the corresponding Go struct type.
 		}
+
+		// TODO(mkopriva): allow for embedding a struct with "common feature fields",
+		// and make sure to also allow imported and local-unexported struct types.
 
 		// fields with gosql directive types
 		if dirname := typesutil.GetDirectiveName(fld); fld.Name() == "_" && len(dirname) > 0 {
@@ -95,17 +113,18 @@ func (a *analyzer) run() (err error) {
 					return err
 				}
 			case "return":
-				// TODO(mkopriva): provide the ability to specify
-				// a "result block" which would override the return
-				// directive.
-				//
-				// This is useful for queries that return more rows
-				// than they were provided with by the `rel` field.
 				if a.cmd.returning, err = a.collist(tag["sql"]); err != nil {
 					return err
 				}
 			}
 			continue
+
+			// TODO(mkopriva):
+			// - limit directive
+			// - offset directive
+			// - orderby directive
+			// - override directive
+			// - textsearch directive (filter command type)
 		}
 
 		// fields with reserved names
@@ -121,6 +140,15 @@ func (a *analyzer) run() (err error) {
 				}
 			}
 			continue
+
+			// TODO(mkopriva):
+			// - on conflict block
+			// - provide the ability to specify a "result block" which
+			// would override the return directive. This is useful for
+			// queries that return more rows than they were provided
+			// with by the `rel` field.
+			// - limit field
+			// - offset field
 		}
 
 		// fields with specific types
@@ -130,19 +158,10 @@ func (a *analyzer) run() (err error) {
 				a.cmd.erh = fld.Name()
 			}
 			continue
+
+			// TODO(mkopriva):
+			// - embedded gosql.Filter
 		}
-
-		// TODO(mkopriva):
-		// - allow Delete commands to have use _ gosql.Relation `rel:"..."`
-		//   instead of having them to use the corresponding Go struct type.
-		// - errorhandler
-		// - order by
-		// - limit
-		// - offset
-		// - override
-
-		// TODO(mkopriva): allow for embedding a struct with "common feature fields",
-		// and make sure to also allow imported and local-unexported struct types.
 	}
 
 	if a.cmd.rel == nil {
@@ -926,6 +945,35 @@ func (a *analyzer) iserrorhandler(field *types.Var) bool {
 	return typesutil.ImplementsErrorHandler(named)
 }
 
+// isint returns true if the given type is one of the basic integer
+// types, including the unsigned ones.
+func (a *analyzer) isint(typ types.Type) bool {
+	basic, ok := typ.(*types.Basic)
+	if !ok {
+		return false
+	}
+	kind := basic.Kind()
+	return kind == types.Int ||
+		kind == types.Int8 ||
+		kind == types.Int16 ||
+		kind == types.Int32 ||
+		kind == types.Int64 ||
+		kind == types.Uint ||
+		kind == types.Uint8 ||
+		kind == types.Uint16 ||
+		kind == types.Uint32 ||
+		kind == types.Uint64
+}
+
+// isbool returns true if the given type is the basic bool type.
+func (a *analyzer) isbool(typ types.Type) bool {
+	basic, ok := typ.(*types.Basic)
+	if !ok {
+		return false
+	}
+	return basic.Kind() == types.Bool
+}
+
 type cmdtype uint
 
 const (
@@ -936,9 +984,21 @@ const (
 	cmdtypeFilter
 )
 
+type selkind uint
+
+const (
+	selfrom      selkind = iota // the default
+	selcount                    // SELECT COUNT(1) ...
+	selexists                   // SELECT EXISTS( ... )
+	selnotexists                // SELECT NOT EXISTS( ... )
+)
+
 type command struct {
-	name  string  // name of the target struct type
-	typ   cmdtype // the type of the command
+	name string  // name of the target struct type
+	typ  cmdtype // the type of the command
+	// If the command is a Select command this field indicates the
+	// specific kind of the select.
+	sel   selkind
 	rel   *relinfo
 	join  *joinblock
 	where *whereblock
