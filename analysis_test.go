@@ -774,6 +774,60 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				{qual: "a", name: "bar"},
 				{qual: "a", name: "baz"}}},
 		},
+	}, {
+		name: "InsertTestOK_Default",
+		want: &command{
+			name: "InsertTestOK_Default",
+			typ:  cmdtypeInsert,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			defaults: &collist{all: true},
+		},
+	}, {
+		name: "UpdateTestOK_Default",
+		want: &command{
+			name: "UpdateTestOK_Default",
+			typ:  cmdtypeUpdate,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			defaults: &collist{list: []colid{
+				{qual: "a", name: "foo"},
+				{qual: "a", name: "bar"},
+				{qual: "a", name: "baz"}}},
+		},
+	}, {
+		name: "InsertTestOK_Force",
+		want: &command{
+			name: "InsertTestOK_Force",
+			typ:  cmdtypeInsert,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			force: &collist{all: true},
+		},
+	}, {
+		name: "UpdateTestOK_Force",
+		want: &command{
+			name: "UpdateTestOK_Force",
+			typ:  cmdtypeUpdate,
+			rel: &relinfo{
+				field:    "Rel",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+			},
+			force: &collist{list: []colid{
+				{qual: "a", name: "foo"},
+				{qual: "a", name: "bar"},
+				{qual: "a", name: "baz"}}},
+		},
 	}}
 
 	for _, tt := range tests {

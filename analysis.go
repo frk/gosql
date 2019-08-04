@@ -95,6 +95,14 @@ func (a *analyzer) run() (err error) {
 			switch strings.ToLower(dirname) {
 			case "all":
 				a.cmd.all = true
+			case "default":
+				if a.cmd.defaults, err = a.collist(tag["sql"]); err != nil {
+					return err
+				}
+			case "force":
+				if a.cmd.force, err = a.collist(tag["sql"]); err != nil {
+					return err
+				}
 			case "return":
 				// TODO(mkopriva): provide the ability to specify
 				// a "result block" which would override the return
@@ -109,11 +117,9 @@ func (a *analyzer) run() (err error) {
 		}
 
 		// errorhandler
-		// default columns
 		// order by
 		// offset
 		// override
-		// force
 	}
 
 	if a.cmd.rel == nil {
@@ -906,6 +912,8 @@ type command struct {
 	join  *joinblock
 	where *whereblock
 
+	defaults  *collist
+	force     *collist
 	returning *collist
 	// Indicates that the command should be executed against all the rows
 	// of the relation.

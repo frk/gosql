@@ -291,3 +291,27 @@ type UpdateTestOK_Return struct {
 	Rel struct{}     `rel:"relation_a:a"`
 	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
 }
+
+//OK: Insert with Default directive
+type InsertTestOK_Default struct {
+	Rel struct{}      `rel:"relation_a:a"`
+	_   gosql.Default `sql:"*"`
+}
+
+//OK: Update with Default directive
+type UpdateTestOK_Default struct {
+	Rel struct{}      `rel:"relation_a:a"`
+	_   gosql.Default `sql:"a.foo,a.bar,a.baz"`
+}
+
+//OK: Insert with Force directive
+type InsertTestOK_Force struct {
+	Rel struct{}    `rel:"relation_a:a"`
+	_   gosql.Force `sql:"*"`
+}
+
+//OK: Update with Force directive
+type UpdateTestOK_Force struct {
+	Rel struct{}    `rel:"relation_a:a"`
+	_   gosql.Force `sql:"a.foo,a.bar,a.baz"`
+}
