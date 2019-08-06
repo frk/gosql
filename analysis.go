@@ -196,13 +196,12 @@ func (a *analyzer) run() (err error) {
 				if err := a.offsetvar(fld, tag.First("sql")); err != nil {
 					return err
 				}
+			case "rowsaffected":
+				if err := a.rowsaffected(fld); err != nil {
+					return err
+				}
 			}
 			continue
-
-			// TODO(mkopriva):
-			// - allow for a rowsaffected int field used in an Insert,
-			// Update, or Delete command that has no gosql.Return directive
-			// nor a Result block.
 		}
 
 		// fields with specific types
@@ -221,20 +220,6 @@ func (a *analyzer) run() (err error) {
 	if a.cmd.rel == nil {
 		return newerr(errNoRelation, a.cmd.name)
 	}
-	return nil
-}
-
-func (a *analyzer) resultfield(field *types.Var) error {
-	rel := new(relinfo)
-	rel.field = field.Name()
-	if err := a.reldatatype(rel, field); err != nil {
-		return err
-	}
-
-	result := new(resultfield)
-	result.name = rel.field
-	result.datatype = rel.datatype
-	a.cmd.result = result
 	return nil
 }
 
@@ -1056,6 +1041,28 @@ func (a *analyzer) overridedir(tag string) error {
 	return nil
 }
 
+func (a *analyzer) resultfield(field *types.Var) error {
+	rel := new(relinfo)
+	rel.field = field.Name()
+	if err := a.reldatatype(rel, field); err != nil {
+		return err
+	}
+
+	result := new(resultfield)
+	result.name = rel.field
+	result.datatype = rel.datatype
+	a.cmd.result = result
+	return nil
+}
+
+func (a *analyzer) rowsaffected(field *types.Var) error {
+	if !a.isint(field.Type()) {
+		return newerr(errBadRowsAffectedType)
+	}
+	a.cmd.rowsaffected = field.Name()
+	return nil
+}
+
 func (a *analyzer) textsearch(tag string) error {
 	val := strings.ToLower(strings.TrimSpace(tag))
 	cid, err := a.colid(val)
@@ -1215,8 +1222,9 @@ type command struct {
 	defaults *collist
 	force    *collist
 
-	returning *collist
-	result    *resultfield
+	returning    *collist
+	result       *resultfield
+	rowsaffected string
 
 	// Indicates that the command should be executed against all the rows
 	// of the relation.
@@ -1457,6 +1465,7 @@ var reservedfields = stringlist{
 	"limit",
 	"offset",
 	"result",
+	"rowsaffected",
 }
 
 type boolop uint // boolop operation

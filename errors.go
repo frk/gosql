@@ -36,6 +36,7 @@ const (
 	errBadOverrideKind
 	errBadIndexIdentifier
 	errBadConstraintIdentifier
+	errBadRowsAffectedType
 
 	errBadKind
 	errBadType

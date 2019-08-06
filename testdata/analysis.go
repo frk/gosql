@@ -439,3 +439,12 @@ type DeleteTestOK_ResultField struct {
 	}
 	Result []T
 }
+
+//OK: Delete with RowsAffected field
+type DeleteTestOK_RowsAffected struct {
+	_     gosql.Relation `rel:"relation_a:a"`
+	Where struct {
+		_ gosql.Column `sql:"a.is_inactive istrue"`
+	}
+	RowsAffected int
+}

@@ -1033,6 +1033,21 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				datatype: reldummyslice.datatype,
 			},
 		},
+	}, {
+		name: "DeleteTestOK_RowsAffected",
+		want: &command{
+			name: "DeleteTestOK_RowsAffected",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "_",
+				relid:    relid{name: "relation_a", alias: "a"},
+				isreldir: true,
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
+			}},
+			rowsaffected: "RowsAffected",
+		},
 	}}
 
 	for _, tt := range tests {
