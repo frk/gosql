@@ -169,7 +169,7 @@ func (a *analyzer) run() (err error) {
 			continue
 		}
 
-		// fields with reserved names
+		// fields with specific names
 		if fname := strings.ToLower(fld.Name()); reservedfields.contains(fname) {
 			switch fname {
 			case "where":
@@ -184,6 +184,10 @@ func (a *analyzer) run() (err error) {
 				if err := a.onconflictblock(fld); err != nil {
 					return err
 				}
+			case "result":
+				if err := a.resultfield(fld); err != nil {
+					return err
+				}
 			case "limit":
 				if err := a.limitvar(fld, tag.First("sql")); err != nil {
 					return err
@@ -196,10 +200,9 @@ func (a *analyzer) run() (err error) {
 			continue
 
 			// TODO(mkopriva):
-			// - provide the ability to specify a "result block" which
-			// would override the return directive. This is useful for
-			// queries that return more rows than they were provided
-			// with by the `rel` field.
+			// - allow for a rowsaffected int field used in an Insert,
+			// Update, or Delete command that has no gosql.Return directive
+			// nor a Result block.
 		}
 
 		// fields with specific types
@@ -218,6 +221,20 @@ func (a *analyzer) run() (err error) {
 	if a.cmd.rel == nil {
 		return newerr(errNoRelation, a.cmd.name)
 	}
+	return nil
+}
+
+func (a *analyzer) resultfield(field *types.Var) error {
+	rel := new(relinfo)
+	rel.field = field.Name()
+	if err := a.reldatatype(rel, field); err != nil {
+		return err
+	}
+
+	result := new(resultfield)
+	result.name = rel.field
+	result.datatype = rel.datatype
+	a.cmd.result = result
 	return nil
 }
 
@@ -1195,9 +1212,11 @@ type command struct {
 	textsearch *colid
 	onconflict *onconflictblock
 
-	defaults  *collist
-	force     *collist
+	defaults *collist
+	force    *collist
+
 	returning *collist
+	result    *resultfield
 
 	// Indicates that the command should be executed against all the rows
 	// of the relation.
@@ -1227,10 +1246,14 @@ type collist struct {
 type relinfo struct {
 	field    string // name of the field that references the relation in the command
 	relid    relid  // the relation identifier
-	alias    string
 	datatype datatype
 	isview   bool // indicates that the relation is a table view
 	isreldir bool // indicates that the gosql.Relation directive was used
+}
+
+type resultfield struct {
+	name     string // name of the field that declares the result of the command
+	datatype datatype
 }
 
 // datatype holds information on the type of data a command should read from,
@@ -1433,6 +1456,7 @@ var reservedfields = stringlist{
 	"onconflict",
 	"limit",
 	"offset",
+	"result",
 }
 
 type boolop uint // boolop operation

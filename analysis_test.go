@@ -1015,6 +1015,24 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				update: &collist{all: true},
 			},
 		},
+	}, {
+		name: "DeleteTestOK_ResultField",
+		want: &command{
+			name: "DeleteTestOK_ResultField",
+			typ:  cmdtypeDelete,
+			rel: &relinfo{
+				field:    "_",
+				relid:    relid{name: "relation_a", alias: "a"},
+				isreldir: true,
+			},
+			where: &whereblock{name: "Where", items: []*whereitem{
+				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
+			}},
+			result: &resultfield{
+				name:     "Result",
+				datatype: reldummyslice.datatype,
+			},
+		},
 	}}
 
 	for _, tt := range tests {

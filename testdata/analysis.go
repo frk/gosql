@@ -430,3 +430,12 @@ type InsertTestOK_OnConflictIndex struct {
 		_ gosql.Update `sql:"*"`
 	}
 }
+
+//OK: Delete with Result field
+type DeleteTestOK_ResultField struct {
+	_     gosql.Relation `rel:"relation_a:a"`
+	Where struct {
+		_ gosql.Column `sql:"a.is_inactive istrue"`
+	}
+	Result []T
+}

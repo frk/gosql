@@ -68,6 +68,7 @@ var errorCodeMessageFormats = map[errorCode]string{
 		"type and it MUST return exactly one value of type error, when it's an " +
 		"interface, it MUST have exactly one method whose signature MUST be the " +
 		"same as that of the function described above.",
+
 	errBadObjId:       "bad object id",
 	errBadColId:       "bad column id",
 	errBadBoolTag:     "bad boolean tag",
