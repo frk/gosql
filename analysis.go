@@ -207,13 +207,12 @@ func (a *analyzer) run() (err error) {
 		// fields with specific types
 		if a.isaccessible(fld, a.named) {
 			switch {
+			case a.isfilter(fld.Type()):
+				a.cmd.filter = fld.Name()
 			case a.iserrorhandler(fld.Type()):
 				a.cmd.erh = fld.Name()
 			}
 			continue
-
-			// TODO(mkopriva):
-			// - embedded gosql.Filter
 		}
 	}
 
@@ -1155,6 +1154,21 @@ func (a *analyzer) iserrorhandler(typ types.Type) bool {
 	return typesutil.ImplementsErrorHandler(named)
 }
 
+// isfilter returns true if the given type is the gosql.Filter type.
+func (a *analyzer) isfilter(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+	name := named.Obj().Name()
+	if name != "Filter" {
+		return false
+	}
+
+	path := named.Obj().Pkg().Path()
+	return strings.HasSuffix(path, "github.com/frk/gosql")
+}
+
 // isint returns true if the given type is one of the basic integer
 // types, including the unsigned ones.
 func (a *analyzer) isint(typ types.Type) bool {
@@ -1229,8 +1243,10 @@ type command struct {
 	// Indicates that the command should be executed against all the rows
 	// of the relation.
 	all bool
-	// The name of the field that implements the ErrorHandler interface, if any.
+	// The name of the ErrorHandler field, if any.
 	erh string
+	// The name of the Filter type field, if any.
+	filter string
 }
 
 type relid struct {

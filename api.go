@@ -136,3 +136,7 @@ type AfterScanner interface {
 type ErrorHandler interface {
 	HandleError(err error) error
 }
+
+type Filter struct {
+	// TODO(mkopriva): ...
+}

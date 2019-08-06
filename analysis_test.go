@@ -79,6 +79,14 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}
 
+	dummytype := datatype{typeinfo: typeinfo{
+		kind:     kindstruct,
+		name:     "T",
+		pkgpath:  "path/to/test",
+		pkgname:  "testdata",
+		pkglocal: "testdata",
+	}}
+
 	tests := []struct {
 		name string
 		want *command
@@ -965,9 +973,13 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 	}, {
 		name: "FilterTestOK_TextSearchDirective",
 		want: &command{
-			name:       "FilterTestOK_TextSearchDirective",
-			typ:        cmdtypeFilter,
-			rel:        reldummyslice,
+			name: "FilterTestOK_TextSearchDirective",
+			typ:  cmdtypeFilter,
+			rel: &relinfo{
+				field:    "_",
+				relid:    relid{name: "relation_a", alias: "a"},
+				datatype: dummytype,
+			},
 			textsearch: &colid{qual: "a", name: "ts_document"},
 		},
 	}, {
@@ -1047,6 +1059,14 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
 			}},
 			rowsaffected: "RowsAffected",
+		},
+	}, {
+		name: "SelectTestOK_FilterField",
+		want: &command{
+			name:   "SelectTestOK_FilterField",
+			typ:    cmdtypeSelect,
+			rel:    reldummyslice,
+			filter: "Filter",
 		},
 	}}
 

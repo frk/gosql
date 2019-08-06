@@ -392,8 +392,8 @@ type InsertTestOK_OverrideDirective struct {
 
 //OK: Filter with TextSearch directive
 type FilterTestOK_TextSearchDirective struct {
-	Rel []T              `rel:"relation_a:a"`
-	_   gosql.TextSearch `sql:"a.ts_document"`
+	_ T                `rel:"relation_a:a"`
+	_ gosql.TextSearch `sql:"a.ts_document"`
 }
 
 //OK: Insert with onconflict block
@@ -447,4 +447,10 @@ type DeleteTestOK_RowsAffected struct {
 		_ gosql.Column `sql:"a.is_inactive istrue"`
 	}
 	RowsAffected int
+}
+
+//OK: Select with Filter field
+type SelectTestOK_FilterField struct {
+	Rel    []T `rel:"relation_a:a"`
+	Filter gosql.Filter
 }
