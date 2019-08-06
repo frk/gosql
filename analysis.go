@@ -11,6 +11,36 @@ import (
 	"github.com/frk/tagutil"
 )
 
+var (
+	// NOTE(mkopriva): Identifiers must begin with a letter (a-z) or an underscore (_).
+	// Subsequent characters in an identifier can be letters, underscores, and digits (0-9).
+
+	// Matches a valid identifier.
+	reident = regexp.MustCompile(`^[A-Za-z_]\w*$`)
+
+	// Matches a valid identifier. The identifier can optionally be prefixed
+	// by another identifier and concatenated to it by a dot. It can also have
+	// another optional identifier at the right end concatenated to id by a colon.
+	// Expected input format: [schema_name.]relation_name[:alias_name]
+	rerelid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*(?:\:[A-Za-z_]\w*)?$`)
+
+	// Matches a valid identifier. The identifier can optionally be prefixed
+	// by another identifier and concatenated to it by a dot.
+	// Expected input format: [rel_alias.]column_name
+	recolid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*$`)
+
+	// Matches a few reserved identifiers.
+	rereserved = regexp.MustCompile(`^(?i:true|false|` +
+		`current_date|current_time|current_timestamp|` +
+		`current_role|current_schema|current_user|` +
+		`localtime|localtimestamp|` +
+		`session_user)$`)
+
+	// Matches coalesce or coalesce(<value>) where <value> is expected to
+	// be a single value literal.
+	recoalesce = regexp.MustCompile(`(?i)^coalesce$|^coalesce\((.*)\)$`)
+)
+
 // TODO(mkopriva): to provide more detailed error messages either pass in the
 // details about the file being analyzed, or make sure that the caller has that
 // information and appends it to the error.
@@ -150,6 +180,10 @@ func (a *analyzer) run() (err error) {
 				if err := a.joinblock(fld); err != nil {
 					return err
 				}
+			case "onconflict":
+				if err := a.onconflictblock(fld); err != nil {
+					return err
+				}
 			case "limit":
 				if err := a.limitvar(fld, tag.First("sql")); err != nil {
 					return err
@@ -162,7 +196,6 @@ func (a *analyzer) run() (err error) {
 			continue
 
 			// TODO(mkopriva):
-			// - on conflict block
 			// - provide the ability to specify a "result block" which
 			// would override the return directive. This is useful for
 			// queries that return more rows than they were provided
@@ -452,8 +485,6 @@ func (a *analyzer) typekind(typ types.Type) typekind {
 	}
 	return 0 // unsupported / unknown
 }
-
-var recoalesce = regexp.MustCompile(`(?i)^coalesce$|^coalesce\((.*)\)$`)
 
 func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 	if sqltag := tag["sql"]; len(sqltag) > 0 {
@@ -771,6 +802,52 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 	return nil
 }
 
+func (a *analyzer) onconflictblock(field *types.Var) (err error) {
+	onconf := new(onconflictblock)
+	ns, err := typesutil.GetStruct(field)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < ns.Struct.NumFields(); i++ {
+		fld := ns.Struct.Field(i)
+		tag := tagutil.New(ns.Struct.Tag(i))
+
+		// In an onconflictblock all fields are expected to be directives
+		// with the blank identifier as their name.
+		if fld.Name() != "_" {
+			continue
+		}
+
+		switch dirname := strings.ToLower(typesutil.GetDirectiveName(fld)); dirname {
+		case "column":
+			list, err := a.collist(tag["sql"])
+			if err != nil {
+				return err
+			}
+			onconf.column = list.items
+		case "index":
+			if onconf.index = tag.First("sql"); !reident.MatchString(onconf.index) {
+				return newerr(errBadIndexIdentifier)
+			}
+		case "constraint":
+			if onconf.constraint = tag.First("sql"); !reident.MatchString(onconf.constraint) {
+				return newerr(errBadConstraintIdentifier)
+			}
+		case "ignore":
+			onconf.ignore = true
+		case "update":
+			if onconf.update, err = a.collist(tag["sql"]); err != nil {
+				return err
+			}
+		}
+
+	}
+
+	a.cmd.onconflict = onconf
+	return nil
+}
+
 // Parses the given string as a comparison expression and returns the
 // individual elements of that expression. The expected format is:
 // { column [ comparison-operator [ scalar-operator ] { column | literal } ] }
@@ -982,8 +1059,6 @@ func (a *analyzer) modfn(tagvals []string) function {
 	return 0
 }
 
-var rerelid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*(?:\:[A-Za-z_]\w*)?$`)
-
 // parses the given string and returns a relid, if the value's format is invalid
 // an error will be returned instead. The expected format is: "[qualifier.]name[:alias]".
 func (a *analyzer) relid(val string) (id relid, err error) {
@@ -1001,13 +1076,6 @@ func (a *analyzer) relid(val string) (id relid, err error) {
 	id.name = val
 	return id, nil
 }
-
-var recolid = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*$`)
-var rereserved = regexp.MustCompile(`^(?i:true|false|` +
-	`current_date|current_time|current_timestamp|` +
-	`current_role|current_schema|current_user|` +
-	`localtime|localtimestamp|` +
-	`session_user)$`)
 
 func (a *analyzer) iscolid(val string) bool {
 	return recolid.MatchString(val) && !rereserved.MatchString(val)
@@ -1125,6 +1193,7 @@ type command struct {
 	orderby    *orderbylist
 	override   overridingkind
 	textsearch *colid
+	onconflict *onconflictblock
 
 	defaults  *collist
 	force     *collist
@@ -1310,6 +1379,14 @@ type wherebetween struct {
 	x, y  interface{}
 }
 
+type onconflictblock struct {
+	column     []colid
+	index      string
+	constraint string
+	ignore     bool
+	update     *collist
+}
+
 // The limitvar is produced from either a Limit directive or from a valid "limit"
 // field, it is then, in turn, used to produce a LIMIT clause in a SELECT query.
 type limitvar struct {
@@ -1353,6 +1430,7 @@ var reservedfields = stringlist{
 	"using",
 	"from",
 	"join",
+	"onconflict",
 	"limit",
 	"offset",
 }

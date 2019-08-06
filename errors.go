@@ -34,6 +34,8 @@ const (
 	errBadOffsetValue
 	errBadNullsOrderOption
 	errBadOverrideKind
+	errBadIndexIdentifier
+	errBadConstraintIdentifier
 
 	errBadKind
 	errBadType

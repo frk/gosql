@@ -8,8 +8,17 @@ type directive struct {
 }
 
 type (
-	// The Column directive can be used in Where blocks to generate
-	// single column predicates and column to column comparisons.
+	// The Column directive has two potential use cases:
+	//
+	// (1) It can be used in a Where block to produce column specific comparisons
+	// for a WHERE clause condition. The type of comparison that can be produced
+	// depends on the `sql` tag value supplied to the directive.
+	// The expected format of the tag's value is:
+	// { column [ comparison-operator [ scalar-operator ] { column | literal } ] }
+	//
+	// (2) It can be used in an OnConflict block to specify the resulting
+	// ON CONFLICT clause's conflict_target as a list of index_column_names.
+	// The list should be should be provided in the directive's `sql` tag.
 	Column directive
 
 	// This is inteded to be used with Update and Delete commands to
@@ -96,6 +105,28 @@ type (
 	// The TextSearch directive can be used in a Filter command to specify
 	// the document column that will be used for full-text search.
 	TextSearch directive
+
+	// The Index directive can be used in an OnConflict block to specify
+	// the resulting ON CONFLICT clause's conflict_target using the name
+	// of a unique index. The index name should be should be provided in
+	// the directive's `sql` tag.
+	Index directive
+
+	// The Constraint directive can be used in an OnConflict block to specify
+	// the resulting ON CONFLICT clause's conflict_target using the name of
+	// a table constraint. The constraint's name should be should be provided
+	// in the directive's `sql` tag.
+	Constraint directive
+
+	// The Ignore directive can be used in an OnConflict block to produce
+	// the DO NOTHING action of the resulting ON CONFLICT clause.
+	Ignore directive
+
+	// The Update directive can be used in an OnConflict block to produce
+	// the DO UPDATE SET action of the resulting ON CONFLICT clause. The
+	// columns to be updated by the produced action should be listed in
+	// the directive's `sql` tag.
+	Update directive
 )
 
 type AfterScanner interface {

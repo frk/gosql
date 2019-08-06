@@ -970,6 +970,51 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel:        reldummyslice,
 			textsearch: &colid{qual: "a", name: "ts_document"},
 		},
+	}, {
+		name: "InsertTestOK_OnConflict",
+		want: &command{
+			name:       "InsertTestOK_OnConflict",
+			typ:        cmdtypeInsert,
+			rel:        reldummyslice,
+			onconflict: &onconflictblock{ignore: true},
+		},
+	}, {
+		name: "InsertTestOK_OnConflictColumn",
+		want: &command{
+			name: "InsertTestOK_OnConflictColumn",
+			typ:  cmdtypeInsert,
+			rel:  reldummyslice,
+			onconflict: &onconflictblock{
+				column: []colid{{qual: "a", name: "id"}},
+				ignore: true,
+			},
+		},
+	}, {
+		name: "InsertTestOK_OnConflictConstraint",
+		want: &command{
+			name: "InsertTestOK_OnConflictConstraint",
+			typ:  cmdtypeInsert,
+			rel:  reldummyslice,
+			onconflict: &onconflictblock{
+				constraint: "relation_constraint_xyz",
+				update: &collist{items: []colid{
+					{qual: "a", name: "foo"},
+					{qual: "a", name: "bar"},
+					{qual: "a", name: "baz"},
+				}},
+			},
+		},
+	}, {
+		name: "InsertTestOK_OnConflictIndex",
+		want: &command{
+			name: "InsertTestOK_OnConflictIndex",
+			typ:  cmdtypeInsert,
+			rel:  reldummyslice,
+			onconflict: &onconflictblock{
+				index:  "relation_index_xyz",
+				update: &collist{all: true},
+			},
+		},
 	}}
 
 	for _, tt := range tests {

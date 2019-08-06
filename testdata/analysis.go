@@ -395,3 +395,38 @@ type FilterTestOK_TextSearchDirective struct {
 	Rel []T              `rel:"relation_a:a"`
 	_   gosql.TextSearch `sql:"a.ts_document"`
 }
+
+//OK: Insert with onconflict block
+type InsertTestOK_OnConflict struct {
+	Rel        []T `rel:"relation_a:a"`
+	OnConflict struct {
+		_ gosql.Ignore
+	}
+}
+
+//OK: Insert with onconflict block with column target
+type InsertTestOK_OnConflictColumn struct {
+	Rel        []T `rel:"relation_a:a"`
+	OnConflict struct {
+		_ gosql.Column `sql:"a.id"`
+		_ gosql.Ignore
+	}
+}
+
+//OK: Insert with onconflict block with constraint target and update action
+type InsertTestOK_OnConflictConstraint struct {
+	Rel        []T `rel:"relation_a:a"`
+	OnConflict struct {
+		_ gosql.Constraint `sql:"relation_constraint_xyz"`
+		_ gosql.Update     `sql:"a.foo,a.bar,a.baz"`
+	}
+}
+
+//OK: Insert with onconflict block with index target and update action
+type InsertTestOK_OnConflictIndex struct {
+	Rel        []T `rel:"relation_a:a"`
+	OnConflict struct {
+		_ gosql.Index  `sql:"relation_index_xyz"`
+		_ gosql.Update `sql:"*"`
+	}
+}
