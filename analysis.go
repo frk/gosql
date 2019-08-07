@@ -1,6 +1,7 @@
 package gosql
 
 import (
+	"fmt"
 	"go/types"
 	"log"
 	"regexp"
@@ -53,7 +54,7 @@ func analyze(named *types.Named) (*command, error) {
 	var ok bool
 	if a.cmdtyp, ok = named.Underlying().(*types.Struct); !ok {
 		typ := named.Underlying().String()
-		return nil, newerr(errBadCmdType, a.cmd.name, typ)
+		return nil, a.newerr(errBadCmdType, a.cmd.name, typ)
 	}
 
 	key := strings.ToLower(a.cmd.name)
@@ -73,7 +74,7 @@ func analyze(named *types.Named) (*command, error) {
 	case "filter":
 		a.cmd.typ = cmdtypeFilter
 	default:
-		return nil, newerr(errBadCmdName, a.cmd.name)
+		return nil, a.newerr(errBadCmdName, a.cmd.name)
 	}
 
 	if err := a.run(); err != nil {
@@ -102,7 +103,7 @@ func (a *analyzer) run() (err error) {
 				return err
 			}
 
-			rel := new(relinfo)
+			rel := new(relfield)
 			rel.field = fld.Name()
 			rel.relid = rid
 
@@ -114,7 +115,7 @@ func (a *analyzer) run() (err error) {
 			case fname == "notexists" && a.isbool(fld.Type()):
 				a.cmd.sel = selnotexists
 			case fname == "_" && typesutil.IsDirective("Relation", fld.Type()):
-				rel.isreldir = true
+				rel.isdir = true
 			default:
 				if err := a.reldatatype(rel, fld); err != nil {
 					return err
@@ -170,59 +171,56 @@ func (a *analyzer) run() (err error) {
 		}
 
 		// fields with specific names
-		if fname := strings.ToLower(fld.Name()); reservedfields.contains(fname) {
-			switch fname {
-			case "where":
-				if err := a.whereblock(fld); err != nil {
-					return err
-				}
-			case "join", "from", "using":
-				if err := a.joinblock(fld); err != nil {
-					return err
-				}
-			case "onconflict":
-				if err := a.onconflictblock(fld); err != nil {
-					return err
-				}
-			case "result":
-				if err := a.resultfield(fld); err != nil {
-					return err
-				}
-			case "limit":
-				if err := a.limitvar(fld, tag.First("sql")); err != nil {
-					return err
-				}
-			case "offset":
-				if err := a.offsetvar(fld, tag.First("sql")); err != nil {
-					return err
-				}
-			case "rowsaffected":
-				if err := a.rowsaffected(fld); err != nil {
-					return err
+		switch fname := strings.ToLower(fld.Name()); fname {
+		case "where":
+			if err := a.whereblock(fld); err != nil {
+				return err
+			}
+		case "join", "from", "using":
+			if err := a.joinblock(fld); err != nil {
+				return err
+			}
+		case "onconflict":
+			if err := a.onconflictblock(fld); err != nil {
+				return err
+			}
+		case "result":
+			if err := a.resultfield(fld); err != nil {
+				return err
+			}
+		case "limit":
+			if err := a.limitvar(fld, tag.First("sql")); err != nil {
+				return err
+			}
+		case "offset":
+			if err := a.offsetvar(fld, tag.First("sql")); err != nil {
+				return err
+			}
+		case "rowsaffected":
+			if err := a.rowsaffected(fld); err != nil {
+				return err
+			}
+		default:
+			// if no match by field name, look for specific field types
+			if a.isaccessible(fld, a.named) {
+				switch {
+				case a.isfilter(fld.Type()):
+					a.cmd.filter = fld.Name()
+				case a.iserrorhandler(fld.Type()):
+					a.cmd.erh = fld.Name()
 				}
 			}
-			continue
 		}
 
-		// fields with specific types
-		if a.isaccessible(fld, a.named) {
-			switch {
-			case a.isfilter(fld.Type()):
-				a.cmd.filter = fld.Name()
-			case a.iserrorhandler(fld.Type()):
-				a.cmd.erh = fld.Name()
-			}
-			continue
-		}
 	}
 
 	if a.cmd.rel == nil {
-		return newerr(errNoRelation, a.cmd.name)
+		return a.newerr(errNoRelation, a.cmd.name)
 	}
 	return nil
 }
 
-func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
+func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 	var (
 		ftyp  = field.Type()
 		named *types.Named
@@ -266,7 +264,7 @@ func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 			// Fail if the type is a slice, an array, or a pointer
 			// while its base type remains unnamed.
 			if rel.datatype.isslice || rel.datatype.isarray || rel.datatype.ispointer {
-				return newerr(errBadRelationType, a.cmd.name, rel.field)
+				return a.newerr(errBadRelationType, a.cmd.name, rel.field)
 			}
 		}
 	}
@@ -289,14 +287,14 @@ func (a *analyzer) reldatatype(rel *relinfo, field *types.Var) error {
 	if rel.datatype.kind != kindstruct {
 		// Currently only the struct kind is supported as the
 		// relation's associated base datatype.
-		return newerr(errBadRelationType, a.cmd.name, rel.field)
+		return a.newerr(errBadRelationType, a.cmd.name, rel.field)
 	}
 
 	styp := ftyp.(*types.Struct)
 	return a.relfields(rel, styp)
 }
 
-func (a *analyzer) relfields(rel *relinfo, styp *types.Struct) error {
+func (a *analyzer) relfields(rel *relfield, styp *types.Struct) error {
 	// The structloop type holds the state of a loop over a struct's fields.
 	type structloop struct {
 		styp *types.Struct // the struct type whose fields are being analyzed
@@ -415,9 +413,9 @@ func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 	return typ, base
 }
 
-func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *relinfo) (*types.Named, error) {
+func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *relfield) (*types.Named, error) {
 	if iface.NumExplicitMethods() != 1 {
-		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
+		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
 
 	mth := iface.ExplicitMethod(0)
@@ -426,7 +424,7 @@ func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *rel
 	// ensure that the receiver type is local, i.e. not imported, otherwise
 	// the method will not be accessible.
 	if !mth.Exported() && named != nil && (named.Obj().Pkg().Path() != a.pkg) {
-		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
+		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
 
 	sig := mth.Type().(*types.Signature)
@@ -439,10 +437,10 @@ func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *rel
 	return named, nil
 }
 
-func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relinfo) (*types.Named, error) {
+func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relfield) (*types.Named, error) {
 	// Must take 1 argument and return one value of type error. "func(T) error"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
-		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
+		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
 
 	typ := sig.Params().At(0).Type()
@@ -454,9 +452,9 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relinfo) (*types.Name
 	// Make sure that the argument type is a named struct type.
 	named, ok := typ.(*types.Named)
 	if !ok {
-		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
+		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
 	} else if _, ok := named.Underlying().(*types.Struct); !ok {
-		return nil, newerr(errBadIteratorType, a.cmd.name, rel.field)
+		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
 	}
 
 	rel.datatype.useiter = true
@@ -557,7 +555,7 @@ stackloop:
 					if v == "or" {
 						item.op = boolor
 					} else if v != "and" {
-						return newerr(errBadBoolTag)
+						return a.newerr(errBadBoolTag)
 					}
 				}
 			}
@@ -642,9 +640,9 @@ stackloop:
 			if strings.Contains(op, "between") {
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
-					return newerr(errBadBetweenType)
+					return a.newerr(errBadBetweenType)
 				} else if ns.Struct.NumFields() != 2 {
-					return newerr(errBadBetweenType)
+					return a.newerr(errBadBetweenType)
 				}
 
 				var x, y interface{}
@@ -829,11 +827,11 @@ func (a *analyzer) onconflictblock(field *types.Var) (err error) {
 			onconf.column = list.items
 		case "index":
 			if onconf.index = tag.First("sql"); !reident.MatchString(onconf.index) {
-				return newerr(errBadIndexIdentifier)
+				return a.newerr(errBadIndexIdentifier)
 			}
 		case "constraint":
 			if onconf.constraint = tag.First("sql"); !reident.MatchString(onconf.constraint) {
-				return newerr(errBadConstraintIdentifier)
+				return a.newerr(errBadConstraintIdentifier)
 			}
 		case "ignore":
 			onconf.ignore = true
@@ -956,7 +954,7 @@ func (a *analyzer) limitvar(field *types.Var, tag string) error {
 	limit := new(limitvar)
 	if fname := field.Name(); fname != "_" {
 		if !a.isint(field.Type()) {
-			return newerr(errBadLimitType)
+			return a.newerr(errBadLimitType)
 		}
 		limit.field = fname
 	}
@@ -964,7 +962,7 @@ func (a *analyzer) limitvar(field *types.Var, tag string) error {
 	if len(tag) > 0 {
 		u64, err := strconv.ParseUint(tag, 10, 64)
 		if err != nil {
-			return newerr(errBadLimitValue)
+			return a.newerr(errBadLimitValue)
 		}
 		limit.value = u64
 	}
@@ -976,7 +974,7 @@ func (a *analyzer) offsetvar(field *types.Var, tag string) error {
 	offset := new(offsetvar)
 	if fname := field.Name(); fname != "_" {
 		if !a.isint(field.Type()) {
-			return newerr(errBadOffsetType)
+			return a.newerr(errBadOffsetType)
 		}
 		offset.field = fname
 	}
@@ -984,7 +982,7 @@ func (a *analyzer) offsetvar(field *types.Var, tag string) error {
 	if len(tag) > 0 {
 		u64, err := strconv.ParseUint(tag, 10, 64)
 		if err != nil {
-			return newerr(errBadOffsetValue)
+			return a.newerr(errBadOffsetValue)
 		}
 		offset.value = u64
 	}
@@ -1011,7 +1009,7 @@ func (a *analyzer) orderbylist(tags []string) (err error) {
 			} else if val[i+1:] == "nullslast" {
 				item.nulls = nullslast
 			} else {
-				return newerr(errBadNullsOrderOption)
+				return a.newerr(errBadNullsOrderOption)
 			}
 			val = val[:i]
 		}
@@ -1035,13 +1033,13 @@ func (a *analyzer) overridedir(tag string) error {
 	case "user":
 		a.cmd.override = overridinguser
 	default:
-		return newerr(errBadOverrideKind)
+		return a.newerr(errBadOverrideKind)
 	}
 	return nil
 }
 
 func (a *analyzer) resultfield(field *types.Var) error {
-	rel := new(relinfo)
+	rel := new(relfield)
 	rel.field = field.Name()
 	if err := a.reldatatype(rel, field); err != nil {
 		return err
@@ -1056,7 +1054,7 @@ func (a *analyzer) resultfield(field *types.Var) error {
 
 func (a *analyzer) rowsaffected(field *types.Var) error {
 	if !a.isint(field.Type()) {
-		return newerr(errBadRowsAffectedType)
+		return a.newerr(errBadRowsAffectedType)
 	}
 	a.cmd.rowsaffected = field.Name()
 	return nil
@@ -1086,7 +1084,7 @@ func (a *analyzer) modfn(tagvals []string) function {
 // an error will be returned instead. The expected format is: "[qualifier.]name[:alias]".
 func (a *analyzer) relid(val string) (id relid, err error) {
 	if !rerelid.MatchString(val) {
-		return id, newerr(errBadObjId)
+		return id, a.newerr(errBadObjId)
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.qual = val[:i]
@@ -1109,7 +1107,7 @@ func (a *analyzer) iscolid(val string) bool {
 func (a *analyzer) colid(val string) (id colid, err error) {
 	if !a.iscolid(val) {
 		log.Println("not colid =>", val)
-		return id, newerr(errBadColId)
+		return id, a.newerr(errBadColId)
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.qual = val[:i]
@@ -1223,7 +1221,7 @@ type command struct {
 	// If the command is a Select command this field indicates the
 	// specific kind of the select.
 	sel        selkind
-	rel        *relinfo
+	rel        *relfield
 	join       *joinblock
 	where      *whereblock
 	limit      *limitvar
@@ -1265,14 +1263,13 @@ type collist struct {
 	items []colid
 }
 
-// relinfo holds the information on a go struct type and on the
+// relfield holds the information on a go struct type and on the
 // db relation that's associated with that struct type.
-type relinfo struct {
-	field    string // name of the field that references the relation in the command
-	relid    relid  // the relation identifier
+type relfield struct {
+	field    string // name of the field that references the relation of the command
+	relid    relid  // the relation identifier extracted from the tag
 	datatype datatype
-	isview   bool // indicates that the relation is a table view
-	isreldir bool // indicates that the gosql.Relation directive was used
+	isdir    bool // indicates that the gosql.Relation directive was used
 }
 
 type resultfield struct {
@@ -1470,18 +1467,6 @@ type orderbyitem struct {
 	col   colid
 	dir   orderdirection
 	nulls nullsposition
-}
-
-var reservedfields = stringlist{
-	"where",
-	"using",
-	"from",
-	"join",
-	"onconflict",
-	"limit",
-	"offset",
-	"result",
-	"rowsaffected",
 }
 
 type boolop uint // boolop operation
@@ -1760,4 +1745,88 @@ var typekind2string = map[typekind]string{
 	kindptr:       "<pointer>",
 	kindslice:     "<slice>",
 	kindstruct:    "<struct>",
+}
+
+type analysisError struct {
+	code analysisErrCode
+	args []interface{}
+}
+
+func (a *analyzer) newerr(code analysisErrCode, args ...interface{}) error {
+	return &analysisError{code: code, args: args}
+}
+
+func (e *analysisError) Error() string {
+	return fmt.Sprintf(analysisErrCode2string[e.code], e.args...)
+}
+
+type analysisErrCode uint
+
+const (
+	errNoRelation analysisErrCode = iota + 1
+	errBadRelationType
+	errBadIteratorType
+	errBadObjId
+	errBadColId
+	errBadBoolTag
+	errBadBetweenType
+	errBadDistinctPredicate
+	errBadLimitType
+	errBadLimitValue
+	errBadOffsetType
+	errBadOffsetValue
+	errBadNullsOrderOption
+	errBadOverrideKind
+	errBadIndexIdentifier
+	errBadConstraintIdentifier
+	errBadRowsAffectedType
+
+	errBadKind
+	errBadType
+	// NOTE(mkopriva): the two error codes below can probably be removed
+	// since only *types.Named values that ALREADY satisfy the type and
+	// name requirements will be passed in to the analysis. Struct types
+	// with an invalid name or non-struct types with a valid name should
+	// simply be skipped and not bothered with...
+	errBadCmdType
+	errBadCmdName
+)
+
+var analysisErrCode2string = map[analysisErrCode]string{
+	errNoRelation: "The command type %[1]s is missing a \"relation\" field. " +
+		"To fix the issue, make sure that %[1]s contains a field marked " +
+		"with the `rel` tag.",
+
+	errBadRelationType: "The %s.%s relation field's type is invalid. " +
+		"The field's type MUST be either a struct, a pointer to a " +
+		"struct, a slice of structs, a slice of pointers to structs " +
+		"or, alternatively, an \"iterator\" over structs. If the field's " +
+		"type is a struct then the struct type can be named or unnamed, " +
+		"if it is any other of the allowed types then the base struct " +
+		"type MUST be named.",
+
+	errBadIteratorType: "The %s.%s relation field's type is an invalid \"iterator\". " +
+		"If the relation field's type is a function or an interface it is " +
+		"automatically assumed to be an iterator type, however, to be a valid " +
+		"iterator the function MUST take exactly one argument of a named struct " +
+		"type and it MUST return exactly one value of type error, when it's an " +
+		"interface, it MUST have exactly one method whose signature MUST be the " +
+		"same as that of the function described above.",
+
+	errBadObjId:       "bad object id",
+	errBadColId:       "bad column id",
+	errBadBoolTag:     "bad boolean tag",
+	errBadBetweenType: "bad between type",
+	errBadLimitType:   "bad limit type",
+
+	errBadType: "bad type",
+	errBadKind: "bad kind",
+
+	errBadCmdType: "The %s command type must be a struct, instead got %s. " +
+		"If this type should be ignored by gosql you can add the \"ignore\" comment marker " +
+		"( //gosql:ignore ) right above the type declaration.",
+
+	errBadCmdName: "%q is an invalid command type name. Command type names must " +
+		"begin with one of the following verbs: \"insert\", \"update\", " +
+		"\"select\", \"delete\", or \"filter\".",
 }

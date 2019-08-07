@@ -66,7 +66,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}
 
-	reldummyslice := &relinfo{
+	reldummyslice := &relfield{
 		field: "Rel",
 		relid: relid{name: "relation_a", alias: "a"},
 		datatype: datatype{typeinfo: typeinfo{
@@ -102,14 +102,14 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		err:  &analysisError{code: errBadRelationType, args: []interface{}{"InsertTestBAD3", "User"}},
 	}, {
 		name: "InsertTestOK1",
-		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rel: &relinfo{
+		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rel: &relfield{
 			field:    "UserRec",
 			relid:    relid{name: "users_table"},
 			datatype: datatype{typeinfo: commonUserTypeinfo},
 		}},
 	}, {
 		name: "InsertTestOK2",
-		want: &command{name: "InsertTestOK2", typ: cmdtypeInsert, rel: &relinfo{
+		want: &command{name: "InsertTestOK2", typ: cmdtypeInsert, rel: &relfield{
 			field: "UserRec",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -127,7 +127,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}, {
 		name: "SelectTestOK3",
-		want: &command{name: "SelectTestOK3", typ: cmdtypeSelect, rel: &relinfo{
+		want: &command{name: "SelectTestOK3", typ: cmdtypeSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -137,7 +137,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}, {
 		name: "SelectTestOK4",
-		want: &command{name: "SelectTestOK4", typ: cmdtypeSelect, rel: &relinfo{
+		want: &command{name: "SelectTestOK4", typ: cmdtypeSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -147,7 +147,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}, {
 		name: "SelectTestOK5",
-		want: &command{name: "SelectTestOK5", typ: cmdtypeSelect, rel: &relinfo{
+		want: &command{name: "SelectTestOK5", typ: cmdtypeSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -158,7 +158,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}, {
 		name: "SelectTestOK6",
-		want: &command{name: "SelectTestOK6", typ: cmdtypeSelect, rel: &relinfo{
+		want: &command{name: "SelectTestOK6", typ: cmdtypeSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -169,7 +169,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}, {
 		name: "SelectTestOK7",
-		want: &command{name: "SelectTestOK7", typ: cmdtypeSelect, rel: &relinfo{
+		want: &command{name: "SelectTestOK7", typ: cmdtypeSelect, rel: &relfield{
 			field: "Rel",
 			relid: relid{name: "relation_a"},
 			datatype: datatype{
@@ -226,7 +226,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		}},
 	}, {
 		name: "InsertTestOK8",
-		want: &command{name: "InsertTestOK8", typ: cmdtypeInsert, rel: &relinfo{
+		want: &command{name: "InsertTestOK8", typ: cmdtypeInsert, rel: &relfield{
 			field: "Rel",
 			relid: relid{name: "relation_a"},
 			datatype: datatype{
@@ -287,7 +287,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK9",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -306,7 +306,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK10",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -327,7 +327,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK11",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -381,7 +381,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK12",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -401,7 +401,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK13",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -419,7 +419,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK14",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -460,7 +460,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_DistinctFrom",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -487,7 +487,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_ArrayComparisons",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -533,7 +533,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_PatternMatching",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -594,7 +594,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_Using",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -639,7 +639,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "UpdateTestOK_From",
 			typ:  cmdtypeUpdate,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -684,7 +684,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "SelectTestOK_Join",
 			typ:  cmdtypeSelect,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -734,7 +734,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "UpdateTestOK_All",
 			typ:  cmdtypeUpdate,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -746,7 +746,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_All",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -758,7 +758,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_Return",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -770,7 +770,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "InsertTestOK_Return",
 			typ:  cmdtypeInsert,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -785,7 +785,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "UpdateTestOK_Return",
 			typ:  cmdtypeUpdate,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -800,7 +800,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "InsertTestOK_Default",
 			typ:  cmdtypeInsert,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -812,7 +812,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "UpdateTestOK_Default",
 			typ:  cmdtypeUpdate,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -827,7 +827,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "InsertTestOK_Force",
 			typ:  cmdtypeInsert,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -839,7 +839,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "UpdateTestOK_Force",
 			typ:  cmdtypeUpdate,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -854,7 +854,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "SelectTestOK_ErrorHandler",
 			typ:  cmdtypeSelect,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -866,7 +866,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "InsertTestOK_ErrorHandler",
 			typ:  cmdtypeInsert,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
@@ -878,7 +878,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "SelectTestOK_Count",
 			typ:  cmdtypeSelect,
-			rel: &relinfo{
+			rel: &relfield{
 				field: "Count",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
@@ -889,7 +889,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "SelectTestOK_Exists",
 			typ:  cmdtypeSelect,
-			rel: &relinfo{
+			rel: &relfield{
 				field: "Exists",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
@@ -900,7 +900,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "SelectTestOK_NotExists",
 			typ:  cmdtypeSelect,
-			rel: &relinfo{
+			rel: &relfield{
 				field: "NotExists",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
@@ -911,10 +911,10 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_Relation",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
-				field:    "_",
-				relid:    relid{name: "relation_a", alias: "a"},
-				isreldir: true,
+			rel: &relfield{
+				field: "_",
+				relid: relid{name: "relation_a", alias: "a"},
+				isdir: true,
 			},
 		},
 	}, {
@@ -975,7 +975,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "FilterTestOK_TextSearchDirective",
 			typ:  cmdtypeFilter,
-			rel: &relinfo{
+			rel: &relfield{
 				field:    "_",
 				relid:    relid{name: "relation_a", alias: "a"},
 				datatype: dummytype,
@@ -1032,10 +1032,10 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_ResultField",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
-				field:    "_",
-				relid:    relid{name: "relation_a", alias: "a"},
-				isreldir: true,
+			rel: &relfield{
+				field: "_",
+				relid: relid{name: "relation_a", alias: "a"},
+				isdir: true,
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
@@ -1050,10 +1050,10 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		want: &command{
 			name: "DeleteTestOK_RowsAffected",
 			typ:  cmdtypeDelete,
-			rel: &relinfo{
-				field:    "_",
-				relid:    relid{name: "relation_a", alias: "a"},
-				isreldir: true,
+			rel: &relfield{
+				field: "_",
+				relid: relid{name: "relation_a", alias: "a"},
+				isdir: true,
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
