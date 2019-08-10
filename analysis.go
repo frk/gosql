@@ -1,9 +1,7 @@
 package gosql
 
 import (
-	"fmt"
 	"go/types"
-	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -49,12 +47,12 @@ func analyze(named *types.Named) (*command, error) {
 	a := new(analyzer)
 	a.pkg = named.Obj().Pkg().Path()
 	a.named = named
-	a.cmd = &command{name: named.Obj().Name()}
+	a.cmd = new(command)
+	a.cmd.name = named.Obj().Name()
 
 	var ok bool
 	if a.cmdtyp, ok = named.Underlying().(*types.Struct); !ok {
-		typ := named.Underlying().String()
-		return nil, a.newerr(errBadCmdType, a.cmd.name, typ)
+		panic(a.cmd.name + " command type not supported.") // this shouldn't happen
 	}
 
 	key := strings.ToLower(a.cmd.name)
@@ -74,7 +72,7 @@ func analyze(named *types.Named) (*command, error) {
 	case "filter":
 		a.cmd.typ = cmdtypeFilter
 	default:
-		return nil, a.newerr(errBadCmdName, a.cmd.name)
+		panic(a.cmd.name + " command type has unsupported name prefix.") // this shouldn't happen
 	}
 
 	if err := a.run(); err != nil {
@@ -98,31 +96,47 @@ func (a *analyzer) run() (err error) {
 		tag := tagutil.New(a.cmdtyp.Tag(i))
 
 		if reltag := tag.First("rel"); len(reltag) > 0 {
-			rid, err := a.relid(reltag)
+			rid, err := a.relid(reltag, fld)
 			if err != nil {
+				// XXX test this case
 				return err
 			}
 
-			rel := new(relfield)
-			rel.field = fld.Name()
-			rel.relid = rid
+			a.cmd.rel = new(relfield)
+			a.cmd.rel.field = fld.Name()
+			a.cmd.rel.relid = rid
 
-			switch fname := strings.ToLower(rel.field); {
+			switch fname := strings.ToLower(a.cmd.rel.field); {
 			case fname == "count" && a.isint(fld.Type()):
+				if a.cmd.typ != cmdtypeSelect {
+					// XXX test this case
+					return a.newerr2(errIllegalCountField, fld)
+				}
 				a.cmd.sel = selcount
 			case fname == "exists" && a.isbool(fld.Type()):
+				if a.cmd.typ != cmdtypeSelect {
+					// XXX test this case
+					return a.newerr2(errIllegalExistsField, fld)
+				}
 				a.cmd.sel = selexists
 			case fname == "notexists" && a.isbool(fld.Type()):
+				if a.cmd.typ != cmdtypeSelect {
+					// XXX test this case
+					return a.newerr2(errIllegalNotExistsField, fld)
+				}
 				a.cmd.sel = selnotexists
 			case fname == "_" && typesutil.IsDirective("Relation", fld.Type()):
-				rel.isdir = true
+				if a.cmd.typ != cmdtypeDelete {
+					// XXX test this case
+					return a.newerr2(errIllegalRelationDirective, fld)
+				}
+				a.cmd.rel.isdir = true
 			default:
-				if err := a.reldatatype(rel, fld); err != nil {
+				if err := a.reldatatype(a.cmd.rel, fld); err != nil {
+					// XXX test this case
 					return err
 				}
 			}
-
-			a.cmd.rel = rel
 			continue
 		}
 
@@ -133,39 +147,74 @@ func (a *analyzer) run() (err error) {
 		if dirname := typesutil.GetDirectiveName(fld); fld.Name() == "_" && len(dirname) > 0 {
 			switch strings.ToLower(dirname) {
 			case "all":
+				if a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+					// NOTE tested
+					return a.newerr2(errIllegalAllDirective, fld)
+				}
+				if a.cmd.all || a.cmd.where != nil || len(a.cmd.filter) > 0 {
+					// XXX test this case
+					return a.newerr2(errConflictAllWhereFilter, fld)
+				}
 				a.cmd.all = true
 			case "default":
-				if a.cmd.defaults, err = a.collist(tag["sql"]); err != nil {
+				if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate {
+					// XXX test this case
+					return a.newerr2(errIllegalDefaultDirective, fld)
+				}
+				if a.cmd.defaults, err = a.collist(tag["sql"], fld); err != nil {
+					// XXX test this case
 					return err
 				}
 			case "force":
-				if a.cmd.force, err = a.collist(tag["sql"]); err != nil {
+				if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate {
+					// XXX test this case
+					return a.newerr2(errIllegalForceDirective, fld)
+				}
+				if a.cmd.force, err = a.collist(tag["sql"], fld); err != nil {
+					// XXX test this case
 					return err
 				}
 			case "return":
-				if a.cmd.returning, err = a.collist(tag["sql"]); err != nil {
+				if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+					// XXX test this case
+					return a.newerr2(errIllegalReturnDirective, fld)
+				}
+				if a.cmd.returning != nil || a.cmd.result != nil || len(a.cmd.rowsaffected) > 0 {
+					// XXX test this case
+					return a.newerr2(errConflictReturningResultRowsAffected, fld)
+				}
+				if a.cmd.returning, err = a.collist(tag["sql"], fld); err != nil {
+					// XXX test this case
 					return err
 				}
 			case "limit":
 				if err := a.limitvar(fld, tag.First("sql")); err != nil {
+					// XXX test this case
 					return err
 				}
 			case "offset":
 				if err := a.offsetvar(fld, tag.First("sql")); err != nil {
+					// XXX test this case
 					return err
 				}
 			case "orderby":
-				if err := a.orderbylist(tag["sql"]); err != nil {
+				if err := a.orderbylist(tag["sql"], fld); err != nil {
+					// XXX test this case
 					return err
 				}
 			case "override":
-				if err := a.overridedir(tag.First("sql")); err != nil {
+				if err := a.overridedir(tag.First("sql"), fld); err != nil {
+					// XXX test this case
 					return err
 				}
 			case "textsearch":
-				if err := a.textsearch(tag.First("sql")); err != nil {
+				if err := a.textsearch(tag.First("sql"), fld); err != nil {
+					// XXX test this case
 					return err
 				}
+			default:
+				// XXX test this case
+				return a.newerr2(errIllegalDirectiveInCommand, fld)
 			}
 			continue
 		}
@@ -174,30 +223,37 @@ func (a *analyzer) run() (err error) {
 		switch fname := strings.ToLower(fld.Name()); fname {
 		case "where":
 			if err := a.whereblock(fld); err != nil {
+				// XXX test this case
 				return err
 			}
 		case "join", "from", "using":
 			if err := a.joinblock(fld); err != nil {
+				// XXX test this case
 				return err
 			}
 		case "onconflict":
 			if err := a.onconflictblock(fld); err != nil {
+				// XXX test this case
 				return err
 			}
 		case "result":
 			if err := a.resultfield(fld); err != nil {
+				// XXX test this case
 				return err
 			}
 		case "limit":
 			if err := a.limitvar(fld, tag.First("sql")); err != nil {
+				// XXX test this case
 				return err
 			}
 		case "offset":
 			if err := a.offsetvar(fld, tag.First("sql")); err != nil {
+				// XXX test this case
 				return err
 			}
 		case "rowsaffected":
 			if err := a.rowsaffected(fld); err != nil {
+				// XXX test this case
 				return err
 			}
 		default:
@@ -205,8 +261,20 @@ func (a *analyzer) run() (err error) {
 			if a.isaccessible(fld, a.named) {
 				switch {
 				case a.isfilter(fld.Type()):
+					if a.cmd.typ != cmdtypeSelect && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+						// XXX test this case
+						return a.newerr2(errIllegalFilterField, fld)
+					}
+					if a.cmd.all || a.cmd.where != nil || len(a.cmd.filter) > 0 {
+						// XXX test this case
+						return a.newerr2(errConflictAllWhereFilter, fld)
+					}
 					a.cmd.filter = fld.Name()
 				case a.iserrorhandler(fld.Type()):
+					if len(a.cmd.erh) > 0 {
+						// XXX test this case
+						return a.newerr2(errConflictErrorHandlerField, fld)
+					}
 					a.cmd.erh = fld.Name()
 				}
 			}
@@ -215,7 +283,8 @@ func (a *analyzer) run() (err error) {
 	}
 
 	if a.cmd.rel == nil {
-		return a.newerr(errNoRelation, a.cmd.name)
+		// XXX test this case
+		return a.newerr2(errNoRelation)
 	}
 	return nil
 }
@@ -238,10 +307,12 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 	// as there's currently no support for non-iterator interfaces nor functions.
 	if iface, ok := ftyp.(*types.Interface); ok {
 		if named, err = a.iterator(iface, named, rel); err != nil {
+			// XXX test this case
 			return err
 		}
 	} else if sig, ok := ftyp.(*types.Signature); ok {
 		if named, err = a.iteratorfunc(sig, rel); err != nil {
+			// XXX test this case
 			return err
 		}
 	}
@@ -264,7 +335,8 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 			// Fail if the type is a slice, an array, or a pointer
 			// while its base type remains unnamed.
 			if rel.datatype.isslice || rel.datatype.isarray || rel.datatype.ispointer {
-				return a.newerr(errBadRelationType, a.cmd.name, rel.field)
+				// XXX test this case
+				return a.newerr2(errBadRelfieldType)
 			}
 		}
 	}
@@ -287,7 +359,8 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 	if rel.datatype.kind != kindstruct {
 		// Currently only the struct kind is supported as the
 		// relation's associated base datatype.
-		return a.newerr(errBadRelationType, a.cmd.name, rel.field)
+		// XXX test this case
+		return a.newerr2(errBadRelfieldType)
 	}
 
 	styp := ftyp.(*types.Struct)
@@ -370,8 +443,9 @@ stackloop:
 			f.binadd = tag.HasOption("sql", "+")
 			f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
 
-			colid, err := a.colid(loop.pfx + sqltag)
+			colid, err := a.colid(loop.pfx+sqltag, fld)
 			if err != nil {
+				// XXX test this case
 				return err
 			}
 			f.colid = colid
@@ -415,7 +489,8 @@ func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 
 func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *relfield) (*types.Named, error) {
 	if iface.NumExplicitMethods() != 1 {
-		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
+		// XXX test this case
+		return nil, a.newerr2(errBadIteratorType)
 	}
 
 	mth := iface.ExplicitMethod(0)
@@ -424,12 +499,14 @@ func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *rel
 	// ensure that the receiver type is local, i.e. not imported, otherwise
 	// the method will not be accessible.
 	if !mth.Exported() && named != nil && (named.Obj().Pkg().Path() != a.pkg) {
-		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
+		// XXX test this case
+		return nil, a.newerr2(errBadIteratorType)
 	}
 
 	sig := mth.Type().(*types.Signature)
 	named, err := a.iteratorfunc(sig, rel)
 	if err != nil {
+		// XXX test this case
 		return nil, err
 	}
 
@@ -440,7 +517,8 @@ func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *rel
 func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relfield) (*types.Named, error) {
 	// Must take 1 argument and return one value of type error. "func(T) error"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
-		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
+		// XXX test this case
+		return nil, a.newerr2(errBadIteratorType)
 	}
 
 	typ := sig.Params().At(0).Type()
@@ -452,9 +530,11 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relfield) (*types.Nam
 	// Make sure that the argument type is a named struct type.
 	named, ok := typ.(*types.Named)
 	if !ok {
-		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
+		// XXX test this case
+		return nil, a.newerr2(errBadIteratorType)
 	} else if _, ok := named.Underlying().(*types.Struct); !ok {
-		return nil, a.newerr(errBadIteratorType, a.cmd.name, rel.field)
+		// XXX test this case
+		return nil, a.newerr2(errBadIteratorType)
 	}
 
 	rel.datatype.useiter = true
@@ -501,6 +581,14 @@ func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 }
 
 func (a *analyzer) whereblock(field *types.Var) (err error) {
+	if a.cmd.typ != cmdtypeSelect && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+		// XXX test this case
+		return a.newerr2(errIllegalWhereField, field)
+	}
+	if a.cmd.all || a.cmd.where != nil || len(a.cmd.filter) > 0 {
+		// XXX test this case
+		return a.newerr2(errConflictAllWhereFilter, field)
+	}
 	// The structloop type holds the state of a loop over a struct's fields.
 	type structloop struct {
 		wb  *whereblock
@@ -512,6 +600,7 @@ func (a *analyzer) whereblock(field *types.Var) (err error) {
 	wb.name = field.Name()
 	ns, err := typesutil.GetStruct(field)
 	if err != nil {
+		// XXX test this case
 		return err
 	}
 
@@ -555,7 +644,8 @@ stackloop:
 					if v == "or" {
 						item.op = boolor
 					} else if v != "and" {
-						return a.newerr(errBadBoolTag)
+						// XXX test this case
+						return a.newerr2(errBadBoolTag)
 					}
 				}
 			}
@@ -565,6 +655,7 @@ stackloop:
 			if sqltag == ">" {
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
+					// XXX test this case
 					return err
 				}
 
@@ -592,8 +683,9 @@ stackloop:
 				// either another column or a value-literal to which
 				// the main column should be compared.
 				if len(rhs) > 0 {
-					colid, err := a.colid(lhs)
+					colid, err := a.colid(lhs, fld)
 					if err != nil {
+						// XXX test this case
 						return err
 					}
 
@@ -603,13 +695,14 @@ stackloop:
 					wn.sop = string2scalarrop[op2]
 
 					if a.iscolid(rhs) {
-						colid2, err := a.colid(rhs)
-						if err != nil {
-							return err
-						}
-						wn.colid2 = colid2
+						wn.colid2, _ = a.colid(rhs, fld) // ignore error since iscolid returned true
 					} else {
 						wn.lit = rhs // assume literal expression
+					}
+
+					if wn.sop > 0 && wn.cmp >= _cant_use_scalarrop {
+						// XXX test this case
+						return a.newerr2(errBadCmpopCombo, fld, wn.cmp, wn.sop)
 					}
 
 					item.node = wn
@@ -617,15 +710,24 @@ stackloop:
 				}
 
 				// Assume column with unary predicate.
-				colid, err := a.colid(lhs)
+				colid, err := a.colid(lhs, fld)
 				if err != nil {
+					// XXX test this case
 					return err
 				}
 
 				wn := new(wherecolumn)
 				wn.colid = colid
 				wn.cmp = string2cmpop[op]
-				wn.sop = string2scalarrop[op2]
+
+				if wn.cmp <= _unary_ops_only {
+					// XXX test this case
+					return a.newerr2(errNotUnaryCmpop, fld, wn.cmp)
+				} else if len(op2) > 0 {
+					// XXX test this case
+					return a.newerr2(errExtraScalarrop, fld, op2)
+				}
+
 				item.node = wn
 				continue
 			}
@@ -640,9 +742,11 @@ stackloop:
 			if strings.Contains(op, "between") {
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
-					return a.newerr(errBadBetweenType)
+					// XXX test this case
+					return a.newerr2(errBadBetweenType)
 				} else if ns.Struct.NumFields() != 2 {
-					return a.newerr(errBadBetweenType)
+					// XXX test this case
+					return a.newerr2(errBadBetweenType)
 				}
 
 				var x, y interface{}
@@ -654,8 +758,9 @@ stackloop:
 					if fld.Name() == "_" && typesutil.IsDirective("Column", fld.Type()) {
 						sqltag2 := strings.ToLower(tag.Second("sql"))
 
-						colid, err := a.colid(sqltag)
+						colid, err := a.colid(sqltag, fld)
 						if err != nil {
+							// XXX test this case
 							return err
 						}
 						if sqltag2 == "x" {
@@ -679,8 +784,14 @@ stackloop:
 					}
 				}
 
-				colid, err := a.colid(lhs)
+				if x == nil || y == nil {
+					// XXX test this case
+					return a.newerr2(errNoBetweenXYArgs, fld)
+				}
+
+				colid, err := a.colid(lhs, fld)
 				if err != nil {
+					// XXX test this case
 					return err
 				}
 
@@ -694,8 +805,9 @@ stackloop:
 			}
 
 			// Analyze field where item.
-			colid, err := a.colid(lhs)
+			colid, err := a.colid(lhs, fld)
 			if err != nil {
+				// XXX test this case
 				return err
 			}
 
@@ -706,12 +818,16 @@ stackloop:
 			wn.cmp = string2cmpop[op]
 			wn.sop = string2scalarrop[op2]
 			wn.mod = a.modfn(tag["sql"][1:])
-			item.node = wn
 
-			// TODO(mkopriva): make sure that, if a scalarrop was
-			// provided, the fields type is either slice or array
-			// and that the cmpop is an operator that can actually
-			// be used with a scalarrop.
+			if wn.sop > 0 && wn.cmp >= _cant_use_scalarrop {
+				// XXX test this case
+				return a.newerr2(errBadCmpopCombo, fld, wn.cmp, wn.sop)
+			} else if wn.sop > 0 && !wn.typ.isslice && !wn.typ.isarray {
+				// XXX test this case
+				return a.newerr2(errBadScalarFieldType, fld, wn.cmp, wn.sop)
+			}
+
+			item.node = wn
 
 		}
 		stack = stack[:len(stack)-1]
@@ -722,9 +838,22 @@ stackloop:
 }
 
 func (a *analyzer) joinblock(field *types.Var) (err error) {
+	joinblockname := strings.ToLower(field.Name())
+	if joinblockname == "join" && a.cmd.typ != cmdtypeSelect {
+		// XXX test this case
+		return a.newerr2(errIllegalJoinField, field)
+	} else if joinblockname == "from" && a.cmd.typ != cmdtypeUpdate {
+		// XXX test this case
+		return a.newerr2(errIllegalFromField, field)
+	} else if joinblockname == "using" && a.cmd.typ != cmdtypeDelete {
+		// XXX test this case
+		return a.newerr2(errIllegalUsingField, field)
+	}
+
 	join := new(joinblock)
 	ns, err := typesutil.GetStruct(field)
 	if err != nil {
+		// XXX test this case
 		return err
 	}
 
@@ -745,14 +874,20 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 
 		switch dirname := strings.ToLower(typesutil.GetDirectiveName(fld)); dirname {
 		case "relation":
-			id, err := a.relid(sqltag)
+			if joinblockname != "from" && joinblockname != "using" {
+				// XXX test this case
+				return a.newerr2(errIllegalRelationJoinDirective, fld)
+			}
+			id, err := a.relid(sqltag, fld)
 			if err != nil {
+				// XXX test this case
 				return err
 			}
 			join.rel = id
 		case "leftjoin", "rightjoin", "fulljoin", "crossjoin":
-			id, err := a.relid(sqltag)
+			id, err := a.relid(sqltag, fld)
 			if err != nil {
+				// XXX test this case
 				return err
 			}
 
@@ -769,21 +904,35 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 					}
 
 					lhs, op, op2, rhs := a.splitcmpexpr(val)
-					if cond.col1, err = a.colid(lhs); err != nil {
+					if cond.col1, err = a.colid(lhs, fld); err != nil {
+						// XXX test this case
 						return err
 					}
 
 					// optional right-hand side
 					if a.iscolid(rhs) {
-						if cond.col2, err = a.colid(rhs); err != nil {
-							return err
-						}
+						cond.col2, _ = a.colid(rhs, fld) // ignore error since iscolid returned true
 					} else {
 						cond.lit = rhs
 					}
 
 					cond.cmp = string2cmpop[op]
 					cond.sop = string2scalarrop[op2]
+
+					if len(rhs) == 0 {
+						if cond.cmp <= _unary_ops_only {
+							// XXX test this case
+							return a.newerr2(errNotUnaryCmpop, fld, cond.cmp)
+						} else if len(op2) > 0 {
+							// XXX test this case
+							return a.newerr2(errExtraScalarrop, fld, op2)
+						}
+					}
+					if cond.sop > 0 && cond.cmp >= _cant_use_scalarrop {
+						// XXX test this case
+						return a.newerr2(errBadCmpopCombo, fld, cond.cmp, cond.sop)
+					}
+
 					conds = append(conds, cond)
 				}
 			}
@@ -793,6 +942,9 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 			item.rel = id
 			item.conds = conds
 			join.items = append(join.items, item)
+		default:
+			// XXX test this case
+			return a.newerr2(errIllegalDirectiveInJoinBlock, field, fld)
 		}
 
 	}
@@ -802,9 +954,15 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 }
 
 func (a *analyzer) onconflictblock(field *types.Var) (err error) {
-	onconf := new(onconflictblock)
+	if a.cmd.typ != cmdtypeInsert {
+		// XXX test this case
+		return a.newerr2(errIllegalOnConflictField, field)
+	}
+
+	onc := new(onconflictblock)
 	ns, err := typesutil.GetStruct(field)
 	if err != nil {
+		// XXX test this case
 		return err
 	}
 
@@ -820,30 +978,62 @@ func (a *analyzer) onconflictblock(field *types.Var) (err error) {
 
 		switch dirname := strings.ToLower(typesutil.GetDirectiveName(fld)); dirname {
 		case "column":
-			list, err := a.collist(tag["sql"])
+			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
+				// XXX test this case
+				return a.newerr2(errConflictTargetInOnConflict)
+			}
+			list, err := a.collist(tag["sql"], fld)
 			if err != nil {
+				// XXX test this case
 				return err
 			}
-			onconf.column = list.items
+			onc.column = list.items
 		case "index":
-			if onconf.index = tag.First("sql"); !reident.MatchString(onconf.index) {
-				return a.newerr(errBadIndexIdentifier)
+			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
+				// XXX test this case
+				return a.newerr2(errConflictTargetInOnConflict)
+			}
+			if onc.index = tag.First("sql"); !reident.MatchString(onc.index) {
+				// XXX test this case
+				return a.newerr2(errBadIndexIdentifier)
 			}
 		case "constraint":
-			if onconf.constraint = tag.First("sql"); !reident.MatchString(onconf.constraint) {
-				return a.newerr(errBadConstraintIdentifier)
+			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
+				// XXX test this case
+				return a.newerr2(errConflictTargetInOnConflict)
+			}
+			if onc.constraint = tag.First("sql"); !reident.MatchString(onc.constraint) {
+				// XXX test this case
+				return a.newerr2(errBadConstraintIdentifier)
 			}
 		case "ignore":
-			onconf.ignore = true
+			if onc.ignore || onc.update != nil {
+				// XXX test this case
+				return a.newerr2(errConflictActionInOnConflict)
+			}
+			onc.ignore = true
 		case "update":
-			if onconf.update, err = a.collist(tag["sql"]); err != nil {
+			if onc.ignore || onc.update != nil {
+				// XXX test this case
+				return a.newerr2(errConflictActionInOnConflict)
+			}
+			if onc.update, err = a.collist(tag["sql"], fld); err != nil {
+				// XXX test this case
 				return err
 			}
+		default:
+			// XXX test this case
+			return a.newerr2(errIllegalDirectiveInOnConflictBlock)
 		}
 
 	}
 
-	a.cmd.onconflict = onconf
+	if onc.update != nil && (len(onc.column) == 0 && len(onc.index) == 0 && len(onc.constraint) == 0) {
+		// XXX test this case
+		return a.newerr2(errNoOnConflictTarget)
+	}
+
+	a.cmd.onconflict = onc
 	return nil
 }
 
@@ -951,18 +1141,32 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
 }
 
 func (a *analyzer) limitvar(field *types.Var, tag string) error {
+	if a.cmd.typ != cmdtypeSelect {
+		// XXX test this case
+		return a.newerr2(errIllegalLimitField, field)
+	}
+	if a.cmd.limit != nil {
+		// XXX test this case
+		return a.newerr2(errConflictLimitField, field)
+	}
+
 	limit := new(limitvar)
 	if fname := field.Name(); fname != "_" {
 		if !a.isint(field.Type()) {
-			return a.newerr(errBadLimitType)
+			// XXX test this case
+			return a.newerr2(errBadLimitType)
 		}
 		limit.field = fname
+	} else if len(tag) == 0 {
+		// XXX test this case
+		return a.newerr2(errNoLimitDirectiveValue)
 	}
 
 	if len(tag) > 0 {
 		u64, err := strconv.ParseUint(tag, 10, 64)
 		if err != nil {
-			return a.newerr(errBadLimitValue)
+			// XXX test this case
+			return a.newerr2(errBadLimitValue)
 		}
 		limit.value = u64
 	}
@@ -971,18 +1175,32 @@ func (a *analyzer) limitvar(field *types.Var, tag string) error {
 }
 
 func (a *analyzer) offsetvar(field *types.Var, tag string) error {
+	if a.cmd.typ != cmdtypeSelect {
+		// XXX test this case
+		return a.newerr2(errIllegalOffsetField, field)
+	}
+	if a.cmd.offset != nil {
+		// XXX test this case
+		return a.newerr2(errConflictOffsetField, field)
+	}
+
 	offset := new(offsetvar)
 	if fname := field.Name(); fname != "_" {
 		if !a.isint(field.Type()) {
-			return a.newerr(errBadOffsetType)
+			// XXX test this case
+			return a.newerr2(errBadOffsetType)
 		}
 		offset.field = fname
+	} else if len(tag) == 0 {
+		// XXX test this case
+		return a.newerr2(errNoOffsetDirectiveValue)
 	}
 
 	if len(tag) > 0 {
 		u64, err := strconv.ParseUint(tag, 10, 64)
 		if err != nil {
-			return a.newerr(errBadOffsetValue)
+			// XXX test this case
+			return a.newerr2(errBadOffsetValue)
 		}
 		offset.value = u64
 	}
@@ -990,7 +1208,16 @@ func (a *analyzer) offsetvar(field *types.Var, tag string) error {
 	return nil
 }
 
-func (a *analyzer) orderbylist(tags []string) (err error) {
+func (a *analyzer) orderbylist(tags []string, field *types.Var) (err error) {
+	if a.cmd.typ != cmdtypeSelect {
+		// XXX test this case
+		return a.newerr2(errIllegalOrderByDirective, field)
+	}
+	if len(tags) == 0 {
+		// XXX test this case
+		return a.newerr2(errEmptyOrderByList, field)
+	}
+
 	list := new(orderbylist)
 	for _, val := range tags {
 		val = strings.TrimSpace(val)
@@ -1009,12 +1236,14 @@ func (a *analyzer) orderbylist(tags []string) (err error) {
 			} else if val[i+1:] == "nullslast" {
 				item.nulls = nullslast
 			} else {
-				return a.newerr(errBadNullsOrderOption)
+				// XXX test this case
+				return a.newerr2(errBadNullsOrderOption)
 			}
 			val = val[:i]
 		}
 
-		if item.col, err = a.colid(val); err != nil {
+		if item.col, err = a.colid(val, field); err != nil {
+			// XXX test this case
 			return err
 		}
 
@@ -1025,7 +1254,12 @@ func (a *analyzer) orderbylist(tags []string) (err error) {
 	return nil
 }
 
-func (a *analyzer) overridedir(tag string) error {
+func (a *analyzer) overridedir(tag string, field *types.Var) error {
+	if a.cmd.typ != cmdtypeInsert {
+		// XXX test this case
+		return a.newerr2(errIllegalOverrideDirective, field)
+	}
+
 	val := strings.ToLower(strings.TrimSpace(tag))
 	switch val {
 	case "system":
@@ -1033,15 +1267,26 @@ func (a *analyzer) overridedir(tag string) error {
 	case "user":
 		a.cmd.override = overridinguser
 	default:
-		return a.newerr(errBadOverrideKind)
+		// XXX test this case
+		return a.newerr2(errBadOverrideKind)
 	}
 	return nil
 }
 
 func (a *analyzer) resultfield(field *types.Var) error {
+	if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+		// XXX test this case
+		return a.newerr2(errIllegalResultField, field)
+	}
+	if a.cmd.returning != nil || a.cmd.result != nil || len(a.cmd.rowsaffected) > 0 {
+		// XXX test this case
+		return a.newerr2(errConflictReturningResultRowsAffected, field)
+	}
+
 	rel := new(relfield)
 	rel.field = field.Name()
 	if err := a.reldatatype(rel, field); err != nil {
+		// XXX test this case
 		return err
 	}
 
@@ -1053,17 +1298,33 @@ func (a *analyzer) resultfield(field *types.Var) error {
 }
 
 func (a *analyzer) rowsaffected(field *types.Var) error {
+	if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+		// XXX test this case
+		return a.newerr2(errIllegalRowsAffectedField, field)
+	}
+	if a.cmd.returning != nil || a.cmd.result != nil || len(a.cmd.rowsaffected) > 0 {
+		// XXX test this case
+		return a.newerr2(errConflictReturningResultRowsAffected, field)
+	}
+
 	if !a.isint(field.Type()) {
-		return a.newerr(errBadRowsAffectedType)
+		// XXX test this case
+		return a.newerr2(errBadRowsAffectedType)
 	}
 	a.cmd.rowsaffected = field.Name()
 	return nil
 }
 
-func (a *analyzer) textsearch(tag string) error {
+func (a *analyzer) textsearch(tag string, field *types.Var) error {
+	if a.cmd.typ != cmdtypeFilter {
+		// XXX test this case
+		return a.newerr2(errIllegalTextsearchDirective, field)
+	}
+
 	val := strings.ToLower(strings.TrimSpace(tag))
-	cid, err := a.colid(val)
+	cid, err := a.colid(val, field)
 	if err != nil {
+		// XXX test this case
 		return err
 	}
 
@@ -1081,10 +1342,12 @@ func (a *analyzer) modfn(tagvals []string) function {
 }
 
 // parses the given string and returns a relid, if the value's format is invalid
-// an error will be returned instead. The expected format is: "[qualifier.]name[:alias]".
-func (a *analyzer) relid(val string) (id relid, err error) {
+// an error will be returned instead. The additional field argument is used only
+// for error reporting. The expected format is: "[qualifier.]name[:alias]".
+func (a *analyzer) relid(val string, field *types.Var) (id relid, err error) {
 	if !rerelid.MatchString(val) {
-		return id, a.newerr(errBadObjId)
+		// XXX test this case
+		return id, a.newerr2(errBadRelId, val, field)
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.qual = val[:i]
@@ -1103,11 +1366,12 @@ func (a *analyzer) iscolid(val string) bool {
 }
 
 // parses the given string and returns a colid, if the value's format is invalid
-// an error will be returned instead. The expected format is: "[qualifier.]name".
-func (a *analyzer) colid(val string) (id colid, err error) {
+// an error will be returned instead. The additional field argument is used only
+// for error reporting. The expected format is: "[qualifier.]name".
+func (a *analyzer) colid(val string, field *types.Var) (id colid, err error) {
 	if !a.iscolid(val) {
-		log.Println("not colid =>", val)
-		return id, a.newerr(errBadColId)
+		// XXX test this case
+		return id, a.newerr2(errBadColId, val, field)
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.qual = val[:i]
@@ -1117,7 +1381,12 @@ func (a *analyzer) colid(val string) (id colid, err error) {
 	return id, nil
 }
 
-func (a *analyzer) collist(tag []string) (*collist, error) {
+func (a *analyzer) collist(tag []string, field *types.Var) (*collist, error) {
+	if len(tag) == 0 {
+		// XXX test this case
+		return nil, a.newerr2(errEmptyColList, field)
+	}
+
 	cl := new(collist)
 	if len(tag) == 1 && tag[0] == "*" {
 		cl.all = true
@@ -1126,8 +1395,9 @@ func (a *analyzer) collist(tag []string) (*collist, error) {
 
 	cl.items = make([]colid, len(tag))
 	for i, val := range tag {
-		id, err := a.colid(val)
+		id, err := a.colid(val, field)
 		if err != nil {
+			// XXX test this case
 			return nil, err
 		}
 		cl.items[i] = id
@@ -1194,6 +1464,58 @@ func (a *analyzer) isbool(typ types.Type) bool {
 		return false
 	}
 	return basic.Kind() == types.Bool
+}
+
+func (a *analyzer) newerr2(code errcode, xx ...interface{}) error {
+	switch code {
+	case errNoRelation:
+		return &errortype{code: code, args: args{"cmdname": a.cmd.name}}
+	case errBadRelfieldType, errBadIteratorType:
+		return &errortype{code: code, args: args{"cmdname": a.cmd.name, "relfield": a.cmd.rel.field}}
+	case errIllegalLimitField, errIllegalOffsetField, errIllegalCountField,
+		errIllegalExistsField, errIllegalNotExistsField:
+		fvar := xx[0].(*types.Var)
+		allowed := "Select"
+		return &errortype{code: code, args: args{"cmdname": a.cmd.name, "fieldname": fvar.Name(), "allowed": allowed}}
+	case errIllegalRelationDirective:
+		typname := a.gettypestr(xx[0].(*types.Var).Type())
+		allowed := "Delete"
+		return &errortype{code: code, args: args{"cmdname": a.cmd.name, "fieldname": typname, "allowed": allowed}}
+	case errIllegalAllDirective:
+		typname := a.gettypestr(xx[0].(*types.Var).Type())
+		allowed := "[ Update, Delete ]"
+		return &errortype{code: code, args: args{"cmdname": a.cmd.name, "fieldname": typname, "allowed": allowed}}
+	case errConflictAllWhereFilter:
+		fstr := a.getvarstr(xx[0].(*types.Var))
+		return &errortype{code: code, args: args{"cmdname": a.cmd.name, "field": fstr}}
+	case errBadRelId, errBadColId:
+		tagvalue := xx[0].(string)
+		fvar := xx[1].(*types.Var)
+		fstr := a.getvarstr(fvar)
+		return &errortype{code: code, args: args{"cmdname": a.cmd.name, "tagvalue": tagvalue, "field": fstr}}
+
+	}
+	return &errortype{code: code}
+}
+
+// A helper method that returns the name and type of the given v, intended to
+// be used primarily for error reporting.
+// For example: "SomeField time.Time", or "someVar string", etc.
+func (a *analyzer) getvarstr(v *types.Var) string {
+	return v.Name() + " " + a.gettypestr(v.Type())
+}
+
+// A helper method that returns the type of the given t, intended to be used
+// primarily for error reporting.  For example: "time.Time", or "string", etc.
+func (a *analyzer) gettypestr(t types.Type) (out string) {
+	if named, ok := t.(*types.Named); ok {
+		if a.isimported(named) {
+			return named.Obj().Pkg().Name() + "." + named.Obj().Name()
+		} else {
+			return named.Obj().Name()
+		}
+	}
+	return t.String()
 }
 
 type cmdtype uint
@@ -1496,26 +1818,6 @@ const (
 	cmpisdistinct  // IS DISTINCT FROM
 	cmpnotdistinct // IS NOT DISTINCT FROM
 
-	// unary comparison predicates
-	cmpisnull     // IS NULL
-	cmpnotnull    // IS NOT NULL
-	cmpistrue     // IS TRUE
-	cmpnottrue    // IS NOT TRUE
-	cmpisfalse    // IS FALSE
-	cmpnotfalse   // IS NOT FALSE
-	cmpisunknown  // IS UNKNOWN
-	cmpnotunknown // IS NOT UNKNOWN
-
-	// range comparison operators
-	cmpisbetween     // BETWEEN x AND y
-	cmpnotbetween    // NOT BETWEEN x AND y
-	cmpisbetweensym  // BETWEEN SYMMETRIC x AND y
-	cmpnotbetweensym // NOT BETWEEN SYMMETRIC x AND y
-
-	// array comparison operators
-	cmpisin  // IN
-	cmpnotin // NOT IN
-
 	// pattern matching operators
 	cmprexp       // match regular expression
 	cmprexpi      // match regular expression (case insensitive)
@@ -1527,6 +1829,39 @@ const (
 	cmpnotilike   // NOT ILIKE
 	cmpissimilar  // IS SIMILAR TO
 	cmpnotsimilar // IS NOT SIMILAR TO
+
+	// NOTE(mkopriva): This value is used to figure out which comparison
+	// operators can be used with scalarrops (the above) and which operators
+	// cannot (those below). It is therefore IMPORTANT NOT TO MOVE operators
+	// from above to below or vice versa without first understanding the
+	// effect it will have on the correctness of the program's logic.
+	_cant_use_scalarrop
+
+	// array comparison operators
+	cmpisin  // IN
+	cmpnotin // NOT IN
+
+	// range comparison operators
+	cmpisbetween     // BETWEEN x AND y
+	cmpnotbetween    // NOT BETWEEN x AND y
+	cmpisbetweensym  // BETWEEN SYMMETRIC x AND y
+	cmpnotbetweensym // NOT BETWEEN SYMMETRIC x AND y
+
+	// NOTE(mkopriva): This value is used to figure out which comparison
+	// operators are unary. It is therefore IMPORTANT NOT TO MOVE operators
+	// from above to below or vice versa without first understanding the
+	// effect it will have on the correctness of the program's logic.
+	_unary_ops_only
+
+	// unary comparison predicates
+	cmpisnull     // IS NULL
+	cmpnotnull    // IS NOT NULL
+	cmpistrue     // IS TRUE
+	cmpnottrue    // IS NOT TRUE
+	cmpisfalse    // IS FALSE
+	cmpnotfalse   // IS NOT FALSE
+	cmpisunknown  // IS UNKNOWN
+	cmpnotunknown // IS NOT UNKNOWN
 )
 
 var string2cmpop = map[string]cmpop{
@@ -1541,23 +1876,6 @@ var string2cmpop = map[string]cmpop{
 	"isdistinct":  cmpisdistinct,
 	"notdistinct": cmpnotdistinct,
 
-	"isnull":     cmpisnull,
-	"notnull":    cmpnotnull,
-	"istrue":     cmpistrue,
-	"nottrue":    cmpnottrue,
-	"isfalse":    cmpisfalse,
-	"notfalse":   cmpnotfalse,
-	"isunknown":  cmpisunknown,
-	"notunknown": cmpnotunknown,
-
-	"isbetween":     cmpisbetween,
-	"notbetween":    cmpnotbetween,
-	"isbetweensym":  cmpisbetweensym,
-	"notbetweensym": cmpnotbetweensym,
-
-	"isin":  cmpisin,
-	"notin": cmpnotin,
-
 	"~":          cmprexp,
 	"~*":         cmprexpi,
 	"!~":         cmpnotrexp,
@@ -1568,6 +1886,23 @@ var string2cmpop = map[string]cmpop{
 	"notilike":   cmpnotilike,
 	"issimilar":  cmpissimilar,
 	"notsimilar": cmpnotsimilar,
+
+	"isin":  cmpisin,
+	"notin": cmpnotin,
+
+	"isbetween":     cmpisbetween,
+	"notbetween":    cmpnotbetween,
+	"isbetweensym":  cmpisbetweensym,
+	"notbetweensym": cmpnotbetweensym,
+
+	"isnull":     cmpisnull,
+	"notnull":    cmpnotnull,
+	"istrue":     cmpistrue,
+	"nottrue":    cmpnottrue,
+	"isfalse":    cmpisfalse,
+	"notfalse":   cmpnotfalse,
+	"isunknown":  cmpisunknown,
+	"notunknown": cmpnotunknown,
 }
 
 var predicateadjectives = []string{ // and adverbs
@@ -1745,88 +2080,4 @@ var typekind2string = map[typekind]string{
 	kindptr:       "<pointer>",
 	kindslice:     "<slice>",
 	kindstruct:    "<struct>",
-}
-
-type analysisError struct {
-	code analysisErrCode
-	args []interface{}
-}
-
-func (a *analyzer) newerr(code analysisErrCode, args ...interface{}) error {
-	return &analysisError{code: code, args: args}
-}
-
-func (e *analysisError) Error() string {
-	return fmt.Sprintf(analysisErrCode2string[e.code], e.args...)
-}
-
-type analysisErrCode uint
-
-const (
-	errNoRelation analysisErrCode = iota + 1
-	errBadRelationType
-	errBadIteratorType
-	errBadObjId
-	errBadColId
-	errBadBoolTag
-	errBadBetweenType
-	errBadDistinctPredicate
-	errBadLimitType
-	errBadLimitValue
-	errBadOffsetType
-	errBadOffsetValue
-	errBadNullsOrderOption
-	errBadOverrideKind
-	errBadIndexIdentifier
-	errBadConstraintIdentifier
-	errBadRowsAffectedType
-
-	errBadKind
-	errBadType
-	// NOTE(mkopriva): the two error codes below can probably be removed
-	// since only *types.Named values that ALREADY satisfy the type and
-	// name requirements will be passed in to the analysis. Struct types
-	// with an invalid name or non-struct types with a valid name should
-	// simply be skipped and not bothered with...
-	errBadCmdType
-	errBadCmdName
-)
-
-var analysisErrCode2string = map[analysisErrCode]string{
-	errNoRelation: "The command type %[1]s is missing a \"relation\" field. " +
-		"To fix the issue, make sure that %[1]s contains a field marked " +
-		"with the `rel` tag.",
-
-	errBadRelationType: "The %s.%s relation field's type is invalid. " +
-		"The field's type MUST be either a struct, a pointer to a " +
-		"struct, a slice of structs, a slice of pointers to structs " +
-		"or, alternatively, an \"iterator\" over structs. If the field's " +
-		"type is a struct then the struct type can be named or unnamed, " +
-		"if it is any other of the allowed types then the base struct " +
-		"type MUST be named.",
-
-	errBadIteratorType: "The %s.%s relation field's type is an invalid \"iterator\". " +
-		"If the relation field's type is a function or an interface it is " +
-		"automatically assumed to be an iterator type, however, to be a valid " +
-		"iterator the function MUST take exactly one argument of a named struct " +
-		"type and it MUST return exactly one value of type error, when it's an " +
-		"interface, it MUST have exactly one method whose signature MUST be the " +
-		"same as that of the function described above.",
-
-	errBadObjId:       "bad object id",
-	errBadColId:       "bad column id",
-	errBadBoolTag:     "bad boolean tag",
-	errBadBetweenType: "bad between type",
-	errBadLimitType:   "bad limit type",
-
-	errBadType: "bad type",
-	errBadKind: "bad kind",
-
-	errBadCmdType: "The %s command type must be a struct, instead got %s. " +
-		"If this type should be ignored by gosql you can add the \"ignore\" comment marker " +
-		"( //gosql:ignore ) right above the type declaration.",
-
-	errBadCmdName: "%q is an invalid command type name. Command type names must " +
-		"begin with one of the following verbs: \"insert\", \"update\", " +
-		"\"select\", \"delete\", or \"filter\".",
 }

@@ -22,6 +22,35 @@ type InsertTestBAD3 struct {
 	User string `rel:"users_table"`
 }
 
+//BAD: Insert with Limit field
+type InsertTestBAD_LimitField struct {
+	Rel   T   `rel:"relation_a:a"`
+	Limit int `sql:"10"`
+}
+
+//BAD: Update with Offset field
+type UpdateTestBAD_OffsetField struct {
+	Rel    T `rel:"relation_a:a"`
+	Offset int
+}
+
+//BAD: Delete with invalid relid
+type DeleteTestBAD_relid struct {
+	Rel T `rel:"foo.123:bar"`
+}
+
+//BAD: Select with All directive
+type SelectTestBAD_AllDirective struct {
+	Rel []T `rel:"relation_a:a"`
+	_   gosql.All
+}
+
+//BAD: Insert with All directive
+type InsertTestBAD_AllDirective struct {
+	Rel T `rel:"relation_a:a"`
+	_   gosql.All
+}
+
 //OK: user datatype
 type InsertTestOK1 struct {
 	UserRec *common.User `rel:"users_table"`

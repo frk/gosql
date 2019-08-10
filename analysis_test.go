@@ -93,13 +93,25 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		err  error
 	}{{
 		name: "InsertTestBAD1",
-		err:  &analysisError{code: errNoRelation, args: []interface{}{"InsertTestBAD1"}},
+		err:  &errortype{code: errNoRelation, args: args{"cmdname": "InsertTestBAD1"}},
 	}, {
 		name: "InsertTestBAD2",
-		err:  &analysisError{code: errNoRelation, args: []interface{}{"InsertTestBAD2"}},
+		err:  &errortype{code: errNoRelation, args: args{"cmdname": "InsertTestBAD2"}},
 	}, {
 		name: "InsertTestBAD3",
-		err:  &analysisError{code: errBadRelationType, args: []interface{}{"InsertTestBAD3", "User"}},
+		err:  &errortype{code: errBadRelfieldType, args: args{"cmdname": "InsertTestBAD3", "relfield": "User"}},
+	}, {
+		name: "InsertTestBAD_LimitField",
+		err:  &errortype{code: errIllegalLimitField, args: args{"cmdname": "InsertTestBAD_LimitField", "fieldname": "Limit", "allowed": "Select"}},
+	}, {
+		name: "UpdateTestBAD_OffsetField",
+		err:  &errortype{code: errIllegalOffsetField, args: args{"cmdname": "UpdateTestBAD_OffsetField", "fieldname": "Offset", "allowed": "Select"}},
+	}, {
+		name: "DeleteTestBAD_relid",
+		err:  &errortype{code: errBadRelId, args: args{"cmdname": "DeleteTestBAD_relid", "field": "Rel T", "tagvalue": "foo.123:bar"}},
+	}, {
+		name: "SelectTestBAD_AllDirective",
+		err:  &errortype{code: errIllegalAllDirective, args: args{"cmdname": "SelectTestBAD_AllDirective", "fieldname": "gosql.All", "allowed": "[ Update, Delete ]"}},
 	}, {
 		name: "InsertTestOK1",
 		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rel: &relfield{
