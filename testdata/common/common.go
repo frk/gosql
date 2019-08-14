@@ -23,3 +23,7 @@ type Bar struct {
 type Baz struct {
 	Val string `sql:"val"`
 }
+
+type BadIterator interface { // unexported method
+	fn(*User) error
+}
