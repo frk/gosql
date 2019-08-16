@@ -77,4 +77,5 @@ const (
 	BadWhereBlockTypeError                     errnum = 60
 	BadJoinBlockTypeError                      errnum = 61
 	BadOnConflictBlockTypeError                errnum = 61
+	NoDBRelationError                          errnum = 62
 )
