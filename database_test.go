@@ -36,7 +36,7 @@ func Test_dbchecker_loadrelation(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
-		dbc.relid = tt.relid
+		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.load()
 		rel := dbc.rel
@@ -44,6 +44,11 @@ func Test_dbchecker_loadrelation(t *testing.T) {
 			if rel.oid == 0 {
 				t.Error(i, "expected rel.oid to be not 0")
 			}
+
+			// we don't care about these in this test
+			rel.columns = nil
+			rel.constraints = nil
+			rel.indexes = nil
 
 			// non-deterministic value, all we care about is that
 			// it's not 0, after checking that we can move on.
@@ -147,11 +152,11 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
-		dbc.relid = tt.relid
+		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.load()
 		if err == nil {
-			if e := compare.Compare(dbc.columns, tt.want); e != nil {
+			if e := compare.Compare(dbc.rel.columns, tt.want); e != nil {
 				t.Error(i, e)
 			}
 		}
@@ -185,11 +190,11 @@ func Test_dbchecker_loadconstraints(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
-		dbc.relid = tt.relid
+		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.load()
 		if err == nil {
-			if e := compare.Compare(dbc.constraints, tt.want); e != nil {
+			if e := compare.Compare(dbc.rel.constraints, tt.want); e != nil {
 				t.Error(i, e)
 			}
 		}
@@ -232,11 +237,11 @@ func Test_dbchecker_loadindexes(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
-		dbc.relid = tt.relid
+		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.load()
 		if err == nil {
-			if e := compare.Compare(dbc.indexes, tt.want); e != nil {
+			if e := compare.Compare(dbc.rel.indexes, tt.want); e != nil {
 				t.Error(i, e)
 			}
 		}

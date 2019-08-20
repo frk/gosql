@@ -1393,23 +1393,24 @@ type command struct {
 	typ  cmdtype // the type of the command
 	// If the command is a Select command this field indicates the
 	// specific kind of the select.
-	sel        selkind
-	rel        *relfield
+	sel selkind
+	rel *relfield
+
 	join       *joinblock
 	where      *whereblock
-	limit      *limitvar
-	offset     *offsetvar
 	orderby    *orderbylist
-	override   overridingkind
 	textsearch *colid
 	onconflict *onconflictblock
 
-	defaults *collist
-	force    *collist
-
+	defaults     *collist
+	force        *collist
 	returning    *collist
 	result       *resultfield
 	rowsaffected string
+
+	limit    *limitvar
+	offset   *offsetvar
+	override overridingkind
 
 	// Indicates that the command should be executed against all the rows
 	// of the relation.

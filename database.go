@@ -96,44 +96,56 @@ func dbcheck(url string, cmds []*command) error {
 		c := new(dbchecker)
 		c.db = db
 		c.dbname = dbname
-		c.relid = cmd.rel.relid
+		c.cmd = cmd
 		if err := c.load(); err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
 
 type dbchecker struct {
-	db          *sql.DB
-	dbname      string // name of the current database, used mainly for error reporting
-	relid       relid
-	rel         *dbrelation
-	columns     []*dbcolumn
-	constraints []*dbconstraint
-	indexes     []*dbindex
+	db       *sql.DB
+	dbname   string // name of the current database, used mainly for error reporting
+	cmd      *command
+	rel      *dbrelation   // the target relation
+	joinlist []*dbrelation // joined relations
 }
 
-func (c *dbchecker) load() error {
-	if err := c.loadrelation(); err != nil {
+func (c *dbchecker) load() (err error) {
+	if c.rel, err = c.loadrelation(c.cmd.rel.relid); err != nil {
 		return err
 	}
-	if err := c.loadcolumns(); err != nil {
-		return err
-	}
-	if err := c.loadconstraints(); err != nil {
-		return err
-	}
-	if err := c.loadindexes(); err != nil {
-		return err
+	if join := c.cmd.join; join != nil {
+		if len(join.rel.name) > 0 {
+			rel, err := c.loadrelation(join.rel)
+			if err != nil {
+				return err
+			}
+			c.joinlist = append(c.joinlist, rel)
+		}
+		for _, item := range join.items {
+			rel, err := c.loadrelation(item.rel)
+			if err != nil {
+				return err
+			}
+			c.joinlist = append(c.joinlist, rel)
+		}
 	}
 	return nil
 }
 
-func (c *dbchecker) loadrelation() error {
+func (c *dbchecker) check() error {
+	// TODO(mkopriva): ...
+	// - if it's
+	return nil
+}
+
+func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
 	rel := new(dbrelation)
-	rel.name = c.relid.name
-	rel.namespace = c.relid.qual
+	rel.name = id.name
+	rel.namespace = id.qual
 	if len(rel.namespace) == 0 {
 		rel.namespace = "public"
 	}
@@ -142,18 +154,16 @@ func (c *dbchecker) loadrelation() error {
 	row := c.db.QueryRow(selectdbrelation, rel.name, rel.namespace)
 	if err := row.Scan(&rel.oid, &rel.relkind); err != nil {
 		if err == sql.ErrNoRows {
-			return errors.NoDBRelationError
+			return nil, errors.NoDBRelationError
 		}
-		return err
+		return nil, err
 	}
 	c.rel = rel
-	return nil
-}
 
-func (c *dbchecker) loadcolumns() error {
-	rows, err := c.db.Query(selectdbcolumns, c.rel.oid)
+	// retrieve column info
+	rows, err := c.db.Query(selectdbcolumns, rel.oid)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -175,17 +185,18 @@ func (c *dbchecker) loadcolumns() error {
 			&col.typ.elem,
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		c.columns = append(c.columns, col)
+		rel.columns = append(rel.columns, col)
 	}
-	return rows.Err()
-}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
-func (c *dbchecker) loadconstraints() error {
-	rows, err := c.db.Query(selectdbconstraints, c.rel.oid)
+	// load constraints info
+	rows, err = c.db.Query(selectdbconstraints, rel.oid)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -200,17 +211,18 @@ func (c *dbchecker) loadconstraints() error {
 			(*pq.Int64Array)(&con.fkey),
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		c.constraints = append(c.constraints, con)
+		rel.constraints = append(rel.constraints, con)
 	}
-	return rows.Err()
-}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
-func (c *dbchecker) loadindexes() error {
-	rows, err := c.db.Query(selectdbindexes, c.rel.oid)
+	// load index info
+	rows, err = c.db.Query(selectdbindexes, rel.oid)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -228,18 +240,24 @@ func (c *dbchecker) loadindexes() error {
 			&ind.indexdef,
 		)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		c.indexes = append(c.indexes, ind)
+		rel.indexes = append(rel.indexes, ind)
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return rel, nil
 }
 
 type dbrelation struct {
-	oid       int64  // The object identifier of the relation.
-	name      string // The name of the relation.
-	namespace string // The name of the namespace to which the relation belongs.
-	relkind   string // The relation's kind, we're only interested in r, v, and m.
+	oid         int64  // The object identifier of the relation.
+	name        string // The name of the relation.
+	namespace   string // The name of the namespace to which the relation belongs.
+	relkind     string // The relation's kind, we're only interested in r, v, and m.
+	columns     []*dbcolumn
+	constraints []*dbconstraint
+	indexes     []*dbindex
 }
 
 type dbcolumn struct {
@@ -321,6 +339,11 @@ type dbindex struct {
 	key []int16
 	// The index definition.
 	indexdef string
+}
+
+type dbid struct {
+	name      string
+	namespace string
 }
 
 // postgres types
