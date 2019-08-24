@@ -101,6 +101,9 @@ func dbcheck(url string, cmds []*command) error {
 			return err
 		}
 
+		if err := c.check(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -111,12 +114,21 @@ type dbchecker struct {
 	cmd      *command
 	rel      *dbrelation   // the target relation
 	joinlist []*dbrelation // joined relations
+
+	relmap map[string]*dbrelation
 }
 
 func (c *dbchecker) load() (err error) {
+	c.relmap = make(map[string]*dbrelation)
 	if c.rel, err = c.loadrelation(c.cmd.rel.relid); err != nil {
 		return err
 	}
+
+	// Map the target relation to the "" (empty string) key, this will allow
+	// columns, constraints, and indexes that were specified without a qualifier
+	// to be associated with this target relation.
+	c.relmap[""] = c.rel
+
 	if join := c.cmd.join; join != nil {
 		if len(join.rel.name) > 0 {
 			rel, err := c.loadrelation(join.rel)
@@ -137,8 +149,20 @@ func (c *dbchecker) load() (err error) {
 }
 
 func (c *dbchecker) check() error {
-	// TODO(mkopriva): ...
-	// - if it's
+	if c.cmd.textsearch != nil {
+		ts := *c.cmd.textsearch
+		rel, ok := c.relmap[ts.qual]
+		if !ok {
+			return errors.NoDBRelationError
+		}
+		col := rel.column(ts.name)
+		if col == nil {
+			return errors.NoDBColumnError
+		}
+		if col.typ.name != pgtyp_tsvector {
+			return errors.BadDBColumnTypeError
+		}
+	}
 	return nil
 }
 
@@ -247,6 +271,15 @@ func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
+	// Map the relation to its alias or name if no alias was specified.
+	// This will help with matching columns, constraints, and indexes with
+	// the relation with which their identifiers were qualified.
+	if len(id.alias) > 0 {
+		c.relmap[id.alias] = rel
+	} else {
+		c.relmap[id.name] = rel
+	}
 	return rel, nil
 }
 
@@ -258,6 +291,33 @@ type dbrelation struct {
 	columns     []*dbcolumn
 	constraints []*dbconstraint
 	indexes     []*dbindex
+}
+
+func (rel *dbrelation) column(name string) *dbcolumn {
+	for _, col := range rel.columns {
+		if col.name == name {
+			return col
+		}
+	}
+	return nil
+}
+
+func (rel *dbrelation) constraint(name string) *dbconstraint {
+	for _, con := range rel.constraints {
+		if con.name == name {
+			return con
+		}
+	}
+	return nil
+}
+
+func (rel *dbrelation) index(name string) *dbindex {
+	for _, ind := range rel.indexes {
+		if ind.name == name {
+			return ind
+		}
+	}
+	return nil
 }
 
 type dbcolumn struct {

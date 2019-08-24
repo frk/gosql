@@ -252,3 +252,58 @@ func Test_dbchecker_loadindexes(t *testing.T) {
 		}
 	}
 }
+
+func Test_dbchecker_check(t *testing.T) {
+	tests := []struct {
+		cmd *command
+		err error
+	}{{
+		cmd: &command{
+			rel:        &relfield{relid: relid{name: "column_tests_2"}},
+			textsearch: &colid{qual: "", name: "text_search_column_ok"},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			textsearch: &colid{qual: "c", name: "text_search_column_ok"},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			textsearch: &colid{qual: "d", name: "text_search_column_ok"},
+		},
+		err: errors.NoDBRelationError,
+	}, {
+		cmd: &command{
+			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			textsearch: &colid{qual: "c", name: "no_column"},
+		},
+		err: errors.NoDBColumnError,
+	}, {
+		cmd: &command{
+			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			textsearch: &colid{qual: "c", name: "text_search_column_bad"},
+		},
+		err: errors.BadDBColumnTypeError,
+	}}
+
+	for i, tt := range tests {
+		dbc := new(dbchecker)
+		dbc.db = testdb.db
+		dbc.cmd = tt.cmd
+
+		if err := dbc.load(); err != nil {
+			log.Printf("%#v\n", err)
+			t.Error(err)
+			return
+		}
+
+		err := dbc.check()
+		if e := compare.Compare(err, tt.err); e != nil {
+			log.Printf("%#v\n", err)
+			t.Error(i, e)
+		}
+	}
+}

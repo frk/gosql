@@ -74,6 +74,11 @@ CREATE TABLE column_tests_1 (
 	, col_e timestamp not null default now()
 );
 
+CREATE TABLE column_tests_2 (
+	text_search_column_ok tsvector
+	, text_search_column_bad text -- text search column must be tsvector
+);
+
 CREATE TABLE column_type_tests (
 	col_bool bool
 	, col_boola boolean[]

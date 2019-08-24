@@ -78,4 +78,6 @@ const (
 	BadJoinBlockTypeError                      errnum = 61
 	BadOnConflictBlockTypeError                errnum = 61
 	NoDBRelationError                          errnum = 62
+	NoDBColumnError                            errnum = 63
+	BadDBColumnTypeError                       errnum = 64
 )
