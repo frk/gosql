@@ -75,8 +75,17 @@ CREATE TABLE column_tests_1 (
 );
 
 CREATE TABLE column_tests_2 (
-	text_search_column_ok tsvector
-	, text_search_column_bad text -- text search column must be tsvector
+	col_text_search_ok tsvector
+	, col_text_search_bad text -- text search column must be tsvector
+	, col_orderby_a text
+	, col_orderby_b integer
+	, col_foo integer
+	, col_bar text
+	, col_baz boolean
+	, col_indkey1 text
+	, col_indkey2 integer
+	, col_conkey1 text
+	, col_conkey2 integer
 );
 
 CREATE TABLE column_type_tests (
@@ -104,6 +113,15 @@ CREATE VIEW view_test AS SELECT
 	, col_e
 	, (length(col_b) > 0) AS col_z
 FROM column_tests_1;
+
+CREATE UNIQUE INDEX column_tests_2_unique_index ON column_tests_2 (col_indkey2, col_indkey1);
+CREATE INDEX column_tests_2_nonunique_index ON column_tests_2 (col_indkey2, col_indkey1);
+
+ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_unique_constraint
+UNIQUE (col_conkey1, col_conkey2);
+
+ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_nonunique_constraint
+FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
 ` //`
 
 	if _, err = t.db.Exec(populatedbquery); err != nil {

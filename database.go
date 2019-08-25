@@ -59,6 +59,7 @@ const (
 		, c.conkey
 		, c.confkey
 	FROM pg_constraint c
+	LEFT JOIN pg_index i ON i.indexrelid = c.conindid
 	WHERE c.conrelid = $1
 	ORDER BY c.oid`  //`
 
@@ -149,20 +150,149 @@ func (c *dbchecker) load() (err error) {
 }
 
 func (c *dbchecker) check() error {
+	// If an OrderBy directive was used, make sure that the specified
+	// columns are present in the loaded relations.
+	if c.cmd.orderby != nil {
+		for _, item := range c.cmd.orderby.items {
+			if _, err := c.column(item.col); err != nil {
+				return err
+			}
+		}
+	}
+
+	// If a Default directive was provided, make sure that the specified
+	// columns are present in the loaded relations.
+	if c.cmd.defaults != nil {
+		for _, item := range c.cmd.defaults.items {
+			if _, err := c.column(item); err != nil {
+				return err
+			}
+		}
+	}
+
+	// If a Force directive was provided, make sure that the specified
+	// columns are present in the loaded relations.
+	if c.cmd.force != nil {
+		for _, item := range c.cmd.force.items {
+			if _, err := c.column(item); err != nil {
+				return err
+			}
+		}
+	}
+
+	// If a Return directive was provided, make sure that the specified
+	// columns are present in the loaded relations.
+	if c.cmd.returning != nil {
+		for _, item := range c.cmd.returning.items {
+			if _, err := c.column(item); err != nil {
+				return err
+			}
+		}
+	}
+
+	// If a TextSearch directive was provided, make sure that the specified
+	// column is present in one of the loaded relations and that it has the
+	// correct type.
 	if c.cmd.textsearch != nil {
-		ts := *c.cmd.textsearch
-		rel, ok := c.relmap[ts.qual]
-		if !ok {
-			return errors.NoDBRelationError
-		}
-		col := rel.column(ts.name)
-		if col == nil {
-			return errors.NoDBColumnError
-		}
-		if col.typ.name != pgtyp_tsvector {
+		col, err := c.column(*c.cmd.textsearch)
+		if err != nil {
+			return err
+		} else if col.typ.name != pgtyp_tsvector {
 			return errors.BadDBColumnTypeError
 		}
 	}
+
+	// check onconflict block
+	if c.cmd.onconflict != nil {
+		oc := c.cmd.onconflict
+		rel := c.rel
+
+		// If a Column directive was provided in an OnConflict block make
+		// sure that the listed columns are present in the target table.
+		// Make also msure that the list of columns matches the full list
+		// of columns of a unique index that's present on the target table.
+		if len(oc.column) > 0 {
+			var attnums []int16
+			for _, id := range oc.column {
+				col := rel.column(id.name)
+				if col == nil {
+					return errors.NoDBColumnError
+				}
+				attnums = append(attnums, col.num)
+			}
+
+			var match bool
+			for _, ind := range rel.indexes {
+				if !ind.isunique && !ind.isprimary {
+					continue
+				}
+				if !matchnums(ind.key, attnums) {
+					continue
+				}
+
+				match = true
+				break
+			}
+			if !match {
+				return errors.NoDBIndexForColumnListError
+			}
+		}
+
+		// If an Index directive was provided check that the specified
+		// index is actually present on the target table and also make
+		// sure that it is a unique index.
+		if len(oc.index) > 0 {
+			ind := rel.index(oc.index)
+			if ind == nil {
+				return errors.NoDBIndexError
+			}
+			if !ind.isunique && !ind.isprimary {
+				return errors.NoDBIndexError
+			}
+
+			// TODO(mkopriva): retain the index expression so that it can
+			// be used later during code generation.
+		}
+
+		// If a Constraint directive was provided make sure that the
+		// specified constraint is present on the target table and that
+		// it is a unique constraint.
+		if len(oc.constraint) > 0 {
+			con := rel.constraint(oc.constraint)
+			if con == nil {
+				return errors.NoDBConstraintError
+			}
+			if con.typ != pgconstraint_pkey && con.typ != pgconstraint_unique {
+				return errors.NoDBConstraintError
+			}
+		}
+
+		// If an Update directive was provided, make sure that each
+		// listed column is present in the target table.
+		if oc.update != nil {
+			for _, item := range oc.update.items {
+				if col := rel.column(item.name); col == nil {
+					return errors.NoDBColumnError
+				}
+			}
+		}
+	}
+
+	// check where block
+	if c.cmd.where != nil {
+		// TODO
+	}
+
+	// check join block
+	if c.cmd.join != nil {
+		// TODO
+	}
+
+	// check result field
+	if c.cmd.resultfield != nil {
+		// TODO
+	}
+
 	return nil
 }
 
@@ -283,6 +413,18 @@ func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
 	return rel, nil
 }
 
+func (c *dbchecker) column(id colid) (*dbcolumn, error) {
+	rel, ok := c.relmap[id.qual]
+	if !ok {
+		return nil, errors.NoDBRelationError
+	}
+	col := rel.column(id.name)
+	if col == nil {
+		return nil, errors.NoDBColumnError
+	}
+	return col, nil
+}
+
 type dbrelation struct {
 	oid         int64  // The object identifier of the relation.
 	name        string // The name of the relation.
@@ -321,7 +463,7 @@ func (rel *dbrelation) index(name string) *dbindex {
 }
 
 type dbcolumn struct {
-	num  int    // The number of the column. Ordinary columns are numbered from 1 up.
+	num  int16  // The number of the column. Ordinary columns are numbered from 1 up.
 	name string // The name of the member's column.
 	// The number of dimensions if the column is an array type, otherwise 0.
 	ndims int
@@ -572,4 +714,22 @@ func (v *int2vec) Scan(src interface{}) error {
 		}
 	}
 	return nil
+}
+
+// helper func
+func matchnums(a, b []int16) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+aloop:
+	for _, x := range a {
+		for _, y := range b {
+			if x == y {
+				continue aloop
+			}
+		}
+		return false // x not found in b
+	}
+	return true
 }

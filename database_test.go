@@ -253,40 +253,424 @@ func Test_dbchecker_loadindexes(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_check(t *testing.T) {
+func Test_dbchecker_check_textsearch(t *testing.T) {
 	tests := []struct {
 		cmd *command
 		err error
 	}{{
 		cmd: &command{
 			rel:        &relfield{relid: relid{name: "column_tests_2"}},
-			textsearch: &colid{qual: "", name: "text_search_column_ok"},
+			textsearch: &colid{qual: "", name: "col_text_search_ok"},
 		},
 		err: nil,
 	}, {
 		cmd: &command{
 			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
-			textsearch: &colid{qual: "c", name: "text_search_column_ok"},
+			textsearch: &colid{qual: "c", name: "col_text_search_ok"},
 		},
 		err: nil,
 	}, {
 		cmd: &command{
 			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
-			textsearch: &colid{qual: "d", name: "text_search_column_ok"},
+			textsearch: &colid{qual: "d", name: "col_text_search_ok"},
 		},
 		err: errors.NoDBRelationError,
 	}, {
 		cmd: &command{
 			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
-			textsearch: &colid{qual: "c", name: "no_column"},
+			textsearch: &colid{qual: "c", name: "col_none"},
 		},
 		err: errors.NoDBColumnError,
 	}, {
 		cmd: &command{
 			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
-			textsearch: &colid{qual: "c", name: "text_search_column_bad"},
+			textsearch: &colid{qual: "c", name: "col_text_search_bad"},
 		},
 		err: errors.BadDBColumnTypeError,
+	}}
+
+	for i, tt := range tests {
+		dbc := new(dbchecker)
+		dbc.db = testdb.db
+		dbc.cmd = tt.cmd
+
+		if err := dbc.load(); err != nil {
+			log.Printf("%#v\n", err)
+			t.Error(err)
+			return
+		}
+
+		err := dbc.check()
+		if e := compare.Compare(err, tt.err); e != nil {
+			log.Printf("%#v\n", err)
+			t.Error(i, e)
+		}
+	}
+}
+
+func Test_dbchecker_check_orderby(t *testing.T) {
+	tests := []struct {
+		cmd *command
+		err error
+	}{{
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			orderby: &orderbylist{items: []*orderbyitem{
+				{col: colid{name: "col_orderby_a"}},
+				{col: colid{name: "col_orderby_b"}},
+			}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			orderby: &orderbylist{items: []*orderbyitem{
+				{col: colid{qual: "c", name: "col_orderby_a"}},
+				{col: colid{qual: "c", name: "col_orderby_b"}},
+			}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			orderby: &orderbylist{items: []*orderbyitem{
+				{col: colid{qual: "d", name: "col_orderby_a"}},
+				{col: colid{qual: "d", name: "col_orderby_b"}},
+			}},
+		},
+		err: errors.NoDBRelationError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			orderby: &orderbylist{items: []*orderbyitem{
+				{col: colid{qual: "c", name: "col_none"}},
+			}},
+		},
+		err: errors.NoDBColumnError,
+	}}
+
+	for i, tt := range tests {
+		dbc := new(dbchecker)
+		dbc.db = testdb.db
+		dbc.cmd = tt.cmd
+
+		if err := dbc.load(); err != nil {
+			log.Printf("%#v\n", err)
+			t.Error(err)
+			return
+		}
+
+		err := dbc.check()
+		if e := compare.Compare(err, tt.err); e != nil {
+			log.Printf("%#v\n", err)
+			t.Error(i, e)
+		}
+	}
+}
+
+func Test_dbchecker_check_defaults(t *testing.T) {
+	tests := []struct {
+		cmd *command
+		err error
+	}{{
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			defaults: &collist{items: []colid{
+				{name: "col_foo"},
+				{name: "col_bar"},
+				{name: "col_baz"},
+			}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			defaults: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "c", name: "col_baz"},
+			}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			defaults: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "d", name: "col_bar"},
+			}},
+		},
+		err: errors.NoDBRelationError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			defaults: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "c", name: "col_none"},
+			}},
+		},
+		err: errors.NoDBColumnError,
+	}}
+
+	for i, tt := range tests {
+		dbc := new(dbchecker)
+		dbc.db = testdb.db
+		dbc.cmd = tt.cmd
+
+		if err := dbc.load(); err != nil {
+			log.Printf("%#v\n", err)
+			t.Error(err)
+			return
+		}
+
+		err := dbc.check()
+		if e := compare.Compare(err, tt.err); e != nil {
+			log.Printf("%#v\n", err)
+			t.Error(i, e)
+		}
+	}
+}
+
+func Test_dbchecker_check_force(t *testing.T) {
+	tests := []struct {
+		cmd *command
+		err error
+	}{{
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			force: &collist{items: []colid{
+				{name: "col_foo"},
+				{name: "col_bar"},
+				{name: "col_baz"},
+			}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			force: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "c", name: "col_baz"},
+			}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			force: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "d", name: "col_bar"},
+			}},
+		},
+		err: errors.NoDBRelationError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			force: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "c", name: "col_none"},
+			}},
+		},
+		err: errors.NoDBColumnError,
+	}}
+
+	for i, tt := range tests {
+		dbc := new(dbchecker)
+		dbc.db = testdb.db
+		dbc.cmd = tt.cmd
+
+		if err := dbc.load(); err != nil {
+			log.Printf("%#v\n", err)
+			t.Error(err)
+			return
+		}
+
+		err := dbc.check()
+		if e := compare.Compare(err, tt.err); e != nil {
+			log.Printf("%#v\n", err)
+			t.Error(i, e)
+		}
+	}
+}
+
+func Test_dbchecker_check_returning(t *testing.T) {
+	tests := []struct {
+		cmd *command
+		err error
+	}{{
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			returning: &collist{items: []colid{
+				{name: "col_foo"},
+				{name: "col_bar"},
+				{name: "col_baz"},
+			}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			returning: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "c", name: "col_baz"},
+			}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			returning: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "d", name: "col_bar"},
+			}},
+		},
+		err: errors.NoDBRelationError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
+			returning: &collist{items: []colid{
+				{qual: "c", name: "col_foo"},
+				{qual: "c", name: "col_none"},
+			}},
+		},
+		err: errors.NoDBColumnError,
+	}}
+
+	for i, tt := range tests {
+		dbc := new(dbchecker)
+		dbc.db = testdb.db
+		dbc.cmd = tt.cmd
+
+		if err := dbc.load(); err != nil {
+			log.Printf("%#v\n", err)
+			t.Error(err)
+			return
+		}
+
+		err := dbc.check()
+		if e := compare.Compare(err, tt.err); e != nil {
+			log.Printf("%#v\n", err)
+			t.Error(i, e)
+		}
+	}
+}
+
+func Test_dbchecker_check_onconflict(t *testing.T) {
+	tests := []struct {
+		cmd *command
+		err error
+	}{{
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				column: []colid{
+					{name: "col_indkey1"},
+					{name: "col_indkey2"},
+				},
+			},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel:        &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{column: []colid{{name: "col_none"}}},
+		},
+		err: errors.NoDBColumnError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				column: []colid{{name: "col_indkey2"}},
+			},
+		},
+		err: errors.NoDBIndexForColumnListError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				column: []colid{{name: "col_indkey1"}},
+			},
+		},
+		err: errors.NoDBIndexForColumnListError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				column: []colid{
+					{name: "col_indkey1"},
+					{name: "col_indkey2"},
+					{name: "col_foo"},
+				},
+			},
+		},
+		err: errors.NoDBIndexForColumnListError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				index: "column_tests_2_unique_index",
+			},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				index: "column_tests_2_index_none",
+			},
+		},
+		err: errors.NoDBIndexError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				index: "column_tests_2_nonunique_index",
+			},
+		},
+		err: errors.NoDBIndexError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				constraint: "column_tests_2_unique_constraint",
+			},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				constraint: "column_tests_2_unique_constraint_none",
+			},
+		},
+		err: errors.NoDBConstraintError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{
+				constraint: "column_tests_2_nonunique_constraint",
+			},
+		},
+		err: errors.NoDBConstraintError,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{update: &collist{items: []colid{
+				{name: "col_foo"},
+				{name: "col_bar"},
+				{name: "col_baz"},
+			}}},
+		},
+		err: nil,
+	}, {
+		cmd: &command{
+			rel: &relfield{relid: relid{name: "column_tests_2"}},
+			onconflict: &onconflictblock{update: &collist{items: []colid{
+				{name: "col_foo"},
+				{name: "col_bar"},
+				{name: "col_none"},
+			}}},
+		},
+		err: errors.NoDBColumnError,
 	}}
 
 	for i, tt := range tests {

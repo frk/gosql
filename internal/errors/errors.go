@@ -79,5 +79,9 @@ const (
 	BadOnConflictBlockTypeError                errnum = 61
 	NoDBRelationError                          errnum = 62
 	NoDBColumnError                            errnum = 63
-	BadDBColumnTypeError                       errnum = 64
+	NoDBIndexError                             errnum = 64
+	NoDBIndexForColumnListError                errnum = 65
+	NoDBConstraintError                        errnum = 66
+	BadDBColumnTypeError                       errnum = 67
+	BadDBIndexError                            errnum = 68
 )
