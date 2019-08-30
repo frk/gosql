@@ -1,6 +1,11 @@
 package testdata
 
 import (
+	"database/sql"
+	"encoding/json"
+	"math/big"
+	"net"
+
 	"github.com/frk/gosql"
 	"github.com/frk/gosql/testdata/common"
 )
@@ -438,4 +443,48 @@ type DeleteTestOK_RowsAffected struct {
 type SelectTestOK_FilterField struct {
 	Rel    []T `rel:"relation_a:a"`
 	Filter gosql.Filter
+}
+
+//OK: test field types basic
+type SelectTestOK_FieldTypesBasic struct {
+	Rel struct {
+		f1  bool       `sql:"c1"`
+		f2  byte       `sql:"c2"`
+		f3  rune       `sql:"c3"`
+		f4  int8       `sql:"c4"`
+		f5  int16      `sql:"c5"`
+		f6  int32      `sql:"c6"`
+		f7  int64      `sql:"c7"`
+		f8  int        `sql:"c8"`
+		f9  uint8      `sql:"c9"`
+		f10 uint16     `sql:"c10"`
+		f11 uint32     `sql:"c11"`
+		f12 uint64     `sql:"c12"`
+		f13 uint       `sql:"c13"`
+		f14 uintptr    `sql:"c14"`
+		f15 float32    `sql:"c15"`
+		f16 float64    `sql:"c16"`
+		f17 complex64  `sql:"c17"`
+		f18 complex128 `sql:"c18"`
+		f19 string     `sql:"c19"`
+	} `rel:"relation_a:a"`
+}
+
+//OK: test field types slices, arrays, maps, and pointers
+type SelectTestOK_FieldTypesSlices struct {
+	Rel struct {
+		f1  []bool                    `sql:"c1"`
+		f2  []byte                    `sql:"c2"`
+		f3  []rune                    `sql:"c3"`
+		f4  net.HardwareAddr          `sql:"c4"`
+		f5  json.RawMessage           `sql:"c5"`
+		f6  []json.Marshaler          `sql:"c6"`
+		f7  []json.RawMessage         `sql:"c7"`
+		f8  [][]byte                  `sql:"c8"`
+		f9  [][2][2]float64           `sql:"c9"`
+		f10 [][][2]float64            `sql:"c10"`
+		f11 map[string]sql.NullString `sql:"c11"`
+		f12 []map[string]*string      `sql:"c12"`
+		f13 [][2]*big.Int             `sql:"c13"`
+	} `rel:"relation_a:a"`
 }

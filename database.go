@@ -280,7 +280,49 @@ func (c *dbchecker) check() error {
 
 	// check where block
 	if c.cmd.where != nil {
-		// TODO
+		type loopstate struct {
+			wb  *whereblock
+			idx int // keeps track of the field index
+		}
+		stack := []*loopstate{{wb: c.cmd.where}} // LIFO stack of states.
+
+	stackloop:
+		for len(stack) > 0 {
+			// Loop over the various items of a whereblock, including
+			// other nested whereblocks and check them against the db.
+			loop := stack[len(stack)-1]
+			for loop.idx < len(loop.wb.items) {
+				loop.idx++
+
+				switch node := loop.wb.items[loop.idx].node.(type) {
+				case *wherefield:
+					// In case of a wherefield check that the referenced column
+					// is present in one of the associated relations and that
+					// the field's type is compatible with that of the column.
+					//
+					// Also make sure that the comparison operator, the scalar
+					// array operator, and the modifier function can actually
+					// be used with the given column's type.
+					//
+					// Also check that if column is NULLable
+					// then also the file is NILable
+					col, err := c.column(node.colid)
+					if err != nil {
+						return err
+					}
+					if err := c.checktype(col, node.typ); err != nil {
+						return err
+					}
+				case *wherecolumn:
+				case *wherebetween:
+				case *whereblock:
+					stack = append(stack, &loopstate{wb: node})
+					continue stackloop
+				}
+			}
+
+			stack = stack[:len(stack)-1]
+		}
 	}
 
 	// check join block
@@ -289,10 +331,21 @@ func (c *dbchecker) check() error {
 	}
 
 	// check result field
-	if c.cmd.resultfield != nil {
+	if c.cmd.result != nil {
 		// TODO
 	}
 
+	return nil
+}
+
+func (c *dbchecker) checktype(col *dbcolumn, typ typeinfo) error {
+	var ok bool
+
+	// TODO
+
+	if !ok {
+		return nil // TODO
+	}
 	return nil
 }
 
@@ -499,6 +552,15 @@ type dbtype struct {
 	elem int64
 }
 
+func (typ *dbtype) is(names ...string) bool {
+	for _, name := range names {
+		if typ.name == name {
+			return true
+		}
+	}
+	return false
+}
+
 type dbconstraint struct {
 	// Constraint name (not necessarily unique!)
 	name string
@@ -550,114 +612,98 @@ type dbid struct {
 
 // postgres types
 const (
-	pgtyp_bool           = "bool"
-	pgtyp_bytea          = "bytea"
-	pgtyp_char           = "char"
-	pgtyp_int8           = "int8"
-	pgtyp_int2           = "int2"
-	pgtyp_int2vector     = "int2vector"
-	pgtyp_int4           = "int4"
-	pgtyp_text           = "text"
-	pgtyp_json           = "json"
-	pgtyp_xml            = "xml"
-	pgtyp_xmlarr         = "_xml"
-	pgtyp_jsonarr        = "_json"
-	pgtyp_point          = "point"
-	pgtyp_lseg           = "lseg"
-	pgtyp_path           = "path"
-	pgtyp_box            = "box"
-	pgtyp_polygon        = "polygon"
-	pgtyp_line           = "line"
-	pgtyp_linearr        = "_line"
-	pgtyp_cidr           = "cidr"
-	pgtyp_cidrarr        = "_cidr"
-	pgtyp_float4         = "float4"
-	pgtyp_float8         = "float8"
-	pgtyp_abstime        = "abstime"
-	pgtyp_reltime        = "reltime"
-	pgtyp_tinterval      = "tinterval"
-	pgtyp_unknown        = "unknown"
-	pgtyp_circle         = "circle"
-	pgtyp_circlearr      = "_circle"
-	pgtyp_macaddr8       = "macaddr8"
-	pgtyp_macaddr8arr    = "_macaddr8"
-	pgtyp_money          = "money"
-	pgtyp_moneyarr       = "_money"
-	pgtyp_macaddr        = "macaddr"
-	pgtyp_inet           = "inet"
-	pgtyp_boolarr        = "_bool"
-	pgtyp_byteaarr       = "_bytea"
-	pgtyp_chararr        = "_char"
-	pgtyp_int2arr        = "_int2"
-	pgtyp_int2vectorarr  = "_int2vector"
-	pgtyp_int4arr        = "_int4"
-	pgtyp_textarr        = "_text"
-	pgtyp_bpchararr      = "_bpchar"
-	pgtyp_varchararr     = "_varchar"
-	pgtyp_int8arr        = "_int8"
-	pgtyp_pointarr       = "_point"
-	pgtyp_lsegarr        = "_lseg"
-	pgtyp_patharr        = "_path"
-	pgtyp_boxarr         = "_box"
-	pgtyp_float4arr      = "_float4"
-	pgtyp_float8arr      = "_float8"
-	pgtyp_abstimearr     = "_abstime"
-	pgtyp_reltimearr     = "_reltime"
-	pgtyp_tintervalarr   = "_tinterval"
-	pgtyp_polygonarr     = "_polygon"
-	pgtyp_macaddrarr     = "_macaddr"
-	pgtyp_inetarr        = "_inet"
-	pgtyp_bpchar         = "bpchar" // blank-padded char (the internal name of the character data type)
-	pgtyp_varchar        = "varchar"
-	pgtyp_date           = "date"
-	pgtyp_time           = "time"
-	pgtyp_timestamp      = "timestamp"
-	pgtyp_timestamparr   = "_timestamp"
-	pgtyp_datearr        = "_date"
-	pgtyp_timearr        = "_time"
-	pgtyp_timestamptz    = "timestamptz"
-	pgtyp_timestamptzarr = "_timestamptz"
-	pgtyp_interval       = "interval"
-	pgtyp_intervalarr    = "_interval"
-	pgtyp_numericarr     = "_numeric"
-	pgtyp_cstringarr     = "_cstring"
-	pgtyp_timetz         = "timetz"
-	pgtyp_timetzarr      = "_timetz"
-	pgtyp_bit            = "bit"
-	pgtyp_bitarr         = "_bit"
-	pgtyp_varbit         = "varbit"
-	pgtyp_varbitarr      = "_varbit"
-	pgtyp_numeric        = "numeric"
-	pgtyp_cstring        = "cstring"
-	pgtyp_any            = "any"
-	pgtyp_anyarray       = "anyarray"
-	pgtyp_void           = "void"
-	pgtyp_anyelement     = "anyelement"
-	pgtyp_anynonarray    = "anynonarray"
-	pgtyp_uuid           = "uuid"
-	pgtyp_uuidarr        = "_uuid"
-	pgtyp_anyenum        = "anyenum"
-	pgtyp_tsvector       = "tsvector"
-	pgtyp_tsquery        = "tsquery"
-	pgtyp_tsvectorarr    = "_tsvector"
-	pgtyp_tsqueryarr     = "_tsquery"
-	pgtyp_jsonb          = "jsonb"
-	pgtyp_jsonbarr       = "_jsonb"
-	pgtyp_anyrange       = "anyrange"
-	pgtyp_int4range      = "int4range"
-	pgtyp_int4rangearr   = "_int4range"
-	pgtyp_numrange       = "numrange"
-	pgtyp_numrangearr    = "_numrange"
-	pgtyp_tsrange        = "tsrange"
-	pgtyp_tsrangearr     = "_tsrange"
-	pgtyp_tstzrange      = "tstzrange"
-	pgtyp_tstzrangearr   = "_tstzrange"
-	pgtyp_daterange      = "daterange"
-	pgtyp_daterangearr   = "_daterange"
-	pgtyp_int8range      = "int8range"
-	pgtyp_int8rangearr   = "_int8range"
-	pgtyp_hstore         = "hstore"
-	pgtyp_hstorearr      = "_hstore"
+	pgtyp_bool           = "bool"         // bool
+	pgtyp_bytea          = "bytea"        // []byte
+	pgtyp_char           = "char"         // byte, rune, string, uint8 - if column.typmod=1; else - string
+	pgtyp_int8           = "int8"         // int64
+	pgtyp_int2           = "int2"         // int16, int8
+	pgtyp_int2vector     = "int2vector"   // []int16, int8
+	pgtyp_int4           = "int4"         // int32
+	pgtyp_text           = "text"         // string
+	pgtyp_json           = "json"         // []byte, json.RawMessage, json.Marshaler, usejson=true
+	pgtyp_xml            = "xml"          // []byte, xml.Marshaler, usexml=true
+	pgtyp_xmlarr         = "_xml"         // [][]byte, []xml.Marshaler, usexml=true
+	pgtyp_jsonarr        = "_json"        // [][]byte, []json.RawMessage, []json.Marshaler, usejson=true
+	pgtyp_point          = "point"        // [2]float64
+	pgtyp_lseg           = "lseg"         // [2][2]float64
+	pgtyp_path           = "path"         // [][2]float64
+	pgtyp_box            = "box"          // [2][2]float64
+	pgtyp_polygon        = "polygon"      // [][2]float64
+	pgtyp_line           = "line"         // [3]float64
+	pgtyp_linearr        = "_line"        // [][3]float64
+	pgtyp_cidr           = "cidr"         // *net.IPNet, string
+	pgtyp_cidrarr        = "_cidr"        // []*net.IPNet, string
+	pgtyp_float4         = "float4"       // float32
+	pgtyp_float8         = "float8"       // float64
+	pgtyp_circle         = "circle"       // { centerpoint [2]float64, radius float64 }
+	pgtyp_circlearr      = "_circle"      // []{ centerpoint [2]float64, radius float64 }
+	pgtyp_macaddr8       = "macaddr8"     // net.HardwareAddr
+	pgtyp_macaddr8arr    = "_macaddr8"    // []net.HardwareAddr
+	pgtyp_money          = "money"        // int64 (cents)
+	pgtyp_moneyarr       = "_money"       // []int64 (cents)
+	pgtyp_macaddr        = "macaddr"      // net.HardwareAddr
+	pgtyp_inet           = "inet"         // *net.IPNet
+	pgtyp_boolarr        = "_bool"        // []bool
+	pgtyp_byteaarr       = "_bytea"       // [][]byte
+	pgtyp_chararr        = "_char"        // []byte, []rune, []string, []uint8
+	pgtyp_int2arr        = "_int2"        // []int16, []int8
+	pgtyp_int2vectorarr  = "_int2vector"  // [][]int16, []int8
+	pgtyp_int4arr        = "_int4"        // []int32
+	pgtyp_textarr        = "_text"        // []string
+	pgtyp_bpchararr      = "_bpchar"      // []string
+	pgtyp_varchararr     = "_varchar"     // []string
+	pgtyp_int8arr        = "_int8"        // []int64
+	pgtyp_pointarr       = "_point"       // [][2]float64
+	pgtyp_lsegarr        = "_lseg"        // [][2][2]float64
+	pgtyp_patharr        = "_path"        // [][][2]float64
+	pgtyp_boxarr         = "_box"         // [][2][2]float64
+	pgtyp_float4arr      = "_float4"      // []float32
+	pgtyp_float8arr      = "_float8"      // []float64
+	pgtyp_polygonarr     = "_polygon"     // [][][2]float64
+	pgtyp_macaddrarr     = "_macaddr"     // []net.HardwareAddr
+	pgtyp_inetarr        = "_inet"        // []*net.IPNet
+	pgtyp_bpchar         = "bpchar"       // string (blank-padded char [the internal name of the character data type])
+	pgtyp_varchar        = "varchar"      // string
+	pgtyp_date           = "date"         // time.Time
+	pgtyp_time           = "time"         // time.Time
+	pgtyp_timestamp      = "timestamp"    // time.Time
+	pgtyp_timestamparr   = "_timestamp"   // []time.Time
+	pgtyp_datearr        = "_date"        // []time.Time
+	pgtyp_timearr        = "_time"        // []time.Time
+	pgtyp_timestamptz    = "timestamptz"  // time.Time
+	pgtyp_timestamptzarr = "_timestamptz" // []time.Time
+	pgtyp_interval       = "interval"     // {microsecs int64, days int32, months int32}
+	pgtyp_intervalarr    = "_interval"    // []{microsecs int64, days int32, months int32}
+	pgtyp_numericarr     = "_numeric"     // ? []*big.Int
+	pgtyp_timetz         = "timetz"       // time.Time
+	pgtyp_timetzarr      = "_timetz"      // []time.Time
+	pgtyp_bit            = "bit"          // string, []byte
+	pgtyp_bitarr         = "_bit"         // []string, [][]byte
+	pgtyp_varbit         = "varbit"       // string, []byte
+	pgtyp_varbitarr      = "_varbit"      // []string, [][]byte
+	pgtyp_numeric        = "numeric"      // ? *big.Int
+	pgtyp_uuid           = "uuid"         // string, [16]byte, []byte
+	pgtyp_uuidarr        = "_uuid"        // []string, [][16]byte, [][]byte
+	pgtyp_tsvector       = "tsvector"     // []string
+	pgtyp_tsquery        = "tsquery"      // string
+	pgtyp_tsvectorarr    = "_tsvector"    // [][]string
+	pgtyp_tsqueryarr     = "_tsquery"     // []string
+	pgtyp_jsonb          = "jsonb"        // []byte, json.RawMessage, json.Marshaler, usejson=true
+	pgtyp_jsonbarr       = "_jsonb"       // [][]byte, []json.RawMessage, []json.Marshaler, usejson=true
+	pgtyp_int4range      = "int4range"    // [2]int32 (bound types expressed in tags?)
+	pgtyp_int4rangearr   = "_int4range"   // [][2]int32 (bound types expressed in tags?)
+	pgtyp_numrange       = "numrange"     // [2]*big.Int (bound types expressed in tags?)
+	pgtyp_numrangearr    = "_numrange"    // [][2]*big.Int (bound types expressed in tags?)
+	pgtyp_tsrange        = "tsrange"      // [2]time.Time (bound types expressed in tags?)
+	pgtyp_tsrangearr     = "_tsrange"     // [][2]time.Time (bound types expressed in tags?)
+	pgtyp_tstzrange      = "tstzrange"    // [2]time.Time (bound types expressed in tags?)
+	pgtyp_tstzrangearr   = "_tstzrange"   // [][2]time.Time (bound types expressed in tags?)
+	pgtyp_daterange      = "daterange"    // [2]time.Time (bound types expressed in tags?)
+	pgtyp_daterangearr   = "_daterange"   // [][2]time.Time (bound types expressed in tags?)
+	pgtyp_int8range      = "int8range"    // [2]int64 (bound types expressed in tags?)
+	pgtyp_int8rangearr   = "_int8range"   // [][2]int64 (bound types expressed in tags?)
+	pgtyp_hstore         = "hstore"       // map[string]sql.NullString, map[string]*string, map[string]string
+	pgtyp_hstorearr      = "_hstore"      // []map[string]sql.NullString, []map[string]*string, map[string]string
 )
 
 // postgres type types

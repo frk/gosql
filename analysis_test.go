@@ -31,7 +31,6 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		pkgname:    "common",
 		pkglocal:   "common",
 		isimported: true,
-		ispointer:  true,
 		fields: []*fieldinfo{{
 			name:       "Id",
 			typ:        typeinfo{kind: kindint},
@@ -70,23 +69,27 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 	reldummyslice := &relfield{
 		field: "Rel",
 		relid: relid{name: "relation_a", alias: "a"},
-		datatype: datatype{typeinfo: typeinfo{
-			kind:     kindstruct,
+		datatype: datatype{
+			base: typeinfo{
+				name:     "T",
+				kind:     kindstruct,
+				pkgpath:  "path/to/test",
+				pkgname:  "testdata",
+				pkglocal: "testdata",
+			},
+			isslice: true,
+		},
+	}
+
+	dummytype := datatype{
+		base: typeinfo{
 			name:     "T",
+			kind:     kindstruct,
 			pkgpath:  "path/to/test",
 			pkgname:  "testdata",
 			pkglocal: "testdata",
-			isslice:  true,
-		}},
+		},
 	}
-
-	dummytype := datatype{typeinfo: typeinfo{
-		kind:     kindstruct,
-		name:     "T",
-		pkgpath:  "path/to/test",
-		pkgname:  "testdata",
-		pkglocal: "testdata",
-	}}
 
 	tests := []struct {
 		name string
@@ -389,9 +392,12 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 	}, {
 		name: "InsertTestOK1",
 		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rel: &relfield{
-			field:    "UserRec",
-			relid:    relid{name: "users_table"},
-			datatype: datatype{typeinfo: commonUserTypeinfo},
+			field: "UserRec",
+			relid: relid{name: "users_table"},
+			datatype: datatype{
+				base:      commonUserTypeinfo,
+				ispointer: true,
+			},
 		}},
 	}, {
 		name: "InsertTestOK2",
@@ -399,7 +405,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			field: "UserRec",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
-				typeinfo: typeinfo{
+				base: typeinfo{
 					kind: kindstruct,
 					fields: []*fieldinfo{{
 						name:       "Name3",
@@ -417,8 +423,9 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
-				typeinfo: commonUserTypeinfo,
-				useiter:  true,
+				base:      commonUserTypeinfo,
+				ispointer: true,
+				isiter:    true,
 			},
 		}},
 	}, {
@@ -427,8 +434,9 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
-				typeinfo: commonUserTypeinfo,
-				useiter:  true,
+				base:      commonUserTypeinfo,
+				ispointer: true,
+				isiter:    true,
 			},
 		}},
 	}, {
@@ -437,8 +445,9 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
-				typeinfo:   commonUserTypeinfo,
-				useiter:    true,
+				base:       commonUserTypeinfo,
+				ispointer:  true,
+				isiter:     true,
 				itermethod: "Fn",
 			},
 		}},
@@ -448,8 +457,9 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
-				typeinfo:   commonUserTypeinfo,
-				useiter:    true,
+				base:       commonUserTypeinfo,
+				ispointer:  true,
+				isiter:     true,
 				itermethod: "Fn",
 			},
 		}},
@@ -459,7 +469,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			field: "Rel",
 			relid: relid{name: "relation_a"},
 			datatype: datatype{
-				typeinfo: typeinfo{
+				base: typeinfo{
 					kind: kindstruct,
 					fields: []*fieldinfo{{
 						name:   "a",
@@ -516,7 +526,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			field: "Rel",
 			relid: relid{name: "relation_a"},
 			datatype: datatype{
-				typeinfo: typeinfo{
+				base: typeinfo{
 					kind: kindstruct,
 					fields: []*fieldinfo{{
 						name:       "Foobar",
@@ -576,7 +586,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{{
 				node: &wherefield{
@@ -595,7 +605,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpnotnull}},
@@ -616,7 +626,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &whereblock{name: "x", items: []*whereitem{
@@ -670,7 +680,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{name: "a", typ: typeinfo{kind: kindint}, colid: colid{name: "column_a"}, cmp: cmplt}},
@@ -690,7 +700,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpne, colid2: colid{name: "column_b"}}},
@@ -708,7 +718,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherebetween{
@@ -749,7 +759,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
@@ -776,38 +786,65 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
-					name:  "a",
-					typ:   typeinfo{kind: kindint, isslice: true},
+					name: "a",
+					typ: typeinfo{
+						kind: kindslice,
+						elem: &typeinfo{
+							kind: kindint,
+						},
+					},
 					colid: colid{name: "column_a"},
 					cmp:   cmpisin,
 				}},
 				{op: booland, node: &wherefield{
-					name:  "b",
-					typ:   typeinfo{kind: kindint, isarray: true, arraylen: 5},
+					name: "b",
+					typ: typeinfo{
+						kind: kindarray,
+						elem: &typeinfo{
+							kind: kindint,
+						},
+						arraylen: 5,
+					},
 					colid: colid{name: "column_b"},
 					cmp:   cmpnotin,
 				}},
 				{op: booland, node: &wherefield{
-					name:  "c",
-					typ:   typeinfo{kind: kindint, isslice: true},
+					name: "c",
+					typ: typeinfo{
+						kind: kindslice,
+						elem: &typeinfo{
+							kind: kindint,
+						},
+					},
 					colid: colid{name: "column_c"},
 					cmp:   cmpeq,
 					sop:   scalarrany,
 				}},
 				{op: booland, node: &wherefield{
-					name:  "d",
-					typ:   typeinfo{kind: kindint, isarray: true, arraylen: 10},
+					name: "d",
+					typ: typeinfo{
+						kind: kindarray,
+						elem: &typeinfo{
+							kind: kindint,
+						},
+						arraylen: 10,
+					},
 					colid: colid{name: "column_d"},
 					cmp:   cmpgt,
 					sop:   scalarrsome,
 				}},
 				{op: booland, node: &wherefield{
-					name:  "e",
-					typ:   typeinfo{kind: kindint, isslice: true},
+					name: "e",
+					typ: typeinfo{
+						kind: kindslice,
+						elem: &typeinfo{
+							kind: kindint,
+						},
+					},
 					colid: colid{name: "column_e"},
 					cmp:   cmple,
 					sop:   scalarrall,
@@ -822,7 +859,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
@@ -883,7 +920,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{rel: relid{name: "relation_b", alias: "b"}, items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
@@ -928,7 +965,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{rel: relid{name: "relation_b", alias: "b"}, items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
@@ -973,7 +1010,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_b", alias: "b"}, conds: []*joincond{{
@@ -1023,7 +1060,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			all: true,
 		},
@@ -1035,7 +1072,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			all: true,
 		},
@@ -1047,7 +1084,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			returning: &collist{all: true},
 		},
@@ -1059,7 +1096,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			returning: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1074,7 +1111,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			returning: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1089,7 +1126,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			defaults: &collist{all: true},
 		},
@@ -1101,7 +1138,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			defaults: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1116,7 +1153,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			force: &collist{all: true},
 		},
@@ -1128,7 +1165,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			force: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1143,7 +1180,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			erh: "eh",
 		},
@@ -1155,7 +1192,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{typeinfo: typeinfo{kind: kindstruct}},
+				datatype: datatype{base: typeinfo{kind: kindstruct}},
 			},
 			erh: "myerrorhandler",
 		},
@@ -1353,6 +1390,293 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 			typ:    cmdtypeSelect,
 			rel:    reldummyslice,
 			filter: "Filter",
+		},
+	}, {
+		name: "SelectTestOK_FieldTypesBasic",
+		want: &command{
+			name: "SelectTestOK_FieldTypesBasic",
+			typ:  cmdtypeSelect,
+			rel: &relfield{
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				datatype: datatype{base: typeinfo{
+					kind: kindstruct,
+					fields: []*fieldinfo{{
+						name: "f1", typ: typeinfo{kind: kindbool},
+						colid: colid{name: "c1"},
+						tag:   tagutil.Tag{"sql": {"c1"}},
+					}, {
+						name: "f2", typ: typeinfo{kind: kinduint8},
+						colid: colid{name: "c2"},
+						tag:   tagutil.Tag{"sql": {"c2"}},
+					}, {
+						name: "f3", typ: typeinfo{kind: kindint32},
+						colid: colid{name: "c3"},
+						tag:   tagutil.Tag{"sql": {"c3"}},
+					}, {
+						name: "f4", typ: typeinfo{kind: kindint8},
+						colid: colid{name: "c4"},
+						tag:   tagutil.Tag{"sql": {"c4"}},
+					}, {
+						name: "f5", typ: typeinfo{kind: kindint16},
+						colid: colid{name: "c5"},
+						tag:   tagutil.Tag{"sql": {"c5"}},
+					}, {
+						name: "f6", typ: typeinfo{kind: kindint32},
+						colid: colid{name: "c6"},
+						tag:   tagutil.Tag{"sql": {"c6"}},
+					}, {
+						name: "f7", typ: typeinfo{kind: kindint64},
+						colid: colid{name: "c7"},
+						tag:   tagutil.Tag{"sql": {"c7"}},
+					}, {
+						name: "f8", typ: typeinfo{kind: kindint},
+						colid: colid{name: "c8"},
+						tag:   tagutil.Tag{"sql": {"c8"}},
+					}, {
+						name: "f9", typ: typeinfo{kind: kinduint8},
+						colid: colid{name: "c9"},
+						tag:   tagutil.Tag{"sql": {"c9"}},
+					}, {
+						name: "f10", typ: typeinfo{kind: kinduint16},
+						colid: colid{name: "c10"},
+						tag:   tagutil.Tag{"sql": {"c10"}},
+					}, {
+						name: "f11", typ: typeinfo{kind: kinduint32},
+						colid: colid{name: "c11"},
+						tag:   tagutil.Tag{"sql": {"c11"}},
+					}, {
+						name: "f12", typ: typeinfo{kind: kinduint64},
+						colid: colid{name: "c12"},
+						tag:   tagutil.Tag{"sql": {"c12"}},
+					}, {
+						name: "f13", typ: typeinfo{kind: kinduint},
+						colid: colid{name: "c13"},
+						tag:   tagutil.Tag{"sql": {"c13"}},
+					}, {
+						name: "f14", typ: typeinfo{kind: kinduintptr},
+						colid: colid{name: "c14"},
+						tag:   tagutil.Tag{"sql": {"c14"}},
+					}, {
+						name: "f15", typ: typeinfo{kind: kindfloat32},
+						colid: colid{name: "c15"},
+						tag:   tagutil.Tag{"sql": {"c15"}},
+					}, {
+						name: "f16", typ: typeinfo{kind: kindfloat64},
+						colid: colid{name: "c16"},
+						tag:   tagutil.Tag{"sql": {"c16"}},
+					}, {
+						name: "f17", typ: typeinfo{kind: kindcomplex64},
+						colid: colid{name: "c17"},
+						tag:   tagutil.Tag{"sql": {"c17"}},
+					}, {
+						name: "f18", typ: typeinfo{kind: kindcomplex128},
+						colid: colid{name: "c18"},
+						tag:   tagutil.Tag{"sql": {"c18"}},
+					}, {
+						name: "f19", typ: typeinfo{kind: kindstring},
+						colid: colid{name: "c19"},
+						tag:   tagutil.Tag{"sql": {"c19"}},
+					}},
+				}},
+			},
+		},
+	}, {
+		name: "SelectTestOK_FieldTypesSlices",
+		want: &command{
+			name: "SelectTestOK_FieldTypesSlices",
+			typ:  cmdtypeSelect,
+			rel: &relfield{
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				datatype: datatype{base: typeinfo{
+					kind: kindstruct,
+					fields: []*fieldinfo{{
+						name: "f1", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kindbool,
+							},
+						},
+						colid: colid{name: "c1"},
+						tag:   tagutil.Tag{"sql": {"c1"}},
+					}, {
+						name: "f2", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kinduint8,
+							},
+						},
+						colid: colid{name: "c2"},
+						tag:   tagutil.Tag{"sql": {"c2"}},
+					}, {
+						name: "f3", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kindint32,
+							},
+						},
+						colid: colid{name: "c3"},
+						tag:   tagutil.Tag{"sql": {"c3"}},
+					}, {
+						name: "f4", typ: typeinfo{
+							name:       "HardwareAddr",
+							kind:       kindslice,
+							pkgpath:    "net",
+							pkgname:    "net",
+							pkglocal:   "net",
+							isimported: true,
+							elem: &typeinfo{
+								kind: kinduint8,
+							},
+						},
+						colid: colid{name: "c4"},
+						tag:   tagutil.Tag{"sql": {"c4"}},
+					}, {
+						name: "f5", typ: typeinfo{
+							name:       "RawMessage",
+							kind:       kindslice,
+							pkgpath:    "encoding/json",
+							pkgname:    "json",
+							pkglocal:   "json",
+							isimported: true,
+							elem: &typeinfo{
+								kind: kinduint8,
+							},
+						},
+						colid: colid{name: "c5"},
+						tag:   tagutil.Tag{"sql": {"c5"}},
+					}, {
+						name: "f6", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								name:       "Marshaler",
+								kind:       kindinterface,
+								pkgpath:    "encoding/json",
+								pkgname:    "json",
+								pkglocal:   "json",
+								isimported: true,
+							},
+						},
+						colid: colid{name: "c6"},
+						tag:   tagutil.Tag{"sql": {"c6"}},
+					}, {
+						name: "f7", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								name:       "RawMessage",
+								kind:       kindslice,
+								pkgpath:    "encoding/json",
+								pkgname:    "json",
+								pkglocal:   "json",
+								isimported: true,
+								elem: &typeinfo{
+									kind: kinduint8,
+								},
+							},
+						},
+						colid: colid{name: "c7"},
+						tag:   tagutil.Tag{"sql": {"c7"}},
+					}, {
+						name: "f8", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kindslice,
+								elem: &typeinfo{
+									kind: kinduint8,
+								},
+							},
+						},
+						colid: colid{name: "c8"},
+						tag:   tagutil.Tag{"sql": {"c8"}},
+					}, {
+						name: "f9", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind:     kindarray,
+								arraylen: 2,
+								elem: &typeinfo{
+									kind:     kindarray,
+									arraylen: 2,
+									elem: &typeinfo{
+										kind: kindfloat64,
+									},
+								},
+							},
+						},
+						colid: colid{name: "c9"},
+						tag:   tagutil.Tag{"sql": {"c9"}},
+					}, {
+						name: "f10", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kindslice,
+								elem: &typeinfo{
+									kind:     kindarray,
+									arraylen: 2,
+									elem: &typeinfo{
+										kind: kindfloat64,
+									},
+								},
+							},
+						},
+						colid: colid{name: "c10"},
+						tag:   tagutil.Tag{"sql": {"c10"}},
+					}, {
+						name: "f11", typ: typeinfo{
+							kind: kindmap,
+							key:  &typeinfo{kind: kindstring},
+							elem: &typeinfo{
+								name:       "NullString",
+								kind:       kindstruct,
+								pkgpath:    "database/sql",
+								pkgname:    "sql",
+								pkglocal:   "sql",
+								isimported: true,
+								isscanner:  true,
+								isvaluer:   true,
+							},
+						},
+						colid: colid{name: "c11"},
+						tag:   tagutil.Tag{"sql": {"c11"}},
+					}, {
+						name: "f12", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kindmap,
+								key:  &typeinfo{kind: kindstring},
+								elem: &typeinfo{
+									kind: kindptr,
+									elem: &typeinfo{kind: kindstring},
+								},
+							},
+						},
+						colid: colid{name: "c12"},
+						tag:   tagutil.Tag{"sql": {"c12"}},
+					}, {
+						name: "f13", typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind:     kindarray,
+								arraylen: 2,
+								elem: &typeinfo{
+									kind: kindptr,
+									elem: &typeinfo{
+										name:       "Int",
+										kind:       kindstruct,
+										pkgpath:    "math/big",
+										pkgname:    "big",
+										pkglocal:   "big",
+										isimported: true,
+									},
+								},
+							},
+						},
+						colid: colid{name: "c13"},
+						tag:   tagutil.Tag{"sql": {"c13"}},
+					}},
+				}},
+			},
 		},
 	}}
 

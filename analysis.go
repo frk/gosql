@@ -283,10 +283,8 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 		if named, err = a.iteratorfunc(sig, rel); err != nil {
 			return err
 		}
-	}
-
-	// If unnamed and not an iterator, check for slices and pointers.
-	if named == nil {
+	} else {
+		// If not an iterator, check for slices, arrays, and pointers.
 		if slice, ok := ftyp.(*types.Slice); ok { // allows []T / []*T
 			ftyp = slice.Elem()
 			rel.datatype.isslice = true
@@ -299,10 +297,12 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 			ftyp = ptr.Elem()
 			rel.datatype.ispointer = true
 		}
-		if named, ok = ftyp.(*types.Named); !ok {
-			// Fail if the type is a slice, an array, or a pointer
-			// while its base type remains unnamed.
-			if rel.datatype.isslice || rel.datatype.isarray || rel.datatype.ispointer {
+
+		// Get the name of the base type, if applicable.
+		if rel.datatype.isslice || rel.datatype.isarray || rel.datatype.ispointer {
+			if named, ok = ftyp.(*types.Named); !ok {
+				// Fail if the type is a slice, an array, or a pointer
+				// while its base type remains unnamed.
 				return errors.BadRelfieldTypeError
 			}
 		}
@@ -310,20 +310,17 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 
 	if named != nil {
 		pkg := named.Obj().Pkg()
-		rel.datatype.name = named.Obj().Name()
-		rel.datatype.pkgpath = pkg.Path()
-		rel.datatype.pkgname = pkg.Name()
-		rel.datatype.pkglocal = pkg.Name()
-		rel.datatype.isimported = a.isimported(named)
-		rel.datatype.isscanner = typesutil.ImplementsScanner(named)
-		rel.datatype.isvaluer = typesutil.ImplementsValuer(named)
-		rel.datatype.istime = typesutil.IsTime(named)
+		rel.datatype.base.name = named.Obj().Name()
+		rel.datatype.base.pkgpath = pkg.Path()
+		rel.datatype.base.pkgname = pkg.Name()
+		rel.datatype.base.pkglocal = pkg.Name()
+		rel.datatype.base.isimported = a.isimported(named)
 		rel.datatype.isafterscanner = typesutil.ImplementsAfterScanner(named)
 		ftyp = named.Underlying()
 	}
 
-	rel.datatype.kind = a.typekind(ftyp)
-	if rel.datatype.kind != kindstruct {
+	rel.datatype.base.kind = a.typekind(ftyp)
+	if rel.datatype.base.kind != kindstruct {
 		return errors.BadRelfieldTypeError
 	}
 
@@ -332,16 +329,16 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 }
 
 func (a *analyzer) relfields(rel *relfield, styp *types.Struct) error {
-	// The structloop type holds the state of a loop over a struct's fields.
-	type structloop struct {
+	// The loopstate type holds the state of a loop over a struct's fields.
+	type loopstate struct {
 		styp *types.Struct // the struct type whose fields are being analyzed
 		typ  *typeinfo     // info on the struct type; holds the resulting slice of analyzed fieldinfo
 		idx  int           // keeps track of the field index
 		pfx  string        // column prefix
 	}
 
-	// LIFO stack of structloops used for depth first traversal of struct fields.
-	stack := []*structloop{{styp: styp, typ: &rel.datatype.typeinfo}}
+	// LIFO stack of states used for depth first traversal of struct fields.
+	stack := []*loopstate{{styp: styp, typ: &rel.datatype.base}}
 
 stackloop:
 	for len(stack) > 0 {
@@ -385,8 +382,8 @@ stackloop:
 			// value starts with the ">" (descend) marker, then it is
 			// considered to be a "branch" field whose child fields
 			// need to be analyzed as well.
-			if f.typ.kind == kindstruct && strings.HasPrefix(sqltag, ">") && (!f.typ.isslice && !f.typ.isarray) {
-				loop2 := new(structloop)
+			if f.typ.isstruct() && strings.HasPrefix(sqltag, ">") {
+				loop2 := new(loopstate)
 				loop2.styp = ftyp.(*types.Struct)
 				loop2.typ = &f.typ
 				loop2.pfx = loop.pfx + strings.TrimPrefix(sqltag, ">")
@@ -418,22 +415,13 @@ stackloop:
 	return nil
 }
 
-// typeinfo analyzes the given type and returns the resulting info.
-// The second return value is the base type of the given type.
+// The typeinfo method analyzes the given type and returns the result. The analysis
+// looks only for information of "named types" and in case of slice, array, map,
+// or pointer types it will analyze the element type of those types. The second
+// return value is the base element type of the given type.
 func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 	base = tt
-	if slice, ok := base.(*types.Slice); ok {
-		base = slice.Elem()
-		typ.isslice = true
-	} else if array, ok := base.(*types.Array); ok {
-		base = array.Elem()
-		typ.isarray = true
-		typ.arraylen = array.Len()
-	}
-	if ptr, ok := base.(*types.Pointer); ok {
-		base = ptr.Elem()
-		typ.ispointer = true
-	}
+
 	if named, ok := base.(*types.Named); ok {
 		pkg := named.Obj().Pkg()
 		typ.name = named.Obj().Name()
@@ -447,6 +435,25 @@ func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 		base = named.Underlying()
 	}
 	typ.kind = a.typekind(base)
+
+	var elem typeinfo // element info
+	switch T := base.(type) {
+	case *types.Slice:
+		elem, base = a.typeinfo(T.Elem())
+		typ.elem = &elem
+	case *types.Array:
+		elem, base = a.typeinfo(T.Elem())
+		typ.elem = &elem
+		typ.arraylen = T.Len()
+	case *types.Map:
+		key, _ := a.typeinfo(T.Key())
+		elem, base = a.typeinfo(T.Elem())
+		typ.key = &key
+		typ.elem = &elem
+	case *types.Pointer:
+		elem, base = a.typeinfo(T.Elem())
+		typ.elem = &elem
+	}
 	return typ, base
 }
 
@@ -494,7 +501,7 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relfield) (*types.Nam
 		return nil, errors.BadIteratorTypeError
 	}
 
-	rel.datatype.useiter = true
+	rel.datatype.isiter = true
 	return named, nil
 }
 
@@ -544,8 +551,8 @@ func (a *analyzer) whereblock(field *types.Var) (err error) {
 	if a.cmd.all || a.cmd.where != nil || len(a.cmd.filter) > 0 {
 		return errors.ConflictWhereProducerError
 	}
-	// The structloop type holds the state of a loop over a struct's fields.
-	type structloop struct {
+	// The loopstate type holds the state of a loop over a struct's fields.
+	type loopstate struct {
 		wb  *whereblock
 		ns  *typesutil.NamedStruct // the struct type of the whereblock
 		idx int                    // keeps track of the field index
@@ -558,8 +565,8 @@ func (a *analyzer) whereblock(field *types.Var) (err error) {
 		return errors.BadWhereBlockTypeError
 	}
 
-	// LIFO stack of struct loops used for depth first traversal of struct fields.
-	stack := []*structloop{{wb: wb, ns: ns}}
+	// LIFO stack of states used for depth first traversal of struct fields.
+	stack := []*loopstate{{wb: wb, ns: ns}}
 
 stackloop:
 	for len(stack) > 0 {
@@ -615,7 +622,7 @@ stackloop:
 				wb.name = fld.Name()
 				item.node = wb
 
-				loop2 := new(structloop)
+				loop2 := new(loopstate)
 				loop2.wb = wb
 				loop2.ns = ns
 				stack = append(stack, loop2)
@@ -752,21 +759,21 @@ stackloop:
 				return err
 			}
 
-			wn := new(wherefield)
-			wn.name = fld.Name()
-			wn.colid = colid
-			wn.typ, _ = a.typeinfo(fld.Type())
-			wn.cmp = string2cmpop[op]
-			wn.sop = string2scalarrop[op2]
-			wn.mod = a.modfn(tag["sql"][1:])
+			wf := new(wherefield)
+			wf.name = fld.Name()
+			wf.colid = colid
+			wf.typ, _ = a.typeinfo(fld.Type())
+			wf.cmp = string2cmpop[op]
+			wf.sop = string2scalarrop[op2]
+			wf.mod = a.modfn(tag["sql"][1:])
 
-			if wn.sop > 0 && wn.cmp >= _cant_use_scalarrop {
+			if wf.sop > 0 && wf.cmp >= _cant_use_scalarrop {
 				return errors.BadCmpopComboError
-			} else if wn.sop > 0 && !wn.typ.isslice && !wn.typ.isarray {
+			} else if wf.sop > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
 				return errors.BadScalarFieldTypeError
 			}
 
-			item.node = wn
+			item.node = wf
 
 		}
 		stack = stack[:len(stack)-1]
@@ -1454,9 +1461,13 @@ type resultfield struct {
 // datatype holds information on the type of data a command should read from,
 // or write to, the associated database relation.
 type datatype struct {
-	typeinfo // type info on the datatype
+	base      typeinfo // type info on the datatype
+	ispointer bool     // reports whether or not the base type's a pointer type
+	isslice   bool     // reports whether or not the base type's a slice type
+	isarray   bool     // reports whether or not the base type's an array type
+	arraylen  int64    // if the base type's an array type, this field will hold the array's length
 	// if set, indicates that the datatype is handled by an iterator
-	useiter bool
+	isiter bool
 	// if set the value will hold the method name of the iterator interface
 	itermethod string
 	// reports whether or not the type implements the afterscanner interface
@@ -1470,16 +1481,23 @@ type typeinfo struct {
 	pkgname    string   // the package's name
 	pkglocal   string   // the local package name (including ".")
 	isimported bool     // indicates whether or not the package is imported
-	isarray    bool     // reports whether or not the type's an array type
-	arraylen   int64    // if it's an array type, this field will hold the array's length
-	isslice    bool     // reports whether or not the type's a slice type
-	ispointer  bool     // reports whether or not the type's a pointer type
 	isscanner  bool     // reports whether or not the type implements the sql.Scanner interface
 	isvaluer   bool     // reports whether or not the type implements the driver.Valuer interface
 	istime     bool     // reposrts whether or not the type is time.Time
-	// if the typeinfo represents a struct type then this slice will hold
-	// the info about the fields of that struct type
+	// if kind is struct, fields will hold the info on the struct type's fields
 	fields []*fieldinfo
+	// if kind is map, key will hold the info on the map's key type
+	key *typeinfo
+	// if kind is map, elem will hold the info on the map's value type
+	// if kind is ptr, elem will hold the info on pointed-to type
+	// if kind is slice/array, elem will hold the info on slice/array element type
+	elem *typeinfo
+	// if kind is array, arraylen will hold the array's length
+	arraylen int64
+}
+
+func (t *typeinfo) isstruct() bool {
+	return t.kind == kindstruct || (t.kind == kindptr && t.elem.kind == kindstruct)
 }
 
 // fieldinfo holds information about a record's struct field and the corresponding db column.
@@ -1559,7 +1577,7 @@ type whereblock struct {
 
 type whereitem struct {
 	op   boolop
-	node interface{} // wherefield, wherecolumn, whereblock
+	node interface{} // wherefield, wherecolumn, wherebetween, or whereblock
 }
 
 type wherefield struct {
