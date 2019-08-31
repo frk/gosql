@@ -310,7 +310,7 @@ func (c *dbchecker) check() error {
 					if err != nil {
 						return err
 					}
-					if err := c.checktype(col, node.typ, typopts{}); err != nil {
+					if err := c.checktype(col, node.typ, typeopts{}); err != nil {
 						return err
 					}
 				case *wherecolumn:
@@ -338,12 +338,12 @@ func (c *dbchecker) check() error {
 	return nil
 }
 
-type typopts struct {
+type typeopts struct {
 	usejson bool
 	usexml  bool
 }
 
-func (c *dbchecker) checktype(col *dbcolumn, typ typeinfo, opts typopts) error {
+func (c *dbchecker) checktype(col *dbcolumn, typ typeinfo, opts typeopts) error {
 	var ok bool
 
 	switch col.typ.name {
@@ -584,7 +584,7 @@ func (c *dbchecker) checktype(col *dbcolumn, typ typeinfo, opts typopts) error {
 		// []byte, xml.Marshaler, usexml=true
 		ok = typ.isslice(kindbyte) || (typ.isxmlmarshaler && typ.isxmlunmarshaler) || opts.usexml
 	case pgtyp_xmlarr:
-		// [][]byte, []xml.Marshaler, usexml=true
+		// [][]byte, []xml.Marshaler
 		ok = typ.kind == kindslice && (typ.elem.isslice(kindbyte) ||
 			(typ.elem.isxmlmarshaler && typ.elem.isxmlunmarshaler))
 	}

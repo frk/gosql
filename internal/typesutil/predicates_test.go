@@ -263,3 +263,107 @@ func TestImplementsErrorHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestImplementsJSONMarshaler(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "ImplementsJSONMarshalerTest1", want: false},
+		{name: "ImplementsJSONMarshalerTest2", want: false},
+		{name: "ImplementsJSONMarshalerTest3", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			got := ImplementsJSONMarshaler(named)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestImplementsJSONUnmarshaler(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "ImplementsJSONUnmarshalerTest1", want: false},
+		{name: "ImplementsJSONUnmarshalerTest2", want: false},
+		{name: "ImplementsJSONUnmarshalerTest3", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			got := ImplementsJSONUnmarshaler(named)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestImplementsXMLMarshaler(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "ImplementsXMLMarshalerTest1", want: false},
+		{name: "ImplementsXMLMarshalerTest2", want: false},
+		{name: "ImplementsXMLMarshalerTest3", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			got := ImplementsXMLMarshaler(named)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestImplementsXMLUnmarshaler(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "ImplementsXMLUnmarshalerTest1", want: false},
+		{name: "ImplementsXMLUnmarshalerTest2", want: false},
+		{name: "ImplementsXMLUnmarshalerTest3", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			got := ImplementsXMLUnmarshaler(named)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}

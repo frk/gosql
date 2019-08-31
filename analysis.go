@@ -432,8 +432,13 @@ func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 		typ.isscanner = typesutil.ImplementsScanner(named)
 		typ.isvaluer = typesutil.ImplementsValuer(named)
 		typ.istime = typesutil.IsTime(named)
+		typ.isjsmarshaler = typesutil.ImplementsJSONMarshaler(named)
+		typ.isjsunmarshaler = typesutil.ImplementsJSONUnmarshaler(named)
+		typ.isxmlmarshaler = typesutil.ImplementsXMLMarshaler(named)
+		typ.isxmlunmarshaler = typesutil.ImplementsXMLUnmarshaler(named)
 		base = named.Underlying()
 	}
+
 	typ.kind = a.typekind(base)
 
 	var elem typeinfo // element info
@@ -453,6 +458,17 @@ func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 	case *types.Pointer:
 		elem, base = a.typeinfo(T.Elem())
 		typ.elem = &elem
+	case *types.Interface:
+		// If base is an unnamed interface type check at least whether
+		// or not it declares, or embeds, one of the relevant methods.
+		if typ.name == "" {
+			typ.isscanner = typesutil.IsScanner(T)
+			typ.isvaluer = typesutil.IsValuer(T)
+			typ.isjsmarshaler = typesutil.IsJSONMarshaler(T)
+			typ.isjsunmarshaler = typesutil.IsJSONUnmarshaler(T)
+			typ.isxmlmarshaler = typesutil.IsXMLMarshaler(T)
+			typ.isxmlunmarshaler = typesutil.IsXMLUnmarshaler(T)
+		}
 	}
 	return typ, base
 }
@@ -1501,8 +1517,8 @@ type typeinfo struct {
 	arraylen int64
 }
 
-// a helper method that returns true if t represents a type one of the given
-// kinds or a pointer to one of the given kinds.
+// is returns true if t represents a type one of the given kinds or a pointer
+// to one of the given kinds.
 func (t *typeinfo) is(kk ...typekind) bool {
 	for _, k := range kk {
 		if t.kind == k || (t.kind == kindptr && t.elem.kind == k) {
@@ -1512,8 +1528,8 @@ func (t *typeinfo) is(kk ...typekind) bool {
 	return false
 }
 
-// a helper method that returns true if t represents a slice type whose elem
-// type is one of the given kinds.
+// isslice returns true if t represents a slice type whose elem type is one of
+// the given kinds.
 func (t *typeinfo) isslice(kk ...typekind) bool {
 	if t.kind == kindslice {
 		for _, k := range kk {
@@ -1525,8 +1541,8 @@ func (t *typeinfo) isslice(kk ...typekind) bool {
 	return false
 }
 
-// a helper method that returns true if t represents an n dimensional slice type
-// whose base elem type is one of the given kinds.
+// isslicen returns true if t represents an n dimensional slice type whose
+// base elem type is one of the given kinds.
 func (t *typeinfo) isslicen(n int, kk ...typekind) bool {
 	for ; n > 0; n-- {
 		if t.kind != kindslice {
@@ -1542,13 +1558,18 @@ func (t *typeinfo) isslicen(n int, kk ...typekind) bool {
 	return false
 }
 
-// a helper method that returns true if t represents a named type, or a pointer
-// to a named type, whose package path and type name match the given arguments.
+// isnamed returns true if t represents a named type, or a pointer to a named
+// type, whose package path and type name match the given arguments.
 func (t *typeinfo) isnamed(pkgpath, name string) bool {
 	if t.kind == kindptr {
 		t = t.elem
 	}
 	return t.pkgpath == pkgpath && t.name == name
+}
+
+// isnilable returns true if t represents a type that can be nil.
+func (t *typeinfo) isnilable() bool {
+	return t.is(kindptr, kindslice, kindarray, kindmap, kindinterface)
 }
 
 // fieldinfo holds information about a record's struct field and the corresponding db column.
@@ -1934,13 +1955,13 @@ const (
 
 	// non-basic
 	kindarray
-	kindchan
-	kindfunc
 	kindinterface
 	kindmap
 	kindptr
 	kindslice
 	kindstruct
+	kindchan
+	kindfunc
 
 	// alisases
 	kindbyte = kinduint8

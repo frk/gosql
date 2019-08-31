@@ -488,3 +488,15 @@ type SelectTestOK_FieldTypesSlices struct {
 		f13 [][2]*big.Int             `sql:"c13"`
 	} `rel:"relation_a:a"`
 }
+
+//OK: test field types interfaces
+type SelectTestOK_FieldTypesInterfaces struct {
+	Rel struct {
+		f1 json.Marshaler   `sql:"c1"`
+		f2 json.Unmarshaler `sql:"c2"`
+		f3 interface {
+			json.Marshaler
+			json.Unmarshaler
+		} `sql:"c3"`
+	} `rel:"relation_a:a"`
+}

@@ -2,6 +2,7 @@ package testdata
 
 import (
 	"database/sql/driver"
+	"encoding/xml"
 	"time"
 
 	"github.com/frk/gosql"
@@ -241,3 +242,71 @@ func (ImplementsErrorHandlerTest5) HandleError(err error) interface{} { return n
 type ImplementsErrorHandlerTest6 struct{}
 
 func (ImplementsErrorHandlerTest6) HandleError(err error) error { return nil }
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Does not implement the "json.Marshaler" interface, should return false
+type ImplementsJSONMarshalerTest1 struct{}
+
+// Does not implement the "json.Marshaler" interface, should return false
+type ImplementsJSONMarshalerTest2 struct{}
+
+func (ImplementsJSONMarshalerTest2) UnmarshalJSON([]byte) error { return nil }
+
+// Does implement the "json.Marshaler" interface, should return true
+type ImplementsJSONMarshalerTest3 struct{}
+
+func (ImplementsJSONMarshalerTest3) MarshalJSON() ([]byte, error) { return nil, nil }
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Does not implement the "json.Unmarshaler" interface, should return false
+type ImplementsJSONUnmarshalerTest1 struct{}
+
+// Does not implement the "json.Unmarshaler" interface, should return false
+type ImplementsJSONUnmarshalerTest2 struct{}
+
+func (ImplementsJSONUnmarshalerTest2) MarshalJSON() ([]byte, error) { return nil, nil }
+
+// Does implement the "json.Unmarshaler" interface, should return true
+type ImplementsJSONUnmarshalerTest3 struct{}
+
+func (ImplementsJSONUnmarshalerTest3) UnmarshalJSON([]byte) error { return nil }
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Does not implement the "xml.Marshaler" interface, should return false
+type ImplementsXMLMarshalerTest1 struct{}
+
+// Does not implement the "xml.Marshaler" interface, should return false
+type ImplementsXMLMarshalerTest2 struct{}
+
+func (ImplementsXMLMarshalerTest2) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return nil
+}
+
+// Does implement the "xml.Marshaler" interface, should return true
+type ImplementsXMLMarshalerTest3 struct{}
+
+func (ImplementsXMLMarshalerTest3) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	return nil
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Does not implement the "xml.Unmarshaler" interface, should return false
+type ImplementsXMLUnmarshalerTest1 struct{}
+
+// Does not implement the "xml.Unmarshaler" interface, should return false
+type ImplementsXMLUnmarshalerTest2 struct{}
+
+func (ImplementsXMLUnmarshalerTest2) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	return nil
+}
+
+// Does implement the "xml.Unmarshaler" interface, should return true
+type ImplementsXMLUnmarshalerTest3 struct{}
+
+func (ImplementsXMLUnmarshalerTest3) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
+	return nil
+}
