@@ -84,4 +84,5 @@ const (
 	NoDBConstraintError                        errnum = 66
 	BadDBColumnTypeError                       errnum = 67
 	BadDBIndexError                            errnum = 68
+	UnsupportedColumnTypeError                 errnum = 69
 )

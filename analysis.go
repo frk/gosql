@@ -382,7 +382,7 @@ stackloop:
 			// value starts with the ">" (descend) marker, then it is
 			// considered to be a "branch" field whose child fields
 			// need to be analyzed as well.
-			if f.typ.isstruct() && strings.HasPrefix(sqltag, ">") {
+			if f.typ.is(kindstruct) && strings.HasPrefix(sqltag, ">") {
 				loop2 := new(loopstate)
 				loop2.styp = ftyp.(*types.Struct)
 				loop2.typ = &f.typ
@@ -1462,15 +1462,15 @@ type resultfield struct {
 // or write to, the associated database relation.
 type datatype struct {
 	base      typeinfo // type info on the datatype
-	ispointer bool     // reports whether or not the base type's a pointer type
-	isslice   bool     // reports whether or not the base type's a slice type
-	isarray   bool     // reports whether or not the base type's an array type
+	ispointer bool     // indicates whether or not the base type's a pointer type
+	isslice   bool     // indicates whether or not the base type's a slice type
+	isarray   bool     // indicates whether or not the base type's an array type
 	arraylen  int64    // if the base type's an array type, this field will hold the array's length
 	// if set, indicates that the datatype is handled by an iterator
 	isiter bool
 	// if set the value will hold the method name of the iterator interface
 	itermethod string
-	// reports whether or not the type implements the afterscanner interface
+	// indicates whether or not the type implements the afterscanner interface
 	isafterscanner bool
 }
 
@@ -1481,9 +1481,14 @@ type typeinfo struct {
 	pkgname    string   // the package's name
 	pkglocal   string   // the local package name (including ".")
 	isimported bool     // indicates whether or not the package is imported
-	isscanner  bool     // reports whether or not the type implements the sql.Scanner interface
-	isvaluer   bool     // reports whether or not the type implements the driver.Valuer interface
-	istime     bool     // reposrts whether or not the type is time.Time
+	isscanner  bool     // indicates whether or not the type implements the sql.Scanner interface
+	isvaluer   bool     // indicates whether or not the type implements the driver.Valuer interface
+	istime     bool     // indicates whether or not the type is time.Time or a type that embeds time.Time
+	// TODO
+	isjsmarshaler    bool
+	isjsunmarshaler  bool
+	isxmlmarshaler   bool
+	isxmlunmarshaler bool
 	// if kind is struct, fields will hold the info on the struct type's fields
 	fields []*fieldinfo
 	// if kind is map, key will hold the info on the map's key type
@@ -1496,8 +1501,54 @@ type typeinfo struct {
 	arraylen int64
 }
 
-func (t *typeinfo) isstruct() bool {
-	return t.kind == kindstruct || (t.kind == kindptr && t.elem.kind == kindstruct)
+// a helper method that returns true if t represents a type one of the given
+// kinds or a pointer to one of the given kinds.
+func (t *typeinfo) is(kk ...typekind) bool {
+	for _, k := range kk {
+		if t.kind == k || (t.kind == kindptr && t.elem.kind == k) {
+			return true
+		}
+	}
+	return false
+}
+
+// a helper method that returns true if t represents a slice type whose elem
+// type is one of the given kinds.
+func (t *typeinfo) isslice(kk ...typekind) bool {
+	if t.kind == kindslice {
+		for _, k := range kk {
+			if t.elem.kind == k {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// a helper method that returns true if t represents an n dimensional slice type
+// whose base elem type is one of the given kinds.
+func (t *typeinfo) isslicen(n int, kk ...typekind) bool {
+	for ; n > 0; n-- {
+		if t.kind != kindslice {
+			return false
+		}
+		t = t.elem
+	}
+	for _, k := range kk {
+		if t.kind == k {
+			return true
+		}
+	}
+	return false
+}
+
+// a helper method that returns true if t represents a named type, or a pointer
+// to a named type, whose package path and type name match the given arguments.
+func (t *typeinfo) isnamed(pkgpath, name string) bool {
+	if t.kind == kindptr {
+		t = t.elem
+	}
+	return t.pkgpath == pkgpath && t.name == name
 }
 
 // fieldinfo holds information about a record's struct field and the corresponding db column.
@@ -1890,6 +1941,10 @@ const (
 	kindptr
 	kindslice
 	kindstruct
+
+	// alisases
+	kindbyte = kinduint8
+	kindrune = kindint32
 )
 
 func (k typekind) String() string {
