@@ -85,4 +85,9 @@ const (
 	BadDBColumnTypeError                       errnum = 67
 	BadDBIndexError                            errnum = 68
 	UnsupportedColumnTypeError                 errnum = 69
+	IllegalPtrFieldForNotNullColumnError       errnum = 70
+	IllegalNullemptyForNotNullColumnError      errnum = 71
+	IllegalFieldTypeForScalarOpError           errnum = 72
+	BadFieldToColumnTypeError                  errnum = 73
+	BadColumnTypeToModFuncError                errnum = 74
 )

@@ -401,6 +401,7 @@ stackloop:
 			f.readonly = tag.HasOption("sql", "ro")
 			f.writeonly = tag.HasOption("sql", "wo")
 			f.usejson = tag.HasOption("sql", "json")
+			f.usexml = tag.HasOption("sql", "xml")
 			f.binadd = tag.HasOption("sql", "+")
 			f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
 
@@ -674,7 +675,7 @@ stackloop:
 						wn.lit = rhs // assume literal expression
 					}
 
-					if wn.sop > 0 && wn.cmp >= _cant_use_scalarrop {
+					if wn.sop > 0 && !wn.cmp.canusescalar() {
 						return errors.BadCmpopComboError
 					}
 
@@ -692,7 +693,7 @@ stackloop:
 				wn.colid = colid
 				wn.cmp = string2cmpop[op]
 
-				if wn.cmp <= _unary_ops_only {
+				if !wn.cmp.isunary() {
 					return errors.BadUnaryCmpopError
 				} else if len(op2) > 0 {
 					return errors.ExtraScalarropError
@@ -781,9 +782,9 @@ stackloop:
 			wf.typ, _ = a.typeinfo(fld.Type())
 			wf.cmp = string2cmpop[op]
 			wf.sop = string2scalarrop[op2]
-			wf.mod = a.modfn(tag["sql"][1:])
+			wf.mod = a.modfunc(tag["sql"][1:])
 
-			if wf.sop > 0 && wf.cmp >= _cant_use_scalarrop {
+			if wf.sop > 0 && !wf.cmp.canusescalar() {
 				return errors.BadCmpopComboError
 			} else if wf.sop > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
 				return errors.BadScalarFieldTypeError
@@ -876,13 +877,13 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 					cond.sop = string2scalarrop[op2]
 
 					if len(rhs) == 0 {
-						if cond.cmp <= _unary_ops_only {
+						if !cond.cmp.isunary() {
 							return errors.BadUnaryCmpopError
 						} else if len(op2) > 0 {
 							return errors.ExtraScalarropError
 						}
 					}
-					if cond.sop > 0 && cond.cmp >= _cant_use_scalarrop {
+					if cond.sop > 0 && !cond.cmp.canusescalar() {
 						return errors.BadCmpopComboError
 					}
 
@@ -1246,9 +1247,9 @@ func (a *analyzer) textsearch(tag string, field *types.Var) error {
 	return nil
 }
 
-func (a *analyzer) modfn(tagvals []string) function {
+func (a *analyzer) modfunc(tagvals []string) modfunc {
 	for _, v := range tagvals {
-		if fn, ok := string2function[strings.ToLower(v)]; ok {
+		if fn, ok := string2modfunc[strings.ToLower(v)]; ok {
 			return fn
 		}
 	}
@@ -1606,6 +1607,9 @@ type fieldinfo struct {
 	// indicates that the column value should be marshaled/unmarshaled
 	// to/from json before/after being stored/retrieved.
 	usejson bool
+	// indicates that the column value should be marshaled/unmarshaled
+	// to/from xml before/after being stored/retrieved.
+	usexml bool
 	// if set to true it indicates that the column value should be wrapped
 	// in a COALESCE call when read from the db.
 	usecoalesce bool
@@ -1658,7 +1662,7 @@ type wherefield struct {
 	colid colid    //
 	cmp   cmpop    //
 	sop   scalarrop
-	mod   function //
+	mod   modfunc //
 }
 
 // wherecolumn is produced from a gosql.Column directive and its tag value.
@@ -1772,13 +1776,6 @@ const (
 	cmpissimilar  // IS SIMILAR TO
 	cmpnotsimilar // IS NOT SIMILAR TO
 
-	// NOTE(mkopriva): This value is used to figure out which comparison
-	// operators can be used with scalarrops (the above) and which operators
-	// cannot (those below). It is therefore IMPORTANT NOT TO MOVE operators
-	// from above to below or vice versa without first understanding the
-	// effect it will have on the correctness of the program's logic.
-	_cant_use_scalarrop
-
 	// array comparison operators
 	cmpisin  // IN
 	cmpnotin // NOT IN
@@ -1788,12 +1785,6 @@ const (
 	cmpnotbetween    // NOT BETWEEN x AND y
 	cmpisbetweensym  // BETWEEN SYMMETRIC x AND y
 	cmpnotbetweensym // NOT BETWEEN SYMMETRIC x AND y
-
-	// NOTE(mkopriva): This value is used to figure out which comparison
-	// operators are unary. It is therefore IMPORTANT NOT TO MOVE operators
-	// from above to below or vice versa without first understanding the
-	// effect it will have on the correctness of the program's logic.
-	_unary_ops_only
 
 	// unary comparison predicates
 	cmpisnull     // IS NULL
@@ -1805,6 +1796,48 @@ const (
 	cmpisunknown  // IS UNKNOWN
 	cmpnotunknown // IS NOT UNKNOWN
 )
+
+func (op cmpop) is(oo ...cmpop) bool {
+	for _, o := range oo {
+		if op == o {
+			return true
+		}
+	}
+	return false
+}
+
+// canusescalar returns true if op can be used together with a scalar array operator.
+func (op cmpop) canusescalar() bool {
+	return op.isbinary() || op.ispatmatch()
+}
+
+// isbinbasic returns true if op is a basic binary comparison operator/predicate.
+func (op cmpop) isbinary() bool {
+	return op.is(cmpeq, cmpne, cmpne2, cmplt, cmpgt, cmple, cmpge,
+		cmpisdistinct, cmpnotdistinct)
+}
+
+// ispatmatch returns true if op is a pattern matching comparison operator/predicate.
+func (op cmpop) ispatmatch() bool {
+	return op.is(cmprexp, cmprexpi, cmpnotrexp, cmpnotrexpi, cmpislike,
+		cmpnotlike, cmpisilike, cmpnotilike, cmpissimilar, cmpnotsimilar)
+}
+
+// isrange returns true if op is a range-specific comparison predicate.
+func (op cmpop) isrange() bool {
+	return op.is(cmpisbetween, cmpnotbetween, cmpisbetweensym, cmpnotbetweensym)
+}
+
+// isunary returns true if op is a "unary" comparison predicate.
+func (op cmpop) isunary() bool {
+	return op.is(cmpisnull, cmpnotnull, cmpistrue, cmpnottrue,
+		cmpisfalse, cmpnotfalse, cmpisunknown, cmpnotunknown)
+}
+
+// isarr returns true if op is a array comparison predicate.
+func (op cmpop) isarr() bool {
+	return op.is(cmpisin, cmpnotin)
+}
 
 var string2cmpop = map[string]cmpop{
 	"=":  cmpeq,
@@ -1899,15 +1932,15 @@ const (
 	overridinguser                         // OVERRIDING USER VALUE
 )
 
-type function uint
+type modfunc uint // modifier function
 
 const (
-	_       function = iota // no function
-	fnlower                 // lower
-	fnupper                 // upper
+	_       modfunc = iota // no modfunc
+	fnlower                // lower
+	fnupper                // upper
 )
 
-var string2function = map[string]function{
+var string2modfunc = map[string]modfunc{
 	"lower": fnlower,
 	"upper": fnupper,
 }

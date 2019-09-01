@@ -296,24 +296,63 @@ func (c *dbchecker) check() error {
 
 				switch node := loop.wb.items[loop.idx].node.(type) {
 				case *wherefield:
-					// In case of a wherefield check that the referenced column
-					// is present in one of the associated relations and that
-					// the field's type is compatible with that of the column.
-					//
-					// Also make sure that the comparison operator, the scalar
-					// array operator, and the modifier function can actually
-					// be used with the given column's type.
-					//
-					// Also check that if column is NULLable
-					// then also the file is NILable
+					// (1) Check that the referenced Column is present
+					// in one of the associated relations.
+					// (2) Check that the Field's type is compatible
+					// with that of the Column.
+					// (3) Make sure that if the Field's type is a pointer
+					// type then the Column does not have NOT NULL set.
+					// (4) Check that the scalar array operator can
+					// be used with the given Field's type.
+					// (5) Check that the modifier function can
+					// be used with the given Column's type.
+
 					col, err := c.column(node.colid)
 					if err != nil {
 						return err
 					}
-					if err := c.checktype(col, node.typ, typeopts{}); err != nil {
+					typ := node.typ
+
+					// If this is a scalar array comparison then check the column's
+					// type against the element type of the field's slice/array type.
+					if node.sop > 0 || node.cmp.isarr() {
+						if node.typ.kind != kindslice && node.typ.kind != kindarray {
+							return errors.IllegalFieldTypeForScalarOpError
+						}
+						typ = *node.typ.elem
+					}
+					if err := c.checktype(col, typ, typeopts{}); err != nil {
 						return err
 					}
+
+					if node.mod > 0 {
+						if err := c.checkmodfunc(col, node.mod); err != nil {
+							return err
+						}
+					}
 				case *wherecolumn:
+					// (1) Check that the referenced Columns are
+					// present in one of the associated relations.
+					// TODO
+					// (2) Check that the scalar array operator can
+					// be used with the given Column's type.
+					// (3) Make a rough attempt to determine the type
+					// of the literal and if successful check that the
+					// comparison can be applied to the Column's type.
+					// NOTE this should be done during analysis...
+					// - check if it contains a cast expression
+					// - check if its surrounded by single quotes
+					// - check if it contains only digits (possibly signed)
+					// - check if it contains only digits and a single floating point (possibly signed)
+					// - check if its one of the two bool values
+					if _, err := c.column(node.colid); err != nil {
+						return err
+					}
+					if len(node.colid2.name) > 0 {
+						if _, err := c.column(node.colid2); err != nil {
+							return err
+						}
+					}
 				case *wherebetween:
 				case *whereblock:
 					stack = append(stack, &loopstate{wb: node})
@@ -339,13 +378,22 @@ func (c *dbchecker) check() error {
 }
 
 type typeopts struct {
-	usejson bool
-	usexml  bool
+	usejson   bool
+	usexml    bool
+	nullempty bool
 }
 
 func (c *dbchecker) checktype(col *dbcolumn, typ typeinfo, opts typeopts) error {
-	var ok bool
+	if col.hasnotnull {
+		if typ.kind == kindptr {
+			return errors.IllegalPtrFieldForNotNullColumnError
+		}
+		if opts.nullempty {
+			return errors.IllegalNullemptyForNotNullColumnError
+		}
+	}
 
+	var ok bool
 	switch col.typ.name {
 	case pgtyp_bit, pgtyp_varbit:
 		// string, *string, []byte
@@ -590,7 +638,20 @@ func (c *dbchecker) checktype(col *dbcolumn, typ typeinfo, opts typeopts) error 
 	}
 
 	if !ok {
-		return nil // TODO
+		return errors.BadFieldToColumnTypeError
+	}
+	return nil
+}
+
+// check that the column's type matches that of the modfunc's argument.
+func (c *dbchecker) checkmodfunc(col *dbcolumn, fn modfunc) error {
+	var ok bool
+	switch fn {
+	case fnlower, fnupper:
+		ok = col.typ.name != pgtyp_text
+	}
+	if !ok {
+		return errors.BadColumnTypeToModFuncError
 	}
 	return nil
 }
