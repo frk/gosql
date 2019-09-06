@@ -278,6 +278,9 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 		name: "DeleteTestBAD_BadWhereFieldCmpopCombo",
 		err:  errors.BadCmpopComboError,
 	}, {
+		name: "DeleteTestBAD_IllegalWhereFieldUnaryCmp",
+		err:  errors.IllegalUnaryComparisonOperatorError,
+	}, {
 		name: "UpdateTestBAD_BadWhereFieldTypeForScalarrop",
 		err:  errors.BadScalarFieldTypeError,
 	}, {
@@ -1408,11 +1411,11 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 						colid: colid{name: "c1"},
 						tag:   tagutil.Tag{"sql": {"c1"}},
 					}, {
-						name: "f2", typ: typeinfo{kind: kinduint8},
+						name: "f2", typ: typeinfo{kind: kinduint8, isbyte: true},
 						colid: colid{name: "c2"},
 						tag:   tagutil.Tag{"sql": {"c2"}},
 					}, {
-						name: "f3", typ: typeinfo{kind: kindint32},
+						name: "f3", typ: typeinfo{kind: kindint32, isrune: true},
 						colid: colid{name: "c3"},
 						tag:   tagutil.Tag{"sql": {"c3"}},
 					}, {
@@ -1496,27 +1499,21 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 					fields: []*fieldinfo{{
 						name: "f1", typ: typeinfo{
 							kind: kindslice,
-							elem: &typeinfo{
-								kind: kindbool,
-							},
+							elem: &typeinfo{kind: kindbool},
 						},
 						colid: colid{name: "c1"},
 						tag:   tagutil.Tag{"sql": {"c1"}},
 					}, {
 						name: "f2", typ: typeinfo{
 							kind: kindslice,
-							elem: &typeinfo{
-								kind: kinduint8,
-							},
+							elem: &typeinfo{kind: kinduint8, isbyte: true},
 						},
 						colid: colid{name: "c2"},
 						tag:   tagutil.Tag{"sql": {"c2"}},
 					}, {
 						name: "f3", typ: typeinfo{
 							kind: kindslice,
-							elem: &typeinfo{
-								kind: kindint32,
-							},
+							elem: &typeinfo{kind: kindint32, isrune: true},
 						},
 						colid: colid{name: "c3"},
 						tag:   tagutil.Tag{"sql": {"c3"}},
@@ -1528,9 +1525,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 							pkgname:    "net",
 							pkglocal:   "net",
 							isimported: true,
-							elem: &typeinfo{
-								kind: kinduint8,
-							},
+							elem:       &typeinfo{kind: kinduint8, isbyte: true},
 						},
 						colid: colid{name: "c4"},
 						tag:   tagutil.Tag{"sql": {"c4"}},
@@ -1544,9 +1539,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 							isimported:      true,
 							isjsmarshaler:   true,
 							isjsunmarshaler: true,
-							elem: &typeinfo{
-								kind: kinduint8,
-							},
+							elem:            &typeinfo{kind: kinduint8, isbyte: true},
 						},
 						colid: colid{name: "c5"},
 						tag:   tagutil.Tag{"sql": {"c5"}},
@@ -1577,9 +1570,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 								isimported:      true,
 								isjsmarshaler:   true,
 								isjsunmarshaler: true,
-								elem: &typeinfo{
-									kind: kinduint8,
-								},
+								elem:            &typeinfo{kind: kinduint8, isbyte: true},
 							},
 						},
 						colid: colid{name: "c7"},
@@ -1589,9 +1580,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 							kind: kindslice,
 							elem: &typeinfo{
 								kind: kindslice,
-								elem: &typeinfo{
-									kind: kinduint8,
-								},
+								elem: &typeinfo{kind: kinduint8, isbyte: true},
 							},
 						},
 						colid: colid{name: "c8"},
@@ -1605,9 +1594,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 								elem: &typeinfo{
 									kind:     kindarray,
 									arraylen: 2,
-									elem: &typeinfo{
-										kind: kindfloat64,
-									},
+									elem:     &typeinfo{kind: kindfloat64},
 								},
 							},
 						},
@@ -1621,9 +1608,7 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 								elem: &typeinfo{
 									kind:     kindarray,
 									arraylen: 2,
-									elem: &typeinfo{
-										kind: kindfloat64,
-									},
+									elem:     &typeinfo{kind: kindfloat64},
 								},
 							},
 						},

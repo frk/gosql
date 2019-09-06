@@ -422,7 +422,15 @@ type DeleteTestBAD_BadWhereFieldColId struct {
 type DeleteTestBAD_BadWhereFieldCmpopCombo struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
-		Id int `sql:"a.id notnull any"`
+		Id int `sql:"a.id notin any"`
+	}
+}
+
+//BAD: Delete with illegal where field unary comparison
+type DeleteTestBAD_IllegalWhereFieldUnaryCmp struct {
+	Rel   T `rel:"relation_a:a"`
+	Where struct {
+		Id int `sql:"a.id istrue"`
 	}
 }
 

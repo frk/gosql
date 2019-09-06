@@ -444,6 +444,9 @@ func (a *analyzer) typeinfo(tt types.Type) (typ typeinfo, base types.Type) {
 
 	var elem typeinfo // element info
 	switch T := base.(type) {
+	case *types.Basic:
+		typ.isrune = T.Name() == "rune"
+		typ.isbyte = T.Name() == "byte"
 	case *types.Slice:
 		elem, base = a.typeinfo(T.Elem())
 		typ.elem = &elem
@@ -675,7 +678,10 @@ stackloop:
 						wn.lit = rhs // assume literal expression
 					}
 
-					if wn.sop > 0 && !wn.cmp.canusescalar() {
+					if wn.cmp.isunary() {
+						// TODO add test
+						return errors.IllegalUnaryComparisonOperatorError
+					} else if wn.sop > 0 && !wn.cmp.canusescalar() {
 						return errors.BadCmpopComboError
 					}
 
@@ -784,7 +790,10 @@ stackloop:
 			wf.sop = string2scalarrop[op2]
 			wf.mod = a.modfunc(tag["sql"][1:])
 
-			if wf.sop > 0 && !wf.cmp.canusescalar() {
+			if wf.cmp.isunary() {
+				// TODO add test
+				return errors.IllegalUnaryComparisonOperatorError
+			} else if wf.sop > 0 && !wf.cmp.canusescalar() {
 				return errors.BadCmpopComboError
 			} else if wf.sop > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
 				return errors.BadScalarFieldTypeError
@@ -876,15 +885,19 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 					cond.cmp = string2cmpop[op]
 					cond.sop = string2scalarrop[op2]
 
-					if len(rhs) == 0 {
+					if len(rhs) > 0 {
+						if cond.cmp.isunary() {
+							// TODO add test
+							return errors.IllegalUnaryComparisonOperatorError
+						} else if cond.sop > 0 && !cond.cmp.canusescalar() {
+							return errors.BadCmpopComboError
+						}
+					} else {
 						if !cond.cmp.isunary() {
 							return errors.BadUnaryCmpopError
 						} else if len(op2) > 0 {
 							return errors.ExtraScalarropError
 						}
-					}
-					if cond.sop > 0 && !cond.cmp.canusescalar() {
-						return errors.BadCmpopComboError
 					}
 
 					conds = append(conds, cond)
@@ -1492,20 +1505,21 @@ type datatype struct {
 }
 
 type typeinfo struct {
-	name       string   // the name of a named type or empty string for unnamed types
-	kind       typekind // the kind of the go type
-	pkgpath    string   // the package import path
-	pkgname    string   // the package's name
-	pkglocal   string   // the local package name (including ".")
-	isimported bool     // indicates whether or not the package is imported
-	isscanner  bool     // indicates whether or not the type implements the sql.Scanner interface
-	isvaluer   bool     // indicates whether or not the type implements the driver.Valuer interface
-	istime     bool     // indicates whether or not the type is time.Time or a type that embeds time.Time
-	// TODO
-	isjsmarshaler    bool
-	isjsunmarshaler  bool
-	isxmlmarshaler   bool
-	isxmlunmarshaler bool
+	name             string   // the name of a named type or empty string for unnamed types
+	kind             typekind // the kind of the go type
+	pkgpath          string   // the package import path
+	pkgname          string   // the package's name
+	pkglocal         string   // the local package name (including ".")
+	isimported       bool     // indicates whether or not the package is imported
+	isscanner        bool     // indicates whether or not the type implements the sql.Scanner interface
+	isvaluer         bool     // indicates whether or not the type implements the driver.Valuer interface
+	isjsmarshaler    bool     // indicates whether or not the type implements the json.Marshaler interface
+	isjsunmarshaler  bool     // indicates whether or not the type implements the json.Unmarshaler interface
+	isxmlmarshaler   bool     // indicates whether or not the type implements the xml.Marshaler interface
+	isxmlunmarshaler bool     // indicates whether or not the type implements the xml.Unmarshaler interface
+	istime           bool     // indicates whether or not the type is time.Time or a type that embeds time.Time
+	isbyte           bool     // indicates whether or not the type is the "byte" alias type
+	isrune           bool     // indicates whether or not the type is the "rune" alias type
 	// if kind is struct, fields will hold the info on the struct type's fields
 	fields []*fieldinfo
 	// if kind is map, key will hold the info on the map's key type
@@ -1666,22 +1680,22 @@ type wherefield struct {
 }
 
 // wherecolumn is produced from a gosql.Column directive and its tag value.
-// wherecolumn represents either a column with a comparison predicate,
+// wherecolumn represents either a column with a unary comparison predicate,
 // a column-to-column comparison, or a column-to-literal comparison.
 type wherecolumn struct {
 	// The target column of the wherecolumn item.
 	colid colid
-	// If set, it will hold the comparison operator to be used to compare
-	// the target column either using a predicate unary operator, or a binary
-	// operator comparing against the colid2 column or the lit value.
-	cmp cmpop
-	sop scalarrop
 	// If set, it will hold the id of the column that should be compared
 	// to the target column.
 	colid2 colid
 	// If set, it will hold the literal value that should be compared
 	// to the target column.
 	lit string
+	// If set, it will hold the comparison operator to be used to compare
+	// the target column either using a predicate unary operator, or a binary
+	// operator comparing against the colid2 column or the lit value.
+	cmp cmpop
+	sop scalarrop
 }
 
 type wherebetween struct {
@@ -1832,6 +1846,13 @@ func (op cmpop) isrange() bool {
 func (op cmpop) isunary() bool {
 	return op.is(cmpisnull, cmpnotnull, cmpistrue, cmpnottrue,
 		cmpisfalse, cmpnotfalse, cmpisunknown, cmpnotunknown)
+}
+
+// isbool returns true if op is one of the "unary" comparison predicates
+// that requires a boolean expression.
+func (op cmpop) isbool() bool {
+	return op.is(cmpistrue, cmpnottrue, cmpisfalse, cmpnotfalse,
+		cmpisunknown, cmpnotunknown)
 }
 
 // isarr returns true if op is a array comparison predicate.
