@@ -11,19 +11,19 @@ import (
 func Test_dbchecker_loadrelation(t *testing.T) {
 	tests := []struct {
 		relid relid
-		want  *dbrelation
+		want  *pgrelation
 		err   error
 	}{{
 		relid: relid{name: "relation_test", qual: "public"},
-		want:  &dbrelation{name: "relation_test", namespace: "public", relkind: "r"},
+		want:  &pgrelation{name: "relation_test", namespace: "public", relkind: "r"},
 		err:   nil,
 	}, {
 		relid: relid{name: "column_tests_1", qual: "public"},
-		want:  &dbrelation{name: "column_tests_1", namespace: "public", relkind: "r"},
+		want:  &pgrelation{name: "column_tests_1", namespace: "public", relkind: "r"},
 		err:   nil,
 	}, {
 		relid: relid{name: "view_test"},
-		want:  &dbrelation{name: "view_test", namespace: "public", relkind: "v"},
+		want:  &pgrelation{name: "view_test", namespace: "public", relkind: "v"},
 		err:   nil,
 	}, {
 		relid: relid{name: "no_relation", qual: "public"},
@@ -36,6 +36,7 @@ func Test_dbchecker_loadrelation(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.load()
@@ -69,15 +70,18 @@ func Test_dbchecker_loadrelation(t *testing.T) {
 func Test_dbchecker_loadcolumns(t *testing.T) {
 	tests := []struct {
 		relid relid
-		want  []*dbcolumn
+		want  []*pgcolumn
 		err   error
 	}{{
 		relid: relid{name: "relation_test", qual: "public"},
-		want: []*dbcolumn{{
+		want: []*pgcolumn{{
 			num: 1, name: "col_stub", typmod: 5,
-			typ: dbtype{
-				name:     pgtyp_bpchar,
-				size:     -1,
+			typoid: pgtyp_bpchar,
+			typ: &pgtype{
+				oid:      pgtyp_bpchar,
+				name:     "bpchar",
+				namefmt:  "character",
+				length:   -1,
 				typ:      pgtyptype_base,
 				category: pgtypcategory_string,
 			},
@@ -85,16 +89,19 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 		err: nil,
 	}, {
 		relid: relid{name: "column_tests_1"},
-		want: []*dbcolumn{{
+		want: []*pgcolumn{{
 			num:        1,
 			name:       "col_a",
 			typmod:     -1,
 			hasnotnull: true,
 			hasdefault: true,
 			isprimary:  true,
-			typ: dbtype{
-				name:     pgtyp_int4,
-				size:     4,
+			typoid:     pgtyp_int4,
+			typ: &pgtype{
+				oid:      pgtyp_int4,
+				name:     "int4",
+				namefmt:  "integer",
+				length:   4,
 				typ:      pgtyptype_base,
 				category: pgtypcategory_numeric,
 			},
@@ -103,9 +110,12 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 			name:       "col_b",
 			typmod:     -1,
 			hasnotnull: true,
-			typ: dbtype{
-				name:        pgtyp_text,
-				size:        -1,
+			typoid:     pgtyp_text,
+			typ: &pgtype{
+				oid:         pgtyp_text,
+				name:        "text",
+				namefmt:     "text",
+				length:      -1,
 				typ:         pgtyptype_base,
 				category:    pgtypcategory_string,
 				ispreferred: true,
@@ -114,9 +124,12 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 			num:    3,
 			name:   "col_c",
 			typmod: -1,
-			typ: dbtype{
-				name:        pgtyp_bool,
-				size:        1,
+			typoid: pgtyp_bool,
+			typ: &pgtype{
+				oid:         pgtyp_bool,
+				name:        "bool",
+				namefmt:     "boolean",
+				length:      1,
 				typ:         pgtyptype_base,
 				category:    pgtypcategory_boolean,
 				ispreferred: true,
@@ -126,9 +139,12 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 			name:       "col_d",
 			typmod:     -1,
 			hasdefault: true,
-			typ: dbtype{
-				name:        pgtyp_float8,
-				size:        8,
+			typoid:     pgtyp_float8,
+			typ: &pgtype{
+				oid:         pgtyp_float8,
+				name:        "float8",
+				namefmt:     "double precision",
+				length:      8,
 				typ:         pgtyptype_base,
 				category:    pgtypcategory_numeric,
 				ispreferred: true,
@@ -139,9 +155,12 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 			typmod:     -1,
 			hasnotnull: true,
 			hasdefault: true,
-			typ: dbtype{
-				name:     pgtyp_timestamp,
-				size:     8,
+			typoid:     pgtyp_timestamp,
+			typ: &pgtype{
+				oid:      pgtyp_timestamp,
+				name:     "timestamp",
+				namefmt:  "timestamp without time zone",
+				length:   8,
 				typ:      pgtyptype_base,
 				category: pgtypcategory_datetime,
 			},
@@ -152,6 +171,7 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.load()
@@ -171,11 +191,11 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 func Test_dbchecker_loadconstraints(t *testing.T) {
 	tests := []struct {
 		relid relid
-		want  []*dbconstraint
+		want  []*pgconstraint
 		err   error
 	}{{
 		relid: relid{name: "column_tests_1"},
-		want: []*dbconstraint{{
+		want: []*pgconstraint{{
 			name: "column_tests_1_pkey",
 			typ:  pgconstraint_pkey,
 			key:  []int64{1},
@@ -190,6 +210,7 @@ func Test_dbchecker_loadconstraints(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.load()
@@ -209,11 +230,11 @@ func Test_dbchecker_loadconstraints(t *testing.T) {
 func Test_dbchecker_loadindexes(t *testing.T) {
 	tests := []struct {
 		relid relid
-		want  []*dbindex
+		want  []*pgindex
 		err   error
 	}{{
 		relid: relid{name: "column_tests_1"},
-		want: []*dbindex{{
+		want: []*pgindex{{
 			name:        "column_tests_1_pkey",
 			natts:       1,
 			isunique:    true,
@@ -237,6 +258,7 @@ func Test_dbchecker_loadindexes(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.load()
@@ -292,6 +314,7 @@ func Test_dbchecker_check_textsearch(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
 		if err := dbc.load(); err != nil {
@@ -352,6 +375,7 @@ func Test_dbchecker_check_orderby(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
 		if err := dbc.load(); err != nil {
@@ -414,6 +438,7 @@ func Test_dbchecker_check_defaults(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
 		if err := dbc.load(); err != nil {
@@ -476,6 +501,7 @@ func Test_dbchecker_check_force(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
 		if err := dbc.load(); err != nil {
@@ -538,6 +564,7 @@ func Test_dbchecker_check_returning(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
 		if err := dbc.load(); err != nil {
@@ -676,6 +703,7 @@ func Test_dbchecker_check_onconflict(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(dbchecker)
 		dbc.db = testdb.db
+		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
 		if err := dbc.load(); err != nil {

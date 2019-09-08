@@ -94,4 +94,9 @@ const (
 	BadColumnTypeForScalarrOpError             errnum = 76
 	BadExpressionTypeForScalarrOpError         errnum = 77
 	BadLiteralExpressionError                  errnum = 78
+	UnknownPostgresTypeError                   errnum = 79
+	BadColumnTypeForUnaryOpError               errnum = 80
+	BadColumnNULLSettingForNULLOpError         errnum = 81
+	BadColumnToLiteralComparisonError          errnum = 82
+	BadColumnToColumnTypeComparisonError       errnum = 83
 )

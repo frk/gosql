@@ -33,6 +33,7 @@ type testdbtype struct {
 	db     *sql.DB
 	dbname string
 	dburl  string
+	pgcat  *pgcatalogue
 }
 
 func (t *testdbtype) init() (err error) {
@@ -57,6 +58,11 @@ func (t *testdbtype) init() (err error) {
 	if t.db, err = sql.Open("postgres", t.dburl); err != nil {
 		return err
 	} else if err = t.db.Ping(); err != nil {
+		return err
+	}
+
+	t.pgcat = new(pgcatalogue)
+	if err := t.pgcat.load(t.db, t.dburl); err != nil {
 		return err
 	}
 
@@ -127,6 +133,7 @@ FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
 	if _, err = t.db.Exec(populatedbquery); err != nil {
 		return err
 	}
+
 	return nil
 }
 

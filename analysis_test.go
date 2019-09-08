@@ -21,7 +21,7 @@ func runAnalysis(name string, t *testing.T) (*command, error) {
 	return analyze(named)
 }
 
-func TestAnalysis_InsertCommand(t *testing.T) {
+func TestAnalysis(t *testing.T) {
 
 	// for reuse, analyzed common.User typeinfo
 	commonUserTypeinfo := typeinfo{
@@ -1730,5 +1730,101 @@ func TestAnalysis_InsertCommand(t *testing.T) {
 				t.Error(e)
 			}
 		})
+	}
+}
+
+func TestTypeinfo_string(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+	}{
+		{"f01", gotypbool},
+		{"f02", gotypboolp},
+		{"f03", gotypbools},
+		{"f04", gotypstring},
+		{"f05", gotypstringp},
+		{"f06", gotypstrings},
+		{"f07", gotypstringss},
+		{"f08", gotypstringm},
+		{"f09", gotypstringpm},
+		{"f10", gotypstringms},
+		{"f11", gotypstringpms},
+		{"f12", gotypbyte},
+		{"f13", gotypbytep},
+		{"f14", gotypbytes},
+		{"f15", gotypbytess},
+		{"f16", gotypbytea16},
+		{"f17", gotypbytea16s},
+		{"f18", gotyprune},
+		{"f19", gotyprunep},
+		{"f20", gotyprunes},
+		{"f21", gotypruness},
+		{"f22", gotypint8},
+		{"f23", gotypint8p},
+		{"f24", gotypint8s},
+		{"f25", gotypint8ss},
+		{"f26", gotypint16},
+		{"f27", gotypint16p},
+		{"f28", gotypint16s},
+		{"f29", gotypint16ss},
+		{"f30", gotypint32},
+		{"f31", gotypint32p},
+		{"f32", gotypint32s},
+		{"f33", gotypint32a2},
+		{"f34", gotypint32a2s},
+		{"f35", gotypint64},
+		{"f36", gotypint64p},
+		{"f37", gotypint64s},
+		{"f38", gotypint64a2},
+		{"f39", gotypint64a2s},
+		{"f40", gotypfloat32},
+		{"f41", gotypfloat32p},
+		{"f42", gotypfloat32s},
+		{"f43", gotypfloat64},
+		{"f44", gotypfloat64p},
+		{"f45", gotypfloat64s},
+		{"f46", gotypfloat64a2},
+		{"f47", gotypfloat64a2s},
+		{"f48", gotypfloat64a2ss},
+		{"f49", gotypfloat64a2a2},
+		{"f50", gotypfloat64a2a2s},
+		{"f51", gotypfloat64a3},
+		{"f52", gotypfloat64a3s},
+		{"f53", gotypipnetp},
+		{"f54", gotypipnetps},
+		{"f55", gotyptime},
+		{"f56", gotyptimep},
+		{"f57", gotyptimes},
+		{"f58", gotyptimeps},
+		{"f59", gotyptimea2},
+		{"f60", gotyptimea2s},
+		{"f61", gotypbytes},
+		{"f62", gotypbytess},
+		{"f63", gotypbigint},
+		{"f64", gotypbigintp},
+		{"f65", gotypbigints},
+		{"f66", gotypbigintps},
+		{"f67", gotypbiginta2},
+		{"f68", gotypbigintpa2},
+		{"f69", gotypbigintpa2s},
+		{"f70", gotypnullstringm},
+		{"f71", gotypnullstringms},
+		{"f72", gotypbytes},
+		{"f73", gotypbytess},
+	}
+
+	cmd, err := runAnalysis("SelectTestOK_typeinfo_string", t)
+	if err != nil {
+		t.Error(err)
+	}
+	fields := cmd.rel.datatype.base.fields
+	for i := 0; i < len(fields); i++ {
+		ff := fields[i]
+		tt := tests[i]
+
+		got := ff.typ.string()
+		if ff.name != tt.name || got != tt.want {
+			t.Errorf("got %s::%s, want %s::%s", ff.name, got, tt.name, tt.want)
+		}
 	}
 }

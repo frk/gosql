@@ -694,17 +694,17 @@ stackloop:
 				if err != nil {
 					return err
 				}
-
-				wn := new(wherecolumn)
-				wn.colid = colid
-				wn.cmp = string2cmpop[op]
-
-				if !wn.cmp.isunary() {
+				cmp := string2cmpop[op]
+				if !cmp.isunary() {
 					return errors.BadUnaryCmpopError
-				} else if len(op2) > 0 {
+				}
+				if len(op2) > 0 {
 					return errors.ExtraScalarropError
 				}
 
+				wn := new(wherecolumn)
+				wn.colid = colid
+				wn.cmp = cmp
 				item.node = wn
 				continue
 			}
@@ -717,6 +717,10 @@ stackloop:
 			// fields is marked with an "x" or a "y" in their `sql`
 			// tag to indicate their position in the clause.
 			if strings.Contains(op, "between") {
+				if len(op2) > 0 {
+					// TODO test
+					return errors.ExtraScalarropError
+				}
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
 					return errors.BadBetweenTypeError
@@ -782,25 +786,30 @@ stackloop:
 				return err
 			}
 
+			cmp := string2cmpop[op]
+			if cmp.isunary() {
+				// TODO add test
+				return errors.IllegalUnaryComparisonOperatorError
+			}
+
+			sop := string2scalarrop[op2]
+			if sop > 0 && !cmp.canusescalar() {
+				return errors.BadCmpopComboError
+			}
+
 			wf := new(wherefield)
 			wf.name = fld.Name()
 			wf.colid = colid
 			wf.typ, _ = a.typeinfo(fld.Type())
-			wf.cmp = string2cmpop[op]
-			wf.sop = string2scalarrop[op2]
+			wf.cmp = cmp
+			wf.sop = sop
 			wf.mod = a.modfunc(tag["sql"][1:])
 
-			if wf.cmp.isunary() {
-				// TODO add test
-				return errors.IllegalUnaryComparisonOperatorError
-			} else if wf.sop > 0 && !wf.cmp.canusescalar() {
-				return errors.BadCmpopComboError
-			} else if wf.sop > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
+			if wf.sop > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
 				return errors.BadScalarFieldTypeError
 			}
 
 			item.node = wf
-
 		}
 		stack = stack[:len(stack)-1]
 	}
@@ -1532,6 +1541,51 @@ type typeinfo struct {
 	arraylen int64
 }
 
+func (t *typeinfo) string() string {
+	if t.istime {
+		return "time.Time"
+	}
+
+	switch t.kind {
+	case kindarray:
+		return "[" + strconv.FormatInt(t.arraylen, 10) + "]" + t.elem.string()
+	case kindslice:
+		return "[]" + t.elem.string()
+	case kindmap:
+		return "map[" + t.key.string() + "]" + t.elem.string()
+	case kindptr:
+		return "*" + t.elem.string()
+	case kinduint8:
+		if t.isbyte {
+			return "byte"
+		}
+		return "uint8"
+	case kindint32:
+		if t.isrune {
+			return "rune"
+		}
+		return "int32"
+	case kindstruct:
+		if len(t.name) > 0 {
+			return t.pkgname + "." + t.name
+		}
+		return "struct{}"
+	case kindinterface:
+		if len(t.name) > 0 {
+			return t.pkgname + "." + t.name
+		}
+		return "interface{}"
+	case kindchan:
+		return "chan"
+	case kindfunc:
+		return "func()"
+	default:
+		// assume builtin basic
+		return typekind2string[t.kind]
+	}
+	return "<unknown>"
+}
+
 // is returns true if t represents a type one of the given kinds or a pointer
 // to one of the given kinds.
 func (t *typeinfo) is(kk ...typekind) bool {
@@ -2081,3 +2135,75 @@ var typekind2string = map[typekind]string{
 	kindslice:     "<slice>",
 	kindstruct:    "<struct>",
 }
+
+const (
+	gotypbool         = "bool"
+	gotypboolp        = "*bool"
+	gotypbools        = "[]bool"
+	gotypstring       = "string"
+	gotypstringp      = "*string"
+	gotypstrings      = "[]string"
+	gotypstringss     = "[][]string"
+	gotypstringm      = "map[string]string"
+	gotypstringpm     = "map[string]*string"
+	gotypstringms     = "[]map[string]string"
+	gotypstringpms    = "[]map[string]*string"
+	gotypbyte         = "byte"
+	gotypbytep        = "*byte"
+	gotypbytes        = "[]byte"
+	gotypbytess       = "[][]byte"
+	gotypbytea16      = "[16]byte"
+	gotypbytea16s     = "[][16]byte"
+	gotyprune         = "rune"
+	gotyprunep        = "*rune"
+	gotyprunes        = "[]rune"
+	gotypruness       = "[][]rune"
+	gotypint8         = "int8"
+	gotypint8p        = "*int8"
+	gotypint8s        = "[]int8"
+	gotypint8ss       = "[][]int8"
+	gotypint16        = "int16"
+	gotypint16p       = "*int16"
+	gotypint16s       = "[]int16"
+	gotypint16ss      = "[][]int16"
+	gotypint32        = "int32"
+	gotypint32p       = "*int32"
+	gotypint32s       = "[]int32"
+	gotypint32a2      = "[2]int32"
+	gotypint32a2s     = "[][2]int32"
+	gotypint64        = "int64"
+	gotypint64p       = "*int64"
+	gotypint64s       = "[]int64"
+	gotypint64a2      = "[2]int64"
+	gotypint64a2s     = "[][2]int64"
+	gotypfloat32      = "float32"
+	gotypfloat32p     = "*float32"
+	gotypfloat32s     = "[]float32"
+	gotypfloat64      = "float64"
+	gotypfloat64p     = "*float64"
+	gotypfloat64s     = "[]float64"
+	gotypfloat64a2    = "[2]float64"
+	gotypfloat64a2s   = "[][2]float64"
+	gotypfloat64a2ss  = "[][][2]float64"
+	gotypfloat64a2a2  = "[2][2]float64"
+	gotypfloat64a2a2s = "[][2][2]float64"
+	gotypfloat64a3    = "[3]float64"
+	gotypfloat64a3s   = "[][3]float64"
+	gotypipnetp       = "*net.IPNet"
+	gotypipnetps      = "[]*net.IPNet"
+	gotyptime         = "time.Time"
+	gotyptimep        = "*time.Time"
+	gotyptimes        = "[]time.Time"
+	gotyptimeps       = "[]*time.Time"
+	gotyptimea2       = "[2]time.Time"
+	gotyptimea2s      = "[][2]time.Time"
+	gotypbigint       = "big.Int"
+	gotypbigintp      = "*big.Int"
+	gotypbigints      = "[]big.Int"
+	gotypbigintps     = "[]*big.Int"
+	gotypbiginta2     = "[2]big.Int"
+	gotypbigintpa2    = "[2]*big.Int"
+	gotypbigintpa2s   = "[][2]*big.Int"
+	gotypnullstringm  = "map[string]sql.NullString"
+	gotypnullstringms = "[]map[string]sql.NullString"
+)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"math/big"
 	"net"
+	"time"
 
 	"github.com/frk/gosql"
 	"github.com/frk/gosql/testdata/common"
@@ -498,5 +499,84 @@ type SelectTestOK_FieldTypesInterfaces struct {
 			json.Marshaler
 			json.Unmarshaler
 		} `sql:"c3"`
+	} `rel:"relation_a:a"`
+}
+
+//OK: test typeinfo.string()
+type SelectTestOK_typeinfo_string struct {
+	Rel struct {
+		f01 bool                        `sql:"c01"`
+		f02 *bool                       `sql:"c02"`
+		f03 []bool                      `sql:"c03"`
+		f04 string                      `sql:"c04"`
+		f05 *string                     `sql:"c05"`
+		f06 []string                    `sql:"c06"`
+		f07 [][]string                  `sql:"c07"`
+		f08 map[string]string           `sql:"c08"`
+		f09 map[string]*string          `sql:"c09"`
+		f10 []map[string]string         `sql:"c10"`
+		f11 []map[string]*string        `sql:"c11"`
+		f12 byte                        `sql:"c12"`
+		f13 *byte                       `sql:"c13"`
+		f14 []byte                      `sql:"c14"`
+		f15 [][]byte                    `sql:"c15"`
+		f16 [16]byte                    `sql:"c16"`
+		f17 [][16]byte                  `sql:"c17"`
+		f18 rune                        `sql:"c18"`
+		f19 *rune                       `sql:"c19"`
+		f20 []rune                      `sql:"c20"`
+		f21 [][]rune                    `sql:"c21"`
+		f22 int8                        `sql:"c22"`
+		f23 *int8                       `sql:"c23"`
+		f24 []int8                      `sql:"c24"`
+		f25 [][]int8                    `sql:"c25"`
+		f26 int16                       `sql:"c26"`
+		f27 *int16                      `sql:"c27"`
+		f28 []int16                     `sql:"c28"`
+		f29 [][]int16                   `sql:"c29"`
+		f30 int32                       `sql:"c30"`
+		f31 *int32                      `sql:"c31"`
+		f32 []int32                     `sql:"c32"`
+		f33 [2]int32                    `sql:"c33"`
+		f34 [][2]int32                  `sql:"c34"`
+		f35 int64                       `sql:"c35"`
+		f36 *int64                      `sql:"c36"`
+		f37 []int64                     `sql:"c37"`
+		f38 [2]int64                    `sql:"c38"`
+		f39 [][2]int64                  `sql:"c39"`
+		f40 float32                     `sql:"c40"`
+		f41 *float32                    `sql:"c41"`
+		f42 []float32                   `sql:"c42"`
+		f43 float64                     `sql:"c43"`
+		f44 *float64                    `sql:"c44"`
+		f45 []float64                   `sql:"c45"`
+		f46 [2]float64                  `sql:"c46"`
+		f47 [][2]float64                `sql:"c47"`
+		f48 [][][2]float64              `sql:"c48"`
+		f49 [2][2]float64               `sql:"c49"`
+		f50 [][2][2]float64             `sql:"c50"`
+		f51 [3]float64                  `sql:"c51"`
+		f52 [][3]float64                `sql:"c52"`
+		f53 *net.IPNet                  `sql:"c53"`
+		f54 []*net.IPNet                `sql:"c54"`
+		f55 time.Time                   `sql:"c55"`
+		f56 *time.Time                  `sql:"c56"`
+		f57 []time.Time                 `sql:"c57"`
+		f58 []*time.Time                `sql:"c58"`
+		f59 [2]time.Time                `sql:"c59"`
+		f60 [][2]time.Time              `sql:"c60"`
+		f61 net.HardwareAddr            `sql:"c61"`
+		f62 []net.HardwareAddr          `sql:"c62"`
+		f63 big.Int                     `sql:"c63"`
+		f64 *big.Int                    `sql:"c64"`
+		f65 []big.Int                   `sql:"c65"`
+		f66 []*big.Int                  `sql:"c66"`
+		f67 [2]big.Int                  `sql:"c67"`
+		f68 [2]*big.Int                 `sql:"c68"`
+		f69 [][2]*big.Int               `sql:"c69"`
+		f70 map[string]sql.NullString   `sql:"c70"`
+		f71 []map[string]sql.NullString `sql:"c71"`
+		f72 json.RawMessage             `sql:"c72"`
+		f73 []json.RawMessage           `sql:"c73"`
 	} `rel:"relation_a:a"`
 }

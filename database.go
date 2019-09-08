@@ -3,13 +3,16 @@
 //   to retrieve the index's definition, parse that to extract the index expression and then
 //   use that expression when generating the ON CONFLICT clause.
 //   (https://www.postgresql.org/message-id/204ADCAA-853B-4B5A-A080-4DFA0470B790%40justatheory.com)
+// TODO the postgres types circle(arr) and interval(arr) need a corresponding go type
 
 package gosql
 
 import (
 	"database/sql"
+	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/frk/gosql/internal/errors"
 	"github.com/lib/pq"
@@ -33,14 +36,8 @@ const (
 		, a.attnotnull
 		, a.atthasdef
 		, COALESCE(i.indisprimary, false)
-		, t.typname
-		, t.typlen
-		, t.typtype
-		, t.typcategory
-		, t.typispreferred
-		, t.typelem
+		, a.atttypid
 	FROM pg_attribute a
-	LEFT JOIN pg_type t ON t.oid = a.atttypid
 	LEFT JOIN pg_index i ON (
 		i.indisprimary
 		AND i.indrelid = a.attrelid
@@ -72,11 +69,44 @@ const (
 		, i.indimmediate
 		, i.indisready
 		, i.indkey
-		, pg_get_indexdef(i.indexrelid)
+		, pg_catalog.pg_get_indexdef(i.indexrelid)
 	FROM pg_index i
 	LEFT JOIN pg_class c ON c.oid = i.indexrelid
 	WHERE i.indrelid = $1
 	ORDER BY i.indexrelid`  //`
+
+	selecttypes = `SELECT
+		t.oid
+		, t.typname
+		, pg_catalog.format_type(t.oid, NULL)
+		, t.typlen
+		, t.typtype
+		, t.typcategory
+		, t.typispreferred
+		, t.typelem
+	FROM pg_type t
+	WHERE t.typrelid = 0
+	AND pg_catalog.pg_type_is_visible(t.oid)
+	AND t.typcategory <> 'P'`  //`
+
+	selectoperators = `SELECT
+		o.oid
+		, o.oprname
+		, o.oprkind
+		, o.oprleft
+		, o.oprright
+		, o.oprresult
+	FROM pg_operator o `  //`
+
+	selectcasts = `SELECT
+		c.oid
+		, c.castsource
+		, c.casttarget
+		, c.castcontext
+	FROM pg_cast c `  //`
+
+	selectexprtype = `SELECT pg_typeof(%s)` //`
+
 )
 
 func dbcheck(url string, cmds []*command) error {
@@ -88,8 +118,14 @@ func dbcheck(url string, cmds []*command) error {
 	}
 	defer db.Close()
 
-	var dbname string // the name of the current database
+	// the name of the current database
+	var dbname string
 	if err := db.QueryRow(selectdbname).Scan(&dbname); err != nil {
+		return err
+	}
+
+	pgcat := new(pgcatalogue)
+	if err := pgcat.load(db, url); err != nil {
 		return err
 	}
 
@@ -98,6 +134,7 @@ func dbcheck(url string, cmds []*command) error {
 		c.db = db
 		c.dbname = dbname
 		c.cmd = cmd
+		c.pgcat = pgcat
 		if err := c.load(); err != nil {
 			return err
 		}
@@ -113,14 +150,15 @@ type dbchecker struct {
 	db       *sql.DB
 	dbname   string // name of the current database, used mainly for error reporting
 	cmd      *command
-	rel      *dbrelation   // the target relation
-	joinlist []*dbrelation // joined relations
+	rel      *pgrelation   // the target relation
+	joinlist []*pgrelation // joined relations
+	relmap   map[string]*pgrelation
 
-	relmap map[string]*dbrelation
+	pgcat *pgcatalogue
 }
 
 func (c *dbchecker) load() (err error) {
-	c.relmap = make(map[string]*dbrelation)
+	c.relmap = make(map[string]*pgrelation)
 	if c.rel, err = c.loadrelation(c.cmd.rel.relid); err != nil {
 		return err
 	}
@@ -197,7 +235,7 @@ func (c *dbchecker) check() error {
 		col, err := c.column(*c.cmd.textsearch)
 		if err != nil {
 			return err
-		} else if col.typ.name != pgtyp_tsvector {
+		} else if col.typ.oid != pgtyp_tsvector {
 			return errors.BadDBColumnTypeError
 		}
 	}
@@ -296,64 +334,128 @@ func (c *dbchecker) check() error {
 
 				switch node := loop.wb.items[loop.idx].node.(type) {
 				case *wherefield:
-					// (1) Check that the referenced Column is present
+					// Check that the referenced Column is present
 					// in one of the associated relations.
-					// (2) Check that the Field's type is compatible
-					// with that of the Column.
-					// (3) Make sure that if the Field's type is a pointer
-					// type then the Column does not have NOT NULL set.
-					// (4) Check that the scalar array operator can
-					// be used with the given Field's type.
-					// (5) Check that the modifier function can
-					// be used with the given Column's type.
-
 					col, err := c.column(node.colid)
 					if err != nil {
 						return err
 					}
-					typ := node.typ
 
-					// If this is a scalar array comparison then check the column's
-					// type against the element type of the field's slice/array type.
+					// If the column cannot be set to NULL, then make
+					// sure that the field's not a pointer.
+					if col.hasnotnull {
+						if node.typ.kind == kindptr {
+							return errors.IllegalPtrFieldForNotNullColumnError
+						}
+					}
+
+					// list of types to which the field type can potentially be converted
+					var fieldoids = c.pgtypeoids(node.typ)
+
+					// If this is a scalar array comparison then check that
+					// the field is a slice or array, and also make sure that
+					// the column's type can be compared to the element type
+					// of the slice / array.
 					if node.sop > 0 || node.cmp.isarr() {
 						if node.typ.kind != kindslice && node.typ.kind != kindarray {
 							return errors.IllegalFieldTypeForScalarOpError
 						}
-						typ = *node.typ.elem
-					}
-					if err := c.checktype(col, typ, typeopts{}); err != nil {
-						return err
+						fieldoids = c.pgtypeoids(*node.typ.elem)
 					}
 
+					// Check that the Field's type can be compared to that of the Column.
+					if !c.cancompare(col, fieldoids, node.cmp) {
+						return errors.BadFieldToColumnTypeError
+					}
+
+					// Check that the modifier function can
+					// be used with the given Column's type.
 					if node.mod > 0 {
 						if err := c.checkmodfunc(col, node.mod); err != nil {
 							return err
 						}
 					}
 				case *wherecolumn:
-					// (1) Check that the referenced Columns are
-					// present in one of the associated relations.
-					// TODO
-					// (2) Check that the scalar array operator can
-					// be used with the given Column's type.
-					// (3) Make a rough attempt to determine the type
-					// of the literal and if successful check that the
-					// comparison can be applied to the Column's type.
-					// NOTE this should be done during analysis...
-					// - check if it contains a cast expression
-					// - check if its surrounded by single quotes
-					// - check if it contains only digits (possibly signed)
-					// - check if it contains only digits and a single floating point (possibly signed)
-					// - check if its one of the two bool values
-					if _, err := c.column(node.colid); err != nil {
+					// Check that the referenced Column is present
+					// in one of the associated relations.
+					col, err := c.column(node.colid)
+					if err != nil {
 						return err
 					}
-					if len(node.colid2.name) > 0 {
-						if _, err := c.column(node.colid2); err != nil {
-							return err
+
+					if node.cmp.isunary() {
+						// Column type must be bool if the comparison operator
+						// is one of the IS [NOT] {FALSE|TRUE|UNKNOWN} operators.
+						if node.cmp.isbool() && col.typ.oid != pgtyp_bool {
+							return errors.BadColumnTypeForUnaryOpError
+						}
+						// Column must be NULLable if the comparison operator
+						// is one of the IS [NOT] NULL operators.
+						if col.hasnotnull && (node.cmp == cmpisnull || node.cmp == cmpnotnull) {
+							return errors.BadColumnNULLSettingForNULLOpError
+						}
+					} else {
+						var typ *pgtype
+
+						// Get the type of the right hand side, which is
+						// either a column or a literal expression.
+						if len(node.colid2.name) > 0 {
+							col2, err := c.column(node.colid2)
+							if err != nil {
+								return err
+							}
+							typ = col2.typ
+						} else if len(node.lit) > 0 {
+							var oid pgoid
+							row := c.db.QueryRow(fmt.Sprintf(selectexprtype, node.lit))
+							if err := row.Scan(&oid); err != nil {
+								return err
+							}
+							typ = c.pgcat.types[oid]
+						} else {
+							// bail?
+						}
+
+						if node.cmp.isarr() || node.sop > 0 {
+							// Check that the scalar array operator can
+							// be used with the type of the RHS expression.
+							if typ.category != pgtypcategory_array {
+								return errors.BadExpressionTypeForScalarrOpError
+							}
+							typ = c.pgcat.types[typ.elem]
+						}
+
+						rhsoids := []pgoid{typ.oid}
+						if !c.cancompare(col, rhsoids, node.cmp) {
+							return errors.BadColumnToLiteralComparisonError
 						}
 					}
 				case *wherebetween:
+					// Check that the referenced Column is present
+					// in one of the associated relations.
+					col, err := c.column(node.colid)
+					if err != nil {
+						return err
+					}
+
+					// Check that both arguments, x and y, can be compared to the column.
+					for _, arg := range []interface{}{node.x, node.y} {
+						var argoids []pgoid
+						switch a := arg.(type) {
+						case colid:
+							col2, err := c.column(a)
+							if err != nil {
+								return err
+							}
+							argoids = []pgoid{col2.typ.oid}
+						case *varinfo:
+							argoids = c.pgtypeoids(a.typ)
+						}
+
+						if !c.cancompare(col, argoids, cmpgt) {
+							return errors.BadColumnToColumnTypeComparisonError
+						}
+					}
 				case *whereblock:
 					stack = append(stack, &loopstate{wb: node})
 					continue stackloop
@@ -377,278 +479,31 @@ func (c *dbchecker) check() error {
 	return nil
 }
 
+func (c *dbchecker) pgtypeoids(typ typeinfo) []pgoid {
+	return gotyp2pgtyp[typ.string()]
+}
+
+func (c *dbchecker) cancompare(col *pgcolumn, types []pgoid, cmp cmpop) bool {
+	// TODO
+	return false
+}
+
+func (c *dbchecker) canassign(col *pgcolumn, typ typeinfo, opts typeopts) error {
+	return nil
+}
+
 type typeopts struct {
 	usejson   bool
 	usexml    bool
 	nullempty bool
 }
 
-func (c *dbchecker) checktype(col *dbcolumn, typ typeinfo, opts typeopts) error {
-	if col.hasnotnull {
-		if typ.kind == kindptr {
-			return errors.IllegalPtrFieldForNotNullColumnError
-		}
-		if opts.nullempty {
-			return errors.IllegalNullemptyForNotNullColumnError
-		}
-	}
-
-	var ok bool
-	switch col.typ.name {
-	case pgtyp_bit, pgtyp_varbit:
-		// string, *string, []byte
-		// or byte or *byte if bit(1)
-		if col.typmod == 1 {
-			ok = typ.is(kindbyte)
-		}
-		if !ok {
-			ok = typ.is(kindstring) || typ.isslice(kindbyte)
-		}
-	case pgtyp_bitarr, pgtyp_varbitarr:
-		// []string, [][]byte
-		// or []byte if bit(1)
-		if col.typmod == 1 {
-			ok = typ.isslice(kindbyte)
-		}
-		if !ok {
-			ok = typ.isslice(kindstring) || typ.isslicen(2, kindbyte)
-		}
-	case pgtyp_bool:
-		// bool, *bool
-		ok = typ.is(kindbool)
-	case pgtyp_boolarr:
-		// []bool
-		ok = typ.isslice(kindbool)
-	case pgtyp_box:
-		// [2][2]float64
-		ok = typ.kind == kindarray && typ.arraylen == 2 &&
-			typ.elem.kind == kindarray && typ.elem.arraylen == 2 &&
-			typ.elem.elem.kind == kindfloat64
-	case pgtyp_boxarr:
-		// [][2][2]float64
-		if t := typ.elem; typ.kind == kindslice {
-			ok = t.kind == kindarray && t.arraylen == 2 &&
-				t.elem.kind == kindarray && t.elem.arraylen == 2 &&
-				t.elem.elem.kind == kindfloat64
-		}
-	case pgtyp_bpchar, pgtyp_char, pgtyp_varchar:
-		// []byte, []rune, string, *string
-		// or byte, *byte, rune, *rune if char(1)
-		if (col.typmod - 4) == 1 {
-			ok = typ.is(kindbyte, kindrune)
-		}
-		if !ok {
-			ok = typ.is(kindstring) || typ.isslice(kindbyte, kindrune)
-		}
-	case pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr:
-		// [][]byte, [][]rune, []string
-		// or []byte or []rune if char(1)
-		if (col.typmod - 4) == 1 {
-			ok = typ.isslice(kindbyte, kindrune)
-		}
-		if !ok {
-			ok = typ.isslice(kindstring) || typ.isslicen(2, kindbyte, kindrune)
-		}
-	case pgtyp_bytea:
-		// []byte
-		ok = typ.isslice(kindbyte)
-	case pgtyp_byteaarr:
-		// [][]byte
-		ok = typ.isslicen(2, kindbyte)
-	case pgtyp_cidr, pgtyp_inet:
-		// *net.IPNet, string, *string
-		ok = typ.is(kindstring) || typ.isnamed("net", "IPNet")
-	case pgtyp_cidrarr, pgtyp_inetarr:
-		// []*net.IPNet, []string
-		ok = typ.isslice(kindstring) || (typ.kind == kindslice && typ.elem.isnamed("net", "IPNet"))
-	case pgtyp_circle:
-		// TODO(mkopriva): needs a custom type
-		// - struct{ centerpoint [2]float64, radius float64 }
-		return errors.UnsupportedColumnTypeError
-	case pgtyp_circlearr:
-		// TODO(mkopriva): needs a custom type
-		// - []struct{ centerpoint [2]float64, radius float64 }
-		return errors.UnsupportedColumnTypeError
-	case pgtyp_date, pgtyp_time, pgtyp_timestamp, pgtyp_timestamptz, pgtyp_timetz:
-		// time.Time, *time.Time
-		ok = typ.istime || (typ.kind == kindptr && typ.elem.istime)
-	case pgtyp_datearr, pgtyp_timearr, pgtyp_timestamparr, pgtyp_timestamptzarr, pgtyp_timetzarr:
-		// []time.Time, []*time.Time
-		ok = typ.kind == kindslice && (typ.elem.istime ||
-			(typ.kind == kindptr && typ.elem.istime))
-	case pgtyp_daterange, pgtyp_tsrange, pgtyp_tstzrange:
-		// [2]time.Time (bound types expressed in tags?)
-		ok = typ.kind == kindarray && typ.arraylen == 2 && typ.elem.istime
-	case pgtyp_daterangearr, pgtyp_tsrangearr, pgtyp_tstzrangearr:
-		// [][2]time.Time (bound types expressed in tags?)
-		ok = typ.kind == kindslice && typ.elem.kind == kindarray &&
-			typ.elem.arraylen == 2 && typ.elem.elem.istime
-	case pgtyp_float4:
-		// float32, *float32
-		ok = typ.is(kindfloat32)
-	case pgtyp_float4arr:
-		// []float32
-		ok = typ.isslice(kindfloat32)
-	case pgtyp_float8:
-		// float64, *float64
-		ok = typ.is(kindfloat64)
-	case pgtyp_float8arr:
-		// []float64
-		ok = typ.isslice(kindfloat64)
-	case pgtyp_hstore:
-		// map[string]sql.NullString, map[string]*string, map[string]string
-		ok = typ.kind == kindmap && typ.key.kind == kindstring &&
-			(typ.elem.is(kindstring) || typ.elem.isnamed("database/sql", "NullString"))
-	case pgtyp_hstorearr:
-		// []map[string]sql.NullString, []map[string]*string, []map[string]string
-		ok = typ.kind == kindslice && typ.elem.kind == kindmap && typ.elem.key.kind == kindstring &&
-			(typ.elem.elem.is(kindstring) || typ.elem.elem.isnamed("database/sql", "NullString"))
-	case pgtyp_int2:
-		// int16, int8, uint16, uint8, *int16, *int8, *uint16, *uint8
-		ok = typ.is(kindint8, kindint16, kinduint16, kinduint8)
-	case pgtyp_int2arr, pgtyp_int2vector:
-		// []int16, []int8, []uint16, []uint8
-		ok = typ.isslice(kindint8, kindint16, kinduint16, kinduint8)
-	case pgtyp_int2vectorarr:
-		// [][]int16, [][]int8, [][]uint16, [][]uint8
-		ok = typ.isslicen(2, kindint8, kindint16, kinduint16, kinduint8)
-	case pgtyp_int4:
-		// int32, *int32
-		ok = typ.is(kindint32)
-	case pgtyp_int4arr:
-		// []int32
-		ok = typ.isslice(kindint32)
-	case pgtyp_int4range:
-		// [2]int32 (bound types expressed in tags?)
-		ok = typ.kind == kindarray && typ.arraylen == 2 && typ.elem.kind == kindint32
-	case pgtyp_int4rangearr:
-		// [][2]int32 (bound types expressed in tags?)
-		ok = typ.kind == kindslice && typ.elem.kind == kindarray &&
-			typ.elem.arraylen == 2 && typ.elem.elem.kind == kindint32
-	case pgtyp_int8:
-		// int64, *int64
-		ok = typ.is(kindint64)
-	case pgtyp_int8arr:
-		// []int64
-		ok = typ.isslice(kindint64)
-	case pgtyp_int8range:
-		// [2]int64 (bound types expressed in tags?)
-		ok = typ.kind == kindarray && typ.arraylen == 2 && typ.elem.kind == kindint64
-	case pgtyp_int8rangearr:
-		// [][2]int64 (bound types expressed in tags?)
-		ok = typ.kind == kindslice && typ.elem.kind == kindarray &&
-			typ.elem.arraylen == 2 && typ.elem.elem.kind == kindint64
-	case pgtyp_interval:
-		// TODO(mkopriva): needs a custom type
-		// - struct{ microsecs int64, days int32, months int32 }
-		return errors.UnsupportedColumnTypeError
-	case pgtyp_intervalarr:
-		// TODO(mkopriva): needs a custom type
-		// - []struct{ microsecs int64, days int32, months int32 }
-		return errors.UnsupportedColumnTypeError
-	case pgtyp_json, pgtyp_jsonb:
-		// []byte, json.RawMessage, json.Marshaler, usejson=true
-		ok = typ.isslice(kindbyte) || (typ.isjsmarshaler && typ.isjsunmarshaler) || opts.usejson
-	case pgtyp_jsonarr, pgtyp_jsonbarr:
-		// [][]byte, []json.RawMessage, []json.Marshaler
-		ok = typ.kind == kindslice && (typ.elem.isslice(kindbyte) ||
-			(typ.elem.isjsmarshaler && typ.elem.isjsunmarshaler))
-	case pgtyp_line:
-		// [3]float64
-		ok = typ.kind == kindarray && typ.arraylen == 3 && typ.elem.kind == kindfloat64
-	case pgtyp_linearr:
-		// [][3]float64
-		ok = typ.kind == kindslice && typ.elem.kind == kindarray &&
-			typ.elem.arraylen == 3 && typ.elem.elem.kind == kindfloat64
-	case pgtyp_lseg:
-		// [2][2]float64
-		ok = typ.kind == kindarray && typ.arraylen == 2 &&
-			typ.elem.kind == kindarray && typ.elem.arraylen == 2 &&
-			typ.elem.elem.kind == kindfloat64
-	case pgtyp_lsegarr:
-		// [][2][2]float64
-		if t := typ.elem; typ.kind == kindslice {
-			ok = t.kind == kindarray && t.arraylen == 2 &&
-				t.elem.kind == kindarray && t.elem.arraylen == 2 &&
-				t.elem.elem.kind == kindfloat64
-		}
-	case pgtyp_macaddr, pgtyp_macaddr8:
-		// []byte, net.HardwareAddr
-		ok = typ.isslice(kindbyte)
-	case pgtyp_macaddrarr, pgtyp_macaddr8arr:
-		// []byte, []net.HardwareAddr
-		ok = typ.isslicen(2, kindbyte)
-	case pgtyp_money:
-		// int64 (cents), *int64
-		ok = typ.is(kindint64)
-	case pgtyp_moneyarr:
-		// []int64 (cents)
-		ok = typ.isslice(kindint64)
-	case pgtyp_numeric:
-		// big.Int, *big.Int
-		ok = typ.isnamed("math/big", "Int")
-	case pgtyp_numericarr:
-		// []big.Int, []*big.Int
-		ok = typ.kind == kindslice && typ.elem.isnamed("math/big", "Int")
-	case pgtyp_numrange:
-		// [2]big.Int, [2]*big.Int (bound types expressed in tags?)
-		ok = typ.kind == kindarray && typ.arraylen == 2 && typ.elem.isnamed("math/big", "Int")
-	case pgtyp_numrangearr:
-		// [][2]*big.Int (bound types expressed in tags?)
-		ok = typ.kind == kindslice && typ.elem.kind == kindarray &&
-			typ.elem.arraylen == 2 && typ.elem.elem.isnamed("math/big", "Int")
-	case pgtyp_path, pgtyp_pointarr, pgtyp_polygon:
-		// [][2]float64
-		ok = typ.kind == kindslice && typ.elem.kind == kindarray &&
-			typ.elem.arraylen == 2 && typ.elem.elem.kind == kindfloat64
-	case pgtyp_patharr, pgtyp_polygonarr:
-		// [][][2]float64
-		if t := typ.elem; typ.kind == kindslice {
-			ok = t.kind == kindslice && t.elem.kind == kindarray &&
-				t.elem.arraylen == 2 && t.elem.elem.kind == kindfloat64
-		}
-	case pgtyp_point:
-		// [2]float64
-		ok = typ.kind == kindarray && typ.arraylen == 2 && typ.elem.kind == kindfloat64
-	case pgtyp_text, pgtyp_tsquery:
-		// string, *string
-		ok = typ.is(kindstring)
-	case pgtyp_textarr, pgtyp_tsqueryarr, pgtyp_tsvector:
-		// []string
-		ok = typ.isslice(kindstring)
-	case pgtyp_tsvectorarr:
-		// [][]string
-		ok = typ.isslicen(2, kindstring)
-	case pgtyp_uuid:
-		// string, *string, []byte, [16]byte
-		ok = typ.is(kindstring) || typ.isslice(kindbyte) ||
-			(typ.kind == kindarray && typ.arraylen == 16 && typ.elem.kind == kindbyte)
-	case pgtyp_uuidarr:
-		// []string, [][]byte, [][16]byte
-		ok = typ.isslice(kindstring) || typ.isslicen(2, kindbyte) ||
-			(typ.kind == kindslice && typ.elem.kind == kindarray &&
-				typ.elem.arraylen == 16 && typ.elem.elem.kind == kindbyte)
-	case pgtyp_xml:
-		// []byte, xml.Marshaler, usexml=true
-		ok = typ.isslice(kindbyte) || (typ.isxmlmarshaler && typ.isxmlunmarshaler) || opts.usexml
-	case pgtyp_xmlarr:
-		// [][]byte, []xml.Marshaler
-		ok = typ.kind == kindslice && (typ.elem.isslice(kindbyte) ||
-			(typ.elem.isxmlmarshaler && typ.elem.isxmlunmarshaler))
-	}
-
-	if !ok {
-		return errors.BadFieldToColumnTypeError
-	}
-	return nil
-}
-
 // check that the column's type matches that of the modfunc's argument.
-func (c *dbchecker) checkmodfunc(col *dbcolumn, fn modfunc) error {
+func (c *dbchecker) checkmodfunc(col *pgcolumn, fn modfunc) error {
 	var ok bool
 	switch fn {
 	case fnlower, fnupper:
-		ok = col.typ.name != pgtyp_text
+		ok = col.typ.oid != pgtyp_text
 	}
 	if !ok {
 		return errors.BadColumnTypeToModFuncError
@@ -656,8 +511,8 @@ func (c *dbchecker) checkmodfunc(col *dbcolumn, fn modfunc) error {
 	return nil
 }
 
-func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
-	rel := new(dbrelation)
+func (c *dbchecker) loadrelation(id relid) (*pgrelation, error) {
+	rel := new(pgrelation)
 	rel.name = id.name
 	rel.namespace = id.qual
 	if len(rel.namespace) == 0 {
@@ -682,7 +537,7 @@ func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		col := new(dbcolumn)
+		col := new(pgcolumn)
 		err := rows.Scan(
 			&col.num,
 			&col.name,
@@ -691,16 +546,17 @@ func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
 			&col.hasnotnull,
 			&col.hasdefault,
 			&col.isprimary,
-			&col.typ.name,
-			&col.typ.size,
-			&col.typ.typ,
-			&col.typ.category,
-			&col.typ.ispreferred,
-			&col.typ.elem,
+			&col.typoid,
 		)
 		if err != nil {
 			return nil, err
 		}
+		typ, ok := c.pgcat.types[col.typoid]
+		if !ok {
+			return nil, errors.UnknownPostgresTypeError
+		}
+
+		col.typ = typ
 		rel.columns = append(rel.columns, col)
 	}
 	if err := rows.Err(); err != nil {
@@ -715,7 +571,7 @@ func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		con := new(dbconstraint)
+		con := new(pgconstraint)
 		err := rows.Scan(
 			&con.name,
 			&con.typ,
@@ -741,7 +597,7 @@ func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		ind := new(dbindex)
+		ind := new(pgindex)
 		err := rows.Scan(
 			&ind.name,
 			&ind.natts,
@@ -773,7 +629,7 @@ func (c *dbchecker) loadrelation(id relid) (*dbrelation, error) {
 	return rel, nil
 }
 
-func (c *dbchecker) column(id colid) (*dbcolumn, error) {
+func (c *dbchecker) column(id colid) (*pgcolumn, error) {
 	rel, ok := c.relmap[id.qual]
 	if !ok {
 		return nil, errors.NoDBRelationError
@@ -785,17 +641,17 @@ func (c *dbchecker) column(id colid) (*dbcolumn, error) {
 	return col, nil
 }
 
-type dbrelation struct {
-	oid         int64  // The object identifier of the relation.
+type pgrelation struct {
+	oid         pgoid  // The object identifier of the relation.
 	name        string // The name of the relation.
 	namespace   string // The name of the namespace to which the relation belongs.
 	relkind     string // The relation's kind, we're only interested in r, v, and m.
-	columns     []*dbcolumn
-	constraints []*dbconstraint
-	indexes     []*dbindex
+	columns     []*pgcolumn
+	constraints []*pgconstraint
+	indexes     []*pgindex
 }
 
-func (rel *dbrelation) column(name string) *dbcolumn {
+func (rel *pgrelation) column(name string) *pgcolumn {
 	for _, col := range rel.columns {
 		if col.name == name {
 			return col
@@ -804,7 +660,7 @@ func (rel *dbrelation) column(name string) *dbcolumn {
 	return nil
 }
 
-func (rel *dbrelation) constraint(name string) *dbconstraint {
+func (rel *pgrelation) constraint(name string) *pgconstraint {
 	for _, con := range rel.constraints {
 		if con.name == name {
 			return con
@@ -813,7 +669,7 @@ func (rel *dbrelation) constraint(name string) *dbconstraint {
 	return nil
 }
 
-func (rel *dbrelation) index(name string) *dbindex {
+func (rel *pgrelation) index(name string) *pgindex {
 	for _, ind := range rel.indexes {
 		if ind.name == name {
 			return ind
@@ -822,7 +678,7 @@ func (rel *dbrelation) index(name string) *dbindex {
 	return nil
 }
 
-type dbcolumn struct {
+type pgcolumn struct {
 	num  int16  // The number of the column. Ordinary columns are numbered from 1 up.
 	name string // The name of the member's column.
 	// The number of dimensions if the column is an array type, otherwise 0.
@@ -838,37 +694,13 @@ type dbcolumn struct {
 	hasdefault bool
 	// Reports whether or not the column is a primary key.
 	isprimary bool
+	// The id of the column's type.
+	typoid pgoid
 	// Info about the column's type.
-	typ dbtype
+	typ *pgtype
 }
 
-type dbtype struct {
-	// The name of the type.
-	name string
-	// The number of bytes for fixed-size types, negative for variable length types.
-	size int
-	// The type's type.
-	typ string
-	// An arbitrary classification of data types that is used by the parser
-	// to determine which implicit casts should be "preferred".
-	category string
-	// True if the type is a preferred cast target within its category.
-	ispreferred bool
-	// If this is an array type then elem identifies the element type
-	// of that array type.
-	elem int64
-}
-
-func (typ *dbtype) is(names ...string) bool {
-	for _, name := range names {
-		if typ.name == name {
-			return true
-		}
-	}
-	return false
-}
-
-type dbconstraint struct {
+type pgconstraint struct {
 	// Constraint name (not necessarily unique!)
 	name string
 	// The type of the constraint
@@ -884,7 +716,7 @@ type dbconstraint struct {
 	fkey []int64
 }
 
-type dbindex struct {
+type pgindex struct {
 	// The name of the index.
 	name string
 	// The total number of columns in the index; this number includes
@@ -912,120 +744,253 @@ type dbindex struct {
 	indexdef string
 }
 
-type dbid struct {
-	name      string
-	namespace string
+type pgtype struct {
+	oid pgoid
+	// The name of the type.
+	name string
+	// The formatted name of the type.
+	namefmt string
+	// The number of bytes for fixed-size types, negative for variable length types.
+	length int
+	// The type's type.
+	typ string
+	// An arbitrary classification of data types that is used by the parser
+	// to determine which implicit casts should be "preferred".
+	category string
+	// True if the type is a preferred cast target within its category.
+	ispreferred bool
+	// If this is an array type then elem identifies the element type
+	// of that array type.
+	elem pgoid
 }
+
+func (typ *pgtype) is(oids ...pgoid) bool {
+	for _, oid := range oids {
+		if typ.oid == oid {
+			return true
+		}
+	}
+	return false
+}
+
+type pgoperator struct {
+	oid    pgoid
+	name   string
+	kind   string
+	left   pgoid
+	right  pgoid
+	result pgoid
+}
+
+type pgcast struct {
+	oid     pgoid
+	source  pgoid
+	target  pgoid
+	context string
+}
+
+type pgcatalogue struct {
+	types     map[pgoid]*pgtype
+	operators []*pgoperator
+	casts     []*pgcast
+}
+
+var pgcataloguecache = struct {
+	sync.RWMutex
+	m map[string]*pgcatalogue
+}{m: make(map[string]*pgcatalogue)}
+
+func (c *pgcatalogue) load(db *sql.DB, key string) error {
+	pgcataloguecache.RLock()
+	cat := pgcataloguecache.m[key]
+	pgcataloguecache.RUnlock()
+	if cat != nil {
+		*c = *cat
+		return nil
+	}
+
+	c.types = make(map[pgoid]*pgtype)
+
+	// load types
+	rows, err := db.Query(selecttypes)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		typ := new(pgtype)
+		err := rows.Scan(
+			&typ.oid,
+			&typ.name,
+			&typ.namefmt,
+			&typ.length,
+			&typ.typ,
+			&typ.category,
+			&typ.ispreferred,
+			&typ.elem,
+		)
+		if err != nil {
+			return err
+		}
+		c.types[typ.oid] = typ
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// load operators
+	rows, err = db.Query(selectoperators)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		op := new(pgoperator)
+		err := rows.Scan(
+			&op.oid,
+			&op.name,
+			&op.kind,
+			&op.left,
+			&op.right,
+			&op.result,
+		)
+		if err != nil {
+			return err
+		}
+		c.operators = append(c.operators, op)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// load casts
+	rows, err = db.Query(selectcasts)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		cast := new(pgcast)
+		err := rows.Scan(
+			&cast.oid,
+			&cast.source,
+			&cast.target,
+			&cast.context,
+		)
+		if err != nil {
+			return err
+		}
+		c.casts = append(c.casts, cast)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	pgcataloguecache.Lock()
+	pgcataloguecache.m[key] = c
+	pgcataloguecache.Unlock()
+	return nil
+}
+
+type pgoid uint32
 
 // postgres types
 const (
-	pgtyp_bit       = "bit"
-	pgtyp_bitarr    = "_bit"
-	pgtyp_bool      = "bool"
-	pgtyp_boolarr   = "_bool"
-	pgtyp_box       = "box"
-	pgtyp_boxarr    = "_box"
-	pgtyp_bpchar    = "bpchar"
-	pgtyp_bpchararr = "_bpchar"
-	pgtyp_bytea     = "bytea"
-	pgtyp_byteaarr  = "_bytea"
-
-	pgtyp_char      = "char"
-	pgtyp_chararr   = "_char"
-	pgtyp_cidr      = "cidr"
-	pgtyp_cidrarr   = "_cidr"
-	pgtyp_circle    = "circle"
-	pgtyp_circlearr = "_circle"
-
-	pgtyp_date         = "date"
-	pgtyp_datearr      = "_date"
-	pgtyp_daterange    = "daterange"
-	pgtyp_daterangearr = "_daterange"
-
-	pgtyp_float4    = "float4"
-	pgtyp_float4arr = "_float4"
-	pgtyp_float8    = "float8"
-	pgtyp_float8arr = "_float8"
-
-	pgtyp_hstore    = "hstore"
-	pgtyp_hstorearr = "_hstore"
-
-	pgtyp_inet          = "inet"
-	pgtyp_inetarr       = "_inet"
-	pgtyp_int2          = "int2"
-	pgtyp_int2arr       = "_int2"
-	pgtyp_int2vector    = "int2vector"
-	pgtyp_int2vectorarr = "_int2vector"
-	pgtyp_int4          = "int4"
-	pgtyp_int4arr       = "_int4"
-	pgtyp_int4range     = "int4range"
-	pgtyp_int4rangearr  = "_int4range"
-	pgtyp_int8          = "int8"
-	pgtyp_int8arr       = "_int8"
-	pgtyp_int8range     = "int8range"
-	pgtyp_int8rangearr  = "_int8range"
-	pgtyp_interval      = "interval"
-	pgtyp_intervalarr   = "_interval"
-
-	pgtyp_json     = "json"
-	pgtyp_jsonarr  = "_json"
-	pgtyp_jsonb    = "jsonb"
-	pgtyp_jsonbarr = "_jsonb"
-
-	pgtyp_line    = "line"
-	pgtyp_linearr = "_line"
-	pgtyp_lseg    = "lseg"
-	pgtyp_lsegarr = "_lseg"
-
-	pgtyp_macaddr     = "macaddr"
-	pgtyp_macaddrarr  = "_macaddr"
-	pgtyp_macaddr8    = "macaddr8"
-	pgtyp_macaddr8arr = "_macaddr8"
-	pgtyp_money       = "money"
-	pgtyp_moneyarr    = "_money"
-
-	pgtyp_numeric     = "numeric"
-	pgtyp_numericarr  = "_numeric"
-	pgtyp_numrange    = "numrange"
-	pgtyp_numrangearr = "_numrange"
-
-	pgtyp_path       = "path"
-	pgtyp_patharr    = "_path"
-	pgtyp_point      = "point"
-	pgtyp_pointarr   = "_point"
-	pgtyp_polygon    = "polygon"
-	pgtyp_polygonarr = "_polygon"
-
-	pgtyp_text           = "text"
-	pgtyp_textarr        = "_text"
-	pgtyp_time           = "time"
-	pgtyp_timestamp      = "timestamp"
-	pgtyp_timestamparr   = "_timestamp"
-	pgtyp_timearr        = "_time"
-	pgtyp_timestamptz    = "timestamptz"
-	pgtyp_timestamptzarr = "_timestamptz"
-	pgtyp_timetz         = "timetz"
-	pgtyp_timetzarr      = "_timetz"
-	pgtyp_tsrange        = "tsrange"
-	pgtyp_tsrangearr     = "_tsrange"
-	pgtyp_tstzrange      = "tstzrange"
-	pgtyp_tstzrangearr   = "_tstzrange"
-
-	pgtyp_tsquery     = "tsquery"
-	pgtyp_tsqueryarr  = "_tsquery"
-	pgtyp_tsvector    = "tsvector"
-	pgtyp_tsvectorarr = "_tsvector"
-
-	pgtyp_uuid    = "uuid"
-	pgtyp_uuidarr = "_uuid"
-
-	pgtyp_varbit     = "varbit"
-	pgtyp_varbitarr  = "_varbit"
-	pgtyp_varchar    = "varchar"
-	pgtyp_varchararr = "_varchar"
-
-	pgtyp_xml    = "xml"
-	pgtyp_xmlarr = "_xml"
+	pgtyp_bit            pgoid = 1560
+	pgtyp_bitarr         pgoid = 1561
+	pgtyp_bool           pgoid = 16
+	pgtyp_boolarr        pgoid = 1000
+	pgtyp_box            pgoid = 603
+	pgtyp_boxarr         pgoid = 1020
+	pgtyp_bpchar         pgoid = 1042
+	pgtyp_bpchararr      pgoid = 1014
+	pgtyp_bytea          pgoid = 17
+	pgtyp_byteaarr       pgoid = 1001
+	pgtyp_char           pgoid = 18
+	pgtyp_chararr        pgoid = 1002
+	pgtyp_cidr           pgoid = 650
+	pgtyp_cidrarr        pgoid = 651
+	pgtyp_circle         pgoid = 718
+	pgtyp_circlearr      pgoid = 719
+	pgtyp_date           pgoid = 1082
+	pgtyp_datearr        pgoid = 1182
+	pgtyp_daterange      pgoid = 3912
+	pgtyp_daterangearr   pgoid = 3913
+	pgtyp_float4         pgoid = 700
+	pgtyp_float4arr      pgoid = 1021
+	pgtyp_float8         pgoid = 701
+	pgtyp_float8arr      pgoid = 1022
+	pgtyp_inet           pgoid = 869
+	pgtyp_inetarr        pgoid = 1041
+	pgtyp_int2           pgoid = 21
+	pgtyp_int2arr        pgoid = 1005
+	pgtyp_int2vector     pgoid = 22
+	pgtyp_int2vectorarr  pgoid = 1006
+	pgtyp_int4           pgoid = 23
+	pgtyp_int4arr        pgoid = 1007
+	pgtyp_int4range      pgoid = 3904
+	pgtyp_int4rangearr   pgoid = 3905
+	pgtyp_int8           pgoid = 20
+	pgtyp_int8arr        pgoid = 1016
+	pgtyp_int8range      pgoid = 3926
+	pgtyp_int8rangearr   pgoid = 3927
+	pgtyp_interval       pgoid = 1186
+	pgtyp_intervalarr    pgoid = 1187
+	pgtyp_json           pgoid = 114
+	pgtyp_jsonarr        pgoid = 199
+	pgtyp_jsonb          pgoid = 3802
+	pgtyp_jsonbarr       pgoid = 3807
+	pgtyp_line           pgoid = 628
+	pgtyp_linearr        pgoid = 629
+	pgtyp_lseg           pgoid = 601
+	pgtyp_lsegarr        pgoid = 1018
+	pgtyp_macaddr        pgoid = 829
+	pgtyp_macaddrarr     pgoid = 1040
+	pgtyp_macaddr8       pgoid = 774
+	pgtyp_macaddr8arr    pgoid = 775
+	pgtyp_money          pgoid = 790
+	pgtyp_moneyarr       pgoid = 791
+	pgtyp_numeric        pgoid = 1700
+	pgtyp_numericarr     pgoid = 1231
+	pgtyp_numrange       pgoid = 3906
+	pgtyp_numrangearr    pgoid = 3907
+	pgtyp_path           pgoid = 602
+	pgtyp_patharr        pgoid = 1019
+	pgtyp_point          pgoid = 600
+	pgtyp_pointarr       pgoid = 1017
+	pgtyp_polygon        pgoid = 604
+	pgtyp_polygonarr     pgoid = 1027
+	pgtyp_text           pgoid = 25
+	pgtyp_textarr        pgoid = 1009
+	pgtyp_time           pgoid = 1083
+	pgtyp_timearr        pgoid = 1183
+	pgtyp_timestamp      pgoid = 1114
+	pgtyp_timestamparr   pgoid = 1115
+	pgtyp_timestamptz    pgoid = 1184
+	pgtyp_timestamptzarr pgoid = 1185
+	pgtyp_timetz         pgoid = 1266
+	pgtyp_timetzarr      pgoid = 1270
+	pgtyp_tinterval      pgoid = 704
+	pgtyp_tintervalarr   pgoid = 1025
+	pgtyp_tsquery        pgoid = 3615
+	pgtyp_tsqueryarr     pgoid = 3645
+	pgtyp_tsrange        pgoid = 3908
+	pgtyp_tsrangearr     pgoid = 3909
+	pgtyp_tstzrange      pgoid = 3910
+	pgtyp_tstzrangearr   pgoid = 3911
+	pgtyp_tsvector       pgoid = 3614
+	pgtyp_tsvectorarr    pgoid = 3643
+	pgtyp_uuid           pgoid = 2950
+	pgtyp_uuidarr        pgoid = 2951
+	pgtyp_varbit         pgoid = 1562
+	pgtyp_varbitarr      pgoid = 1563
+	pgtyp_varchar        pgoid = 1043
+	pgtyp_varchararr     pgoid = 1015
+	pgtyp_xml            pgoid = 142
+	pgtyp_xmlarr         pgoid = 143
 )
 
 // postgres type types
@@ -1066,6 +1031,110 @@ const (
 	pgconstraint_trigger   = "t"
 	pgconstraint_exclusion = "x"
 )
+
+// a mapping of go types to a list of pg types where the list contains those
+// pg types that can store a value of the go type.
+var gotyp2pgtyp = map[string][]pgoid{
+	gotypbool:     {pgtyp_bool},
+	gotypboolp:    {pgtyp_bool},
+	gotypbools:    {pgtyp_boolarr},
+	gotypstring:   {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_cidr, pgtyp_inet, pgtyp_text, pgtyp_tsquery, pgtyp_uuid},
+	gotypstringp:  {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_cidr, pgtyp_inet, pgtyp_text, pgtyp_tsquery, pgtyp_uuid},
+	gotypstrings:  {pgtyp_bitarr, pgtyp_varbitarr, pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr, pgtyp_cidrarr, pgtyp_inetarr, pgtyp_textarr, pgtyp_tsqueryarr, pgtyp_tsvector, pgtyp_uuidarr},
+	gotypstringss: {pgtyp_tsvectorarr},
+	// TODO gotypstringm:      {pgtyp_hstore},
+	// TODO gotypstringpm:     {pgtyp_hstore},
+	// TODO gotypstringms:     {pgtyp_hstorearr},
+	// TODO gotypstringpms:    {pgtyp_hstorearr},
+	gotypbyte:         {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar},
+	gotypbytep:        {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar},
+	gotypbytes:        {pgtyp_bit, pgtyp_varbit, pgtyp_bitarr, pgtyp_varbitarr, pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr, pgtyp_bytea, pgtyp_json, pgtyp_jsonb, pgtyp_macaddr, pgtyp_macaddr8, pgtyp_uuid, pgtyp_xml},
+	gotypbytess:       {pgtyp_bitarr, pgtyp_varbitarr, pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr, pgtyp_byteaarr, pgtyp_jsonarr, pgtyp_jsonbarr, pgtyp_macaddrarr, pgtyp_macaddr8arr, pgtyp_uuidarr, pgtyp_xmlarr},
+	gotypbytea16:      {pgtyp_uuid},
+	gotypbytea16s:     {pgtyp_uuidarr},
+	gotyprune:         {pgtyp_bpchar, pgtyp_char, pgtyp_varchar},
+	gotyprunep:        {pgtyp_bpchar, pgtyp_char, pgtyp_varchar},
+	gotyprunes:        {pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr},
+	gotypruness:       {pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr},
+	gotypint8:         {pgtyp_int2},
+	gotypint8p:        {pgtyp_int2},
+	gotypint8s:        {pgtyp_int2arr, pgtyp_int2vector},
+	gotypint8ss:       {pgtyp_int2vectorarr},
+	gotypint16:        {pgtyp_int2},
+	gotypint16p:       {pgtyp_int2},
+	gotypint16s:       {pgtyp_int2arr, pgtyp_int2vector},
+	gotypint16ss:      {pgtyp_int2vectorarr},
+	gotypint32:        {pgtyp_int4},
+	gotypint32p:       {pgtyp_int4},
+	gotypint32s:       {pgtyp_int4arr},
+	gotypint32a2:      {pgtyp_int4range},
+	gotypint32a2s:     {pgtyp_int4rangearr},
+	gotypint64:        {pgtyp_int8, pgtyp_money},
+	gotypint64p:       {pgtyp_int8, pgtyp_money},
+	gotypint64s:       {pgtyp_int8arr, pgtyp_moneyarr},
+	gotypint64a2:      {pgtyp_int8range},
+	gotypint64a2s:     {pgtyp_int8rangearr},
+	gotypfloat32:      {pgtyp_float4},
+	gotypfloat32p:     {pgtyp_float4},
+	gotypfloat32s:     {pgtyp_float4arr},
+	gotypfloat64:      {pgtyp_float8},
+	gotypfloat64p:     {pgtyp_float8},
+	gotypfloat64s:     {pgtyp_float8arr},
+	gotypfloat64a2:    {pgtyp_point},
+	gotypfloat64a2s:   {pgtyp_path, pgtyp_pointarr, pgtyp_polygon},
+	gotypfloat64a2ss:  {pgtyp_patharr, pgtyp_polygonarr},
+	gotypfloat64a2a2:  {pgtyp_box, pgtyp_lseg},
+	gotypfloat64a2a2s: {pgtyp_boxarr, pgtyp_lsegarr},
+	gotypfloat64a3:    {pgtyp_line},
+	gotypfloat64a3s:   {pgtyp_linearr},
+	gotypipnetp:       {pgtyp_cidr, pgtyp_inet},
+	gotypipnetps:      {pgtyp_cidrarr, pgtyp_inetarr},
+	gotyptime:         {pgtyp_date, pgtyp_time, pgtyp_timestamp, pgtyp_timestamptz, pgtyp_timetz},
+	gotyptimep:        {pgtyp_date, pgtyp_time, pgtyp_timestamp, pgtyp_timestamptz, pgtyp_timetz},
+	gotyptimes:        {pgtyp_datearr, pgtyp_timearr, pgtyp_timestamparr, pgtyp_timestamptzarr, pgtyp_timetzarr},
+	gotyptimeps:       {pgtyp_datearr, pgtyp_timearr, pgtyp_timestamparr, pgtyp_timestamptzarr, pgtyp_timetzarr},
+	gotyptimea2:       {pgtyp_daterange, pgtyp_tsrange, pgtyp_tstzrange},
+	gotyptimea2s:      {pgtyp_daterangearr, pgtyp_tsrangearr, pgtyp_tstzrangearr},
+	gotypbigint:       {pgtyp_numeric},
+	gotypbigintp:      {pgtyp_numeric},
+	gotypbigints:      {pgtyp_numericarr},
+	gotypbigintps:     {pgtyp_numericarr},
+	gotypbiginta2:     {pgtyp_numrange},
+	gotypbigintpa2:    {pgtyp_numrange},
+	gotypbigintpa2s:   {pgtyp_numrangearr},
+	// TODO gotypnullstringm:  {pgtyp_hstore},
+	// TODO gotypnullstringms: {pgtyp_hstorearr},
+}
+
+// Used, with the help of pgoperatortable, only for type-checking an operator's
+// operands. Not necessarily a true mapping. As an example, the constructs IN
+// and NOT IN are essentially the same as comparing the LHS to every element of
+// the RHS with the operators "=" and "<>" respectively.
+var cmpop2basepgops = map[cmpop]string{
+	cmpeq:          "=",
+	cmpne:          "<>",
+	cmpne2:         "<>",
+	cmplt:          "<",
+	cmpgt:          ">",
+	cmple:          "<=",
+	cmpge:          ">=",
+	cmprexp:        "~",
+	cmprexpi:       "~*",
+	cmpnotrexp:     "!~",
+	cmpnotrexpi:    "!~*",
+	cmpisdistinct:  "<>",
+	cmpnotdistinct: "=",
+	cmpislike:      "~~",
+	cmpnotlike:     "!~~",
+	cmpisilike:     "~~*",
+	cmpnotilike:    "!~~*",
+	cmpissimilar:   "~~",
+	cmpnotsimilar:  "!~~",
+	cmpisin:        "=",
+	cmpnotin:       "<>",
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 // helper type
 type int2vec []int16
