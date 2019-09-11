@@ -99,4 +99,5 @@ const (
 	BadColumnNULLSettingForNULLOpError         errnum = 81
 	BadColumnToLiteralComparisonError          errnum = 82
 	BadColumnToColumnTypeComparisonError       errnum = 83
+	BadTargetTableForDefaultError              errnum = 84
 )

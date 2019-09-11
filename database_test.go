@@ -39,7 +39,7 @@ func Test_dbchecker_loadrelation(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
-		err := dbc.load()
+		err := dbc.run()
 		rel := dbc.rel
 		if err == nil {
 			if rel.oid == 0 {
@@ -174,7 +174,7 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
-		err := dbc.load()
+		err := dbc.run()
 		if err == nil {
 			if e := compare.Compare(dbc.rel.columns, tt.want); e != nil {
 				t.Error(i, e)
@@ -213,7 +213,7 @@ func Test_dbchecker_loadconstraints(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
-		err := dbc.load()
+		err := dbc.run()
 		if err == nil {
 			if e := compare.Compare(dbc.rel.constraints, tt.want); e != nil {
 				t.Error(i, e)
@@ -261,7 +261,7 @@ func Test_dbchecker_loadindexes(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
-		err := dbc.load()
+		err := dbc.run()
 		if err == nil {
 			if e := compare.Compare(dbc.rel.indexes, tt.want); e != nil {
 				t.Error(i, e)
@@ -317,13 +317,7 @@ func Test_dbchecker_check_textsearch(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
-		if err := dbc.load(); err != nil {
-			log.Printf("%#v\n", err)
-			t.Error(err)
-			return
-		}
-
-		err := dbc.check()
+		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
 			log.Printf("%#v\n", err)
 			t.Error(i, e)
@@ -378,13 +372,7 @@ func Test_dbchecker_check_orderby(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
-		if err := dbc.load(); err != nil {
-			log.Printf("%#v\n", err)
-			t.Error(err)
-			return
-		}
-
-		err := dbc.check()
+		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
 			log.Printf("%#v\n", err)
 			t.Error(i, e)
@@ -423,7 +411,7 @@ func Test_dbchecker_check_defaults(t *testing.T) {
 				{qual: "d", name: "col_bar"},
 			}},
 		},
-		err: errors.NoDBRelationError,
+		err: errors.BadTargetTableForDefaultError,
 	}, {
 		cmd: &command{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
@@ -441,13 +429,7 @@ func Test_dbchecker_check_defaults(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
-		if err := dbc.load(); err != nil {
-			log.Printf("%#v\n", err)
-			t.Error(err)
-			return
-		}
-
-		err := dbc.check()
+		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
 			log.Printf("%#v\n", err)
 			t.Error(i, e)
@@ -504,13 +486,7 @@ func Test_dbchecker_check_force(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
-		if err := dbc.load(); err != nil {
-			log.Printf("%#v\n", err)
-			t.Error(err)
-			return
-		}
-
-		err := dbc.check()
+		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
 			log.Printf("%#v\n", err)
 			t.Error(i, e)
@@ -567,13 +543,7 @@ func Test_dbchecker_check_returning(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
-		if err := dbc.load(); err != nil {
-			log.Printf("%#v\n", err)
-			t.Error(err)
-			return
-		}
-
-		err := dbc.check()
+		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
 			log.Printf("%#v\n", err)
 			t.Error(i, e)
@@ -706,13 +676,7 @@ func Test_dbchecker_check_onconflict(t *testing.T) {
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
 
-		if err := dbc.load(); err != nil {
-			log.Printf("%#v\n", err)
-			t.Error(err)
-			return
-		}
-
-		err := dbc.check()
+		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
 			log.Printf("%#v\n", err)
 			t.Error(i, e)

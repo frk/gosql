@@ -135,11 +135,7 @@ func dbcheck(url string, cmds []*command) error {
 		c.dbname = dbname
 		c.cmd = cmd
 		c.pgcat = pgcat
-		if err := c.load(); err != nil {
-			return err
-		}
-
-		if err := c.check(); err != nil {
+		if err := c.run(); err != nil {
 			return err
 		}
 	}
@@ -157,7 +153,7 @@ type dbchecker struct {
 	pgcat *pgcatalogue
 }
 
-func (c *dbchecker) load() (err error) {
+func (c *dbchecker) run() (err error) {
 	c.relmap = make(map[string]*pgrelation)
 	if c.rel, err = c.loadrelation(c.cmd.rel.relid); err != nil {
 		return err
@@ -169,25 +165,21 @@ func (c *dbchecker) load() (err error) {
 	c.relmap[""] = c.rel
 
 	if join := c.cmd.join; join != nil {
-		if len(join.rel.name) > 0 {
-			rel, err := c.loadrelation(join.rel)
-			if err != nil {
-				return err
-			}
-			c.joinlist = append(c.joinlist, rel)
-		}
-		for _, item := range join.items {
-			rel, err := c.loadrelation(item.rel)
-			if err != nil {
-				return err
-			}
-			c.joinlist = append(c.joinlist, rel)
+		if err := c.checkjoin(join); err != nil {
+			return err
 		}
 	}
-	return nil
-}
+	if onconf := c.cmd.onconflict; onconf != nil {
+		if err := c.checkonconflict(onconf); err != nil {
+			return err
+		}
+	}
+	if where := c.cmd.where; where != nil {
+		if err := c.checkwhere(where); err != nil {
+			return err
+		}
+	}
 
-func (c *dbchecker) check() error {
 	// If an OrderBy directive was used, make sure that the specified
 	// columns are present in the loaded relations.
 	if c.cmd.orderby != nil {
@@ -199,11 +191,15 @@ func (c *dbchecker) check() error {
 	}
 
 	// If a Default directive was provided, make sure that the specified
-	// columns are present in the loaded relations.
+	// columns are present in the target relation.
 	if c.cmd.defaults != nil {
 		for _, item := range c.cmd.defaults.items {
-			if _, err := c.column(item); err != nil {
-				return err
+			// Qualifier, if present, must match the target table's alias.
+			if len(item.qual) > 0 && item.qual != c.cmd.rel.relid.alias {
+				return errors.BadTargetTableForDefaultError
+			}
+			if col := c.rel.column(item.name); col == nil {
+				return errors.NoDBColumnError
 			}
 		}
 	}
@@ -240,240 +236,306 @@ func (c *dbchecker) check() error {
 		}
 	}
 
-	// check onconflict block
-	if c.cmd.onconflict != nil {
-		oc := c.cmd.onconflict
-		rel := c.rel
-
-		// If a Column directive was provided in an OnConflict block make
-		// sure that the listed columns are present in the target table.
-		// Make also msure that the list of columns matches the full list
-		// of columns of a unique index that's present on the target table.
-		if len(oc.column) > 0 {
-			var attnums []int16
-			for _, id := range oc.column {
-				col := rel.column(id.name)
-				if col == nil {
-					return errors.NoDBColumnError
-				}
-				attnums = append(attnums, col.num)
-			}
-
-			var match bool
-			for _, ind := range rel.indexes {
-				if !ind.isunique && !ind.isprimary {
-					continue
-				}
-				if !matchnums(ind.key, attnums) {
-					continue
-				}
-
-				match = true
-				break
-			}
-			if !match {
-				return errors.NoDBIndexForColumnListError
-			}
-		}
-
-		// If an Index directive was provided check that the specified
-		// index is actually present on the target table and also make
-		// sure that it is a unique index.
-		if len(oc.index) > 0 {
-			ind := rel.index(oc.index)
-			if ind == nil {
-				return errors.NoDBIndexError
-			}
-			if !ind.isunique && !ind.isprimary {
-				return errors.NoDBIndexError
-			}
-
-			// TODO(mkopriva): retain the index expression so that it can
-			// be used later during code generation.
-		}
-
-		// If a Constraint directive was provided make sure that the
-		// specified constraint is present on the target table and that
-		// it is a unique constraint.
-		if len(oc.constraint) > 0 {
-			con := rel.constraint(oc.constraint)
-			if con == nil {
-				return errors.NoDBConstraintError
-			}
-			if con.typ != pgconstraint_pkey && con.typ != pgconstraint_unique {
-				return errors.NoDBConstraintError
-			}
-		}
-
-		// If an Update directive was provided, make sure that each
-		// listed column is present in the target table.
-		if oc.update != nil {
-			for _, item := range oc.update.items {
-				if col := rel.column(item.name); col == nil {
-					return errors.NoDBColumnError
-				}
-			}
-		}
-	}
-
-	// check where block
-	if c.cmd.where != nil {
-		type loopstate struct {
-			wb  *whereblock
-			idx int // keeps track of the field index
-		}
-		stack := []*loopstate{{wb: c.cmd.where}} // LIFO stack of states.
-
-	stackloop:
-		for len(stack) > 0 {
-			// Loop over the various items of a whereblock, including
-			// other nested whereblocks and check them against the db.
-			loop := stack[len(stack)-1]
-			for loop.idx < len(loop.wb.items) {
-				loop.idx++
-
-				switch node := loop.wb.items[loop.idx].node.(type) {
-				case *wherefield:
-					// Check that the referenced Column is present
-					// in one of the associated relations.
-					col, err := c.column(node.colid)
-					if err != nil {
-						return err
-					}
-
-					// If the column cannot be set to NULL, then make
-					// sure that the field's not a pointer.
-					if col.hasnotnull {
-						if node.typ.kind == kindptr {
-							return errors.IllegalPtrFieldForNotNullColumnError
-						}
-					}
-
-					// list of types to which the field type can potentially be converted
-					var fieldoids = c.pgtypeoids(node.typ)
-
-					// If this is a scalar array comparison then check that
-					// the field is a slice or array, and also make sure that
-					// the column's type can be compared to the element type
-					// of the slice / array.
-					if node.sop > 0 || node.cmp.isarr() {
-						if node.typ.kind != kindslice && node.typ.kind != kindarray {
-							return errors.IllegalFieldTypeForScalarOpError
-						}
-						fieldoids = c.pgtypeoids(*node.typ.elem)
-					}
-
-					// Check that the Field's type can be compared to that of the Column.
-					if !c.cancompare(col, fieldoids, node.cmp) {
-						return errors.BadFieldToColumnTypeError
-					}
-
-					// Check that the modifier function can
-					// be used with the given Column's type.
-					if node.mod > 0 {
-						if err := c.checkmodfunc(col, node.mod); err != nil {
-							return err
-						}
-					}
-				case *wherecolumn:
-					// Check that the referenced Column is present
-					// in one of the associated relations.
-					col, err := c.column(node.colid)
-					if err != nil {
-						return err
-					}
-
-					if node.cmp.isunary() {
-						// Column type must be bool if the comparison operator
-						// is one of the IS [NOT] {FALSE|TRUE|UNKNOWN} operators.
-						if node.cmp.isbool() && col.typ.oid != pgtyp_bool {
-							return errors.BadColumnTypeForUnaryOpError
-						}
-						// Column must be NULLable if the comparison operator
-						// is one of the IS [NOT] NULL operators.
-						if col.hasnotnull && (node.cmp == cmpisnull || node.cmp == cmpnotnull) {
-							return errors.BadColumnNULLSettingForNULLOpError
-						}
-					} else {
-						var typ *pgtype
-
-						// Get the type of the right hand side, which is
-						// either a column or a literal expression.
-						if len(node.colid2.name) > 0 {
-							col2, err := c.column(node.colid2)
-							if err != nil {
-								return err
-							}
-							typ = col2.typ
-						} else if len(node.lit) > 0 {
-							var oid pgoid
-							row := c.db.QueryRow(fmt.Sprintf(selectexprtype, node.lit))
-							if err := row.Scan(&oid); err != nil {
-								return err
-							}
-							typ = c.pgcat.types[oid]
-						} else {
-							// bail?
-						}
-
-						if node.cmp.isarr() || node.sop > 0 {
-							// Check that the scalar array operator can
-							// be used with the type of the RHS expression.
-							if typ.category != pgtypcategory_array {
-								return errors.BadExpressionTypeForScalarrOpError
-							}
-							typ = c.pgcat.types[typ.elem]
-						}
-
-						rhsoids := []pgoid{typ.oid}
-						if !c.cancompare(col, rhsoids, node.cmp) {
-							return errors.BadColumnToLiteralComparisonError
-						}
-					}
-				case *wherebetween:
-					// Check that the referenced Column is present
-					// in one of the associated relations.
-					col, err := c.column(node.colid)
-					if err != nil {
-						return err
-					}
-
-					// Check that both arguments, x and y, can be compared to the column.
-					for _, arg := range []interface{}{node.x, node.y} {
-						var argoids []pgoid
-						switch a := arg.(type) {
-						case colid:
-							col2, err := c.column(a)
-							if err != nil {
-								return err
-							}
-							argoids = []pgoid{col2.typ.oid}
-						case *varinfo:
-							argoids = c.pgtypeoids(a.typ)
-						}
-
-						if !c.cancompare(col, argoids, cmpgt) {
-							return errors.BadColumnToColumnTypeComparisonError
-						}
-					}
-				case *whereblock:
-					stack = append(stack, &loopstate{wb: node})
-					continue stackloop
-				}
-			}
-
-			stack = stack[:len(stack)-1]
-		}
-	}
-
-	// check join block
-	if c.cmd.join != nil {
-		// TODO
-	}
-
 	// check result field
 	if c.cmd.result != nil {
 		// TODO
+	}
+
+	return nil
+}
+
+func (c *dbchecker) checkjoin(join *joinblock) error {
+	if len(join.rel.name) > 0 {
+		rel, err := c.loadrelation(join.rel)
+		if err != nil {
+			return err
+		}
+		c.joinlist = append(c.joinlist, rel)
+	}
+	for _, item := range join.items {
+		rel, err := c.loadrelation(item.rel)
+		if err != nil {
+			return err
+		}
+		c.joinlist = append(c.joinlist, rel)
+
+		for _, cond := range item.conds {
+			// Make sure that col1 is present in relation being joined.
+			col := rel.column(cond.col1.name)
+			if col == nil {
+				return errors.NoDBColumnError
+			}
+
+			if cond.cmp.isunary() {
+				// Column type must be bool if the comparison operator
+				// is one of the IS [NOT] {FALSE|TRUE|UNKNOWN} operators.
+				if cond.cmp.isbool() && col.typ.oid != pgtyp_bool {
+					return errors.BadColumnTypeForUnaryOpError
+				}
+				// Column must be NULLable if the comparison operator
+				// is one of the IS [NOT] NULL operators.
+				if col.hasnotnull && (cond.cmp == cmpisnull || cond.cmp == cmpnotnull) {
+					return errors.BadColumnNULLSettingForNULLOpError
+				}
+			} else {
+				var typ *pgtype
+				// Get the type of the right hand side, which is
+				// either a column or a literal expression.
+				if len(cond.col2.name) > 0 {
+					col2, err := c.column(cond.col2)
+					if err != nil {
+						return err
+					}
+					typ = col2.typ
+				} else if len(cond.lit) > 0 {
+					var oid pgoid
+					row := c.db.QueryRow(fmt.Sprintf(selectexprtype, cond.lit))
+					if err := row.Scan(&oid); err != nil {
+						return err
+					}
+					typ = c.pgcat.types[oid]
+				}
+
+				if cond.cmp.isarr() || cond.sop > 0 {
+					// Check that the scalar array operator can
+					// be used with the type of the RHS expression.
+					if typ.category != pgtypcategory_array {
+						return errors.BadExpressionTypeForScalarrOpError
+					}
+					typ = c.pgcat.types[typ.elem]
+				}
+
+				rhsoids := []pgoid{typ.oid}
+				if !c.cancompare(col, rhsoids, cond.cmp) {
+					return errors.BadColumnToLiteralComparisonError
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (c *dbchecker) checkonconflict(onconf *onconflictblock) error {
+	rel := c.rel
+
+	// If a Column directive was provided in an OnConflict block make
+	// sure that the listed columns are present in the target table.
+	// Make also msure that the list of columns matches the full list
+	// of columns of a unique index that's present on the target table.
+	if len(onconf.column) > 0 {
+		var attnums []int16
+		for _, id := range onconf.column {
+			col := rel.column(id.name)
+			if col == nil {
+				return errors.NoDBColumnError
+			}
+			attnums = append(attnums, col.num)
+		}
+
+		var match bool
+		for _, ind := range rel.indexes {
+			if !ind.isunique && !ind.isprimary {
+				continue
+			}
+			if !matchnums(ind.key, attnums) {
+				continue
+			}
+
+			match = true
+			break
+		}
+		if !match {
+			return errors.NoDBIndexForColumnListError
+		}
+	}
+
+	// If an Index directive was provided check that the specified
+	// index is actually present on the target table and also make
+	// sure that it is a unique index.
+	if len(onconf.index) > 0 {
+		ind := rel.index(onconf.index)
+		if ind == nil {
+			return errors.NoDBIndexError
+		}
+		if !ind.isunique && !ind.isprimary {
+			return errors.NoDBIndexError
+		}
+
+		// TODO(mkopriva): retain the index expression so that it can
+		// be used later during code generation.
+	}
+
+	// If a Constraint directive was provided make sure that the
+	// specified constraint is present on the target table and that
+	// it is a unique constraint.
+	if len(onconf.constraint) > 0 {
+		con := rel.constraint(onconf.constraint)
+		if con == nil {
+			return errors.NoDBConstraintError
+		}
+		if con.typ != pgconstraint_pkey && con.typ != pgconstraint_unique {
+			return errors.NoDBConstraintError
+		}
+	}
+
+	// If an Update directive was provided, make sure that each
+	// listed column is present in the target table.
+	if onconf.update != nil {
+		for _, item := range onconf.update.items {
+			if col := rel.column(item.name); col == nil {
+				return errors.NoDBColumnError
+			}
+		}
+	}
+	return nil
+}
+
+func (c *dbchecker) checkwhere(where *whereblock) error {
+	type loopstate struct {
+		wb  *whereblock
+		idx int // keeps track of the field index
+	}
+	stack := []*loopstate{{wb: where}} // LIFO stack of states.
+
+stackloop:
+	for len(stack) > 0 {
+		// Loop over the various items of a whereblock, including
+		// other nested whereblocks and check them against the db.
+		loop := stack[len(stack)-1]
+		for loop.idx < len(loop.wb.items) {
+			loop.idx++
+
+			switch node := loop.wb.items[loop.idx].node.(type) {
+			case *wherefield:
+				// Check that the referenced Column is present
+				// in one of the associated relations.
+				col, err := c.column(node.colid)
+				if err != nil {
+					return err
+				}
+
+				// If the column cannot be set to NULL, then make
+				// sure that the field's not a pointer.
+				if col.hasnotnull {
+					if node.typ.kind == kindptr {
+						return errors.IllegalPtrFieldForNotNullColumnError
+					}
+				}
+
+				// list of types to which the field type can potentially be converted
+				var fieldoids = c.pgtypeoids(node.typ)
+
+				// If this is a scalar array comparison then check that
+				// the field is a slice or array, and also make sure that
+				// the column's type can be compared to the element type
+				// of the slice / array.
+				if node.sop > 0 || node.cmp.isarr() {
+					if node.typ.kind != kindslice && node.typ.kind != kindarray {
+						return errors.IllegalFieldTypeForScalarOpError
+					}
+					fieldoids = c.pgtypeoids(*node.typ.elem)
+				}
+
+				// Check that the Field's type can be compared to that of the Column.
+				if !c.cancompare(col, fieldoids, node.cmp) {
+					return errors.BadFieldToColumnTypeError
+				}
+
+				// Check that the modifier function can
+				// be used with the given Column's type.
+				if node.mod > 0 {
+					if err := c.checkmodfunc(col, node.mod); err != nil {
+						return err
+					}
+				}
+			case *wherecolumn:
+				// Check that the referenced Column is present
+				// in one of the associated relations.
+				col, err := c.column(node.colid)
+				if err != nil {
+					return err
+				}
+
+				if node.cmp.isunary() {
+					// Column type must be bool if the comparison operator
+					// is one of the IS [NOT] {FALSE|TRUE|UNKNOWN} operators.
+					if node.cmp.isbool() && col.typ.oid != pgtyp_bool {
+						return errors.BadColumnTypeForUnaryOpError
+					}
+					// Column must be NULLable if the comparison operator
+					// is one of the IS [NOT] NULL operators.
+					if col.hasnotnull && (node.cmp == cmpisnull || node.cmp == cmpnotnull) {
+						return errors.BadColumnNULLSettingForNULLOpError
+					}
+				} else {
+					var typ *pgtype
+
+					// Get the type of the right hand side, which is
+					// either a column or a literal expression.
+					if len(node.colid2.name) > 0 {
+						col2, err := c.column(node.colid2)
+						if err != nil {
+							return err
+						}
+						typ = col2.typ
+					} else if len(node.lit) > 0 {
+						var oid pgoid
+						row := c.db.QueryRow(fmt.Sprintf(selectexprtype, node.lit))
+						if err := row.Scan(&oid); err != nil {
+							return err
+						}
+						typ = c.pgcat.types[oid]
+					} else {
+						// bail?
+					}
+
+					if node.cmp.isarr() || node.sop > 0 {
+						// Check that the scalar array operator can
+						// be used with the type of the RHS expression.
+						if typ.category != pgtypcategory_array {
+							return errors.BadExpressionTypeForScalarrOpError
+						}
+						typ = c.pgcat.types[typ.elem]
+					}
+
+					rhsoids := []pgoid{typ.oid}
+					if !c.cancompare(col, rhsoids, node.cmp) {
+						return errors.BadColumnToLiteralComparisonError
+					}
+				}
+			case *wherebetween:
+				// Check that the referenced Column is present
+				// in one of the associated relations.
+				col, err := c.column(node.colid)
+				if err != nil {
+					return err
+				}
+
+				// Check that both arguments, x and y, can be compared to the column.
+				for _, arg := range []interface{}{node.x, node.y} {
+					var argoids []pgoid
+					switch a := arg.(type) {
+					case colid:
+						col2, err := c.column(a)
+						if err != nil {
+							return err
+						}
+						argoids = []pgoid{col2.typ.oid}
+					case *varinfo:
+						argoids = c.pgtypeoids(a.typ)
+					}
+
+					if !c.cancompare(col, argoids, cmpgt) {
+						return errors.BadColumnToColumnTypeComparisonError
+					}
+				}
+			case *whereblock:
+				stack = append(stack, &loopstate{wb: node})
+				continue stackloop
+			}
+		}
+
+		stack = stack[:len(stack)-1]
 	}
 
 	return nil
@@ -527,7 +589,6 @@ func (c *dbchecker) loadrelation(id relid) (*pgrelation, error) {
 		}
 		return nil, err
 	}
-	c.rel = rel
 
 	// retrieve column info
 	rows, err := c.db.Query(selectdbcolumns, rel.oid)
@@ -762,15 +823,6 @@ type pgtype struct {
 	// If this is an array type then elem identifies the element type
 	// of that array type.
 	elem pgoid
-}
-
-func (typ *pgtype) is(oids ...pgoid) bool {
-	for _, oid := range oids {
-		if typ.oid == oid {
-			return true
-		}
-	}
-	return false
 }
 
 type pgoperator struct {
