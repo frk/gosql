@@ -19,16 +19,16 @@ import (
 )
 
 const (
-	selectdbname = `SELECT current_database()` //`
+	pgselectdbname = `SELECT current_database()` //`
 
-	selectdbrelation = `SELECT
+	pgselectdbrelation = `SELECT
 		c.oid
 		, c.relkind
 	FROM pg_class c
 	WHERE c.relname = $1
 	AND c.relnamespace = to_regnamespace($2)`  //`
 
-	selectdbcolumns = `SELECT
+	pgselectdbcolumns = `SELECT
 		a.attnum
 		, a.attname
 		, a.atttypmod
@@ -48,7 +48,7 @@ const (
 	AND NOT a.attisdropped
 	ORDER BY a.attnum`  //`
 
-	selectdbconstraints = `SELECT
+	pgselectdbconstraints = `SELECT
 		c.conname
 		, c.contype
 		, c.condeferrable
@@ -60,7 +60,7 @@ const (
 	WHERE c.conrelid = $1
 	ORDER BY c.oid`  //`
 
-	selectdbindexes = `SELECT
+	pgselectdbindexes = `SELECT
 		c.relname
 		, i.indnatts
 		, i.indisunique
@@ -75,7 +75,7 @@ const (
 	WHERE i.indrelid = $1
 	ORDER BY i.indexrelid`  //`
 
-	selecttypes = `SELECT
+	pgselecttypes = `SELECT
 		t.oid
 		, t.typname
 		, pg_catalog.format_type(t.oid, NULL)
@@ -89,7 +89,7 @@ const (
 	AND pg_catalog.pg_type_is_visible(t.oid)
 	AND t.typcategory <> 'P'`  //`
 
-	selectoperators = `SELECT
+	pgselectoperators = `SELECT
 		o.oid
 		, o.oprname
 		, o.oprkind
@@ -98,18 +98,18 @@ const (
 		, o.oprresult
 	FROM pg_operator o `  //`
 
-	selectcasts = `SELECT
+	pgselectcasts = `SELECT
 		c.oid
 		, c.castsource
 		, c.casttarget
 		, c.castcontext
 	FROM pg_cast c `  //`
 
-	selectexprtype = `SELECT pg_typeof(%s)` //`
+	pgselectexprtype = `SELECT pg_typeof(%s)` //`
 
 )
 
-func dbcheck(url string, cmds []*command) error {
+func checkpostgres(url string, cmds []*command) error {
 	db, err := sql.Open("postgres", url)
 	if err != nil {
 		return err
@@ -120,7 +120,7 @@ func dbcheck(url string, cmds []*command) error {
 
 	// the name of the current database
 	var dbname string
-	if err := db.QueryRow(selectdbname).Scan(&dbname); err != nil {
+	if err := db.QueryRow(pgselectdbname).Scan(&dbname); err != nil {
 		return err
 	}
 
@@ -130,7 +130,7 @@ func dbcheck(url string, cmds []*command) error {
 	}
 
 	for _, cmd := range cmds {
-		c := new(dbchecker)
+		c := new(pgcheck)
 		c.db = db
 		c.dbname = dbname
 		c.cmd = cmd
@@ -142,7 +142,7 @@ func dbcheck(url string, cmds []*command) error {
 	return nil
 }
 
-type dbchecker struct {
+type pgcheck struct {
 	db       *sql.DB
 	dbname   string // name of the current database, used mainly for error reporting
 	cmd      *command
@@ -153,7 +153,7 @@ type dbchecker struct {
 	pgcat *pgcatalogue
 }
 
-func (c *dbchecker) run() (err error) {
+func (c *pgcheck) run() (err error) {
 	c.relmap = make(map[string]*pgrelation)
 	if c.rel, err = c.loadrelation(c.cmd.rel.relid); err != nil {
 		return err
@@ -251,7 +251,7 @@ func (c *dbchecker) run() (err error) {
 	return nil
 }
 
-func (c *dbchecker) checkfields(typ typeinfo, isresult bool) (err error) {
+func (c *pgcheck) checkfields(typ typeinfo, isresult bool) (err error) {
 	type loopstate struct {
 		typ *typeinfo
 		idx int // keeps track of the field index
@@ -305,7 +305,7 @@ stackloop:
 	return nil
 }
 
-func (c *dbchecker) checkjoin(join *joinblock) error {
+func (c *pgcheck) checkjoin(join *joinblock) error {
 	if len(join.rel.name) > 0 {
 		rel, err := c.loadrelation(join.rel)
 		if err != nil {
@@ -350,7 +350,7 @@ func (c *dbchecker) checkjoin(join *joinblock) error {
 					typ = col2.typ
 				} else if len(cond.lit) > 0 {
 					var oid pgoid
-					row := c.db.QueryRow(fmt.Sprintf(selectexprtype, cond.lit))
+					row := c.db.QueryRow(fmt.Sprintf(pgselectexprtype, cond.lit))
 					if err := row.Scan(&oid); err != nil {
 						return err
 					}
@@ -376,7 +376,7 @@ func (c *dbchecker) checkjoin(join *joinblock) error {
 	return nil
 }
 
-func (c *dbchecker) checkonconflict(onconf *onconflictblock) error {
+func (c *pgcheck) checkonconflict(onconf *onconflictblock) error {
 	rel := c.rel
 
 	// If a Column directive was provided in an OnConflict block make
@@ -451,7 +451,7 @@ func (c *dbchecker) checkonconflict(onconf *onconflictblock) error {
 	return nil
 }
 
-func (c *dbchecker) checkwhere(where *whereblock) error {
+func (c *pgcheck) checkwhere(where *whereblock) error {
 	type loopstate struct {
 		wb  *whereblock
 		idx int // keeps track of the field index
@@ -541,7 +541,7 @@ stackloop:
 						typ = col2.typ
 					} else if len(node.lit) > 0 {
 						var oid pgoid
-						row := c.db.QueryRow(fmt.Sprintf(selectexprtype, node.lit))
+						row := c.db.QueryRow(fmt.Sprintf(pgselectexprtype, node.lit))
 						if err := row.Scan(&oid); err != nil {
 							return err
 						}
@@ -602,7 +602,7 @@ stackloop:
 	return nil
 }
 
-func (c *dbchecker) pgtypeoids(typ typeinfo) []pgoid {
+func (c *pgcheck) pgtypeoids(typ typeinfo) []pgoid {
 	// TODO needs more work
 
 	switch typstr := typ.string(); typstr {
@@ -620,7 +620,7 @@ func (c *dbchecker) pgtypeoids(typ typeinfo) []pgoid {
 	return nil
 }
 
-func (c *dbchecker) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool {
+func (c *pgcheck) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool {
 	// TODO needs more work
 
 	name := cmpop2basepgops[cmp]
@@ -636,7 +636,7 @@ func (c *dbchecker) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool 
 
 // cancoerce reports whether or not a value of the given field's type can
 // be coerced into a value of the column's type.
-func (c *dbchecker) cancoerce(col *pgcolumn, field *fieldinfo) bool {
+func (c *pgcheck) cancoerce(col *pgcolumn, field *fieldinfo) bool {
 	// TODO needs more work
 
 	target := col.typ.oid
@@ -679,7 +679,7 @@ func (c *dbchecker) cancoerce(col *pgcolumn, field *fieldinfo) bool {
 }
 
 // check that the column's type matches that of the modfunc's argument.
-func (c *dbchecker) checkmodfunc(col *pgcolumn, fn modfunc) error {
+func (c *pgcheck) checkmodfunc(col *pgcolumn, fn modfunc) error {
 	var ok bool
 	switch fn {
 	case fnlower, fnupper:
@@ -691,7 +691,7 @@ func (c *dbchecker) checkmodfunc(col *pgcolumn, fn modfunc) error {
 	return nil
 }
 
-func (c *dbchecker) loadrelation(id relid) (*pgrelation, error) {
+func (c *pgcheck) loadrelation(id relid) (*pgrelation, error) {
 	rel := new(pgrelation)
 	rel.name = id.name
 	rel.namespace = id.qual
@@ -700,7 +700,7 @@ func (c *dbchecker) loadrelation(id relid) (*pgrelation, error) {
 	}
 
 	// retrieve relation info
-	row := c.db.QueryRow(selectdbrelation, rel.name, rel.namespace)
+	row := c.db.QueryRow(pgselectdbrelation, rel.name, rel.namespace)
 	if err := row.Scan(&rel.oid, &rel.relkind); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.NoDBRelationError
@@ -709,7 +709,7 @@ func (c *dbchecker) loadrelation(id relid) (*pgrelation, error) {
 	}
 
 	// retrieve column info
-	rows, err := c.db.Query(selectdbcolumns, rel.oid)
+	rows, err := c.db.Query(pgselectdbcolumns, rel.oid)
 	if err != nil {
 		return nil, err
 	}
@@ -743,7 +743,7 @@ func (c *dbchecker) loadrelation(id relid) (*pgrelation, error) {
 	}
 
 	// load constraints info
-	rows, err = c.db.Query(selectdbconstraints, rel.oid)
+	rows, err = c.db.Query(pgselectdbconstraints, rel.oid)
 	if err != nil {
 		return nil, err
 	}
@@ -769,7 +769,7 @@ func (c *dbchecker) loadrelation(id relid) (*pgrelation, error) {
 	}
 
 	// load index info
-	rows, err = c.db.Query(selectdbindexes, rel.oid)
+	rows, err = c.db.Query(pgselectdbindexes, rel.oid)
 	if err != nil {
 		return nil, err
 	}
@@ -808,7 +808,7 @@ func (c *dbchecker) loadrelation(id relid) (*pgrelation, error) {
 	return rel, nil
 }
 
-func (c *dbchecker) column(id colid) (*pgcolumn, error) {
+func (c *pgcheck) column(id colid) (*pgcolumn, error) {
 	rel, ok := c.relmap[id.qual]
 	if !ok {
 		return nil, errors.NoDBRelationError
@@ -1015,7 +1015,7 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 	c.types = make(map[pgoid]*pgtype)
 
 	// load types
-	rows, err := db.Query(selecttypes)
+	rows, err := db.Query(pgselecttypes)
 	if err != nil {
 		return err
 	}
@@ -1045,7 +1045,7 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 	c.operators = make(map[pgopkey]*pgoperator)
 
 	// load operators
-	rows, err = db.Query(selectoperators)
+	rows, err = db.Query(pgselectoperators)
 	if err != nil {
 		return err
 	}
@@ -1073,7 +1073,7 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 	c.casts = make(map[pgcastkey]*pgcast)
 
 	// load casts
-	rows, err = db.Query(selectcasts)
+	rows, err = db.Query(pgselectcasts)
 	if err != nil {
 		return err
 	}

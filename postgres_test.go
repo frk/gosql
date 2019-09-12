@@ -8,7 +8,7 @@ import (
 	"github.com/frk/gosql/internal/errors"
 )
 
-func Test_dbchecker_loadrelation(t *testing.T) {
+func Test_pgcheck_loadrelation(t *testing.T) {
 	tests := []struct {
 		relid relid
 		want  *pgrelation
@@ -34,7 +34,7 @@ func Test_dbchecker_loadrelation(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
@@ -67,7 +67,7 @@ func Test_dbchecker_loadrelation(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_loadcolumns(t *testing.T) {
+func Test_pgcheck_loadcolumns(t *testing.T) {
 	tests := []struct {
 		relid relid
 		want  []*pgcolumn
@@ -169,7 +169,7 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
@@ -188,7 +188,7 @@ func Test_dbchecker_loadcolumns(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_loadconstraints(t *testing.T) {
+func Test_pgcheck_loadconstraints(t *testing.T) {
 	tests := []struct {
 		relid relid
 		want  []*pgconstraint
@@ -208,7 +208,7 @@ func Test_dbchecker_loadconstraints(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
@@ -227,7 +227,7 @@ func Test_dbchecker_loadconstraints(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_loadindexes(t *testing.T) {
+func Test_pgcheck_loadindexes(t *testing.T) {
 	tests := []struct {
 		relid relid
 		want  []*pgindex
@@ -256,7 +256,7 @@ func Test_dbchecker_loadindexes(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
@@ -275,7 +275,7 @@ func Test_dbchecker_loadindexes(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_check_textsearch(t *testing.T) {
+func Test_pgcheck_check_textsearch(t *testing.T) {
 	tests := []struct {
 		cmd *command
 		err error
@@ -312,7 +312,7 @@ func Test_dbchecker_check_textsearch(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
@@ -325,7 +325,7 @@ func Test_dbchecker_check_textsearch(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_check_orderby(t *testing.T) {
+func Test_pgcheck_check_orderby(t *testing.T) {
 	tests := []struct {
 		cmd *command
 		err error
@@ -367,7 +367,7 @@ func Test_dbchecker_check_orderby(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
@@ -380,7 +380,7 @@ func Test_dbchecker_check_orderby(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_check_defaults(t *testing.T) {
+func Test_pgcheck_check_defaults(t *testing.T) {
 	tests := []struct {
 		cmd *command
 		err error
@@ -424,7 +424,7 @@ func Test_dbchecker_check_defaults(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
@@ -437,7 +437,7 @@ func Test_dbchecker_check_defaults(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_check_force(t *testing.T) {
+func Test_pgcheck_check_force(t *testing.T) {
 	tests := []struct {
 		cmd *command
 		err error
@@ -481,7 +481,7 @@ func Test_dbchecker_check_force(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
@@ -494,7 +494,7 @@ func Test_dbchecker_check_force(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_check_returning(t *testing.T) {
+func Test_pgcheck_check_returning(t *testing.T) {
 	tests := []struct {
 		cmd *command
 		err error
@@ -538,7 +538,7 @@ func Test_dbchecker_check_returning(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
@@ -551,7 +551,7 @@ func Test_dbchecker_check_returning(t *testing.T) {
 	}
 }
 
-func Test_dbchecker_check_onconflict(t *testing.T) {
+func Test_pgcheck_check_onconflict(t *testing.T) {
 	tests := []struct {
 		cmd *command
 		err error
@@ -671,7 +671,7 @@ func Test_dbchecker_check_onconflict(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(dbchecker)
+		dbc := new(pgcheck)
 		dbc.db = testdb.db
 		dbc.pgcat = testdb.pgcat
 		dbc.cmd = tt.cmd
