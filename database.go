@@ -224,9 +224,9 @@ func (c *dbchecker) run() (err error) {
 		}
 	}
 
-	// If a TextSearch directive was provided, make sure that the specified
-	// column is present in one of the loaded relations and that it has the
-	// correct type.
+	// If a TextSearch directive was provided, make sure that the
+	// specified column is present in one of the loaded relations
+	// and that it has the correct type.
 	if c.cmd.textsearch != nil {
 		col, err := c.column(*c.cmd.textsearch)
 		if err != nil {
@@ -236,11 +236,72 @@ func (c *dbchecker) run() (err error) {
 		}
 	}
 
-	// check result field
-	if c.cmd.result != nil {
-		// TODO
+	if rel := c.cmd.rel; rel != nil && !rel.isdir {
+		if err := c.checkfields(rel.datatype.base, false); err != nil {
+			return err
+		}
 	}
 
+	if res := c.cmd.result; res != nil {
+		if err := c.checkfields(res.datatype.base, true); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *dbchecker) checkfields(typ typeinfo, isresult bool) (err error) {
+	type loopstate struct {
+		typ *typeinfo
+		idx int // keeps track of the field index
+	}
+
+	stack := []*loopstate{{typ: &typ}} // lifo stack
+
+stackloop:
+	for len(stack) > 0 {
+		loop := stack[len(stack)-1]
+		for loop.idx < len(loop.typ.fields) {
+			fld := loop.typ.fields[loop.idx]
+
+			// Instead of incrementing the index in the for-statement
+			// it is done here manually to ensure that it is not skipped
+			// when continuing to the outer loop.
+			loop.idx++
+
+			if len(fld.typ.fields) > 0 {
+				loop2 := new(loopstate)
+				loop2.typ = &fld.typ
+				stack = append(stack, loop2)
+				continue stackloop
+			}
+
+			var col *pgcolumn
+			if c.cmd.typ == cmdtypeSelect || isresult {
+				// If this is a SELECT, or the target type is
+				// from the "Result" field, lookup the column
+				// in all of the associated relations since its
+				// ok to select columns from joined relations.
+				if col, err = c.column(fld.colid); err != nil {
+					return err
+				}
+			} else {
+				// If this is a non-select command, non-result the
+				// columns must be present in the target relation.
+				if col = c.rel.column(fld.colid.name); col == nil {
+					return errors.NoDBColumnError
+				}
+			}
+
+			// Make sure that a value of the given field's type
+			// can be assigned to given column, and vice versa.
+			if !c.cancoerce(col, fld) {
+				return nil
+			}
+		}
+		stack = stack[:len(stack)-1]
+	}
 	return nil
 }
 
@@ -542,22 +603,79 @@ stackloop:
 }
 
 func (c *dbchecker) pgtypeoids(typ typeinfo) []pgoid {
-	return gotyp2pgtyp[typ.string()]
-}
+	// TODO needs more work
 
-func (c *dbchecker) cancompare(col *pgcolumn, types []pgoid, cmp cmpop) bool {
-	// TODO
-	return false
-}
-
-func (c *dbchecker) canassign(col *pgcolumn, typ typeinfo, opts typeopts) error {
+	switch typstr := typ.string(); typstr {
+	case gotypstringm, gotypstringpm, gotypnullstringm:
+		if t := c.pgcat.typebyname("hstore"); t != nil {
+			return []pgoid{t.oid}
+		}
+	case gotypstringms, gotypstringpms, gotypnullstringms:
+		if t := c.pgcat.typebyname("_hstore"); t != nil {
+			return []pgoid{t.oid}
+		}
+	default:
+		return gotyp2pgtyp[typstr]
+	}
 	return nil
 }
 
-type typeopts struct {
-	usejson   bool
-	usexml    bool
-	nullempty bool
+func (c *dbchecker) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool {
+	// TODO needs more work
+
+	name := cmpop2basepgops[cmp]
+	left := col.typ.oid
+	for _, right := range rhstypes {
+		key := pgopkey{name: name, left: left, right: right}
+		if _, ok := c.pgcat.operators[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// cancoerce reports whether or not a value of the given field's type can
+// be coerced into a value of the column's type.
+func (c *dbchecker) cancoerce(col *pgcolumn, field *fieldinfo) bool {
+	// TODO needs more work
+
+	target := col.typ.oid
+	sourceoids := c.pgtypeoids(field.typ)
+	for _, source := range sourceoids {
+		if target == source {
+			return true
+		}
+		if col.typ.category == pgtypcategory_string {
+			return true
+		}
+		if c.pgcat.cancasti(target, source) {
+			return true
+		}
+
+		if col.typ.category == pgtypcategory_array && (target != pgtyp_int2vector && target != pgtyp_oidvector) {
+			if srctyp := c.pgcat.types[source]; srctyp != nil && srctyp.category == pgtypcategory_array {
+				if col.typ.elem == srctyp.elem {
+					return true
+				}
+				elemtyp := c.pgcat.types[col.typ.elem]
+				if elemtyp != nil && elemtyp.category == pgtypcategory_string {
+					return true
+				}
+				if c.pgcat.cancasti(col.typ.elem, srctyp.elem) {
+					return true
+				}
+			}
+		}
+	}
+	if col.typ.typ == pgtyptype_domain {
+		// TODO(mkopriva): implement cancoerce for domain types
+		return true
+	}
+	if col.typ.typ == pgtyptype_composite {
+		// TODO(mkopriva): implement cancoerce for composite types
+		return true
+	}
+	return false
 }
 
 // check that the column's type matches that of the modfunc's argument.
@@ -834,6 +952,12 @@ type pgoperator struct {
 	result pgoid
 }
 
+type pgopkey struct {
+	name  string
+	left  pgoid
+	right pgoid
+}
+
 type pgcast struct {
 	oid     pgoid
 	source  pgoid
@@ -841,16 +965,43 @@ type pgcast struct {
 	context string
 }
 
+type pgcastkey struct {
+	target pgoid
+	source pgoid
+}
+
 type pgcatalogue struct {
 	types     map[pgoid]*pgtype
-	operators []*pgoperator
-	casts     []*pgcast
+	operators map[pgopkey]*pgoperator
+	casts     map[pgcastkey]*pgcast
 }
 
 var pgcataloguecache = struct {
 	sync.RWMutex
 	m map[string]*pgcatalogue
 }{m: make(map[string]*pgcatalogue)}
+
+func (c *pgcatalogue) typebyname(name string) *pgtype {
+	for _, t := range c.types {
+		if t.name == name {
+			return t
+		}
+	}
+	return nil
+}
+
+func (c *pgcatalogue) typebyoid(oid pgoid) *pgtype {
+	return c.types[oid]
+}
+
+// cancasti reports whether s can be cast to t implicitly or in assignment.
+func (c *pgcatalogue) cancasti(t, s pgoid) bool {
+	key := pgcastkey{target: t, source: s}
+	if cast := c.casts[key]; cast != nil {
+		return cast.context == pgcast_implicit || cast.context == pgcast_assignment
+	}
+	return false
+}
 
 func (c *pgcatalogue) load(db *sql.DB, key string) error {
 	pgcataloguecache.RLock()
@@ -891,6 +1042,8 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		return err
 	}
 
+	c.operators = make(map[pgopkey]*pgoperator)
+
 	// load operators
 	rows, err = db.Query(selectoperators)
 	if err != nil {
@@ -911,11 +1064,13 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		if err != nil {
 			return err
 		}
-		c.operators = append(c.operators, op)
+		c.operators[pgopkey{name: op.name, left: op.left, right: op.right}] = op
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
+
+	c.casts = make(map[pgcastkey]*pgcast)
 
 	// load casts
 	rows, err = db.Query(selectcasts)
@@ -935,7 +1090,7 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		if err != nil {
 			return err
 		}
-		c.casts = append(c.casts, cast)
+		c.casts[pgcastkey{target: cast.target, source: cast.source}] = cast
 	}
 	if err := rows.Err(); err != nil {
 		return err
@@ -1009,6 +1164,7 @@ const (
 	pgtyp_numericarr     pgoid = 1231
 	pgtyp_numrange       pgoid = 3906
 	pgtyp_numrangearr    pgoid = 3907
+	pgtyp_oidvector      pgoid = 30
 	pgtyp_path           pgoid = 602
 	pgtyp_patharr        pgoid = 1019
 	pgtyp_point          pgoid = 600
@@ -1084,20 +1240,23 @@ const (
 	pgconstraint_exclusion = "x"
 )
 
+// postgres cast contexts
+const (
+	pgcast_explicit   = "e"
+	pgcast_implicit   = "i"
+	pgcast_assignment = "a"
+)
+
 // a mapping of go types to a list of pg types where the list contains those
 // pg types that can store a value of the go type.
 var gotyp2pgtyp = map[string][]pgoid{
-	gotypbool:     {pgtyp_bool},
-	gotypboolp:    {pgtyp_bool},
-	gotypbools:    {pgtyp_boolarr},
-	gotypstring:   {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_cidr, pgtyp_inet, pgtyp_text, pgtyp_tsquery, pgtyp_uuid},
-	gotypstringp:  {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_cidr, pgtyp_inet, pgtyp_text, pgtyp_tsquery, pgtyp_uuid},
-	gotypstrings:  {pgtyp_bitarr, pgtyp_varbitarr, pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr, pgtyp_cidrarr, pgtyp_inetarr, pgtyp_textarr, pgtyp_tsqueryarr, pgtyp_tsvector, pgtyp_uuidarr},
-	gotypstringss: {pgtyp_tsvectorarr},
-	// TODO gotypstringm:      {pgtyp_hstore},
-	// TODO gotypstringpm:     {pgtyp_hstore},
-	// TODO gotypstringms:     {pgtyp_hstorearr},
-	// TODO gotypstringpms:    {pgtyp_hstorearr},
+	gotypbool:         {pgtyp_bool},
+	gotypboolp:        {pgtyp_bool},
+	gotypbools:        {pgtyp_boolarr},
+	gotypstring:       {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_cidr, pgtyp_inet, pgtyp_text, pgtyp_tsquery, pgtyp_uuid},
+	gotypstringp:      {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_cidr, pgtyp_inet, pgtyp_text, pgtyp_tsquery, pgtyp_uuid},
+	gotypstrings:      {pgtyp_bitarr, pgtyp_varbitarr, pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr, pgtyp_cidrarr, pgtyp_inetarr, pgtyp_textarr, pgtyp_tsqueryarr, pgtyp_tsvector, pgtyp_uuidarr},
+	gotypstringss:     {pgtyp_tsvectorarr},
 	gotypbyte:         {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar},
 	gotypbytep:        {pgtyp_bit, pgtyp_varbit, pgtyp_bpchar, pgtyp_char, pgtyp_varchar},
 	gotypbytes:        {pgtyp_bit, pgtyp_varbit, pgtyp_bitarr, pgtyp_varbitarr, pgtyp_bpchar, pgtyp_char, pgtyp_varchar, pgtyp_bpchararr, pgtyp_chararr, pgtyp_varchararr, pgtyp_bytea, pgtyp_json, pgtyp_jsonb, pgtyp_macaddr, pgtyp_macaddr8, pgtyp_uuid, pgtyp_xml},
@@ -1154,14 +1313,12 @@ var gotyp2pgtyp = map[string][]pgoid{
 	gotypbiginta2:     {pgtyp_numrange},
 	gotypbigintpa2:    {pgtyp_numrange},
 	gotypbigintpa2s:   {pgtyp_numrangearr},
-	// TODO gotypnullstringm:  {pgtyp_hstore},
-	// TODO gotypnullstringms: {pgtyp_hstorearr},
 }
 
-// Used, with the help of pgoperatortable, only for type-checking an operator's
-// operands. Not necessarily a true mapping. As an example, the constructs IN
-// and NOT IN are essentially the same as comparing the LHS to every element of
-// the RHS with the operators "=" and "<>" respectively.
+// Map of supported cmpops to *equivalent* postgres comparison operators. For example
+// the constructs IN and NOT IN are essentially the same as comparing the LHS to every
+// element of the RHS with the operators "=" and "<>" respectively, and therefore the
+// cmpisin maps to "=" and cmpnotin maps to "<>".
 var cmpop2basepgops = map[cmpop]string{
 	cmpeq:          "=",
 	cmpne:          "<>",
