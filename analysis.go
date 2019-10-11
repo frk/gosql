@@ -403,6 +403,7 @@ stackloop:
 			f.usejson = tag.HasOption("sql", "json")
 			f.usexml = tag.HasOption("sql", "xml")
 			f.binadd = tag.HasOption("sql", "+")
+			f.cancast = tag.HasOption("sql", "cast")
 			f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
 
 			colid, err := a.colid(loop.pfx+sqltag, fld)
@@ -1541,20 +1542,26 @@ type typeinfo struct {
 	arraylen int64
 }
 
-func (t *typeinfo) string() string {
+// string returns a textual representation of the type that t represents.
+// If elideptr is true the "*" will be elided from the output.
+func (t *typeinfo) string(elideptr bool) string {
 	if t.istime {
 		return "time.Time"
 	}
 
 	switch t.kind {
 	case kindarray:
-		return "[" + strconv.FormatInt(t.arraylen, 10) + "]" + t.elem.string()
+		return "[" + strconv.FormatInt(t.arraylen, 10) + "]" + t.elem.string(elideptr)
 	case kindslice:
-		return "[]" + t.elem.string()
+		return "[]" + t.elem.string(elideptr)
 	case kindmap:
-		return "map[" + t.key.string() + "]" + t.elem.string()
+		return "map[" + t.key.string(elideptr) + "]" + t.elem.string(elideptr)
 	case kindptr:
-		return "*" + t.elem.string()
+		if elideptr {
+			return t.elem.string(elideptr)
+		} else {
+			return "*" + t.elem.string(elideptr)
+		}
 	case kinduint8:
 		if t.isbyte {
 			return "byte"
@@ -1641,6 +1648,26 @@ func (t *typeinfo) isnilable() bool {
 	return t.is(kindptr, kindslice, kindarray, kindmap, kindinterface)
 }
 
+// indicates whether or not the MarshalJSON method can be called on the type.
+func (t *typeinfo) canjsonmarshal() bool {
+	return t.isjsmarshaler || (t.kind == kindptr && t.elem.isjsmarshaler)
+}
+
+// indicates whether or not the UnmarshalJSON method can be called on the type.
+func (t *typeinfo) canjsonunmarshal() bool {
+	return t.isjsunmarshaler || (t.kind == kindptr && t.elem.isjsunmarshaler)
+}
+
+// indicates whether or not the MarshalXML method can be called on the type.
+func (t *typeinfo) canxmlmarshal() bool {
+	return t.isxmlmarshaler || (t.kind == kindptr && t.elem.isxmlmarshaler)
+}
+
+// indicates whether or not the UnmarshalXML method can be called on the type.
+func (t *typeinfo) canxmlunmarshal() bool {
+	return t.isxmlunmarshaler || (t.kind == kindptr && t.elem.isxmlunmarshaler)
+}
+
 // fieldinfo holds information about a record's struct field and the corresponding db column.
 type fieldinfo struct {
 	typ  typeinfo // info about the field's type
@@ -1685,6 +1712,8 @@ type fieldinfo struct {
 	// for UPDATEs, if set to true, it indicates that the provided field
 	// value should be added to the already existing column value.
 	binadd bool
+	// indicates whether or not an implicit CAST should be allowed.
+	cancast bool
 }
 
 type joinblock struct {
@@ -2138,49 +2167,51 @@ var typekind2string = map[typekind]string{
 
 const (
 	gotypbool         = "bool"
-	gotypboolp        = "*bool"
 	gotypbools        = "[]bool"
 	gotypstring       = "string"
-	gotypstringp      = "*string"
 	gotypstrings      = "[]string"
 	gotypstringss     = "[][]string"
 	gotypstringm      = "map[string]string"
-	gotypstringpm     = "map[string]*string"
 	gotypstringms     = "[]map[string]string"
-	gotypstringpms    = "[]map[string]*string"
 	gotypbyte         = "byte"
-	gotypbytep        = "*byte"
 	gotypbytes        = "[]byte"
 	gotypbytess       = "[][]byte"
 	gotypbytea16      = "[16]byte"
 	gotypbytea16s     = "[][16]byte"
 	gotyprune         = "rune"
-	gotyprunep        = "*rune"
 	gotyprunes        = "[]rune"
 	gotypruness       = "[][]rune"
+	gotypint          = "int"
+	gotypints         = "[]int"
+	gotypinta2        = "[2]int"
+	gotypinta2s       = "[][2]int"
 	gotypint8         = "int8"
-	gotypint8p        = "*int8"
 	gotypint8s        = "[]int8"
 	gotypint8ss       = "[][]int8"
 	gotypint16        = "int16"
-	gotypint16p       = "*int16"
 	gotypint16s       = "[]int16"
 	gotypint16ss      = "[][]int16"
 	gotypint32        = "int32"
-	gotypint32p       = "*int32"
 	gotypint32s       = "[]int32"
 	gotypint32a2      = "[2]int32"
 	gotypint32a2s     = "[][2]int32"
 	gotypint64        = "int64"
-	gotypint64p       = "*int64"
 	gotypint64s       = "[]int64"
 	gotypint64a2      = "[2]int64"
 	gotypint64a2s     = "[][2]int64"
+	gotypuint         = "uint"
+	gotypuints        = "[]uint"
+	gotypuint8        = "uint8"
+	gotypuint8s       = "[]uint8"
+	gotypuint16       = "uint16"
+	gotypuint16s      = "[]uint16"
+	gotypuint32       = "uint32"
+	gotypuint32s      = "[]uint32"
+	gotypuint64       = "uint64"
+	gotypuint64s      = "[]uint64"
 	gotypfloat32      = "float32"
-	gotypfloat32p     = "*float32"
 	gotypfloat32s     = "[]float32"
 	gotypfloat64      = "float64"
-	gotypfloat64p     = "*float64"
 	gotypfloat64s     = "[]float64"
 	gotypfloat64a2    = "[2]float64"
 	gotypfloat64a2s   = "[][2]float64"
@@ -2189,21 +2220,20 @@ const (
 	gotypfloat64a2a2s = "[][2][2]float64"
 	gotypfloat64a3    = "[3]float64"
 	gotypfloat64a3s   = "[][3]float64"
-	gotypipnetp       = "*net.IPNet"
-	gotypipnetps      = "[]*net.IPNet"
+	gotypipnet        = "net.IPNet"
+	gotypipnets       = "[]net.IPNet"
 	gotyptime         = "time.Time"
-	gotyptimep        = "*time.Time"
 	gotyptimes        = "[]time.Time"
-	gotyptimeps       = "[]*time.Time"
 	gotyptimea2       = "[2]time.Time"
 	gotyptimea2s      = "[][2]time.Time"
 	gotypbigint       = "big.Int"
-	gotypbigintp      = "*big.Int"
 	gotypbigints      = "[]big.Int"
-	gotypbigintps     = "[]*big.Int"
 	gotypbiginta2     = "[2]big.Int"
-	gotypbigintpa2    = "[2]*big.Int"
-	gotypbigintpa2s   = "[][2]*big.Int"
+	gotypbiginta2s    = "[][2]big.Int"
+	gotypbigfloat     = "big.Float"
+	gotypbigfloats    = "[]big.Float"
+	gotypbigfloata2   = "[2]big.Float"
+	gotypbigfloata2s  = "[][2]big.Float"
 	gotypnullstringm  = "map[string]sql.NullString"
 	gotypnullstringms = "[]map[string]sql.NullString"
 )

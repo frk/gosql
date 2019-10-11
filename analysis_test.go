@@ -98,305 +98,305 @@ func TestAnalysis(t *testing.T) {
 		want *command
 		err  error
 	}{{
-		name: "InsertTestBAD_NoRelfield",
+		name: "InsertAnalysisTestBAD_NoRelfield",
 		err:  errors.NoRelfieldError,
 	}, {
-		name: "InsertTestBAD3",
+		name: "InsertAnalysisTestBAD3",
 		err:  errors.BadRelfieldTypeError,
 	}, {
-		name: "DeleteTestBAD_BadRelId",
+		name: "DeleteAnalysisTestBAD_BadRelId",
 		err:  errors.BadRelIdError,
 	}, {
-		name: "DeleteTestBAD_IllegalCountField",
+		name: "DeleteAnalysisTestBAD_IllegalCountField",
 		err:  errors.IllegalCountFieldError,
 	}, {
-		name: "UpdateTestBAD_IllegalExistsField",
+		name: "UpdateAnalysisTestBAD_IllegalExistsField",
 		err:  errors.IllegalExistsFieldError,
 	}, {
-		name: "InsertTestBAD_IllegalNotExistsField",
+		name: "InsertAnalysisTestBAD_IllegalNotExistsField",
 		err:  errors.IllegalNotExistsFieldError,
 	}, {
-		name: "SelectTestBAD_IllegalRelationDirective",
+		name: "SelectAnalysisTestBAD_IllegalRelationDirective",
 		err:  errors.IllegalRelationDirectiveError,
 	}, {
-		name: "SelectTestBAD_UnnamedBaseStructType",
+		name: "SelectAnalysisTestBAD_UnnamedBaseStructType",
 		err:  errors.BadRelfieldTypeError,
 	}, {
-		name: "SelectTestBAD_IllegalAllDirective",
+		name: "SelectAnalysisTestBAD_IllegalAllDirective",
 		err:  errors.IllegalAllDirectiveError,
 	}, {
-		name: "InsertTestBAD_IllegalAllDirective",
+		name: "InsertAnalysisTestBAD_IllegalAllDirective",
 		err:  errors.IllegalAllDirectiveError,
 	}, {
-		name: "UpdateTestBAD_ConflictWhereProducer",
+		name: "UpdateAnalysisTestBAD_ConflictWhereProducer",
 		err:  errors.ConflictWhereProducerError,
 	}, {
-		name: "DeleteTestBAD_IllegalDefaultDirective",
+		name: "DeleteAnalysisTestBAD_IllegalDefaultDirective",
 		err:  errors.IllegalDefaultDirectiveError,
 	}, {
-		name: "UpdateTestBAD_EmptyDefaultDirectiveCollist",
+		name: "UpdateAnalysisTestBAD_EmptyDefaultDirectiveCollist",
 		err:  errors.EmptyColListError,
 	}, {
-		name: "SelectTestBAD_IllegalForceDirective",
+		name: "SelectAnalysisTestBAD_IllegalForceDirective",
 		err:  errors.IllegalForceDirectiveError,
 	}, {
-		name: "UpdateTestBAD_BadForceDirectiveColId",
+		name: "UpdateAnalysisTestBAD_BadForceDirectiveColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "FilterTestBAD_IllegalReturnDirective",
+		name: "FilterAnalysisTestBAD_IllegalReturnDirective",
 		err:  errors.IllegalReturnDirectiveError,
 	}, {
-		name: "DeleteTestBAD_ConflictResultProducer",
+		name: "DeleteAnalysisTestBAD_ConflictResultProducer",
 		err:  errors.ConflictResultProducerError,
 	}, {
-		name: "UpdateTestBAD_EmptyReturnDirectiveCollist",
+		name: "UpdateAnalysisTestBAD_EmptyReturnDirectiveCollist",
 		err:  errors.EmptyColListError,
 	}, {
-		name: "InsertTestBAD_IllegalLimitField",
+		name: "InsertAnalysisTestBAD_IllegalLimitField",
 		err:  errors.IllegalLimitFieldOrDirectiveError,
 	}, {
-		name: "UpdateTestBAD_IllegalOffsetField",
+		name: "UpdateAnalysisTestBAD_IllegalOffsetField",
 		err:  errors.IllegalOffsetFieldOrDirectiveError,
 	}, {
-		name: "InsertTestBAD_IllegalOrderByDirective",
+		name: "InsertAnalysisTestBAD_IllegalOrderByDirective",
 		err:  errors.IllegalOrderByDirectiveError,
 	}, {
-		name: "DeleteTestBAD_IllegalOverrideDirective",
+		name: "DeleteAnalysisTestBAD_IllegalOverrideDirective",
 		err:  errors.IllegalOverrideDirectiveError,
 	}, {
-		name: "SelectTestBAD_IllegalTextSearchDirective",
+		name: "SelectAnalysisTestBAD_IllegalTextSearchDirective",
 		err:  errors.IllegalTextSearchDirectiveError,
 	}, {
-		name: "SelectTestBAD_IllegalColumnDirective",
+		name: "SelectAnalysisTestBAD_IllegalColumnDirective",
 		err:  errors.IllegalCommandDirectiveError,
 	}, {
-		name: "InsertTestBAD_IllegalWhereBlock",
+		name: "InsertAnalysisTestBAD_IllegalWhereBlock",
 		err:  errors.IllegalWhereBlockError,
 	}, {
-		name: "UpdateTestBAD_IllegalJoinBlock",
+		name: "UpdateAnalysisTestBAD_IllegalJoinBlock",
 		err:  errors.IllegalJoinBlockError,
 	}, {
-		name: "DeleteTestBAD_IllegalFromBlock",
+		name: "DeleteAnalysisTestBAD_IllegalFromBlock",
 		err:  errors.IllegalFromBlockError,
 	}, {
-		name: "SelectTestBAD_IllegalUsingBlock",
+		name: "SelectAnalysisTestBAD_IllegalUsingBlock",
 		err:  errors.IllegalUsingBlockError,
 	}, {
-		name: "UpdateTestBAD_IllegalOnConflictBlock",
+		name: "UpdateAnalysisTestBAD_IllegalOnConflictBlock",
 		err:  errors.IllegalOnConflictBlockError,
 	}, {
-		name: "SelectTestBAD_IllegalResultField",
+		name: "SelectAnalysisTestBAD_IllegalResultField",
 		err:  errors.IllegalResultFieldError,
 	}, {
-		name: "SelectTestBAD_ConflictLimitProducer",
+		name: "SelectAnalysisTestBAD_ConflictLimitProducer",
 		err:  errors.ConflictLimitProducerError,
 	}, {
-		name: "SelectTestBAD_ConflictOffsetProducer",
+		name: "SelectAnalysisTestBAD_ConflictOffsetProducer",
 		err:  errors.ConflictOffsetProducerError,
 	}, {
-		name: "SelectTestBAD_IllegalRowsAffectedField",
+		name: "SelectAnalysisTestBAD_IllegalRowsAffectedField",
 		err:  errors.IllegalRowsAffectedFieldError,
 	}, {
-		name: "InsertTestBAD_IllegalFilterField",
+		name: "InsertAnalysisTestBAD_IllegalFilterField",
 		err:  errors.IllegalFilterFieldError,
 	}, {
-		name: "SelectTestBAD_ConflictWhereProducer",
+		name: "SelectAnalysisTestBAD_ConflictWhereProducer",
 		err:  errors.ConflictWhereProducerError,
 	}, {
-		name: "DeleteTestBAD_ConflictWhereProducer",
+		name: "DeleteAnalysisTestBAD_ConflictWhereProducer",
 		err:  errors.ConflictErrorHandlerFieldError,
 	}, {
-		name: "SelectTestBAD_IteratorWithTooManyMethods",
+		name: "SelectAnalysisTestBAD_IteratorWithTooManyMethods",
 		err:  errors.BadIteratorTypeError,
 	}, {
-		name: "SelectTestBAD_IteratorWithBadSignature",
+		name: "SelectAnalysisTestBAD_IteratorWithBadSignature",
 		err:  errors.BadIteratorTypeError,
 	}, {
-		name: "SelectTestBAD_IteratorWithBadSignatureIface",
+		name: "SelectAnalysisTestBAD_IteratorWithBadSignatureIface",
 		err:  errors.BadIteratorTypeError,
 	}, {
-		name: "SelectTestBAD_IteratorWithUnexportedMethod",
+		name: "SelectAnalysisTestBAD_IteratorWithUnexportedMethod",
 		err:  errors.BadIteratorTypeError,
 	}, {
-		name: "SelectTestBAD_IteratorWithUnnamedArgument",
+		name: "SelectAnalysisTestBAD_IteratorWithUnnamedArgument",
 		err:  errors.BadIteratorTypeError,
 	}, {
-		name: "SelectTestBAD_IteratorWithNonStructArgument",
+		name: "SelectAnalysisTestBAD_IteratorWithNonStructArgument",
 		err:  errors.BadIteratorTypeError,
 	}, {
-		name: "InsertTestBAD_BadRelfiedlStructBaseType",
+		name: "InsertAnalysisTestBAD_BadRelfiedlStructBaseType",
 		err:  errors.BadRelfieldTypeError,
 	}, {
-		name: "UpdateTestBAD_BadRelTypeFieldColId",
+		name: "UpdateAnalysisTestBAD_BadRelTypeFieldColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "UpdateTestBAD_ConflictWhereProducer2",
+		name: "UpdateAnalysisTestBAD_ConflictWhereProducer2",
 		err:  errors.ConflictWhereProducerError,
 	}, {
-		name: "DeleteTestBAD_BadWhereBlockType",
+		name: "DeleteAnalysisTestBAD_BadWhereBlockType",
 		err:  errors.BadWhereBlockTypeError,
 	}, {
-		name: "SelectTestBAD_BadBoolTagValue",
+		name: "SelectAnalysisTestBAD_BadBoolTagValue",
 		err:  errors.BadBoolTagValueError,
 	}, {
-		name: "SelectTestBAD_BadNestedWhereBlockType",
+		name: "SelectAnalysisTestBAD_BadNestedWhereBlockType",
 		err:  errors.BadWhereBlockTypeError,
 	}, {
-		name: "SelectTestBAD_BadColumnExpressionLHS",
+		name: "SelectAnalysisTestBAD_BadColumnExpressionLHS",
 		err:  errors.BadColIdError,
 	}, {
-		name: "SelectTestBAD_BadColumnCmpopCombo",
+		name: "SelectAnalysisTestBAD_BadColumnCmpopCombo",
 		err:  errors.BadCmpopComboError,
 	}, {
-		name: "DeleteTestBAD_BadColumnExpressionLHS",
+		name: "DeleteAnalysisTestBAD_BadColumnExpressionLHS",
 		err:  errors.BadColIdError,
 	}, {
-		name: "UpdateTestBAD_BadUnaryOp",
+		name: "UpdateAnalysisTestBAD_BadUnaryOp",
 		err:  errors.BadUnaryCmpopError,
 	}, {
-		name: "UpdateTestBAD_ExtraScalarrop",
+		name: "UpdateAnalysisTestBAD_ExtraScalarrop",
 		err:  errors.ExtraScalarropError,
 	}, {
-		name: "SelectTestBAD_BadBetweenFieldType",
+		name: "SelectAnalysisTestBAD_BadBetweenFieldType",
 		err:  errors.BadBetweenTypeError,
 	}, {
-		name: "SelectTestBAD_BadBetweenFieldType2",
+		name: "SelectAnalysisTestBAD_BadBetweenFieldType2",
 		err:  errors.BadBetweenTypeError,
 	}, {
-		name: "SelectTestBAD_BadBetweenArgColId",
+		name: "SelectAnalysisTestBAD_BadBetweenArgColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "SelectTestBAD_NoBetweenXYArg",
+		name: "SelectAnalysisTestBAD_NoBetweenXYArg",
 		err:  errors.NoBetweenXYArgsError,
 	}, {
-		name: "SelectTestBAD_BadBetweenColId",
+		name: "SelectAnalysisTestBAD_BadBetweenColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "DeleteTestBAD_BadWhereFieldColId",
+		name: "DeleteAnalysisTestBAD_BadWhereFieldColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "DeleteTestBAD_BadWhereFieldCmpopCombo",
+		name: "DeleteAnalysisTestBAD_BadWhereFieldCmpopCombo",
 		err:  errors.BadCmpopComboError,
 	}, {
-		name: "DeleteTestBAD_IllegalWhereFieldUnaryCmp",
+		name: "DeleteAnalysisTestBAD_IllegalWhereFieldUnaryCmp",
 		err:  errors.IllegalUnaryComparisonOperatorError,
 	}, {
-		name: "UpdateTestBAD_BadWhereFieldTypeForScalarrop",
+		name: "UpdateAnalysisTestBAD_BadWhereFieldTypeForScalarrop",
 		err:  errors.BadScalarFieldTypeError,
 	}, {
-		name: "SelectTestBAD_BadJoinBlockType",
+		name: "SelectAnalysisTestBAD_BadJoinBlockType",
 		err:  errors.BadJoinBlockTypeError,
 	}, {
-		name: "SelectTestBAD_IllegalJoinBlockRelationDirective",
+		name: "SelectAnalysisTestBAD_IllegalJoinBlockRelationDirective",
 		err:  errors.IllegalJoinBlockRelationDirectiveError,
 	}, {
-		name: "DeleteTestBAD_ConflictRelationDirective",
+		name: "DeleteAnalysisTestBAD_ConflictRelationDirective",
 		err:  errors.ConflictJoinBlockRelationDirectiveError,
 	}, {
-		name: "UpdateTestBAD_BadFromRelationRelId",
+		name: "UpdateAnalysisTestBAD_BadFromRelationRelId",
 		err:  errors.BadRelIdError,
 	}, {
-		name: "SelectTestBAD_BadJoinDirectiveRelId",
+		name: "SelectAnalysisTestBAD_BadJoinDirectiveRelId",
 		err:  errors.BadRelIdError,
 	}, {
-		name: "SelectTestBAD_BadJoinDirectiveExpressionColId",
+		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "SelectTestBAD_BadJoinDirectiveExpressionCmpop",
+		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpop",
 		err:  errors.BadUnaryCmpopError,
 	}, {
-		name: "SelectTestBAD_BadJoinDirectiveExpressionExtraScalarrop",
+		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraScalarrop",
 		err:  errors.ExtraScalarropError,
 	}, {
-		name: "SelectTestBAD_BadJoinDirectiveExpressionCmpopCombo",
+		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpopCombo",
 		err:  errors.BadCmpopComboError,
 	}, {
-		name: "DeleteTestBAD_IllegalJoinBlockDirective",
+		name: "DeleteAnalysisTestBAD_IllegalJoinBlockDirective",
 		err:  errors.IllegalJoinBlockDirectiveError,
 	}, {
-		name: "InsertTestBAD_BadOnConflictBlockType",
+		name: "InsertAnalysisTestBAD_BadOnConflictBlockType",
 		err:  errors.BadOnConflictBlockTypeError,
 	}, {
-		name: "InsertTestBAD_ConflictOnConflictBlockTargetProducer",
+		name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer",
 		err:  errors.ConflictOnConflictBlockTargetProducerError,
 	}, {
-		name: "InsertTestBAD_ConflictOnConflictBlockTargetProducer2",
+		name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer2",
 		err:  errors.ConflictOnConflictBlockTargetProducerError,
 	}, {
-		name: "InsertTestBAD_ConflictOnConflictBlockTargetProducer3",
+		name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer3",
 		err:  errors.ConflictOnConflictBlockTargetProducerError,
 	}, {
-		name: "InsertTestBAD_ConflictOnConflictBlockActionProducer",
+		name: "InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer",
 		err:  errors.ConflictOnConflictBlockActionProducerError,
 	}, {
-		name: "InsertTestBAD_ConflictOnConflictBlockActionProducer2",
+		name: "InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer2",
 		err:  errors.ConflictOnConflictBlockActionProducerError,
 	}, {
-		name: "InsertTestBAD_BadOnConflictColumnTargetValue",
+		name: "InsertAnalysisTestBAD_BadOnConflictColumnTargetValue",
 		err:  errors.BadColIdError,
 	}, {
-		name: "InsertTestBAD_BadOnConflictIndexTargetIdent",
+		name: "InsertAnalysisTestBAD_BadOnConflictIndexTargetIdent",
 		err:  errors.BadIndexIdentifierValueError,
 	}, {
-		name: "InsertTestBAD_BadOnConflictConstraintTargetIdent",
+		name: "InsertAnalysisTestBAD_BadOnConflictConstraintTargetIdent",
 		err:  errors.BadConstraintIdentifierValueError,
 	}, {
-		name: "InsertTestBAD_BadOnConflictUpdateActionCollist",
+		name: "InsertAnalysisTestBAD_BadOnConflictUpdateActionCollist",
 		err:  errors.BadColIdError,
 	}, {
-		name: "InsertTestBAD_IllegalOnConflictDirective",
+		name: "InsertAnalysisTestBAD_IllegalOnConflictDirective",
 		err:  errors.IllegalOnConflictBlockDirectiveError,
 	}, {
-		name: "InsertTestBAD_NoOnConflictTarget",
+		name: "InsertAnalysisTestBAD_NoOnConflictTarget",
 		err:  errors.NoOnConflictTargetError,
 	}, {
-		name: "SelectTestBAD_BadLimitFieldType",
+		name: "SelectAnalysisTestBAD_BadLimitFieldType",
 		err:  errors.BadLimitTypeError,
 	}, {
-		name: "SelectTestBAD_NoLimitDirectiveValue",
+		name: "SelectAnalysisTestBAD_NoLimitDirectiveValue",
 		err:  errors.NoLimitDirectiveValueError,
 	}, {
-		name: "SelectTestBAD_BadLimitDirectiveValue",
+		name: "SelectAnalysisTestBAD_BadLimitDirectiveValue",
 		err:  errors.BadLimitValueError,
 	}, {
-		name: "SelectTestBAD_BadOffsetFieldType",
+		name: "SelectAnalysisTestBAD_BadOffsetFieldType",
 		err:  errors.BadOffsetTypeError,
 	}, {
-		name: "SelectTestBAD_NoOffsetDirectiveValue",
+		name: "SelectAnalysisTestBAD_NoOffsetDirectiveValue",
 		err:  errors.NoOffsetDirectiveValueError,
 	}, {
-		name: "SelectTestBAD_BadOffsetDirectiveValue",
+		name: "SelectAnalysisTestBAD_BadOffsetDirectiveValue",
 		err:  errors.BadOffsetValueError,
 	}, {
-		name: "SelectTestBAD_EmptyOrderByDirectiveCollist",
+		name: "SelectAnalysisTestBAD_EmptyOrderByDirectiveCollist",
 		err:  errors.EmptyOrderByListError,
 	}, {
-		name: "SelectTestBAD_BadOrderByDirectiveNullsOrderValue",
+		name: "SelectAnalysisTestBAD_BadOrderByDirectiveNullsOrderValue",
 		err:  errors.BadNullsOrderOptionValueError,
 	}, {
-		name: "SelectTestBAD_BadOrderByDirectiveCollist",
+		name: "SelectAnalysisTestBAD_BadOrderByDirectiveCollist",
 		err:  errors.BadColIdError,
 	}, {
-		name: "InsertTestBAD_BadOverrideDirectiveKindValue",
+		name: "InsertAnalysisTestBAD_BadOverrideDirectiveKindValue",
 		err:  errors.BadOverrideKindValueError,
 	}, {
-		name: "UpdateTestBAD_ConflictResultProducer",
+		name: "UpdateAnalysisTestBAD_ConflictResultProducer",
 		err:  errors.ConflictResultProducerError,
 	}, {
-		name: "UpdateTestBAD_BadResultFieldType",
+		name: "UpdateAnalysisTestBAD_BadResultFieldType",
 		err:  errors.BadRelfieldTypeError,
 	}, {
-		name: "DeleteTestBAD_ConflictResultProducer2",
+		name: "DeleteAnalysisTestBAD_ConflictResultProducer2",
 		err:  errors.ConflictResultProducerError,
 	}, {
-		name: "DeleteTestBAD_BadRowsAffecteFieldType",
+		name: "DeleteAnalysisTestBAD_BadRowsAffecteFieldType",
 		err:  errors.BadRowsAffectedTypeError,
 	}, {
-		name: "FilterTestBAD_BadTextSearchDirectiveColId",
+		name: "FilterAnalysisTestBAD_BadTextSearchDirectiveColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "InsertTestOK1",
-		want: &command{name: "InsertTestOK1", typ: cmdtypeInsert, rel: &relfield{
+		name: "InsertAnalysisTestOK1",
+		want: &command{name: "InsertAnalysisTestOK1", typ: cmdtypeInsert, rel: &relfield{
 			field: "UserRec",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -405,8 +405,8 @@ func TestAnalysis(t *testing.T) {
 			},
 		}},
 	}, {
-		name: "InsertTestOK2",
-		want: &command{name: "InsertTestOK2", typ: cmdtypeInsert, rel: &relfield{
+		name: "InsertAnalysisTestOK2",
+		want: &command{name: "InsertAnalysisTestOK2", typ: cmdtypeInsert, rel: &relfield{
 			field: "UserRec",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -423,8 +423,8 @@ func TestAnalysis(t *testing.T) {
 			},
 		}},
 	}, {
-		name: "SelectTestOK3",
-		want: &command{name: "SelectTestOK3", typ: cmdtypeSelect, rel: &relfield{
+		name: "SelectAnalysisTestOK3",
+		want: &command{name: "SelectAnalysisTestOK3", typ: cmdtypeSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -434,8 +434,8 @@ func TestAnalysis(t *testing.T) {
 			},
 		}},
 	}, {
-		name: "SelectTestOK4",
-		want: &command{name: "SelectTestOK4", typ: cmdtypeSelect, rel: &relfield{
+		name: "SelectAnalysisTestOK4",
+		want: &command{name: "SelectAnalysisTestOK4", typ: cmdtypeSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -445,8 +445,8 @@ func TestAnalysis(t *testing.T) {
 			},
 		}},
 	}, {
-		name: "SelectTestOK5",
-		want: &command{name: "SelectTestOK5", typ: cmdtypeSelect, rel: &relfield{
+		name: "SelectAnalysisTestOK5",
+		want: &command{name: "SelectAnalysisTestOK5", typ: cmdtypeSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -457,8 +457,8 @@ func TestAnalysis(t *testing.T) {
 			},
 		}},
 	}, {
-		name: "SelectTestOK6",
-		want: &command{name: "SelectTestOK6", typ: cmdtypeSelect, rel: &relfield{
+		name: "SelectAnalysisTestOK6",
+		want: &command{name: "SelectAnalysisTestOK6", typ: cmdtypeSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -469,8 +469,8 @@ func TestAnalysis(t *testing.T) {
 			},
 		}},
 	}, {
-		name: "SelectTestOK7",
-		want: &command{name: "SelectTestOK7", typ: cmdtypeSelect, rel: &relfield{
+		name: "SelectAnalysisTestOK7",
+		want: &command{name: "SelectAnalysisTestOK7", typ: cmdtypeSelect, rel: &relfield{
 			field: "Rel",
 			relid: relid{name: "relation_a"},
 			datatype: datatype{
@@ -526,8 +526,8 @@ func TestAnalysis(t *testing.T) {
 			},
 		}},
 	}, {
-		name: "InsertTestOK8",
-		want: &command{name: "InsertTestOK8", typ: cmdtypeInsert, rel: &relfield{
+		name: "InsertAnalysisTestOK8",
+		want: &command{name: "InsertAnalysisTestOK8", typ: cmdtypeInsert, rel: &relfield{
 			field: "Rel",
 			relid: relid{name: "relation_a"},
 			datatype: datatype{
@@ -584,9 +584,9 @@ func TestAnalysis(t *testing.T) {
 			},
 		}},
 	}, {
-		name: "DeleteTestOK9",
+		name: "DeleteAnalysisTestOK9",
 		want: &command{
-			name: "DeleteTestOK9",
+			name: "DeleteAnalysisTestOK9",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -603,9 +603,9 @@ func TestAnalysis(t *testing.T) {
 			}}},
 		},
 	}, {
-		name: "DeleteTestOK10",
+		name: "DeleteAnalysisTestOK10",
 		want: &command{
-			name: "DeleteTestOK10",
+			name: "DeleteAnalysisTestOK10",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -624,9 +624,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK11",
+		name: "DeleteAnalysisTestOK11",
 		want: &command{
-			name: "DeleteTestOK11",
+			name: "DeleteAnalysisTestOK11",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -678,9 +678,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK12",
+		name: "DeleteAnalysisTestOK12",
 		want: &command{
-			name: "DeleteTestOK12",
+			name: "DeleteAnalysisTestOK12",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -698,9 +698,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK13",
+		name: "DeleteAnalysisTestOK13",
 		want: &command{
-			name: "DeleteTestOK13",
+			name: "DeleteAnalysisTestOK13",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -716,9 +716,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK14",
+		name: "DeleteAnalysisTestOK14",
 		want: &command{
-			name: "DeleteTestOK14",
+			name: "DeleteAnalysisTestOK14",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -757,9 +757,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK_DistinctFrom",
+		name: "DeleteAnalysisTestOK_DistinctFrom",
 		want: &command{
-			name: "DeleteTestOK_DistinctFrom",
+			name: "DeleteAnalysisTestOK_DistinctFrom",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -784,9 +784,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK_ArrayComparisons",
+		name: "DeleteAnalysisTestOK_ArrayComparisons",
 		want: &command{
-			name: "DeleteTestOK_ArrayComparisons",
+			name: "DeleteAnalysisTestOK_ArrayComparisons",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -857,9 +857,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK_PatternMatching",
+		name: "DeleteAnalysisTestOK_PatternMatching",
 		want: &command{
-			name: "DeleteTestOK_PatternMatching",
+			name: "DeleteAnalysisTestOK_PatternMatching",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -918,9 +918,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "DeleteTestOK_Using",
+		name: "DeleteAnalysisTestOK_Using",
 		want: &command{
-			name: "DeleteTestOK_Using",
+			name: "DeleteAnalysisTestOK_Using",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -963,9 +963,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "UpdateTestOK_From",
+		name: "UpdateAnalysisTestOK_From",
 		want: &command{
-			name: "UpdateTestOK_From",
+			name: "UpdateAnalysisTestOK_From",
 			typ:  cmdtypeUpdate,
 			rel: &relfield{
 				field:    "Rel",
@@ -1008,9 +1008,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "SelectTestOK_Join",
+		name: "SelectAnalysisTestOK_Join",
 		want: &command{
-			name: "SelectTestOK_Join",
+			name: "SelectAnalysisTestOK_Join",
 			typ:  cmdtypeSelect,
 			rel: &relfield{
 				field:    "Rel",
@@ -1058,9 +1058,9 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "UpdateTestOK_All",
+		name: "UpdateAnalysisTestOK_All",
 		want: &command{
-			name: "UpdateTestOK_All",
+			name: "UpdateAnalysisTestOK_All",
 			typ:  cmdtypeUpdate,
 			rel: &relfield{
 				field:    "Rel",
@@ -1070,9 +1070,9 @@ func TestAnalysis(t *testing.T) {
 			all: true,
 		},
 	}, {
-		name: "DeleteTestOK_All",
+		name: "DeleteAnalysisTestOK_All",
 		want: &command{
-			name: "DeleteTestOK_All",
+			name: "DeleteAnalysisTestOK_All",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -1082,9 +1082,9 @@ func TestAnalysis(t *testing.T) {
 			all: true,
 		},
 	}, {
-		name: "DeleteTestOK_Return",
+		name: "DeleteAnalysisTestOK_Return",
 		want: &command{
-			name: "DeleteTestOK_Return",
+			name: "DeleteAnalysisTestOK_Return",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field:    "Rel",
@@ -1094,9 +1094,9 @@ func TestAnalysis(t *testing.T) {
 			returning: &collist{all: true},
 		},
 	}, {
-		name: "InsertTestOK_Return",
+		name: "InsertAnalysisTestOK_Return",
 		want: &command{
-			name: "InsertTestOK_Return",
+			name: "InsertAnalysisTestOK_Return",
 			typ:  cmdtypeInsert,
 			rel: &relfield{
 				field:    "Rel",
@@ -1109,9 +1109,9 @@ func TestAnalysis(t *testing.T) {
 				{qual: "a", name: "baz"}}},
 		},
 	}, {
-		name: "UpdateTestOK_Return",
+		name: "UpdateAnalysisTestOK_Return",
 		want: &command{
-			name: "UpdateTestOK_Return",
+			name: "UpdateAnalysisTestOK_Return",
 			typ:  cmdtypeUpdate,
 			rel: &relfield{
 				field:    "Rel",
@@ -1124,9 +1124,9 @@ func TestAnalysis(t *testing.T) {
 				{qual: "a", name: "baz"}}},
 		},
 	}, {
-		name: "InsertTestOK_Default",
+		name: "InsertAnalysisTestOK_Default",
 		want: &command{
-			name: "InsertTestOK_Default",
+			name: "InsertAnalysisTestOK_Default",
 			typ:  cmdtypeInsert,
 			rel: &relfield{
 				field:    "Rel",
@@ -1136,9 +1136,9 @@ func TestAnalysis(t *testing.T) {
 			defaults: &collist{all: true},
 		},
 	}, {
-		name: "UpdateTestOK_Default",
+		name: "UpdateAnalysisTestOK_Default",
 		want: &command{
-			name: "UpdateTestOK_Default",
+			name: "UpdateAnalysisTestOK_Default",
 			typ:  cmdtypeUpdate,
 			rel: &relfield{
 				field:    "Rel",
@@ -1151,9 +1151,9 @@ func TestAnalysis(t *testing.T) {
 				{qual: "a", name: "baz"}}},
 		},
 	}, {
-		name: "InsertTestOK_Force",
+		name: "InsertAnalysisTestOK_Force",
 		want: &command{
-			name: "InsertTestOK_Force",
+			name: "InsertAnalysisTestOK_Force",
 			typ:  cmdtypeInsert,
 			rel: &relfield{
 				field:    "Rel",
@@ -1163,9 +1163,9 @@ func TestAnalysis(t *testing.T) {
 			force: &collist{all: true},
 		},
 	}, {
-		name: "UpdateTestOK_Force",
+		name: "UpdateAnalysisTestOK_Force",
 		want: &command{
-			name: "UpdateTestOK_Force",
+			name: "UpdateAnalysisTestOK_Force",
 			typ:  cmdtypeUpdate,
 			rel: &relfield{
 				field:    "Rel",
@@ -1178,9 +1178,9 @@ func TestAnalysis(t *testing.T) {
 				{qual: "a", name: "baz"}}},
 		},
 	}, {
-		name: "SelectTestOK_ErrorHandler",
+		name: "SelectAnalysisTestOK_ErrorHandler",
 		want: &command{
-			name: "SelectTestOK_ErrorHandler",
+			name: "SelectAnalysisTestOK_ErrorHandler",
 			typ:  cmdtypeSelect,
 			rel: &relfield{
 				field:    "Rel",
@@ -1190,9 +1190,9 @@ func TestAnalysis(t *testing.T) {
 			erh: "eh",
 		},
 	}, {
-		name: "InsertTestOK_ErrorHandler",
+		name: "InsertAnalysisTestOK_ErrorHandler",
 		want: &command{
-			name: "InsertTestOK_ErrorHandler",
+			name: "InsertAnalysisTestOK_ErrorHandler",
 			typ:  cmdtypeInsert,
 			rel: &relfield{
 				field:    "Rel",
@@ -1202,9 +1202,9 @@ func TestAnalysis(t *testing.T) {
 			erh: "myerrorhandler",
 		},
 	}, {
-		name: "SelectTestOK_Count",
+		name: "SelectAnalysisTestOK_Count",
 		want: &command{
-			name: "SelectTestOK_Count",
+			name: "SelectAnalysisTestOK_Count",
 			typ:  cmdtypeSelect,
 			rel: &relfield{
 				field: "Count",
@@ -1213,9 +1213,9 @@ func TestAnalysis(t *testing.T) {
 			sel: selcount,
 		},
 	}, {
-		name: "SelectTestOK_Exists",
+		name: "SelectAnalysisTestOK_Exists",
 		want: &command{
-			name: "SelectTestOK_Exists",
+			name: "SelectAnalysisTestOK_Exists",
 			typ:  cmdtypeSelect,
 			rel: &relfield{
 				field: "Exists",
@@ -1224,9 +1224,9 @@ func TestAnalysis(t *testing.T) {
 			sel: selexists,
 		},
 	}, {
-		name: "SelectTestOK_NotExists",
+		name: "SelectAnalysisTestOK_NotExists",
 		want: &command{
-			name: "SelectTestOK_NotExists",
+			name: "SelectAnalysisTestOK_NotExists",
 			typ:  cmdtypeSelect,
 			rel: &relfield{
 				field: "NotExists",
@@ -1235,9 +1235,9 @@ func TestAnalysis(t *testing.T) {
 			sel: selnotexists,
 		},
 	}, {
-		name: "DeleteTestOK_Relation",
+		name: "DeleteAnalysisTestOK_Relation",
 		want: &command{
-			name: "DeleteTestOK_Relation",
+			name: "DeleteAnalysisTestOK_Relation",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field: "_",
@@ -1246,41 +1246,41 @@ func TestAnalysis(t *testing.T) {
 			},
 		},
 	}, {
-		name: "SelectTestOK_LimitDirective",
+		name: "SelectAnalysisTestOK_LimitDirective",
 		want: &command{
-			name:  "SelectTestOK_LimitDirective",
+			name:  "SelectAnalysisTestOK_LimitDirective",
 			typ:   cmdtypeSelect,
 			rel:   reldummyslice,
 			limit: &limitvar{value: 25},
 		},
 	}, {
-		name: "SelectTestOK_LimitField",
+		name: "SelectAnalysisTestOK_LimitField",
 		want: &command{
-			name:  "SelectTestOK_LimitField",
+			name:  "SelectAnalysisTestOK_LimitField",
 			typ:   cmdtypeSelect,
 			rel:   reldummyslice,
 			limit: &limitvar{value: 10, field: "Limit"},
 		},
 	}, {
-		name: "SelectTestOK_OffsetDirective",
+		name: "SelectAnalysisTestOK_OffsetDirective",
 		want: &command{
-			name:   "SelectTestOK_OffsetDirective",
+			name:   "SelectAnalysisTestOK_OffsetDirective",
 			typ:    cmdtypeSelect,
 			rel:    reldummyslice,
 			offset: &offsetvar{value: 25},
 		},
 	}, {
-		name: "SelectTestOK_OffsetField",
+		name: "SelectAnalysisTestOK_OffsetField",
 		want: &command{
-			name:   "SelectTestOK_OffsetField",
+			name:   "SelectAnalysisTestOK_OffsetField",
 			typ:    cmdtypeSelect,
 			rel:    reldummyslice,
 			offset: &offsetvar{value: 10, field: "Offset"},
 		},
 	}, {
-		name: "SelectTestOK_OrderByDirective",
+		name: "SelectAnalysisTestOK_OrderByDirective",
 		want: &command{
-			name: "SelectTestOK_OrderByDirective",
+			name: "SelectAnalysisTestOK_OrderByDirective",
 			typ:  cmdtypeSelect,
 			rel:  reldummyslice,
 			orderby: &orderbylist{items: []*orderbyitem{
@@ -1291,17 +1291,17 @@ func TestAnalysis(t *testing.T) {
 			}},
 		},
 	}, {
-		name: "InsertTestOK_OverrideDirective",
+		name: "InsertAnalysisTestOK_OverrideDirective",
 		want: &command{
-			name:     "InsertTestOK_OverrideDirective",
+			name:     "InsertAnalysisTestOK_OverrideDirective",
 			typ:      cmdtypeInsert,
 			rel:      reldummyslice,
 			override: overridingsystem,
 		},
 	}, {
-		name: "FilterTestOK_TextSearchDirective",
+		name: "FilterAnalysisTestOK_TextSearchDirective",
 		want: &command{
-			name: "FilterTestOK_TextSearchDirective",
+			name: "FilterAnalysisTestOK_TextSearchDirective",
 			typ:  cmdtypeFilter,
 			rel: &relfield{
 				field:    "_",
@@ -1311,17 +1311,17 @@ func TestAnalysis(t *testing.T) {
 			textsearch: &colid{qual: "a", name: "ts_document"},
 		},
 	}, {
-		name: "InsertTestOK_OnConflict",
+		name: "InsertAnalysisTestOK_OnConflict",
 		want: &command{
-			name:       "InsertTestOK_OnConflict",
+			name:       "InsertAnalysisTestOK_OnConflict",
 			typ:        cmdtypeInsert,
 			rel:        reldummyslice,
 			onconflict: &onconflictblock{ignore: true},
 		},
 	}, {
-		name: "InsertTestOK_OnConflictColumn",
+		name: "InsertAnalysisTestOK_OnConflictColumn",
 		want: &command{
-			name: "InsertTestOK_OnConflictColumn",
+			name: "InsertAnalysisTestOK_OnConflictColumn",
 			typ:  cmdtypeInsert,
 			rel:  reldummyslice,
 			onconflict: &onconflictblock{
@@ -1330,9 +1330,9 @@ func TestAnalysis(t *testing.T) {
 			},
 		},
 	}, {
-		name: "InsertTestOK_OnConflictConstraint",
+		name: "InsertAnalysisTestOK_OnConflictConstraint",
 		want: &command{
-			name: "InsertTestOK_OnConflictConstraint",
+			name: "InsertAnalysisTestOK_OnConflictConstraint",
 			typ:  cmdtypeInsert,
 			rel:  reldummyslice,
 			onconflict: &onconflictblock{
@@ -1345,9 +1345,9 @@ func TestAnalysis(t *testing.T) {
 			},
 		},
 	}, {
-		name: "InsertTestOK_OnConflictIndex",
+		name: "InsertAnalysisTestOK_OnConflictIndex",
 		want: &command{
-			name: "InsertTestOK_OnConflictIndex",
+			name: "InsertAnalysisTestOK_OnConflictIndex",
 			typ:  cmdtypeInsert,
 			rel:  reldummyslice,
 			onconflict: &onconflictblock{
@@ -1356,9 +1356,9 @@ func TestAnalysis(t *testing.T) {
 			},
 		},
 	}, {
-		name: "DeleteTestOK_ResultField",
+		name: "DeleteAnalysisTestOK_ResultField",
 		want: &command{
-			name: "DeleteTestOK_ResultField",
+			name: "DeleteAnalysisTestOK_ResultField",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field: "_",
@@ -1374,9 +1374,9 @@ func TestAnalysis(t *testing.T) {
 			},
 		},
 	}, {
-		name: "DeleteTestOK_RowsAffected",
+		name: "DeleteAnalysisTestOK_RowsAffected",
 		want: &command{
-			name: "DeleteTestOK_RowsAffected",
+			name: "DeleteAnalysisTestOK_RowsAffected",
 			typ:  cmdtypeDelete,
 			rel: &relfield{
 				field: "_",
@@ -1389,17 +1389,17 @@ func TestAnalysis(t *testing.T) {
 			rowsaffected: "RowsAffected",
 		},
 	}, {
-		name: "SelectTestOK_FilterField",
+		name: "SelectAnalysisTestOK_FilterField",
 		want: &command{
-			name:   "SelectTestOK_FilterField",
+			name:   "SelectAnalysisTestOK_FilterField",
 			typ:    cmdtypeSelect,
 			rel:    reldummyslice,
 			filter: "Filter",
 		},
 	}, {
-		name: "SelectTestOK_FieldTypesBasic",
+		name: "SelectAnalysisTestOK_FieldTypesBasic",
 		want: &command{
-			name: "SelectTestOK_FieldTypesBasic",
+			name: "SelectAnalysisTestOK_FieldTypesBasic",
 			typ:  cmdtypeSelect,
 			rel: &relfield{
 				field: "Rel",
@@ -1487,9 +1487,9 @@ func TestAnalysis(t *testing.T) {
 			},
 		},
 	}, {
-		name: "SelectTestOK_FieldTypesSlices",
+		name: "SelectAnalysisTestOK_FieldTypesSlices",
 		want: &command{
-			name: "SelectTestOK_FieldTypesSlices",
+			name: "SelectAnalysisTestOK_FieldTypesSlices",
 			typ:  cmdtypeSelect,
 			rel: &relfield{
 				field: "Rel",
@@ -1673,9 +1673,9 @@ func TestAnalysis(t *testing.T) {
 			},
 		},
 	}, {
-		name: "SelectTestOK_FieldTypesInterfaces",
+		name: "SelectAnalysisTestOK_FieldTypesInterfaces",
 		want: &command{
-			name: "SelectTestOK_FieldTypesInterfaces",
+			name: "SelectAnalysisTestOK_FieldTypesInterfaces",
 			typ:  cmdtypeSelect,
 			rel: &relfield{
 				field: "Rel",
@@ -1739,49 +1739,49 @@ func TestTypeinfo_string(t *testing.T) {
 		want string
 	}{
 		{"f01", gotypbool},
-		{"f02", gotypboolp},
+		{"f02", gotypbool},
 		{"f03", gotypbools},
 		{"f04", gotypstring},
-		{"f05", gotypstringp},
+		{"f05", gotypstring},
 		{"f06", gotypstrings},
 		{"f07", gotypstringss},
 		{"f08", gotypstringm},
-		{"f09", gotypstringpm},
+		{"f09", gotypstringm},
 		{"f10", gotypstringms},
-		{"f11", gotypstringpms},
+		{"f11", gotypstringms},
 		{"f12", gotypbyte},
-		{"f13", gotypbytep},
+		{"f13", gotypbyte},
 		{"f14", gotypbytes},
 		{"f15", gotypbytess},
 		{"f16", gotypbytea16},
 		{"f17", gotypbytea16s},
 		{"f18", gotyprune},
-		{"f19", gotyprunep},
+		{"f19", gotyprune},
 		{"f20", gotyprunes},
 		{"f21", gotypruness},
 		{"f22", gotypint8},
-		{"f23", gotypint8p},
+		{"f23", gotypint8},
 		{"f24", gotypint8s},
 		{"f25", gotypint8ss},
 		{"f26", gotypint16},
-		{"f27", gotypint16p},
+		{"f27", gotypint16},
 		{"f28", gotypint16s},
 		{"f29", gotypint16ss},
 		{"f30", gotypint32},
-		{"f31", gotypint32p},
+		{"f31", gotypint32},
 		{"f32", gotypint32s},
 		{"f33", gotypint32a2},
 		{"f34", gotypint32a2s},
 		{"f35", gotypint64},
-		{"f36", gotypint64p},
+		{"f36", gotypint64},
 		{"f37", gotypint64s},
 		{"f38", gotypint64a2},
 		{"f39", gotypint64a2s},
 		{"f40", gotypfloat32},
-		{"f41", gotypfloat32p},
+		{"f41", gotypfloat32},
 		{"f42", gotypfloat32s},
 		{"f43", gotypfloat64},
-		{"f44", gotypfloat64p},
+		{"f44", gotypfloat64},
 		{"f45", gotypfloat64s},
 		{"f46", gotypfloat64a2},
 		{"f47", gotypfloat64a2s},
@@ -1790,30 +1790,30 @@ func TestTypeinfo_string(t *testing.T) {
 		{"f50", gotypfloat64a2a2s},
 		{"f51", gotypfloat64a3},
 		{"f52", gotypfloat64a3s},
-		{"f53", gotypipnetp},
-		{"f54", gotypipnetps},
+		{"f53", gotypipnet},
+		{"f54", gotypipnets},
 		{"f55", gotyptime},
-		{"f56", gotyptimep},
+		{"f56", gotyptime},
 		{"f57", gotyptimes},
-		{"f58", gotyptimeps},
+		{"f58", gotyptimes},
 		{"f59", gotyptimea2},
 		{"f60", gotyptimea2s},
 		{"f61", gotypbytes},
 		{"f62", gotypbytess},
 		{"f63", gotypbigint},
-		{"f64", gotypbigintp},
+		{"f64", gotypbigint},
 		{"f65", gotypbigints},
-		{"f66", gotypbigintps},
+		{"f66", gotypbigints},
 		{"f67", gotypbiginta2},
-		{"f68", gotypbigintpa2},
-		{"f69", gotypbigintpa2s},
+		{"f68", gotypbiginta2},
+		{"f69", gotypbiginta2s},
 		{"f70", gotypnullstringm},
 		{"f71", gotypnullstringms},
 		{"f72", gotypbytes},
 		{"f73", gotypbytess},
 	}
 
-	cmd, err := runAnalysis("SelectTestOK_typeinfo_string", t)
+	cmd, err := runAnalysis("SelectAnalysisTestOK_typeinfo_string", t)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1822,7 +1822,7 @@ func TestTypeinfo_string(t *testing.T) {
 		ff := fields[i]
 		tt := tests[i]
 
-		got := ff.typ.string()
+		got := ff.typ.string(true)
 		if ff.name != tt.name || got != tt.want {
 			t.Errorf("got %s::%s, want %s::%s", ff.name, got, tt.name, tt.want)
 		}

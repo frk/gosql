@@ -85,9 +85,9 @@ CREATE TABLE column_tests_2 (
 	, col_text_search_bad text -- text search column must be tsvector
 	, col_orderby_a text
 	, col_orderby_b integer
-	, col_foo integer
-	, col_bar text
-	, col_baz boolean
+	, col_foo integer default 0
+	, col_bar text default ''
+	, col_baz boolean not null default false
 	, col_indkey1 text
 	, col_indkey2 integer
 	, col_conkey1 text

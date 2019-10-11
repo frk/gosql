@@ -8,6 +8,204 @@ import (
 	"github.com/frk/gosql/internal/errors"
 )
 
+func Test_pgcheck_run(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+	}{{
+		name: "SelectPostgresTestOK_Simple",
+		err:  nil,
+	}, {
+		name: "SelectPostgresTestBAD_NoRelation",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "DeletePostgresTestBAD_JoinNoRelation",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "DeletePostgresTestBAD_JoinNoRelation2",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinNoAliasRelation",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinNoAliasRelation2",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinNoColumn",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinNoColumn2",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinBadUnaryBoolColumn",
+		err:  errors.BadColumnTypeForUnaryOpError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinBadUnaryNullColumn",
+		err:  errors.BadColumnNULLSettingForNULLOpError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinBadLiteralExpression",
+		err:  errors.BadLiteralExpressionError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinBadScalarOpColumnType",
+		err:  errors.BadExpressionTypeForScalarrOpError,
+	}, {
+		name: "SelectPostgresTestBAD_JoinBadComparisonOperandType",
+		err:  errors.BadColumnToLiteralComparisonError,
+	}, {
+		name: "InsertPostgresTestBAD_OnConflictNoColumn",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "InsertPostgresTestBAD_OnConflictColumnNoIndexMatch",
+		err:  errors.NoDBIndexForColumnListError,
+	}, {
+		name: "InsertPostgresTestBAD_OnConflictNoIndex",
+		err:  errors.NoDBIndexError,
+	}, {
+		name: "InsertPostgresTestBAD_OnConflictNoUniqueIndex",
+		err:  errors.NoDBIndexError,
+	}, {
+		name: "InsertPostgresTestBAD_OnConflictNoConstraint",
+		err:  errors.NoDBConstraintError,
+	}, {
+		name: "InsertPostgresTestBAD_OnConflictNoUniqueConstraint",
+		err:  errors.NoDBConstraintError,
+	}, {
+		name: "InsertPostgresTestBAD_OnConflictUpdateColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereFieldNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereAliasNotFound",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "SelectPostgresTestBAD_WherePointerFieldForNonNullColumn",
+		err:  errors.IllegalPtrFieldForNotNullColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereBadFieldTypeForScalarOp",
+		err:  errors.IllegalFieldTypeForScalarOpError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereCannotCompareTypes",
+		err:  errors.BadFieldToColumnTypeError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnTypeForModfunc",
+		err:  errors.BadColumnTypeToModFuncError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnNotFoundBadAlias",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnBadBoolOp",
+		err:  errors.BadColumnTypeForUnaryOpError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnNotFoundRHS",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnNotFoundRHSBadAlias",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnBadLiteralExpression",
+		err:  errors.BadLiteralExpressionError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnBadTypeForScalarOp",
+		err:  errors.BadExpressionTypeForScalarrOpError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereColumnBadTypeComparison",
+		err:  errors.BadColumnToLiteralComparisonError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereBetweenColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereBetweenRelationNotFound",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereBetweenArgColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereBetweenArgRelationNotFound",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "SelectPostgresTestBAD_WhereBetweenComparisonBadArgType",
+		err:  errors.BadColumnToColumnTypeComparisonError,
+	}, {
+		name: "SelectPostgresTestBAD_OrderByColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_OrderByRelationNotFound",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "InsertPostgresTestBAD_DefaultBadRelationAlias",
+		err:  errors.BadTargetTableForDefaultError,
+	}, {
+		name: "InsertPostgresTestBAD_DefaultColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "InsertPostgresTestBAD_DefaultNotSet",
+		err:  errors.NoColumnDefaultSetError,
+	}, {
+		name: "InsertPostgresTestBAD_ForceColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "InsertPostgresTestBAD_ForceRelationNotFound",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "UpdatePostgresTestBAD_ReturnColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "UpdatePostgresTestBAD_ReturnRelationNotFound",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "FilterPostgresTestBAD_TextSearchColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "FilterPostgresTestBAD_TextSearchRelationNotFound",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "FilterPostgresTestBAD_TextSearchBadColumnType",
+		err:  errors.BadDBColumnTypeError,
+	}, {
+		name: "SelectPostgresTestBAD_RelationColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "SelectPostgresTestBAD_RelationColumnAliasNotFound",
+		err:  errors.NoDBRelationError,
+	}, {
+		name: "InsertPostgresTestBAD_RelationColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}, {
+		name: "InsertPostgresTestBAD_BadJSONOption",
+		err:  errors.BadUseJSONTargetColumnError,
+	}, {
+		name: "InsertPostgresTestBAD_BadXMLOption",
+		err:  errors.BadUseXMLTargetColumnError,
+	}, {
+		name: "InsertPostgresTestBAD_BadFieldToColumnType",
+		err:  errors.FieldToColumnTypeError,
+	}, {
+		name: "InsertPostgresTestBAD_ResultColumnNotFound",
+		err:  errors.NoDBColumnError,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, err := runAnalysis(tt.name, t)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			dbc := new(pgcheck)
+			dbc.db = testdb.db
+			dbc.pgcat = testdb.pgcat
+			dbc.cmd = cmd
+
+			err = dbc.run()
+			if e := compare.Compare(err, tt.err); e != nil {
+				t.Errorf("%v - %#v %v", e, err, err)
+			}
+		})
+	}
+}
 func Test_pgcheck_loadrelation(t *testing.T) {
 	tests := []struct {
 		relid relid

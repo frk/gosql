@@ -11,7 +11,7 @@ func (e errnum) Error() string {
 }
 
 const (
-	// TODO(mkopriva): this is a preliminary solution to accommodate the
+	// TODO(mkopriva): this is a temporary solution to accommodate the
 	// large variety of errors. Eventually these values should be grouped
 	// into as few as possible error types that will replace the values
 	// and that will also be able to generate informative error messages.
@@ -100,4 +100,8 @@ const (
 	BadColumnToLiteralComparisonError          errnum = 82
 	BadColumnToColumnTypeComparisonError       errnum = 83
 	BadTargetTableForDefaultError              errnum = 84
+	BadUseJSONTargetColumnError                errnum = 85
+	BadUseXMLTargetColumnError                 errnum = 86
+	NoColumnDefaultSetError                    errnum = 87
+	FieldToColumnTypeError                     errnum = 88
 )
