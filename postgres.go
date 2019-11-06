@@ -106,6 +106,18 @@ const (
 		, c.castcontext
 	FROM pg_cast c `  //`
 
+	pgselectprocs = `SELECT
+		p.oid
+		, p.proname
+		, p.proargtypes[0]
+		, p.prorettype
+		, p.proisagg
+	FROM pg_proc p
+	WHERE p.pronargs = 1
+	AND p.proname NOT LIKE 'pg_%'
+	AND p.proname NOT LIKE '_pg_%'
+	`  //`
+
 	pgselectexprtype = `SELECT id::oid FROM pg_typeof(%s) AS id` //`
 
 )
@@ -252,12 +264,19 @@ func (c *pgcheck) run() (err error) {
 		}
 	}
 
-	// TODO(mkopriva): if this is an insert make sure that all columns that
-	// do not have a DEFAULT set but do have a NOT NULL set, have a corresponding
-	// field in the relation's datatype. (keep in mind that such a column could
-	// be also set by a BEFORE TRIGGER, so maybe instead of erroring only warning
-	// would be thrown, or make this check optional, something that can be turned
-	// on/off...?)
+	if c.cmd.typ == cmdtypeInsert {
+		// TODO(mkopriva): if this is an insert make sure that all columns that
+		// do not have a DEFAULT set but do have a NOT NULL set, have a corresponding
+		// field in the relation's datatype. (keep in mind that such a column could
+		// be also set by a BEFORE TRIGGER, so maybe instead of erroring only warning
+		// would be thrown, or make this check optional, something that can be turned
+		// on/off...?)
+	}
+
+	// TODO(mkopriva): if this is an insert or update (i.e. write) the column
+	// generated from the field tags cannot contain duplicate columns. Conversely
+	// if this is a read query (select, or I,U,D with returning) the columns do
+	// not have to be unique.
 
 	return nil
 }
@@ -546,16 +565,17 @@ stackloop:
 					fieldoids = c.typeoids(*node.typ.elem)
 				}
 
-				// Check that the Field's type can be compared to that of the Column.
-				if !c.cancompare(col, fieldoids, node.cmp) {
-					return errors.BadFieldToColumnTypeError
-				}
-
-				// Check that the modifier function can
-				// be used with the given Column's type.
-				if node.mod > 0 {
-					if err := c.checkmodfunc(col, node.mod); err != nil {
+				if len(node.modfunc) > 0 {
+					// Check that the modifier function can
+					// be used with the given Column's type.
+					if err := c.checkmodfunc(node.modfunc, col, fieldoids); err != nil {
 						return err
+					}
+				} else {
+					// Check that the Field's type can be
+					// compared to that of the Column.
+					if !c.cancompare(col, fieldoids, node.cmp) {
+						return errors.BadFieldToColumnTypeError
 					}
 				}
 			case *wherecolumn:
@@ -785,62 +805,82 @@ func (c *pgcheck) cancoerce(col *pgcolumn, field *fieldinfo) bool {
 		}
 	}
 
-	// TODO
-	{
-		targetid := col.typ.oid
-		inputids := c.typeoids(field.typ)
-		for _, inputid := range inputids {
-			// no problem if same type
-			if targetid == inputid {
-				return true
-			}
-			if c.pgcat.cancasti(targetid, inputid) {
-				return true
-			}
+	targetid := col.typ.oid
+	inputids := c.typeoids(field.typ)
+	for _, inputid := range inputids {
+		if c.cancoerceoid(targetid, inputid) {
+			return true
+		}
 
-			if col.typ.category == pgtypcategory_array && (targetid != pgtyp_int2vector && targetid != pgtyp_oidvector) {
-				if srctyp := c.pgcat.types[inputid]; srctyp != nil && srctyp.category == pgtypcategory_array {
-					if col.typ.elem == srctyp.elem {
-						return true
-					}
-					if c.pgcat.cancasti(col.typ.elem, srctyp.elem) {
-						return true
-					}
+		if col.typ.category == pgtypcategory_array && (targetid != pgtyp_int2vector && targetid != pgtyp_oidvector) {
+			if srctyp := c.pgcat.types[inputid]; srctyp != nil && srctyp.category == pgtypcategory_array {
+				if col.typ.elem == srctyp.elem {
+					return true
+				}
+				if c.pgcat.cancasti(col.typ.elem, srctyp.elem) {
+					return true
 				}
 			}
 		}
-		if col.typ.typ == pgtyptype_domain {
-			// TODO(mkopriva): implement cancoerce for domain types
-			return false
-		}
-		if col.typ.typ == pgtyptype_composite {
-			// TODO(mkopriva): implement cancoerce for composite types
-			return false
-		}
+	}
+	if col.typ.typ == pgtyptype_domain {
+		// TODO(mkopriva): implement cancoerce for domain types
+		return false
+	}
+	if col.typ.typ == pgtyptype_composite {
+		// TODO(mkopriva): implement cancoerce for composite types
+		return false
 	}
 	return false
 }
 
-// check that the column's type matches that of the modfunc's argument.
-//
-// TODO(mkopriva): allow for arbitrary functions so that the user can also
-// employ user-defined functions.
-//
-// It might be preferable to introduce some syntax for the struct tags that would
-// indicate that an identifier is a function, like .funcname, or @funcname... this
-// would make it easier to parse not only for the program but for humans too.
-//
-// Using the pg_catalog figure out if those functions exist, what their argument
-// and return types are and use that information to type-check that against the
-// field's and column's types.
-func (c *pgcheck) checkmodfunc(col *pgcolumn, fn modfunc) error {
-	var ok bool
-	switch fn {
-	case fnlower, fnupper:
-		ok = col.typ.oid == pgtyp_text
+func (c *pgcheck) cancoerceoid(targetid, inputid pgoid) bool {
+	// no problem if same type
+	if targetid == inputid {
+		return true
 	}
-	if !ok {
-		return errors.BadColumnTypeToModFuncError
+
+	// accept if target is ANY
+	if targetid == pgtyp_any {
+		return true
+	}
+
+	// if input is an untyped string constant assume it can be converted to anything
+	if inputid == pgtyp_unkown {
+		return true
+	}
+
+	// if pg_cast says ok, accept.
+	if c.pgcat.cancasti(targetid, inputid) {
+		return true
+	}
+	return false
+}
+
+// check that the column's and field's type can be used as the argument to the specified function.
+func (c *pgcheck) checkmodfunc(fn funcname, col *pgcolumn, fieldoids []pgoid) error {
+	var (
+		ok1 bool // column's type can be coerced to the functions argument's type
+		ok2 bool // field's type can be assigned to the functions argument's type
+	)
+
+	if proclist, ok := c.pgcat.procs[fn]; ok {
+		for _, proc := range proclist {
+			// ok if the column's type can be coerced to the function argument's type
+			if c.cancoerceoid(proc.argtype, col.typ.oid) {
+				ok1 = true
+			}
+
+			// ok if one of the fieldoids types can be assigned to the function argument's type
+			for _, foid := range fieldoids {
+				if c.cancoerceoid(proc.argtype, foid) {
+					ok2 = true
+				}
+			}
+		}
+	}
+	if !ok1 || !ok2 {
+		return errors.BadColumnTypeForDBFuncError
 	}
 	return nil
 }
@@ -1145,6 +1185,14 @@ type pgcast struct {
 	context string
 }
 
+type pgproc struct {
+	oid     pgoid
+	name    string
+	argtype pgoid
+	rettype pgoid
+	isagg   bool
+}
+
 type pgcastkey struct {
 	target pgoid
 	source pgoid
@@ -1154,6 +1202,7 @@ type pgcatalogue struct {
 	types     map[pgoid]*pgtype
 	operators map[pgopkey]*pgoperator
 	casts     map[pgcastkey]*pgcast
+	procs     map[funcname][]*pgproc
 }
 
 var pgcataloguecache = struct {
@@ -1276,6 +1325,34 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		return err
 	}
 
+	c.procs = make(map[funcname][]*pgproc)
+
+	// load procs
+	rows, err = db.Query(pgselectprocs)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		proc := new(pgproc)
+		err := rows.Scan(
+			&proc.oid,
+			&proc.name,
+			&proc.argtype,
+			&proc.rettype,
+			&proc.isagg,
+		)
+		if err != nil {
+			return err
+		}
+
+		c.procs[funcname(proc.name)] = append(c.procs[funcname(proc.name)], proc)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
 	pgcataloguecache.Lock()
 	pgcataloguecache.m[key] = c
 	pgcataloguecache.Unlock()
@@ -1293,6 +1370,7 @@ type pgoid uint32
 
 // postgres types
 const (
+	pgtyp_any            pgoid = 2276
 	pgtyp_bit            pgoid = 1560
 	pgtyp_bitarr         pgoid = 1561
 	pgtyp_bool           pgoid = 16
@@ -1378,6 +1456,7 @@ const (
 	pgtyp_tsvectorarr    pgoid = 3643
 	pgtyp_uuid           pgoid = 2950
 	pgtyp_uuidarr        pgoid = 2951
+	pgtyp_unkown         pgoid = 705
 	pgtyp_varbit         pgoid = 1562
 	pgtyp_varbitarr      pgoid = 1563
 	pgtyp_varchar        pgoid = 1043

@@ -1,5 +1,9 @@
 package gosql
 
+import (
+	"database/sql"
+)
+
 type directive struct {
 	// This field serves as an indicator that the type is actually a directive
 	// as opposed to other types declared by this package. Used by helper
@@ -128,6 +132,12 @@ type (
 	// the directive's `sql` tag.
 	Update directive
 )
+
+type Conn interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
 
 type AfterScanner interface {
 	AfterScan()

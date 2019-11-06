@@ -804,7 +804,7 @@ stackloop:
 			wf.typ, _ = a.typeinfo(fld.Type())
 			wf.cmp = cmp
 			wf.sop = sop
-			wf.mod = a.modfunc(tag["sql"][1:])
+			wf.modfunc = a.funcname(tag["sql"][1:])
 
 			if wf.sop > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
 				return errors.BadScalarFieldTypeError
@@ -1270,13 +1270,13 @@ func (a *analyzer) textsearch(tag string, field *types.Var) error {
 	return nil
 }
 
-func (a *analyzer) modfunc(tagvals []string) modfunc {
+func (a *analyzer) funcname(tagvals []string) funcname {
 	for _, v := range tagvals {
-		if fn, ok := string2modfunc[strings.ToLower(v)]; ok {
-			return fn
+		if len(v) > 0 && v[0] == '@' {
+			return funcname(strings.ToLower(v[1:]))
 		}
 	}
-	return 0
+	return ""
 }
 
 // parses the given string and returns a relid, if the value's format is invalid
@@ -1759,7 +1759,9 @@ type wherefield struct {
 	colid colid    //
 	cmp   cmpop    //
 	sop   scalarrop
-	mod   modfunc //
+	// The name of the function to be used to modify the comparison
+	// operands' values before comparing them.
+	modfunc funcname
 }
 
 // wherecolumn is produced from a gosql.Column directive and its tag value.
@@ -2036,18 +2038,9 @@ const (
 	overridinguser                         // OVERRIDING USER VALUE
 )
 
-type modfunc uint // modifier function
-
-const (
-	_       modfunc = iota // no modfunc
-	fnlower                // lower
-	fnupper                // upper
-)
-
-var string2modfunc = map[string]modfunc{
-	"lower": fnlower,
-	"upper": fnupper,
-}
+// funcname is the name of a database function that can either be used to modify
+// a value, like lower, upper, etc. or a function that can be used as an aggregate.
+type funcname string
 
 type jointype uint
 

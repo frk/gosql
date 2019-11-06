@@ -89,7 +89,7 @@ const (
 	IllegalNullemptyForNotNullColumnError      errnum = 71
 	IllegalFieldTypeForScalarOpError           errnum = 72
 	BadFieldToColumnTypeError                  errnum = 73
-	BadColumnTypeToModFuncError                errnum = 74
+	BadColumnTypeForDBFuncError                errnum = 74
 	IllegalUnaryComparisonOperatorError        errnum = 75
 	BadColumnTypeForScalarrOpError             errnum = 76
 	BadExpressionTypeForScalarrOpError         errnum = 77

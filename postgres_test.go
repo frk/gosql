@@ -88,8 +88,8 @@ func Test_pgcheck_run(t *testing.T) {
 		name: "SelectPostgresTestBAD_WhereCannotCompareTypes",
 		err:  errors.BadFieldToColumnTypeError,
 	}, {
-		name: "SelectPostgresTestBAD_WhereColumnTypeForModfunc",
-		err:  errors.BadColumnTypeToModFuncError,
+		name: "SelectPostgresTestBAD_WhereColumnTypeForFuncname",
+		err:  errors.BadColumnTypeForDBFuncError,
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnNotFound",
 		err:  errors.NoDBColumnError,

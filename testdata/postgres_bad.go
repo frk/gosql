@@ -212,11 +212,11 @@ type SelectPostgresTestBAD_WhereCannotCompareTypes struct {
 	}
 }
 
-//BAD: whereblock with bad argument type for modfunc
-type SelectPostgresTestBAD_WhereColumnTypeForModfunc struct {
+//BAD: whereblock with bad argument type for funcname
+type SelectPostgresTestBAD_WhereColumnTypeForFuncname struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
-		D float64 `sql:"c.col_d,lower"`
+		D float64 `sql:"c.col_d,@lower"`
 	}
 }
 

@@ -111,6 +111,13 @@ CREATE TABLE column_type_tests (
 	, col_texta text[]
 );
 
+CREATE TABLE test_user (
+	id serial primary key
+	, email text not null
+	, full_name text not null
+	, created_at timestamptz not null
+);
+
 CREATE VIEW view_test AS SELECT
 	col_a
 	, col_b
@@ -128,6 +135,7 @@ UNIQUE (col_conkey1, col_conkey2);
 
 ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_nonunique_constraint
 FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
+
 ` //`
 
 	if _, err = t.db.Exec(populatedbquery); err != nil {
