@@ -122,7 +122,7 @@ const (
 
 )
 
-func checkpostgres(url string, cmds []*command) error {
+func pgcheck(url string, cmds []*command) error {
 	db, err := sql.Open("postgres", url)
 	if err != nil {
 		return err
@@ -143,7 +143,7 @@ func checkpostgres(url string, cmds []*command) error {
 	}
 
 	for _, cmd := range cmds {
-		c := new(pgcheck)
+		c := new(pgchecker)
 		c.db = db
 		c.dbname = dbname
 		c.cmd = cmd
@@ -155,7 +155,7 @@ func checkpostgres(url string, cmds []*command) error {
 	return nil
 }
 
-type pgcheck struct {
+type pgchecker struct {
 	db       *sql.DB
 	dbname   string // name of the current database, used mainly for error reporting
 	cmd      *command
@@ -166,7 +166,7 @@ type pgcheck struct {
 	pgcat *pgcatalogue
 }
 
-func (c *pgcheck) run() (err error) {
+func (c *pgchecker) run() (err error) {
 	c.relmap = make(map[string]*pgrelation)
 	if c.rel, err = c.loadrelation(c.cmd.rel.relid); err != nil {
 		return err
@@ -281,7 +281,7 @@ func (c *pgcheck) run() (err error) {
 	return nil
 }
 
-func (c *pgcheck) checkfields(typ typeinfo, isresult bool) (err error) {
+func (c *pgchecker) checkfields(typ typeinfo, isresult bool) (err error) {
 	type loopstate struct {
 		typ *typeinfo
 		idx int // keeps track of the field index
@@ -359,7 +359,7 @@ stackloop:
 	return nil
 }
 
-func (c *pgcheck) checkjoin(jb *joinblock) error {
+func (c *pgchecker) checkjoin(jb *joinblock) error {
 	if len(jb.rel.name) > 0 {
 		rel, err := c.loadrelation(jb.rel)
 		if err != nil {
@@ -439,7 +439,7 @@ func (c *pgcheck) checkjoin(jb *joinblock) error {
 	return nil
 }
 
-func (c *pgcheck) checkonconflict(onconf *onconflictblock) error {
+func (c *pgchecker) checkonconflict(onconf *onconflictblock) error {
 	rel := c.rel
 
 	// If a Column directive was provided in an OnConflict block make
@@ -514,7 +514,7 @@ func (c *pgcheck) checkonconflict(onconf *onconflictblock) error {
 	return nil
 }
 
-func (c *pgcheck) checkwhere(where *whereblock) error {
+func (c *pgchecker) checkwhere(where *whereblock) error {
 	type loopstate struct {
 		wb  *whereblock
 		idx int // keeps track of the field index
@@ -673,7 +673,7 @@ stackloop:
 
 // typeoids returns a list of OIDs of those PostgreSQL types that can be
 // used to hold a value of a Go type represented by the given typeinfo.
-func (c *pgcheck) typeoids(typ typeinfo) []pgoid {
+func (c *pgchecker) typeoids(typ typeinfo) []pgoid {
 	switch typstr := typ.string(true); typstr {
 	case gotypstringm, gotypnullstringm:
 		if t := c.pgcat.typebyname("hstore"); t != nil {
@@ -693,7 +693,7 @@ func (c *pgcheck) typeoids(typ typeinfo) []pgoid {
 
 // cancompare reports whether a value of the given col's type can be compared to,
 // using the cmp operator, a value of one of the types specified by the given oids.
-func (c *pgcheck) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool {
+func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool {
 	name := cmpop2basepgops[cmp]
 	left := col.typ.oid
 	for _, right := range rhstypes {
@@ -706,7 +706,7 @@ func (c *pgcheck) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool {
 }
 
 // canassign reports whether a value
-func (c *pgcheck) canassign(col *pgcolumn, field *fieldinfo, atyp assigntype) bool {
+func (c *pgchecker) canassign(col *pgcolumn, field *fieldinfo, atyp assigntype) bool {
 	// TODO(mkopriva): this returns on success, so write tests that test
 	// successful scenarios...
 
@@ -791,7 +791,7 @@ func (c *pgcheck) canassign(col *pgcolumn, field *fieldinfo, atyp assigntype) bo
 
 // cancoerce reports whether or not a value of the given field's type can
 // be coerced into a value of the column's type.
-func (c *pgcheck) cancoerce(col *pgcolumn, field *fieldinfo) bool {
+func (c *pgchecker) cancoerce(col *pgcolumn, field *fieldinfo) bool {
 	// if the target type is of the string category, accept.
 	if col.typ.category == pgtypcategory_string {
 		return true
@@ -834,7 +834,7 @@ func (c *pgcheck) cancoerce(col *pgcolumn, field *fieldinfo) bool {
 	return false
 }
 
-func (c *pgcheck) cancoerceoid(targetid, inputid pgoid) bool {
+func (c *pgchecker) cancoerceoid(targetid, inputid pgoid) bool {
 	// no problem if same type
 	if targetid == inputid {
 		return true
@@ -858,7 +858,7 @@ func (c *pgcheck) cancoerceoid(targetid, inputid pgoid) bool {
 }
 
 // check that the column's and field's type can be used as the argument to the specified function.
-func (c *pgcheck) checkmodfunc(fn funcname, col *pgcolumn, fieldoids []pgoid) error {
+func (c *pgchecker) checkmodfunc(fn funcname, col *pgcolumn, fieldoids []pgoid) error {
 	var (
 		ok1 bool // column's type can be coerced to the functions argument's type
 		ok2 bool // field's type can be assigned to the functions argument's type
@@ -885,7 +885,7 @@ func (c *pgcheck) checkmodfunc(fn funcname, col *pgcolumn, fieldoids []pgoid) er
 	return nil
 }
 
-func (c *pgcheck) loadrelation(id relid) (*pgrelation, error) {
+func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
 	rel := new(pgrelation)
 	rel.name = id.name
 	rel.namespace = id.qual
@@ -1002,7 +1002,7 @@ func (c *pgcheck) loadrelation(id relid) (*pgrelation, error) {
 	return rel, nil
 }
 
-func (c *pgcheck) column(id colid) (*pgcolumn, error) {
+func (c *pgchecker) column(id colid) (*pgcolumn, error) {
 	rel, ok := c.relmap[id.qual]
 	if !ok {
 		return nil, errors.NoDBRelationError
