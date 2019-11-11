@@ -122,48 +122,52 @@ const (
 
 )
 
-func pgcheck(url string, cmds []*command) error {
-	db, err := sql.Open("postgres", url)
-	if err != nil {
+type postgres struct {
+	db   *sql.DB
+	cat  *pgcatalogue
+	url  string
+	name string // name of the current database, used mainly for error reporting
+}
+
+func (pg *postgres) init() (err error) {
+	if pg.db, err = sql.Open("postgres", pg.url); err != nil {
 		return err
-	} else if err := db.Ping(); err != nil {
+	} else if err := pg.db.Ping(); err != nil {
 		return err
 	}
-	defer db.Close()
 
 	// the name of the current database
-	var dbname string
-	if err := db.QueryRow(pgselectdbname).Scan(&dbname); err != nil {
+	if err := pg.db.QueryRow(pgselectdbname).Scan(&pg.name); err != nil {
 		return err
 	}
 
-	pgcat := new(pgcatalogue)
-	if err := pgcat.load(db, url); err != nil {
+	pg.cat = new(pgcatalogue)
+	if err = pg.cat.load(pg.db, pg.url); err != nil {
 		return err
 	}
+	return nil
+}
 
+func (pg *postgres) close() error {
+	return pg.db.Close()
+}
+
+type pgchecker struct {
+	pg       *postgres
+	cmd      *command
+	rel      *pgrelation   // the target relation
+	joinlist []*pgrelation // joined relations
+	relmap   map[string]*pgrelation
+}
+
+func pgcheck(pg *postgres, cmds []*command) error {
 	for _, cmd := range cmds {
-		c := new(pgchecker)
-		c.db = db
-		c.dbname = dbname
-		c.cmd = cmd
-		c.pgcat = pgcat
+		c := pgchecker{pg: pg, cmd: cmd}
 		if err := c.run(); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-type pgchecker struct {
-	db       *sql.DB
-	dbname   string // name of the current database, used mainly for error reporting
-	cmd      *command
-	rel      *pgrelation   // the target relation
-	joinlist []*pgrelation // joined relations
-	relmap   map[string]*pgrelation
-
-	pgcat *pgcatalogue
 }
 
 func (c *pgchecker) run() (err error) {
@@ -413,11 +417,11 @@ func (c *pgchecker) checkjoin(jb *joinblock) error {
 					typ = col2.typ
 				} else if len(cond.lit) > 0 {
 					var oid pgoid
-					row := c.db.QueryRow(fmt.Sprintf(pgselectexprtype, cond.lit))
+					row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, cond.lit))
 					if err := row.Scan(&oid); err != nil {
 						return errors.BadLiteralExpressionError
 					}
-					typ = c.pgcat.types[oid]
+					typ = c.pg.cat.types[oid]
 				}
 
 				if cond.cmp.isarr() || cond.sop > 0 {
@@ -426,7 +430,7 @@ func (c *pgchecker) checkjoin(jb *joinblock) error {
 					if typ.category != pgtypcategory_array {
 						return errors.BadExpressionTypeForScalarrOpError
 					}
-					typ = c.pgcat.types[typ.elem]
+					typ = c.pg.cat.types[typ.elem]
 				}
 
 				rhsoids := []pgoid{typ.oid}
@@ -610,11 +614,11 @@ stackloop:
 						typ = col2.typ
 					} else if len(node.lit) > 0 {
 						var oid pgoid
-						row := c.db.QueryRow(fmt.Sprintf(pgselectexprtype, node.lit))
+						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, node.lit))
 						if err := row.Scan(&oid); err != nil {
 							return errors.BadLiteralExpressionError
 						}
-						typ = c.pgcat.types[oid]
+						typ = c.pg.cat.types[oid]
 					} else {
 						panic("shouldn't happen")
 					}
@@ -625,7 +629,7 @@ stackloop:
 						if typ.category != pgtypcategory_array {
 							return errors.BadExpressionTypeForScalarrOpError
 						}
-						typ = c.pgcat.types[typ.elem]
+						typ = c.pg.cat.types[typ.elem]
 					}
 
 					rhsoids := []pgoid{typ.oid}
@@ -676,11 +680,11 @@ stackloop:
 func (c *pgchecker) typeoids(typ typeinfo) []pgoid {
 	switch typstr := typ.string(true); typstr {
 	case gotypstringm, gotypnullstringm:
-		if t := c.pgcat.typebyname("hstore"); t != nil {
+		if t := c.pg.cat.typebyname("hstore"); t != nil {
 			return []pgoid{t.oid}
 		}
 	case gotypstringms, gotypnullstringms:
-		if t := c.pgcat.typebyname("_hstore"); t != nil {
+		if t := c.pg.cat.typebyname("_hstore"); t != nil {
 			return []pgoid{t.oid}
 		}
 	default:
@@ -698,7 +702,7 @@ func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool 
 	left := col.typ.oid
 	for _, right := range rhstypes {
 		key := pgopkey{name: name, left: left, right: right}
-		if _, ok := c.pgcat.operators[key]; ok {
+		if _, ok := c.pg.cat.operators[key]; ok {
 			return true
 		}
 	}
@@ -799,7 +803,7 @@ func (c *pgchecker) cancoerce(col *pgcolumn, field *fieldinfo) bool {
 	// if the target type is of the array category with an element type of
 	// the string category, and the source type is a slice or an array, accept.
 	if col.typ.category == pgtypcategory_array && (field.typ.kind == kindslice || field.typ.kind == kindarray) {
-		elemtyp := c.pgcat.types[col.typ.elem]
+		elemtyp := c.pg.cat.types[col.typ.elem]
 		if elemtyp != nil && elemtyp.category == pgtypcategory_string {
 			return true
 		}
@@ -813,11 +817,11 @@ func (c *pgchecker) cancoerce(col *pgcolumn, field *fieldinfo) bool {
 		}
 
 		if col.typ.category == pgtypcategory_array && (targetid != pgtyp_int2vector && targetid != pgtyp_oidvector) {
-			if srctyp := c.pgcat.types[inputid]; srctyp != nil && srctyp.category == pgtypcategory_array {
+			if srctyp := c.pg.cat.types[inputid]; srctyp != nil && srctyp.category == pgtypcategory_array {
 				if col.typ.elem == srctyp.elem {
 					return true
 				}
-				if c.pgcat.cancasti(col.typ.elem, srctyp.elem) {
+				if c.pg.cat.cancasti(col.typ.elem, srctyp.elem) {
 					return true
 				}
 			}
@@ -851,7 +855,7 @@ func (c *pgchecker) cancoerceoid(targetid, inputid pgoid) bool {
 	}
 
 	// if pg_cast says ok, accept.
-	if c.pgcat.cancasti(targetid, inputid) {
+	if c.pg.cat.cancasti(targetid, inputid) {
 		return true
 	}
 	return false
@@ -864,7 +868,7 @@ func (c *pgchecker) checkmodfunc(fn funcname, col *pgcolumn, fieldoids []pgoid) 
 		ok2 bool // field's type can be assigned to the functions argument's type
 	)
 
-	if proclist, ok := c.pgcat.procs[fn]; ok {
+	if proclist, ok := c.pg.cat.procs[fn]; ok {
 		for _, proc := range proclist {
 			// ok if the column's type can be coerced to the function argument's type
 			if c.cancoerceoid(proc.argtype, col.typ.oid) {
@@ -894,7 +898,7 @@ func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
 	}
 
 	// retrieve relation info
-	row := c.db.QueryRow(pgselectdbrelation, rel.name, rel.namespace)
+	row := c.pg.db.QueryRow(pgselectdbrelation, rel.name, rel.namespace)
 	if err := row.Scan(&rel.oid, &rel.relkind); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.NoDBRelationError
@@ -903,7 +907,7 @@ func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
 	}
 
 	// retrieve column info
-	rows, err := c.db.Query(pgselectdbcolumns, rel.oid)
+	rows, err := c.pg.db.Query(pgselectdbcolumns, rel.oid)
 	if err != nil {
 		return nil, err
 	}
@@ -924,7 +928,7 @@ func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
 		if err != nil {
 			return nil, err
 		}
-		typ, ok := c.pgcat.types[col.typoid]
+		typ, ok := c.pg.cat.types[col.typoid]
 		if !ok {
 			return nil, errors.UnknownPostgresTypeError
 		}
@@ -937,7 +941,7 @@ func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
 	}
 
 	// load constraints info
-	rows, err = c.db.Query(pgselectdbconstraints, rel.oid)
+	rows, err = c.pg.db.Query(pgselectdbconstraints, rel.oid)
 	if err != nil {
 		return nil, err
 	}
@@ -963,7 +967,7 @@ func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
 	}
 
 	// load index info
-	rows, err = c.db.Query(pgselectdbindexes, rel.oid)
+	rows, err = c.pg.db.Query(pgselectdbindexes, rel.oid)
 	if err != nil {
 		return nil, err
 	}

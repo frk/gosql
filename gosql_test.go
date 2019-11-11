@@ -29,11 +29,8 @@ func TestMain(m *testing.M) {
 }
 
 type testdbtype struct {
-	root   *sql.DB
-	db     *sql.DB
-	dbname string
-	dburl  string
-	pgcat  *pgcatalogue
+	root *sql.DB
+	pg   *postgres
 }
 
 func (t *testdbtype) init() (err error) {
@@ -45,24 +42,17 @@ func (t *testdbtype) init() (err error) {
 	}
 
 	// create a new database so that the default one isn't polluted with the test data.
-	t.dbname = "gosql_test_db"
-	t.dburl = "postgres:///" + t.dbname + "?sslmode=disable"
-	if _, err = t.root.Exec("DROP DATABASE IF EXISTS " + t.dbname); err != nil {
+	dbname := "gosql_test_db"
+	if _, err = t.root.Exec("DROP DATABASE IF EXISTS " + dbname); err != nil {
 		return err
 	}
-	if _, err = t.root.Exec("CREATE DATABASE " + t.dbname); err != nil {
-		return err
-	}
-
-	// open the new database
-	if t.db, err = sql.Open("postgres", t.dburl); err != nil {
-		return err
-	} else if err = t.db.Ping(); err != nil {
+	if _, err = t.root.Exec("CREATE DATABASE " + dbname); err != nil {
 		return err
 	}
 
-	t.pgcat = new(pgcatalogue)
-	if err := t.pgcat.load(t.db, t.dburl); err != nil {
+	t.pg = new(postgres)
+	t.pg.url = "postgres:///" + dbname + "?sslmode=disable"
+	if err := t.pg.init(); err != nil {
 		return err
 	}
 
@@ -138,7 +128,7 @@ FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
 
 ` //`
 
-	if _, err = t.db.Exec(populatedbquery); err != nil {
+	if _, err = t.pg.db.Exec(populatedbquery); err != nil {
 		return err
 	}
 
@@ -146,13 +136,13 @@ FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
 }
 
 func (t *testdbtype) close() {
-	if t.db != nil {
-		if err := t.db.Close(); err != nil {
+	if t.pg.db != nil {
+		if err := t.pg.close(); err != nil {
 			log.Println("error closing test db handle:", err)
 		}
 	}
 	if t.root != nil {
-		if _, err := t.root.Exec("DROP DATABASE " + t.dbname); err != nil {
+		if _, err := t.root.Exec("DROP DATABASE " + t.pg.name); err != nil {
 			log.Println("error dropping test db:", err)
 		}
 		if err := t.root.Close(); err != nil {

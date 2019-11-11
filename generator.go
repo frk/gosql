@@ -17,6 +17,7 @@
 package gosql
 
 import (
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -35,16 +36,22 @@ var (
 	retargetname = regexp.MustCompile(`^(Select|Insert|Update|Delete|Filter)`)
 )
 
-func generate(file, dburl string) error {
-	// Parse the whole directory in which the file is located, this is
-	// required so that the type checker doesn't fail just because the
-	// target file references an identifier declared in another file of
-	// the same package.
+type directory struct {
+	path    string
+	name    string
+	fset    *token.FileSet
+	files   []*ast.File
+	astpkg  *ast.Package
+	typpkg  *types.Package
+	typinfo *types.Info
+}
+
+// parsedir parses and type-checks the directory at the given path.
+func parsedir(path string) (*directory, error) {
 	fset := token.NewFileSet()
-	dirpath := filepath.Dir(file)
-	pkgs, err := parser.ParseDir(fset, dirpath, filternotestfiles, parser.ParseComments)
+	pkgs, err := parser.ParseDir(fset, path, filternotestfiles, parser.ParseComments)
 	if err != nil {
-		return err
+		return nil, err
 	} else if len(pkgs) != 1 {
 		// This should not happen but it's here just to make sure everything
 		// works as expected.
@@ -53,36 +60,69 @@ func generate(file, dburl string) error {
 		// have test files declare an additional xxx_test package, but since the
 		// filternotestfiles was passed to ParseDir those test files and by virtue
 		// that package ought to be omitted by the parser.
-		return fmt.Errorf("unexpected number parsed packages, want 1 got %d", len(pkgs))
+		return nil, fmt.Errorf("unexpected number parsed packages, want 1 got %d", len(pkgs))
 	}
 
-	// Get the AST of the target file and also turn the package's map of
-	// files into a slice of files for type checking.
-	var astfile *ast.File
-	var files []*ast.File
-	for _, p := range pkgs {
-		astfile = p.Files[file]
-		for _, f := range p.Files {
-			files = append(files, f)
+	dir := new(directory)
+	dir.path = path
+	dir.name = filepath.Base(path)
+	dir.fset = fset
+
+	// Turn the package's map of files into a slice of files for type checking.
+	for _, pkg := range pkgs {
+		dir.astpkg = pkg
+		for _, f := range pkg.Files {
+			dir.files = append(dir.files, f)
 		}
 	}
 
 	// Type checking of the package's files is done here becaue it is the type
 	// checker that imports, and provides information on, all the referenced types
-	// that we need for the upcoming analysis of the target types.
+	// that we need for the subsequent analysis of the target types.
 	conf := types.Config{Importer: typesutil.NewImporter()}
 	info := types.Info{Defs: make(map[*ast.Ident]types.Object)}
-	pkg, err := conf.Check(dirpath, fset, files, &info)
+	pkg, err := conf.Check(path, fset, dir.files, &info)
+	if err != nil {
+		return nil, err
+	}
+
+	dir.typpkg = pkg
+	dir.typinfo = &info
+	return dir, nil
+}
+
+type generator struct {
+	file  string // the target file
+	dir   *directory
+	types []*types.Named
+	cmds  []*command
+	pg    *postgres
+	buf   bytes.Buffer
+}
+
+func generate(file, dburl string) error {
+	// Parse the whole directory in which the file is located, this is to
+	// ensure that the generator has all the type info it may need.
+	dirpath := filepath.Dir(file)
+	dir, err := parsedir(dirpath)
 	if err != nil {
 		return err
 	}
 
-	g := new(generator)
-	g.dburl = dburl
-	g.pkgname = pkg.Name()
+	pg := &postgres{url: dburl}
+	if err := pg.init(); err != nil {
+		return err
+	}
+	defer pg.close()
 
-	// Aggregate *types.Named instances of all of the target types declared in the target file.
-	for _, d := range astfile.Decls {
+	g := &generator{file: file, dir: dir, pg: pg}
+	return g.run()
+}
+
+func (g *generator) init() {
+	// aggregates *types.Named instances of all of the target types
+	// declared in the target file.
+	for _, d := range g.dir.astpkg.Files[g.file].Decls {
 		gd, ok := d.(*ast.GenDecl)
 		if !ok || gd.Tok != token.TYPE {
 			continue
@@ -92,7 +132,7 @@ func generate(file, dburl string) error {
 			if !ok || !retargetname.MatchString(typ.Name.Name) {
 				continue
 			}
-			if obj, ok := info.Defs[typ.Name]; ok {
+			if obj, ok := g.dir.typinfo.Defs[typ.Name]; ok {
 				if tn, ok := obj.(*types.TypeName); ok {
 					if named, ok := tn.Type().(*types.Named); ok {
 						g.types = append(g.types, named)
@@ -102,17 +142,10 @@ func generate(file, dburl string) error {
 			}
 		}
 	}
-	return g.run()
-}
-
-type generator struct {
-	dburl   string
-	pkgname string
-	types   []*types.Named
-	cmds    []*command
 }
 
 func (g *generator) run() error {
+	g.init()
 	if err := g.analyze(); err != nil {
 		return err
 	}
@@ -137,11 +170,10 @@ func (g *generator) analyze() error {
 }
 
 func (g *generator) dbcheck() error {
-	return pgcheck(g.dburl, g.cmds)
+	return pgcheck(g.pg, g.cmds)
 }
 
 func (g *generator) generate() error {
-	// TODO
 	return nil
 }
 

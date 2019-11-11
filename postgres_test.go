@@ -195,8 +195,7 @@ func Test_pgchecker_run(t *testing.T) {
 			}
 
 			dbc := new(pgchecker)
-			dbc.db = testdb.db
-			dbc.pgcat = testdb.pgcat
+			dbc.pg = testdb.pg
 			dbc.cmd = cmd
 
 			err = dbc.run()
@@ -233,8 +232,7 @@ func Test_pgchecker_loadrelation(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.run()
@@ -368,8 +366,7 @@ func Test_pgchecker_loadcolumns(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.run()
@@ -407,8 +404,7 @@ func Test_pgchecker_loadconstraints(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.run()
@@ -455,8 +451,7 @@ func Test_pgchecker_loadindexes(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.run()
@@ -511,8 +506,7 @@ func Test_pgchecker_check_textsearch(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = tt.cmd
 
 		err := dbc.run()
@@ -566,8 +560,7 @@ func Test_pgchecker_check_orderby(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = tt.cmd
 
 		err := dbc.run()
@@ -623,8 +616,7 @@ func Test_pgchecker_check_defaults(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = tt.cmd
 
 		err := dbc.run()
@@ -680,8 +672,7 @@ func Test_pgchecker_check_force(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = tt.cmd
 
 		err := dbc.run()
@@ -737,8 +728,7 @@ func Test_pgchecker_check_returning(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = tt.cmd
 
 		err := dbc.run()
@@ -870,8 +860,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgchecker)
-		dbc.db = testdb.db
-		dbc.pgcat = testdb.pgcat
+		dbc.pg = testdb.pg
 		dbc.cmd = tt.cmd
 
 		err := dbc.run()
