@@ -11,7 +11,7 @@ import (
 
 var tdata = testutil.ParseTestdata("testdata")
 
-func runAnalysis(name string, t *testing.T) (*command, error) {
+func runAnalysis(name string, t *testing.T) (*typespec, error) {
 	named := testutil.FindNamedType(name, tdata)
 	if named == nil {
 		// Stop the test if no type with the given name was found.
@@ -95,7 +95,7 @@ func TestAnalysis(t *testing.T) {
 
 	tests := []struct {
 		name string
-		want *command
+		want *typespec
 		err  error
 	}{{
 		name: "InsertAnalysisTestBAD_NoRelfield",
@@ -396,7 +396,7 @@ func TestAnalysis(t *testing.T) {
 		err:  errors.BadColIdError,
 	}, {
 		name: "InsertAnalysisTestOK1",
-		want: &command{name: "InsertAnalysisTestOK1", typ: cmdtypeInsert, rel: &relfield{
+		want: &typespec{name: "InsertAnalysisTestOK1", kind: speckindInsert, rel: &relfield{
 			field: "UserRec",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -406,7 +406,7 @@ func TestAnalysis(t *testing.T) {
 		}},
 	}, {
 		name: "InsertAnalysisTestOK2",
-		want: &command{name: "InsertAnalysisTestOK2", typ: cmdtypeInsert, rel: &relfield{
+		want: &typespec{name: "InsertAnalysisTestOK2", kind: speckindInsert, rel: &relfield{
 			field: "UserRec",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -424,7 +424,7 @@ func TestAnalysis(t *testing.T) {
 		}},
 	}, {
 		name: "SelectAnalysisTestOK3",
-		want: &command{name: "SelectAnalysisTestOK3", typ: cmdtypeSelect, rel: &relfield{
+		want: &typespec{name: "SelectAnalysisTestOK3", kind: speckindSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -435,7 +435,7 @@ func TestAnalysis(t *testing.T) {
 		}},
 	}, {
 		name: "SelectAnalysisTestOK4",
-		want: &command{name: "SelectAnalysisTestOK4", typ: cmdtypeSelect, rel: &relfield{
+		want: &typespec{name: "SelectAnalysisTestOK4", kind: speckindSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -446,7 +446,7 @@ func TestAnalysis(t *testing.T) {
 		}},
 	}, {
 		name: "SelectAnalysisTestOK5",
-		want: &command{name: "SelectAnalysisTestOK5", typ: cmdtypeSelect, rel: &relfield{
+		want: &typespec{name: "SelectAnalysisTestOK5", kind: speckindSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -458,7 +458,7 @@ func TestAnalysis(t *testing.T) {
 		}},
 	}, {
 		name: "SelectAnalysisTestOK6",
-		want: &command{name: "SelectAnalysisTestOK6", typ: cmdtypeSelect, rel: &relfield{
+		want: &typespec{name: "SelectAnalysisTestOK6", kind: speckindSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
 			datatype: datatype{
@@ -470,7 +470,7 @@ func TestAnalysis(t *testing.T) {
 		}},
 	}, {
 		name: "SelectAnalysisTestOK7",
-		want: &command{name: "SelectAnalysisTestOK7", typ: cmdtypeSelect, rel: &relfield{
+		want: &typespec{name: "SelectAnalysisTestOK7", kind: speckindSelect, rel: &relfield{
 			field: "Rel",
 			relid: relid{name: "relation_a"},
 			datatype: datatype{
@@ -527,7 +527,7 @@ func TestAnalysis(t *testing.T) {
 		}},
 	}, {
 		name: "InsertAnalysisTestOK8",
-		want: &command{name: "InsertAnalysisTestOK8", typ: cmdtypeInsert, rel: &relfield{
+		want: &typespec{name: "InsertAnalysisTestOK8", kind: speckindInsert, rel: &relfield{
 			field: "Rel",
 			relid: relid{name: "relation_a"},
 			datatype: datatype{
@@ -585,9 +585,9 @@ func TestAnalysis(t *testing.T) {
 		}},
 	}, {
 		name: "DeleteAnalysisTestOK9",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK9",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -604,9 +604,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK10",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK10",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -625,9 +625,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK11",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK11",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -679,9 +679,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK12",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK12",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -699,9 +699,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK13",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK13",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -717,9 +717,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK14",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK14",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -758,9 +758,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_DistinctFrom",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_DistinctFrom",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -785,9 +785,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_ArrayComparisons",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_ArrayComparisons",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -858,9 +858,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_PatternMatching",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_PatternMatching",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a"},
@@ -919,9 +919,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_Using",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_Using",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -964,9 +964,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "UpdateAnalysisTestOK_From",
-		want: &command{
+		want: &typespec{
 			name: "UpdateAnalysisTestOK_From",
-			typ:  cmdtypeUpdate,
+			kind: speckindUpdate,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1009,9 +1009,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "SelectAnalysisTestOK_Join",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_Join",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1059,9 +1059,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "UpdateAnalysisTestOK_All",
-		want: &command{
+		want: &typespec{
 			name: "UpdateAnalysisTestOK_All",
-			typ:  cmdtypeUpdate,
+			kind: speckindUpdate,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1071,9 +1071,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_All",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_All",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1083,9 +1083,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_Return",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_Return",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1095,9 +1095,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "InsertAnalysisTestOK_Return",
-		want: &command{
+		want: &typespec{
 			name: "InsertAnalysisTestOK_Return",
-			typ:  cmdtypeInsert,
+			kind: speckindInsert,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1110,9 +1110,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "UpdateAnalysisTestOK_Return",
-		want: &command{
+		want: &typespec{
 			name: "UpdateAnalysisTestOK_Return",
-			typ:  cmdtypeUpdate,
+			kind: speckindUpdate,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1125,9 +1125,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "InsertAnalysisTestOK_Default",
-		want: &command{
+		want: &typespec{
 			name: "InsertAnalysisTestOK_Default",
-			typ:  cmdtypeInsert,
+			kind: speckindInsert,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1137,9 +1137,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "UpdateAnalysisTestOK_Default",
-		want: &command{
+		want: &typespec{
 			name: "UpdateAnalysisTestOK_Default",
-			typ:  cmdtypeUpdate,
+			kind: speckindUpdate,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1152,9 +1152,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "InsertAnalysisTestOK_Force",
-		want: &command{
+		want: &typespec{
 			name: "InsertAnalysisTestOK_Force",
-			typ:  cmdtypeInsert,
+			kind: speckindInsert,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1164,9 +1164,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "UpdateAnalysisTestOK_Force",
-		want: &command{
+		want: &typespec{
 			name: "UpdateAnalysisTestOK_Force",
-			typ:  cmdtypeUpdate,
+			kind: speckindUpdate,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1179,9 +1179,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "SelectAnalysisTestOK_ErrorHandler",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_ErrorHandler",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1191,9 +1191,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "InsertAnalysisTestOK_ErrorHandler",
-		want: &command{
+		want: &typespec{
 			name: "InsertAnalysisTestOK_ErrorHandler",
-			typ:  cmdtypeInsert,
+			kind: speckindInsert,
 			rel: &relfield{
 				field:    "Rel",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1203,42 +1203,42 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "SelectAnalysisTestOK_Count",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_Count",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel: &relfield{
 				field: "Count",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
-			sel: selcount,
+			selkind: selectcount,
 		},
 	}, {
 		name: "SelectAnalysisTestOK_Exists",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_Exists",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel: &relfield{
 				field: "Exists",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
-			sel: selexists,
+			selkind: selectexists,
 		},
 	}, {
 		name: "SelectAnalysisTestOK_NotExists",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_NotExists",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel: &relfield{
 				field: "NotExists",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
-			sel: selnotexists,
+			selkind: selectnotexists,
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_Relation",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_Relation",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field: "_",
 				relid: relid{name: "relation_a", alias: "a"},
@@ -1247,41 +1247,41 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "SelectAnalysisTestOK_LimitDirective",
-		want: &command{
+		want: &typespec{
 			name:  "SelectAnalysisTestOK_LimitDirective",
-			typ:   cmdtypeSelect,
+			kind:  speckindSelect,
 			rel:   reldummyslice,
 			limit: &limitvar{value: 25},
 		},
 	}, {
 		name: "SelectAnalysisTestOK_LimitField",
-		want: &command{
+		want: &typespec{
 			name:  "SelectAnalysisTestOK_LimitField",
-			typ:   cmdtypeSelect,
+			kind:  speckindSelect,
 			rel:   reldummyslice,
 			limit: &limitvar{value: 10, field: "Limit"},
 		},
 	}, {
 		name: "SelectAnalysisTestOK_OffsetDirective",
-		want: &command{
+		want: &typespec{
 			name:   "SelectAnalysisTestOK_OffsetDirective",
-			typ:    cmdtypeSelect,
+			kind:   speckindSelect,
 			rel:    reldummyslice,
 			offset: &offsetvar{value: 25},
 		},
 	}, {
 		name: "SelectAnalysisTestOK_OffsetField",
-		want: &command{
+		want: &typespec{
 			name:   "SelectAnalysisTestOK_OffsetField",
-			typ:    cmdtypeSelect,
+			kind:   speckindSelect,
 			rel:    reldummyslice,
 			offset: &offsetvar{value: 10, field: "Offset"},
 		},
 	}, {
 		name: "SelectAnalysisTestOK_OrderByDirective",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_OrderByDirective",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel:  reldummyslice,
 			orderby: &orderbylist{items: []*orderbyitem{
 				{col: colid{qual: "a", name: "foo"}, dir: orderasc, nulls: nullsfirst},
@@ -1292,17 +1292,17 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "InsertAnalysisTestOK_OverrideDirective",
-		want: &command{
+		want: &typespec{
 			name:     "InsertAnalysisTestOK_OverrideDirective",
-			typ:      cmdtypeInsert,
+			kind:     speckindInsert,
 			rel:      reldummyslice,
 			override: overridingsystem,
 		},
 	}, {
 		name: "FilterAnalysisTestOK_TextSearchDirective",
-		want: &command{
+		want: &typespec{
 			name: "FilterAnalysisTestOK_TextSearchDirective",
-			typ:  cmdtypeFilter,
+			kind: speckindFilter,
 			rel: &relfield{
 				field:    "_",
 				relid:    relid{name: "relation_a", alias: "a"},
@@ -1312,17 +1312,17 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "InsertAnalysisTestOK_OnConflict",
-		want: &command{
+		want: &typespec{
 			name:       "InsertAnalysisTestOK_OnConflict",
-			typ:        cmdtypeInsert,
+			kind:       speckindInsert,
 			rel:        reldummyslice,
 			onconflict: &onconflictblock{ignore: true},
 		},
 	}, {
 		name: "InsertAnalysisTestOK_OnConflictColumn",
-		want: &command{
+		want: &typespec{
 			name: "InsertAnalysisTestOK_OnConflictColumn",
-			typ:  cmdtypeInsert,
+			kind: speckindInsert,
 			rel:  reldummyslice,
 			onconflict: &onconflictblock{
 				column: []colid{{qual: "a", name: "id"}},
@@ -1331,9 +1331,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "InsertAnalysisTestOK_OnConflictConstraint",
-		want: &command{
+		want: &typespec{
 			name: "InsertAnalysisTestOK_OnConflictConstraint",
-			typ:  cmdtypeInsert,
+			kind: speckindInsert,
 			rel:  reldummyslice,
 			onconflict: &onconflictblock{
 				constraint: "relation_constraint_xyz",
@@ -1346,9 +1346,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "InsertAnalysisTestOK_OnConflictIndex",
-		want: &command{
+		want: &typespec{
 			name: "InsertAnalysisTestOK_OnConflictIndex",
-			typ:  cmdtypeInsert,
+			kind: speckindInsert,
 			rel:  reldummyslice,
 			onconflict: &onconflictblock{
 				index:  "relation_index_xyz",
@@ -1357,9 +1357,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_ResultField",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_ResultField",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field: "_",
 				relid: relid{name: "relation_a", alias: "a"},
@@ -1375,9 +1375,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "DeleteAnalysisTestOK_RowsAffected",
-		want: &command{
+		want: &typespec{
 			name: "DeleteAnalysisTestOK_RowsAffected",
-			typ:  cmdtypeDelete,
+			kind: speckindDelete,
 			rel: &relfield{
 				field: "_",
 				relid: relid{name: "relation_a", alias: "a"},
@@ -1390,17 +1390,17 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "SelectAnalysisTestOK_FilterField",
-		want: &command{
+		want: &typespec{
 			name:   "SelectAnalysisTestOK_FilterField",
-			typ:    cmdtypeSelect,
+			kind:   speckindSelect,
 			rel:    reldummyslice,
 			filter: "Filter",
 		},
 	}, {
 		name: "SelectAnalysisTestOK_FieldTypesBasic",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_FieldTypesBasic",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel: &relfield{
 				field: "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
@@ -1488,9 +1488,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "SelectAnalysisTestOK_FieldTypesSlices",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_FieldTypesSlices",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel: &relfield{
 				field: "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
@@ -1674,9 +1674,9 @@ func TestAnalysis(t *testing.T) {
 		},
 	}, {
 		name: "SelectAnalysisTestOK_FieldTypesInterfaces",
-		want: &command{
+		want: &typespec{
 			name: "SelectAnalysisTestOK_FieldTypesInterfaces",
-			typ:  cmdtypeSelect,
+			kind: speckindSelect,
 			rel: &relfield{
 				field: "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
@@ -1813,11 +1813,11 @@ func TestTypeinfo_string(t *testing.T) {
 		{"f73", gotypbytess},
 	}
 
-	cmd, err := runAnalysis("SelectAnalysisTestOK_typeinfo_string", t)
+	spec, err := runAnalysis("SelectAnalysisTestOK_typeinfo_string", t)
 	if err != nil {
 		t.Error(err)
 	}
-	fields := cmd.rel.datatype.base.fields
+	fields := spec.rel.datatype.base.fields
 	for i := 0; i < len(fields); i++ {
 		ff := fields[i]
 		tt := tests[i]

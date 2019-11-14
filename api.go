@@ -4,6 +4,9 @@ import (
 	"database/sql"
 )
 
+// documentation purpose only
+type TypeSpec struct{}
+
 type directive struct {
 	// This field serves as an indicator that the type is actually a directive
 	// as opposed to other types declared by this package. Used by helper
@@ -25,9 +28,9 @@ type (
 	// The list should be should be provided in the directive's `sql` tag.
 	Column directive
 
-	// This is inteded to be used with Update and Delete commands to
+	// This is inteded to be used with Update and Delete TypeSpecs to
 	// explicitly indicate that, if a "where block" is missing, the
-	// command should be executed against all the rows of the relation.
+	// query should be executed against all the rows of the relation.
 	//
 	// This acts as a safeguard against unintentionally omitting the
 	// "where block" and then generating a query that would delete/update
@@ -36,9 +39,9 @@ type (
 
 	// The Relation directive has two potential use cases:
 	//
-	// (1) It can be used in a Delete command as the mount for the `rel` tag.
-	// This can be useful for Delete commands that have no Return directive,
-	// since such commands produce a DELETE query that takes no input other
+	// (1) It can be used in a Delete TypeSpec as the mount for the `rel` tag.
+	// This can be useful for Delete TypeSpecs that have no Return directive,
+	// since such TypeSpecs produce a DELETE query that takes no input other
 	// than the optional WHERE clause parameters, nor does it generate any
 	// output, and it therefore then becomes unnecessary to provide
 	// a proper Go struct representation of the target relation.
@@ -56,12 +59,12 @@ type (
 	// The Return directive produces a postgres RETURNING clause. The columns
 	// to be returned have to be specified in the struct field's tag.
 	//
-	// The Return directive can be used in Insert, Update, and Delete commands.
+	// The Return directive can be used in Insert, Update, and Delete TypeSpecs.
 	Return directive
 
 	// The Force directive allows for specifying columns that are usually
 	// omitted from a query to actually be included in the query by the
-	// command in which the directive is used. The columns to be included
+	// TypeSpec in which the directive is used. The columns to be included
 	// have to be specified in the struct field's tag.
 	//
 	// For example if a table has an "id" column whose value is auto-generated
@@ -70,26 +73,26 @@ type (
 	// queries. However, there may be scenarios in an app where the "id"
 	// value is already pre-generated and it needs to be INSERTed together
 	// with the record, this is where the Force directive can be used to
-	// tell the command to include the "id" column in the query.
+	// tell the TypeSpec to include the "id" column in the query.
 	Force directive
 
 	// The Default directive produces the DEFAULT marker in place of values
 	// of those columns that are listed in the directive's field tag. This can
-	// be used to specify those columns of an INSERT/UPDATE command that should
+	// be used to specify those columns of an INSERT/UPDATE query that should
 	// have their value set to their default as defined by the database table.
 	Default directive
 
-	// The Limit directive can be used inside a Select command to produce
+	// The Limit directive can be used inside a Select TypeSpec to produce
 	// a LIMIT clause for the SELECT query. The limit value must be specified
 	// in the directive field's `sql` tag.
 	Limit directive
 
-	// The Offset directive can be used inside a Select command to produce
+	// The Offset directive can be used inside a Select TypeSpec to produce
 	// an OFFSET clause for the SELECT query. The offset value must be specified
 	// in the directive field's `sql` tag.
 	Offset directive
 
-	// The OrderBy directive can be used inside a Select command to produce
+	// The OrderBy directive can be used inside a Select TypeSpec to produce
 	// an ORDER BY clause for the SELECT query. The list of columns by which
 	// to order should be specified in the directive's tag.
 	//
@@ -102,11 +105,11 @@ type (
 	// NULLS LAST options respectively.
 	OrderBy directive
 
-	// The Override directive can be used in an Insert command to produce
+	// The Override directive can be used in an Insert TypeSpec to produce
 	// the OVERRIDING { SYSTEM | USER } VALUE clause.
 	Override directive
 
-	// The TextSearch directive can be used in a Filter command to specify
+	// The TextSearch directive can be used in a Filter TypeSpec to specify
 	// the document column that will be used for full-text search.
 	TextSearch directive
 

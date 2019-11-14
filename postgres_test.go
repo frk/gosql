@@ -189,14 +189,14 @@ func Test_pgchecker_run(t *testing.T) {
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd, err := runAnalysis(tt.name, t)
+			spec, err := runAnalysis(tt.name, t)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			dbc := new(pgchecker)
 			dbc.pg = testdb.pg
-			dbc.cmd = cmd
+			dbc.spec = spec
 
 			err = dbc.run()
 			if e := compare.Compare(err, tt.err); e != nil {
@@ -233,7 +233,7 @@ func Test_pgchecker_loadrelation(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
+		dbc.spec = &typespec{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.run()
 		rel := dbc.rel
@@ -367,7 +367,7 @@ func Test_pgchecker_loadcolumns(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
+		dbc.spec = &typespec{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.run()
 		if err == nil {
@@ -405,7 +405,7 @@ func Test_pgchecker_loadconstraints(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
+		dbc.spec = &typespec{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.run()
 		if err == nil {
@@ -452,7 +452,7 @@ func Test_pgchecker_loadindexes(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = &command{rel: &relfield{relid: tt.relid}}
+		dbc.spec = &typespec{rel: &relfield{relid: tt.relid}}
 
 		err := dbc.run()
 		if err == nil {
@@ -470,34 +470,34 @@ func Test_pgchecker_loadindexes(t *testing.T) {
 
 func Test_pgchecker_check_textsearch(t *testing.T) {
 	tests := []struct {
-		cmd *command
-		err error
+		spec *typespec
+		err  error
 	}{{
-		cmd: &command{
+		spec: &typespec{
 			rel:        &relfield{relid: relid{name: "column_tests_2"}},
 			textsearch: &colid{qual: "", name: "col_text_search_ok"},
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			textsearch: &colid{qual: "c", name: "col_text_search_ok"},
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			textsearch: &colid{qual: "d", name: "col_text_search_ok"},
 		},
 		err: errors.NoDBRelationError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			textsearch: &colid{qual: "c", name: "col_none"},
 		},
 		err: errors.NoDBColumnError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel:        &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			textsearch: &colid{qual: "c", name: "col_text_search_bad"},
 		},
@@ -507,7 +507,7 @@ func Test_pgchecker_check_textsearch(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = tt.cmd
+		dbc.spec = tt.spec
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -519,10 +519,10 @@ func Test_pgchecker_check_textsearch(t *testing.T) {
 
 func Test_pgchecker_check_orderby(t *testing.T) {
 	tests := []struct {
-		cmd *command
-		err error
+		spec *typespec
+		err  error
 	}{{
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			orderby: &orderbylist{items: []*orderbyitem{
 				{col: colid{name: "col_orderby_a"}},
@@ -531,7 +531,7 @@ func Test_pgchecker_check_orderby(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			orderby: &orderbylist{items: []*orderbyitem{
 				{col: colid{qual: "c", name: "col_orderby_a"}},
@@ -540,7 +540,7 @@ func Test_pgchecker_check_orderby(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			orderby: &orderbylist{items: []*orderbyitem{
 				{col: colid{qual: "d", name: "col_orderby_a"}},
@@ -549,7 +549,7 @@ func Test_pgchecker_check_orderby(t *testing.T) {
 		},
 		err: errors.NoDBRelationError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			orderby: &orderbylist{items: []*orderbyitem{
 				{col: colid{qual: "c", name: "col_none"}},
@@ -561,7 +561,7 @@ func Test_pgchecker_check_orderby(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = tt.cmd
+		dbc.spec = tt.spec
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -573,10 +573,10 @@ func Test_pgchecker_check_orderby(t *testing.T) {
 
 func Test_pgchecker_check_defaults(t *testing.T) {
 	tests := []struct {
-		cmd *command
-		err error
+		spec *typespec
+		err  error
 	}{{
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			defaults: &collist{items: []colid{
 				{name: "col_foo"},
@@ -586,7 +586,7 @@ func Test_pgchecker_check_defaults(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			defaults: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -595,7 +595,7 @@ func Test_pgchecker_check_defaults(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			defaults: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -604,7 +604,7 @@ func Test_pgchecker_check_defaults(t *testing.T) {
 		},
 		err: errors.BadTargetTableForDefaultError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			defaults: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -617,7 +617,7 @@ func Test_pgchecker_check_defaults(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = tt.cmd
+		dbc.spec = tt.spec
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -629,10 +629,10 @@ func Test_pgchecker_check_defaults(t *testing.T) {
 
 func Test_pgchecker_check_force(t *testing.T) {
 	tests := []struct {
-		cmd *command
-		err error
+		spec *typespec
+		err  error
 	}{{
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			force: &collist{items: []colid{
 				{name: "col_foo"},
@@ -642,7 +642,7 @@ func Test_pgchecker_check_force(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			force: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -651,7 +651,7 @@ func Test_pgchecker_check_force(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			force: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -660,7 +660,7 @@ func Test_pgchecker_check_force(t *testing.T) {
 		},
 		err: errors.NoDBRelationError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			force: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -673,7 +673,7 @@ func Test_pgchecker_check_force(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = tt.cmd
+		dbc.spec = tt.spec
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -685,10 +685,10 @@ func Test_pgchecker_check_force(t *testing.T) {
 
 func Test_pgchecker_check_returning(t *testing.T) {
 	tests := []struct {
-		cmd *command
-		err error
+		spec *typespec
+		err  error
 	}{{
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			returning: &collist{items: []colid{
 				{name: "col_foo"},
@@ -698,7 +698,7 @@ func Test_pgchecker_check_returning(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			returning: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -707,7 +707,7 @@ func Test_pgchecker_check_returning(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			returning: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -716,7 +716,7 @@ func Test_pgchecker_check_returning(t *testing.T) {
 		},
 		err: errors.NoDBRelationError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			returning: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
@@ -729,7 +729,7 @@ func Test_pgchecker_check_returning(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = tt.cmd
+		dbc.spec = tt.spec
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -741,10 +741,10 @@ func Test_pgchecker_check_returning(t *testing.T) {
 
 func Test_pgchecker_check_onconflict(t *testing.T) {
 	tests := []struct {
-		cmd *command
-		err error
+		spec *typespec
+		err  error
 	}{{
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				column: []colid{
@@ -755,13 +755,13 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel:        &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{column: []colid{{name: "col_none"}}},
 		},
 		err: errors.NoDBColumnError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				column: []colid{{name: "col_indkey2"}},
@@ -769,7 +769,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: errors.NoDBIndexForColumnListError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				column: []colid{{name: "col_indkey1"}},
@@ -777,7 +777,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: errors.NoDBIndexForColumnListError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				column: []colid{
@@ -789,7 +789,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: errors.NoDBIndexForColumnListError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				index: "column_tests_2_unique_index",
@@ -797,7 +797,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				index: "column_tests_2_index_none",
@@ -805,7 +805,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: errors.NoDBIndexError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				index: "column_tests_2_nonunique_index",
@@ -813,7 +813,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: errors.NoDBIndexError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				constraint: "column_tests_2_unique_constraint",
@@ -821,7 +821,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				constraint: "column_tests_2_unique_constraint_none",
@@ -829,7 +829,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: errors.NoDBConstraintError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{
 				constraint: "column_tests_2_nonunique_constraint",
@@ -837,7 +837,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: errors.NoDBConstraintError,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{update: &collist{items: []colid{
 				{name: "col_foo"},
@@ -847,7 +847,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 		},
 		err: nil,
 	}, {
-		cmd: &command{
+		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2"}},
 			onconflict: &onconflictblock{update: &collist{items: []colid{
 				{name: "col_foo"},
@@ -861,7 +861,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.cmd = tt.cmd
+		dbc.spec = tt.spec
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {

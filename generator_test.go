@@ -16,13 +16,16 @@ func TestGenerate(t *testing.T) {
 	}{
 		// deletes
 		{"delete_with_all_directive"},
-		{"delete_with_where_block_1"},
+		//{"delete_with_where_block_1"},
 
 		// selects
 		// {"select_with_where_block"},
 	}
 
-	dir, err := parsedir("./testdata/generator")
+	cmd := new(command)
+	cmd.pg = testdb.pg
+
+	dir, err := cmd.parsedir("./testdata/generator")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,11 +34,14 @@ func TestGenerate(t *testing.T) {
 		t.Run(tt.filename, func(t *testing.T) {
 			fileprefix := "testdata/generator/" + tt.filename
 
-			g := &generator{file: fileprefix + "_in.go", dir: dir, pg: testdb.pg}
-			if err := g.run(); err != nil {
+			f := cmd.aggtypes(dir, fileprefix+"_in.go")
+			buf, err := cmd.run(f)
+			if err != nil {
 				t.Error(err)
+				return
 			}
-			got := string(formatBytes(&g.buf))
+
+			got := string(formatBytes(buf))
 
 			out, err := ioutil.ReadFile(fileprefix + "_out.go")
 			if err != nil {

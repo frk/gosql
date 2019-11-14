@@ -44,57 +44,57 @@ var (
 // TODO(mkopriva): to provide more detailed error messages either pass in the
 // details about the file being analyzed, or make sure that the caller has that
 // information and appends it to the error.
-func analyze(named *types.Named) (*command, error) {
+func analyze(named *types.Named) (*typespec, error) {
 	a := new(analyzer)
 	a.pkg = named.Obj().Pkg().Path()
 	a.named = named
-	a.cmd = new(command)
-	a.cmd.name = named.Obj().Name()
+	a.spec = new(typespec)
+	a.spec.name = named.Obj().Name()
 
 	var ok bool
-	if a.cmdtyp, ok = named.Underlying().(*types.Struct); !ok {
-		panic(a.cmd.name + " command type not supported.") // this shouldn't happen
+	if a.spectyp, ok = named.Underlying().(*types.Struct); !ok {
+		panic(a.spec.name + " typespec kind not supported.") // this shouldn't happen
 	}
 
-	key := strings.ToLower(a.cmd.name)
+	key := strings.ToLower(a.spec.name)
 	if len(key) > 5 {
 		key = key[:6]
 	}
 
 	switch key {
 	case "insert":
-		a.cmd.typ = cmdtypeInsert
+		a.spec.kind = speckindInsert
 	case "update":
-		a.cmd.typ = cmdtypeUpdate
+		a.spec.kind = speckindUpdate
 	case "select":
-		a.cmd.typ = cmdtypeSelect
+		a.spec.kind = speckindSelect
 	case "delete":
-		a.cmd.typ = cmdtypeDelete
+		a.spec.kind = speckindDelete
 	case "filter":
-		a.cmd.typ = cmdtypeFilter
+		a.spec.kind = speckindFilter
 	default:
-		panic(a.cmd.name + " command type has unsupported name prefix.") // this shouldn't happen
+		panic(a.spec.name + " typespec kind has unsupported name prefix.") // this shouldn't happen
 	}
 
 	if err := a.run(); err != nil {
 		return nil, err
 	}
-	return a.cmd, nil
+	return a.spec, nil
 }
 
 // analyzer holds the state of the analysis
 type analyzer struct {
-	pkg    string        // the package path of the command under analysis
-	named  *types.Named  // the named type of the command under analysis
-	cmdtyp *types.Struct // the struct type of the command under analysis
-	reltyp *types.Struct // the struct type of the relation under analysis
-	cmd    *command      // the result of the analysis
+	pkg     string        // the package path of the typespec under analysis
+	named   *types.Named  // the named type of the typespec under analysis
+	spectyp *types.Struct // the struct type of the typespec under analysis
+	reltyp  *types.Struct // the struct type of the relation under analysis
+	spec    *typespec     // the result of the analysis
 }
 
 func (a *analyzer) run() (err error) {
-	for i := 0; i < a.cmdtyp.NumFields(); i++ {
-		fld := a.cmdtyp.Field(i)
-		tag := tagutil.New(a.cmdtyp.Tag(i))
+	for i := 0; i < a.spectyp.NumFields(); i++ {
+		fld := a.spectyp.Field(i)
+		tag := tagutil.New(a.spectyp.Tag(i))
 
 		if reltag := tag.First("rel"); len(reltag) > 0 {
 			rid, err := a.relid(reltag, fld)
@@ -102,34 +102,34 @@ func (a *analyzer) run() (err error) {
 				return err
 			}
 
-			a.cmd.rel = new(relfield)
-			a.cmd.rel.field = fld.Name()
-			a.cmd.rel.relid = rid
+			a.spec.rel = new(relfield)
+			a.spec.rel.field = fld.Name()
+			a.spec.rel.relid = rid
 
-			switch fname := strings.ToLower(a.cmd.rel.field); {
+			switch fname := strings.ToLower(a.spec.rel.field); {
 			case fname == "count" && a.isint(fld.Type()):
-				if a.cmd.typ != cmdtypeSelect {
+				if a.spec.kind != speckindSelect {
 					return errors.IllegalCountFieldError
 
 				}
-				a.cmd.sel = selcount
+				a.spec.selkind = selectcount
 			case fname == "exists" && a.isbool(fld.Type()):
-				if a.cmd.typ != cmdtypeSelect {
+				if a.spec.kind != speckindSelect {
 					return errors.IllegalExistsFieldError
 				}
-				a.cmd.sel = selexists
+				a.spec.selkind = selectexists
 			case fname == "notexists" && a.isbool(fld.Type()):
-				if a.cmd.typ != cmdtypeSelect {
+				if a.spec.kind != speckindSelect {
 					return errors.IllegalNotExistsFieldError
 				}
-				a.cmd.sel = selnotexists
+				a.spec.selkind = selectnotexists
 			case fname == "_" && typesutil.IsDirective("Relation", fld.Type()):
-				if a.cmd.typ != cmdtypeDelete {
+				if a.spec.kind != speckindDelete {
 					return errors.IllegalRelationDirectiveError
 				}
-				a.cmd.rel.isdir = true
+				a.spec.rel.isdir = true
 			default:
-				if err := a.reldatatype(a.cmd.rel, fld); err != nil {
+				if err := a.reldatatype(a.spec.rel, fld); err != nil {
 					return err
 				}
 			}
@@ -143,35 +143,35 @@ func (a *analyzer) run() (err error) {
 		if dirname := typesutil.GetDirectiveName(fld); fld.Name() == "_" && len(dirname) > 0 {
 			switch strings.ToLower(dirname) {
 			case "all":
-				if a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+				if a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 					return errors.IllegalAllDirectiveError
 				}
-				if a.cmd.all || a.cmd.where != nil || len(a.cmd.filter) > 0 {
+				if a.spec.all || a.spec.where != nil || len(a.spec.filter) > 0 {
 					return errors.ConflictWhereProducerError
 				}
-				a.cmd.all = true
+				a.spec.all = true
 			case "default":
-				if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate {
+				if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate {
 					return errors.IllegalDefaultDirectiveError
 				}
-				if a.cmd.defaults, err = a.collist(tag["sql"], fld); err != nil {
+				if a.spec.defaults, err = a.collist(tag["sql"], fld); err != nil {
 					return err
 				}
 			case "force":
-				if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate {
+				if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate {
 					return errors.IllegalForceDirectiveError
 				}
-				if a.cmd.force, err = a.collist(tag["sql"], fld); err != nil {
+				if a.spec.force, err = a.collist(tag["sql"], fld); err != nil {
 					return err
 				}
 			case "return":
-				if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+				if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 					return errors.IllegalReturnDirectiveError
 				}
-				if a.cmd.returning != nil || a.cmd.result != nil || len(a.cmd.rowsaffected) > 0 {
+				if a.spec.returning != nil || a.spec.result != nil || len(a.spec.rowsaffected) > 0 {
 					return errors.ConflictResultProducerError
 				}
-				if a.cmd.returning, err = a.collist(tag["sql"], fld); err != nil {
+				if a.spec.returning, err = a.collist(tag["sql"], fld); err != nil {
 					return err
 				}
 			case "limit":
@@ -235,25 +235,25 @@ func (a *analyzer) run() (err error) {
 			if a.isaccessible(fld, a.named) {
 				switch {
 				case a.isfilter(fld.Type()):
-					if a.cmd.typ != cmdtypeSelect && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+					if a.spec.kind != speckindSelect && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 						return errors.IllegalFilterFieldError
 					}
-					if a.cmd.all || a.cmd.where != nil || len(a.cmd.filter) > 0 {
+					if a.spec.all || a.spec.where != nil || len(a.spec.filter) > 0 {
 						return errors.ConflictWhereProducerError
 					}
-					a.cmd.filter = fld.Name()
+					a.spec.filter = fld.Name()
 				case a.iserrorhandler(fld.Type()):
-					if len(a.cmd.erh) > 0 {
+					if len(a.spec.erh) > 0 {
 						return errors.ConflictErrorHandlerFieldError
 					}
-					a.cmd.erh = fld.Name()
+					a.spec.erh = fld.Name()
 				}
 			}
 		}
 
 	}
 
-	if a.cmd.rel == nil {
+	if a.spec.rel == nil {
 		return errors.NoRelfieldError
 	}
 	return nil
@@ -566,10 +566,10 @@ func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 }
 
 func (a *analyzer) whereblock(field *types.Var) (err error) {
-	if a.cmd.typ != cmdtypeSelect && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+	if a.spec.kind != speckindSelect && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 		return errors.IllegalWhereBlockError
 	}
-	if a.cmd.all || a.cmd.where != nil || len(a.cmd.filter) > 0 {
+	if a.spec.all || a.spec.where != nil || len(a.spec.filter) > 0 {
 		return errors.ConflictWhereProducerError
 	}
 	// The loopstate type holds the state of a loop over a struct's fields.
@@ -815,17 +815,17 @@ stackloop:
 		stack = stack[:len(stack)-1]
 	}
 
-	a.cmd.where = wb
+	a.spec.where = wb
 	return nil
 }
 
 func (a *analyzer) joinblock(field *types.Var) (err error) {
 	joinblockname := strings.ToLower(field.Name())
-	if joinblockname == "join" && a.cmd.typ != cmdtypeSelect {
+	if joinblockname == "join" && a.spec.kind != speckindSelect {
 		return errors.IllegalJoinBlockError
-	} else if joinblockname == "from" && a.cmd.typ != cmdtypeUpdate {
+	} else if joinblockname == "from" && a.spec.kind != speckindUpdate {
 		return errors.IllegalFromBlockError
-	} else if joinblockname == "using" && a.cmd.typ != cmdtypeDelete {
+	} else if joinblockname == "using" && a.spec.kind != speckindDelete {
 		return errors.IllegalUsingBlockError
 	}
 
@@ -925,12 +925,12 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 
 	}
 
-	a.cmd.join = join
+	a.spec.join = join
 	return nil
 }
 
 func (a *analyzer) onconflictblock(field *types.Var) (err error) {
-	if a.cmd.typ != cmdtypeInsert {
+	if a.spec.kind != speckindInsert {
 		return errors.IllegalOnConflictBlockError
 	}
 
@@ -996,7 +996,7 @@ func (a *analyzer) onconflictblock(field *types.Var) (err error) {
 		return errors.NoOnConflictTargetError
 	}
 
-	a.cmd.onconflict = onc
+	a.spec.onconflict = onc
 	return nil
 }
 
@@ -1104,10 +1104,10 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
 }
 
 func (a *analyzer) limitvar(field *types.Var, tag string) error {
-	if a.cmd.typ != cmdtypeSelect {
+	if a.spec.kind != speckindSelect {
 		return errors.IllegalLimitFieldOrDirectiveError
 	}
-	if a.cmd.limit != nil {
+	if a.spec.limit != nil {
 		return errors.ConflictLimitProducerError
 	}
 
@@ -1128,15 +1128,15 @@ func (a *analyzer) limitvar(field *types.Var, tag string) error {
 		}
 		limit.value = u64
 	}
-	a.cmd.limit = limit
+	a.spec.limit = limit
 	return nil
 }
 
 func (a *analyzer) offsetvar(field *types.Var, tag string) error {
-	if a.cmd.typ != cmdtypeSelect {
+	if a.spec.kind != speckindSelect {
 		return errors.IllegalOffsetFieldOrDirectiveError
 	}
-	if a.cmd.offset != nil {
+	if a.spec.offset != nil {
 		return errors.ConflictOffsetProducerError
 	}
 
@@ -1157,12 +1157,12 @@ func (a *analyzer) offsetvar(field *types.Var, tag string) error {
 		}
 		offset.value = u64
 	}
-	a.cmd.offset = offset
+	a.spec.offset = offset
 	return nil
 }
 
 func (a *analyzer) orderbydir(tags []string, field *types.Var) (err error) {
-	if a.cmd.typ != cmdtypeSelect {
+	if a.spec.kind != speckindSelect {
 		return errors.IllegalOrderByDirectiveError
 	} else if len(tags) == 0 {
 		return errors.EmptyOrderByListError
@@ -1198,21 +1198,21 @@ func (a *analyzer) orderbydir(tags []string, field *types.Var) (err error) {
 		list.items = append(list.items, item)
 	}
 
-	a.cmd.orderby = list
+	a.spec.orderby = list
 	return nil
 }
 
 func (a *analyzer) overridedir(tag string, field *types.Var) error {
-	if a.cmd.typ != cmdtypeInsert {
+	if a.spec.kind != speckindInsert {
 		return errors.IllegalOverrideDirectiveError
 	}
 
 	val := strings.ToLower(strings.TrimSpace(tag))
 	switch val {
 	case "system":
-		a.cmd.override = overridingsystem
+		a.spec.override = overridingsystem
 	case "user":
-		a.cmd.override = overridinguser
+		a.spec.override = overridinguser
 	default:
 		return errors.BadOverrideKindValueError
 	}
@@ -1220,10 +1220,10 @@ func (a *analyzer) overridedir(tag string, field *types.Var) error {
 }
 
 func (a *analyzer) resultfield(field *types.Var) error {
-	if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+	if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 		return errors.IllegalResultFieldError
 	}
-	if a.cmd.returning != nil || a.cmd.result != nil || len(a.cmd.rowsaffected) > 0 {
+	if a.spec.returning != nil || a.spec.result != nil || len(a.spec.rowsaffected) > 0 {
 		return errors.ConflictResultProducerError
 	}
 
@@ -1236,27 +1236,27 @@ func (a *analyzer) resultfield(field *types.Var) error {
 	result := new(resultfield)
 	result.name = rel.field
 	result.datatype = rel.datatype
-	a.cmd.result = result
+	a.spec.result = result
 	return nil
 }
 
 func (a *analyzer) rowsaffected(field *types.Var) error {
-	if a.cmd.typ != cmdtypeInsert && a.cmd.typ != cmdtypeUpdate && a.cmd.typ != cmdtypeDelete {
+	if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 		return errors.IllegalRowsAffectedFieldError
 	}
-	if a.cmd.returning != nil || a.cmd.result != nil || len(a.cmd.rowsaffected) > 0 {
+	if a.spec.returning != nil || a.spec.result != nil || len(a.spec.rowsaffected) > 0 {
 		return errors.ConflictResultProducerError
 	}
 
 	if !a.isint(field.Type()) {
 		return errors.BadRowsAffectedTypeError
 	}
-	a.cmd.rowsaffected = field.Name()
+	a.spec.rowsaffected = field.Name()
 	return nil
 }
 
 func (a *analyzer) textsearch(tag string, field *types.Var) error {
-	if a.cmd.typ != cmdtypeFilter {
+	if a.spec.kind != speckindFilter {
 		return errors.IllegalTextSearchDirectiveError
 	}
 
@@ -1266,7 +1266,7 @@ func (a *analyzer) textsearch(tag string, field *types.Var) error {
 		return err
 	}
 
-	a.cmd.textsearch = &cid
+	a.spec.textsearch = &cid
 	return nil
 }
 
@@ -1400,49 +1400,49 @@ func (a *analyzer) isbool(typ types.Type) bool {
 	return basic.Kind() == types.Bool
 }
 
-type cmdtype uint
+type speckind uint
 
 const (
-	cmdtypeInsert cmdtype = iota + 1
-	cmdtypeUpdate
-	cmdtypeSelect
-	cmdtypeDelete
-	cmdtypeFilter
+	speckindInsert speckind = iota + 1
+	speckindUpdate
+	speckindSelect
+	speckindDelete
+	speckindFilter
 )
 
-func (cmd cmdtype) String() string {
-	switch cmd {
-	case cmdtypeInsert:
+func (k speckind) String() string {
+	switch k {
+	case speckindInsert:
 		return "Insert"
-	case cmdtypeUpdate:
+	case speckindUpdate:
 		return "Update"
-	case cmdtypeSelect:
+	case speckindSelect:
 		return "Select"
-	case cmdtypeDelete:
+	case speckindDelete:
 		return "Delete"
-	case cmdtypeFilter:
+	case speckindFilter:
 		return "Filter"
 	}
-	return "<unknown cmdtype>"
+	return "<unknown speckind>"
 }
 
-type selkind uint
+type selectkind uint
 
 const (
-	selfrom      selkind = iota // the default
-	selcount                    // SELECT COUNT(1) ...
-	selexists                   // SELECT EXISTS( ... )
-	selnotexists                // SELECT NOT EXISTS( ... )
+	selectfrom      selectkind = iota // the default
+	selectcount                       // SELECT COUNT(1) ...
+	selectexists                      // SELECT EXISTS( ... )
+	selectnotexists                   // SELECT NOT EXISTS( ... )
 )
 
-type command struct {
-	name string  // name of the target struct type
-	typ  cmdtype // the type of the command
-	// If the command is a Select command this field indicates the
+type typespec struct {
+	name string   // name of the target struct type
+	kind speckind // the kind of the typespec
+	// If the typespec is a Select spec this field indicates the
 	// specific kind of the select.
-	sel selkind
-	rel *relfield
+	selkind selectkind
 
+	rel        *relfield
 	join       *joinblock
 	where      *whereblock
 	orderby    *orderbylist
@@ -1459,8 +1459,8 @@ type command struct {
 	offset   *offsetvar
 	override overridingkind
 
-	// Indicates that the command should be executed against all the rows
-	// of the relation.
+	// Indicates that the query to be generated should be executed
+	// against all the rows of the relation.
 	all bool
 	// The name of the ErrorHandler field, if any.
 	erh string
@@ -1487,18 +1487,18 @@ type collist struct {
 // relfield holds the information on a go struct type and on the
 // db relation that's associated with that struct type.
 type relfield struct {
-	field    string // name of the field that references the relation of the command
+	field    string // name of the field that references the relation of the typespec
 	relid    relid  // the relation identifier extracted from the tag
 	datatype datatype
 	isdir    bool // indicates that the gosql.Relation directive was used
 }
 
 type resultfield struct {
-	name     string // name of the field that declares the result of the command
+	name     string // name of the field that declares the result of the typespec
 	datatype datatype
 }
 
-// datatype holds information on the type of data a command should read from,
+// datatype holds information on the type of data a typespec should read from,
 // or write to, the associated database relation.
 type datatype struct {
 	base      typeinfo // type info on the datatype

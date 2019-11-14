@@ -154,15 +154,15 @@ func (pg *postgres) close() error {
 
 type pgchecker struct {
 	pg       *postgres
-	cmd      *command
+	spec     *typespec
 	rel      *pgrelation   // the target relation
 	joinlist []*pgrelation // joined relations
 	relmap   map[string]*pgrelation
 }
 
-func pgcheck(pg *postgres, cmds []*command) error {
-	for _, cmd := range cmds {
-		c := pgchecker{pg: pg, cmd: cmd}
+func pgcheck(pg *postgres, specs []*typespec) error {
+	for _, s := range specs {
+		c := pgchecker{pg: pg, spec: s}
 		if err := c.run(); err != nil {
 			return err
 		}
@@ -172,7 +172,7 @@ func pgcheck(pg *postgres, cmds []*command) error {
 
 func (c *pgchecker) run() (err error) {
 	c.relmap = make(map[string]*pgrelation)
-	if c.rel, err = c.loadrelation(c.cmd.rel.relid); err != nil {
+	if c.rel, err = c.loadrelation(c.spec.rel.relid); err != nil {
 		return err
 	}
 
@@ -181,17 +181,17 @@ func (c *pgchecker) run() (err error) {
 	// to be associated with this target relation.
 	c.relmap[""] = c.rel
 
-	if join := c.cmd.join; join != nil {
+	if join := c.spec.join; join != nil {
 		if err := c.checkjoin(join); err != nil {
 			return err
 		}
 	}
-	if onconf := c.cmd.onconflict; onconf != nil {
+	if onconf := c.spec.onconflict; onconf != nil {
 		if err := c.checkonconflict(onconf); err != nil {
 			return err
 		}
 	}
-	if where := c.cmd.where; where != nil {
+	if where := c.spec.where; where != nil {
 		if err := c.checkwhere(where); err != nil {
 			return err
 		}
@@ -199,8 +199,8 @@ func (c *pgchecker) run() (err error) {
 
 	// If an OrderBy directive was used, make sure that the specified
 	// columns are present in the loaded relations.
-	if c.cmd.orderby != nil {
-		for _, item := range c.cmd.orderby.items {
+	if c.spec.orderby != nil {
+		for _, item := range c.spec.orderby.items {
 			if _, err := c.column(item.col); err != nil {
 				return err
 			}
@@ -209,10 +209,10 @@ func (c *pgchecker) run() (err error) {
 
 	// If a Default directive was provided, make sure that the specified
 	// columns are present in the target relation.
-	if c.cmd.defaults != nil {
-		for _, item := range c.cmd.defaults.items {
+	if c.spec.defaults != nil {
+		for _, item := range c.spec.defaults.items {
 			// Qualifier, if present, must match the target table's alias.
-			if len(item.qual) > 0 && item.qual != c.cmd.rel.relid.alias {
+			if len(item.qual) > 0 && item.qual != c.spec.rel.relid.alias {
 				return errors.BadTargetTableForDefaultError
 			}
 
@@ -227,8 +227,8 @@ func (c *pgchecker) run() (err error) {
 
 	// If a Force directive was provided, make sure that the specified
 	// columns are present in the loaded relations.
-	if c.cmd.force != nil {
-		for _, item := range c.cmd.force.items {
+	if c.spec.force != nil {
+		for _, item := range c.spec.force.items {
 			if _, err := c.column(item); err != nil {
 				return err
 			}
@@ -237,8 +237,8 @@ func (c *pgchecker) run() (err error) {
 
 	// If a Return directive was provided, make sure that the specified
 	// columns are present in the loaded relations.
-	if c.cmd.returning != nil {
-		for _, item := range c.cmd.returning.items {
+	if c.spec.returning != nil {
+		for _, item := range c.spec.returning.items {
 			if _, err := c.column(item); err != nil {
 				return err
 			}
@@ -248,8 +248,8 @@ func (c *pgchecker) run() (err error) {
 	// If a TextSearch directive was provided, make sure that the
 	// specified column is present in one of the loaded relations
 	// and that it has the correct type.
-	if c.cmd.textsearch != nil {
-		col, err := c.column(*c.cmd.textsearch)
+	if c.spec.textsearch != nil {
+		col, err := c.column(*c.spec.textsearch)
 		if err != nil {
 			return err
 		} else if col.typ.oid != pgtyp_tsvector {
@@ -257,18 +257,18 @@ func (c *pgchecker) run() (err error) {
 		}
 	}
 
-	if rel := c.cmd.rel; rel != nil && !rel.isdir {
+	if rel := c.spec.rel; rel != nil && !rel.isdir {
 		if err := c.checkfields(rel.datatype.base, false); err != nil {
 			return err
 		}
 	}
-	if res := c.cmd.result; res != nil {
+	if res := c.spec.result; res != nil {
 		if err := c.checkfields(res.datatype.base, true); err != nil {
 			return err
 		}
 	}
 
-	if c.cmd.typ == cmdtypeInsert {
+	if c.spec.kind == speckindInsert {
 		// TODO(mkopriva): if this is an insert make sure that all columns that
 		// do not have a DEFAULT set but do have a NOT NULL set, have a corresponding
 		// field in the relation's datatype. (keep in mind that such a column could
@@ -319,7 +319,7 @@ stackloop:
 			// matching type in the app, this however may not always be
 			// practical and there may be cases where a single struct
 			// type is used to represent multiple different relations...
-			if c.cmd.typ == cmdtypeSelect || isresult {
+			if c.spec.kind == speckindSelect || isresult {
 				// TODO(mkopriva): currently columns specified in
 				// the fields of the struct representing the record
 				// aren't really meant to include the relation alias
@@ -337,7 +337,7 @@ stackloop:
 				}
 				atyp = assignread
 			} else {
-				// If this is a non-select command and non-result
+				// If this is a non-select typespec and non-result
 				// the column must be present in the target relation.
 				if col = c.rel.column(fld.colid.name); col == nil {
 					return errors.NoDBColumnError

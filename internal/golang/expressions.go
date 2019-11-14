@@ -196,6 +196,12 @@ func (id Ident) Walk(w *writer.Writer) {
 	w.Write(id.Name)
 }
 
+type IdentString string
+
+func (id IdentString) Walk(w *writer.Writer) {
+	w.Write(string(id))
+}
+
 // A StarExpr node represents an expression of the form "*" Expression.
 // Semantically it could be a unary "*" expression, or a pointer type.
 type StarExpr struct {
@@ -456,6 +462,7 @@ func (s AffixStringNode) Walk(w *writer.Writer) {
 }
 
 func (Ident) exprNode()           {}
+func (IdentString) exprNode()     {}
 func (StarExpr) exprNode()        {}
 func (UnaryExpr) exprNode()       {}
 func (SelectorExpr) exprNode()    {}
