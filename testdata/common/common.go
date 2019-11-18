@@ -13,7 +13,8 @@ type User struct {
 
 // for testing nested struct fields
 type Foo struct {
-	Bar Bar `sql:">bar_"`
+	Bar Bar  `sql:">bar_"`
+	Baz *Baz `sql:">baz_"`
 }
 
 type Bar struct {

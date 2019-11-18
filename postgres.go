@@ -258,12 +258,12 @@ func (c *pgchecker) run() (err error) {
 	}
 
 	if rel := c.spec.rel; rel != nil && !rel.isdir {
-		if err := c.checkfields(rel.datatype.base, false); err != nil {
+		if err := c.checkfields(rel.rec, false); err != nil {
 			return err
 		}
 	}
 	if res := c.spec.result; res != nil {
-		if err := c.checkfields(res.datatype.base, true); err != nil {
+		if err := c.checkfields(res.rec, true); err != nil {
 			return err
 		}
 	}
@@ -271,7 +271,7 @@ func (c *pgchecker) run() (err error) {
 	if c.spec.kind == speckindInsert {
 		// TODO(mkopriva): if this is an insert make sure that all columns that
 		// do not have a DEFAULT set but do have a NOT NULL set, have a corresponding
-		// field in the relation's datatype. (keep in mind that such a column could
+		// field in the relation's record type. (keep in mind that such a column could
 		// be also set by a BEFORE TRIGGER, so maybe instead of erroring only warning
 		// would be thrown, or make this check optional, something that can be turned
 		// on/off...?)
@@ -285,80 +285,54 @@ func (c *pgchecker) run() (err error) {
 	return nil
 }
 
-func (c *pgchecker) checkfields(typ typeinfo, isresult bool) (err error) {
-	type loopstate struct {
-		typ *typeinfo
-		idx int // keeps track of the field index
-	}
+func (c *pgchecker) checkfields(rec record, isresult bool) (err error) {
+	for _, fld := range rec.fields {
+		var col *pgcolumn
+		var atyp assigntype
+		// TODO(mkopriva): currenlty this requires that every field
+		// has a corresponding column in the target relation, which
+		// represents an ideal where each relation in the db has a
+		// matching type in the app, this however may not always be
+		// practical and there may be cases where a single struct
+		// type is used to represent multiple different relations...
+		if c.spec.kind == speckindSelect || isresult {
+			// TODO(mkopriva): currently columns specified in
+			// the fields of the struct representing the record
+			// aren't really meant to include the relation alias
+			// which makes this a bit of a non-issue, however in
+			// the future it would be good to provide a way to do
+			// that, like when selecting columns from multiple
+			// joined tables.. therefore this stays here, at least for now...
 
-	stack := []*loopstate{{typ: &typ}} // lifo stack
-
-stackloop:
-	for len(stack) > 0 {
-		loop := stack[len(stack)-1]
-		for loop.idx < len(loop.typ.fields) {
-			fld := loop.typ.fields[loop.idx]
-
-			// Instead of incrementing the index in the for-statement
-			// it is done here manually to ensure that it is not skipped
-			// when continuing to the outer loop.
-			loop.idx++
-
-			if len(fld.typ.fields) > 0 {
-				loop2 := new(loopstate)
-				loop2.typ = &fld.typ
-				stack = append(stack, loop2)
-				continue stackloop
+			// If this is a SELECT, or the target type is
+			// from the "Result" field, lookup the column
+			// in all of the associated relations since its
+			// ok to select columns from joined relations.
+			if col, err = c.column(fld.colid); err != nil {
+				return err
 			}
-
-			var col *pgcolumn
-			var atyp assigntype
-			// TODO(mkopriva): currenlty this requires that every field
-			// has a corresponding column in the target relation, which
-			// represents an ideal where each relation in the db has a
-			// matching type in the app, this however may not always be
-			// practical and there may be cases where a single struct
-			// type is used to represent multiple different relations...
-			if c.spec.kind == speckindSelect || isresult {
-				// TODO(mkopriva): currently columns specified in
-				// the fields of the struct representing the record
-				// aren't really meant to include the relation alias
-				// which makes this a bit of a non-issue, however in
-				// the future it would be good to provide a way to do
-				// that, like when selecting columns from multiple
-				// joined tables.. therefore this stays here, at least for now...
-
-				// If this is a SELECT, or the target type is
-				// from the "Result" field, lookup the column
-				// in all of the associated relations since its
-				// ok to select columns from joined relations.
-				if col, err = c.column(fld.colid); err != nil {
-					return err
-				}
-				atyp = assignread
-			} else {
-				// If this is a non-select typespec and non-result
-				// the column must be present in the target relation.
-				if col = c.rel.column(fld.colid.name); col == nil {
-					return errors.NoDBColumnError
-				}
-				atyp = assignwrite
+			atyp = assignread
+		} else {
+			// If this is a non-select typespec and non-result
+			// the column must be present in the target relation.
+			if col = c.rel.column(fld.colid.name); col == nil {
+				return errors.NoDBColumnError
 			}
-
-			if fld.usejson && !col.typ.is(pgtyp_json, pgtyp_jsonb) {
-				return errors.BadUseJSONTargetColumnError
-			}
-			if fld.usexml && !col.typ.is(pgtyp_xml) {
-				return errors.BadUseXMLTargetColumnError
-			}
-
-			// Make sure that a value of the given field's type
-			// can be assigned to given column, and vice versa.
-			if !c.canassign(col, fld, atyp) {
-				return errors.FieldToColumnTypeError
-			}
+			atyp = assignwrite
 		}
-		stack = stack[:len(stack)-1]
+
+		if fld.usejson && !col.typ.is(pgtyp_json, pgtyp_jsonb) {
+			return errors.BadUseJSONTargetColumnError
+		}
+		if fld.usexml && !col.typ.is(pgtyp_xml) {
+			return errors.BadUseXMLTargetColumnError
+		}
+
+		// Make sure that a value of the given field's type
+		// can be assigned to given column, and vice versa.
+		if !c.canassign(col, fld, atyp) {
+			return errors.FieldToColumnTypeError
+		}
 	}
 	return nil
 }

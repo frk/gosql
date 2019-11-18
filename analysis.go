@@ -129,7 +129,7 @@ func (a *analyzer) run() (err error) {
 				}
 				a.spec.rel.isdir = true
 			default:
-				if err := a.reldatatype(a.spec.rel, fld); err != nil {
+				if err := a.relrecord(a.spec.rel, fld); err != nil {
 					return err
 				}
 			}
@@ -259,7 +259,7 @@ func (a *analyzer) run() (err error) {
 	return nil
 }
 
-func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
+func (a *analyzer) relrecord(rel *relfield, field *types.Var) error {
 	var (
 		ftyp  = field.Type()
 		named *types.Named
@@ -287,19 +287,19 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 		// If not an iterator, check for slices, arrays, and pointers.
 		if slice, ok := ftyp.(*types.Slice); ok { // allows []T / []*T
 			ftyp = slice.Elem()
-			rel.datatype.isslice = true
+			rel.rec.isslice = true
 		} else if array, ok := ftyp.(*types.Array); ok { // allows [N]T / [N]*T
 			ftyp = array.Elem()
-			rel.datatype.isarray = true
-			rel.datatype.arraylen = array.Len()
+			rel.rec.isarray = true
+			rel.rec.arraylen = array.Len()
 		}
 		if ptr, ok := ftyp.(*types.Pointer); ok { // allows *T
 			ftyp = ptr.Elem()
-			rel.datatype.ispointer = true
+			rel.rec.ispointer = true
 		}
 
 		// Get the name of the base type, if applicable.
-		if rel.datatype.isslice || rel.datatype.isarray || rel.datatype.ispointer {
+		if rel.rec.isslice || rel.rec.isarray || rel.rec.ispointer {
 			if named, ok = ftyp.(*types.Named); !ok {
 				// Fail if the type is a slice, an array, or a pointer
 				// while its base type remains unnamed.
@@ -310,17 +310,17 @@ func (a *analyzer) reldatatype(rel *relfield, field *types.Var) error {
 
 	if named != nil {
 		pkg := named.Obj().Pkg()
-		rel.datatype.base.name = named.Obj().Name()
-		rel.datatype.base.pkgpath = pkg.Path()
-		rel.datatype.base.pkgname = pkg.Name()
-		rel.datatype.base.pkglocal = pkg.Name()
-		rel.datatype.base.isimported = a.isimported(named)
-		rel.datatype.isafterscanner = typesutil.ImplementsAfterScanner(named)
+		rel.rec.base.name = named.Obj().Name()
+		rel.rec.base.pkgpath = pkg.Path()
+		rel.rec.base.pkgname = pkg.Name()
+		rel.rec.base.pkglocal = pkg.Name()
+		rel.rec.base.isimported = a.isimported(named)
+		rel.rec.isafterscanner = typesutil.ImplementsAfterScanner(named)
 		ftyp = named.Underlying()
 	}
 
-	rel.datatype.base.kind = a.typekind(ftyp)
-	if rel.datatype.base.kind != kindstruct {
+	rel.rec.base.kind = a.typekind(ftyp)
+	if rel.rec.base.kind != kindstruct {
 		return errors.BadRelfieldTypeError
 	}
 
@@ -335,10 +335,11 @@ func (a *analyzer) relfields(rel *relfield, styp *types.Struct) error {
 		typ  *typeinfo     // info on the struct type; holds the resulting slice of analyzed fieldinfo
 		idx  int           // keeps track of the field index
 		pfx  string        // column prefix
+		path []*fieldelem
 	}
 
 	// LIFO stack of states used for depth first traversal of struct fields.
-	stack := []*loopstate{{styp: styp, typ: &rel.datatype.base}}
+	stack := []*loopstate{{styp: styp, typ: &rel.rec.base}}
 
 stackloop:
 	for len(stack) > 0 {
@@ -371,22 +372,44 @@ stackloop:
 			f.isembedded = fld.Embedded()
 			f.isexported = fld.Exported()
 
-			// Add the field to the list.
-			loop.typ.fields = append(loop.typ.fields, f)
-
 			// Analyze the field's type.
 			ftyp := fld.Type()
 			f.typ, ftyp = a.typeinfo(ftyp)
 
 			// If the field's type is a struct and the `sql` tag's
 			// value starts with the ">" (descend) marker, then it is
-			// considered to be a "branch" field whose child fields
-			// need to be analyzed as well.
+			// considered to be a "parent" field element whose child
+			// fields need to be analyzed as well.
 			if f.typ.is(kindstruct) && strings.HasPrefix(sqltag, ">") {
 				loop2 := new(loopstate)
 				loop2.styp = ftyp.(*types.Struct)
 				loop2.typ = &f.typ
 				loop2.pfx = loop.pfx + strings.TrimPrefix(sqltag, ">")
+
+				// Allocate path of the appropriate size an copy it.
+				loop2.path = make([]*fieldelem, len(loop.path))
+				_ = copy(loop2.path, loop.path)
+
+				// If the parent node is a pointer to a struct,
+				// get the struct type info.
+				typ := f.typ
+				if typ.kind == kindptr {
+					typ = *typ.elem
+				}
+
+				fe := new(fieldelem)
+				fe.name = f.name
+				fe.tag = f.tag
+				fe.isembedded = f.isembedded
+				fe.isexported = f.isexported
+				fe.typename = typ.name
+				fe.typepkgpath = typ.pkgpath
+				fe.typepkgname = typ.pkgname
+				fe.typepkglocal = typ.pkglocal
+				fe.isimported = typ.isimported
+				fe.ispointer = (f.typ.kind == kindptr)
+				loop2.path = append(loop2.path, fe)
+
 				stack = append(stack, loop2)
 				continue stackloop
 			}
@@ -395,6 +418,7 @@ stackloop:
 			// it is considered to be a "leaf" field and as
 			// such the analysis of leaf-specific information
 			// needs to be carried out.
+			f.path = loop.path
 			f.auto = tag.HasOption("sql", "auto")
 			f.ispkey = tag.HasOption("sql", "pk")
 			f.nullempty = tag.HasOption("sql", "nullempty")
@@ -406,11 +430,15 @@ stackloop:
 			f.cancast = tag.HasOption("sql", "cast")
 			f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
 
+			// Resolve the column id.
 			colid, err := a.colid(loop.pfx+sqltag, fld)
 			if err != nil {
 				return err
 			}
 			f.colid = colid
+
+			// Add the field to the list.
+			rel.rec.fields = append(rel.rec.fields, f)
 		}
 		stack = stack[:len(stack)-1]
 	}
@@ -498,7 +526,7 @@ func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *rel
 		return nil, err
 	}
 
-	rel.datatype.itermethod = mth.Name()
+	rel.rec.itermethod = mth.Name()
 	return named, nil
 }
 
@@ -511,7 +539,7 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relfield) (*types.Nam
 	typ := sig.Params().At(0).Type()
 	if ptr, ok := typ.(*types.Pointer); ok { // allows *T
 		typ = ptr.Elem()
-		rel.datatype.ispointer = true
+		rel.rec.ispointer = true
 	}
 
 	// Make sure that the argument type is a named struct type.
@@ -522,7 +550,7 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *relfield) (*types.Nam
 		return nil, errors.BadIteratorTypeError
 	}
 
-	rel.datatype.isiter = true
+	rel.rec.isiter = true
 	return named, nil
 }
 
@@ -1229,13 +1257,13 @@ func (a *analyzer) resultfield(field *types.Var) error {
 
 	rel := new(relfield)
 	rel.field = field.Name()
-	if err := a.reldatatype(rel, field); err != nil {
+	if err := a.relrecord(rel, field); err != nil {
 		return err
 	}
 
 	result := new(resultfield)
 	result.name = rel.field
-	result.datatype = rel.datatype
+	result.rec = rel.rec
 	a.spec.result = result
 	return nil
 }
@@ -1487,31 +1515,33 @@ type collist struct {
 // relfield holds the information on a go struct type and on the
 // db relation that's associated with that struct type.
 type relfield struct {
-	field    string // name of the field that references the relation of the typespec
-	relid    relid  // the relation identifier extracted from the tag
-	datatype datatype
-	isdir    bool // indicates that the gosql.Relation directive was used
+	field string // name of the field that references the relation of the typespec
+	relid relid  // the relation identifier extracted from the tag
+	isdir bool   // indicates that the gosql.Relation directive was used
+	rec   record
 }
 
 type resultfield struct {
-	name     string // name of the field that declares the result of the typespec
-	datatype datatype
+	name string // name of the field that declares the result of the typespec
+	rec  record
 }
 
-// datatype holds information on the type of data a typespec should read from,
+// record holds information on the type of record a typespec should read from,
 // or write to, the associated database relation.
-type datatype struct {
-	base      typeinfo // type info on the datatype
+type record struct {
+	base      typeinfo // type info on the record
 	ispointer bool     // indicates whether or not the base type's a pointer type
 	isslice   bool     // indicates whether or not the base type's a slice type
 	isarray   bool     // indicates whether or not the base type's an array type
 	arraylen  int64    // if the base type's an array type, this field will hold the array's length
-	// if set, indicates that the datatype is handled by an iterator
+	// if set, indicates that the record is handled by an iterator
 	isiter bool
 	// if set the value will hold the method name of the iterator interface
 	itermethod string
 	// indicates whether or not the type implements the afterscanner interface
 	isafterscanner bool
+	// fields will hold the info on the record's fields
+	fields []*fieldinfo
 }
 
 type typeinfo struct {
@@ -1530,8 +1560,6 @@ type typeinfo struct {
 	istime           bool     // indicates whether or not the type is time.Time or a type that embeds time.Time
 	isbyte           bool     // indicates whether or not the type is the "byte" alias type
 	isrune           bool     // indicates whether or not the type is the "rune" alias type
-	// if kind is struct, fields will hold the info on the struct type's fields
-	fields []*fieldinfo
 	// if kind is map, key will hold the info on the map's key type
 	key *typeinfo
 	// if kind is map, elem will hold the info on the map's value type
@@ -1668,10 +1696,25 @@ func (t *typeinfo) canxmlunmarshal() bool {
 	return t.isxmlunmarshaler || (t.kind == kindptr && t.elem.isxmlunmarshaler)
 }
 
+type fieldelem struct {
+	name         string
+	tag          tagutil.Tag
+	typename     string // the name of a named type or empty string for unnamed types
+	typepkgpath  string // the package import path
+	typepkgname  string // the package's name
+	typepkglocal string // the local package name (including ".")
+	isimported   bool   // indicates whether or not the package is imported
+	isembedded   bool   // indicates whether or not the package is imported
+	isexported   bool   // indicates whether or not the package is imported
+	ispointer    bool   // indicates whether or not the package is imported
+}
+
 // fieldinfo holds information about a record's struct field and the corresponding db column.
 type fieldinfo struct {
 	typ  typeinfo // info about the field's type
 	name string   // name of the struct field
+	// if the field is nested, path will hold the parent fields' information
+	path []*fieldelem
 	// indicates whether or not the field is embedded
 	isembedded bool
 	// indicates whether or not the field is exported

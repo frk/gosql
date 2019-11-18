@@ -31,47 +31,48 @@ func TestAnalysis(t *testing.T) {
 		pkgname:    "common",
 		pkglocal:   "common",
 		isimported: true,
-		fields: []*fieldinfo{{
-			name:       "Id",
-			typ:        typeinfo{kind: kindint},
-			isexported: true,
-			colid:      colid{name: "id"},
-			tag:        tagutil.Tag{"sql": {"id"}},
-		}, {
-			name:       "Email",
-			typ:        typeinfo{kind: kindstring},
-			isexported: true,
-			colid:      colid{name: "email"},
-			tag:        tagutil.Tag{"sql": {"email"}},
-		}, {
-			name:       "FullName",
-			typ:        typeinfo{kind: kindstring},
-			isexported: true,
-			colid:      colid{name: "full_name"},
-			tag:        tagutil.Tag{"sql": {"full_name"}},
-		}, {
-			name: "CreatedAt",
-			typ: typeinfo{
-				name:            "Time",
-				kind:            kindstruct,
-				pkgpath:         "time",
-				pkgname:         "time",
-				pkglocal:        "time",
-				isimported:      true,
-				istime:          true,
-				isjsmarshaler:   true,
-				isjsunmarshaler: true,
-			},
-			isexported: true,
-			colid:      colid{name: "created_at"},
-			tag:        tagutil.Tag{"sql": {"created_at"}},
-		}},
 	}
+
+	commonUserFields := []*fieldinfo{{
+		name:       "Id",
+		typ:        typeinfo{kind: kindint},
+		isexported: true,
+		colid:      colid{name: "id"},
+		tag:        tagutil.Tag{"sql": {"id"}},
+	}, {
+		name:       "Email",
+		typ:        typeinfo{kind: kindstring},
+		isexported: true,
+		colid:      colid{name: "email"},
+		tag:        tagutil.Tag{"sql": {"email"}},
+	}, {
+		name:       "FullName",
+		typ:        typeinfo{kind: kindstring},
+		isexported: true,
+		colid:      colid{name: "full_name"},
+		tag:        tagutil.Tag{"sql": {"full_name"}},
+	}, {
+		name: "CreatedAt",
+		typ: typeinfo{
+			name:            "Time",
+			kind:            kindstruct,
+			pkgpath:         "time",
+			pkgname:         "time",
+			pkglocal:        "time",
+			isimported:      true,
+			istime:          true,
+			isjsmarshaler:   true,
+			isjsunmarshaler: true,
+		},
+		isexported: true,
+		colid:      colid{name: "created_at"},
+		tag:        tagutil.Tag{"sql": {"created_at"}},
+	}}
 
 	reldummyslice := &relfield{
 		field: "Rel",
 		relid: relid{name: "relation_a", alias: "a"},
-		datatype: datatype{
+		rec: record{
 			base: typeinfo{
 				name:     "T",
 				kind:     kindstruct,
@@ -83,7 +84,7 @@ func TestAnalysis(t *testing.T) {
 		},
 	}
 
-	dummytype := datatype{
+	dummytype := record{
 		base: typeinfo{
 			name:     "T",
 			kind:     kindstruct,
@@ -399,8 +400,9 @@ func TestAnalysis(t *testing.T) {
 		want: &typespec{name: "InsertAnalysisTestOK1", kind: speckindInsert, rel: &relfield{
 			field: "UserRec",
 			relid: relid{name: "users_table"},
-			datatype: datatype{
+			rec: record{
 				base:      commonUserTypeinfo,
+				fields:    commonUserFields,
 				ispointer: true,
 			},
 		}},
@@ -409,17 +411,17 @@ func TestAnalysis(t *testing.T) {
 		want: &typespec{name: "InsertAnalysisTestOK2", kind: speckindInsert, rel: &relfield{
 			field: "UserRec",
 			relid: relid{name: "users_table"},
-			datatype: datatype{
+			rec: record{
 				base: typeinfo{
 					kind: kindstruct,
-					fields: []*fieldinfo{{
-						name:       "Name3",
-						typ:        typeinfo{kind: kindstring},
-						isexported: true,
-						colid:      colid{name: "name"},
-						tag:        tagutil.Tag{"sql": {"name"}},
-					}},
 				},
+				fields: []*fieldinfo{{
+					name:       "Name3",
+					typ:        typeinfo{kind: kindstring},
+					isexported: true,
+					colid:      colid{name: "name"},
+					tag:        tagutil.Tag{"sql": {"name"}},
+				}},
 			},
 		}},
 	}, {
@@ -427,8 +429,9 @@ func TestAnalysis(t *testing.T) {
 		want: &typespec{name: "SelectAnalysisTestOK3", kind: speckindSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
-			datatype: datatype{
+			rec: record{
 				base:      commonUserTypeinfo,
+				fields:    commonUserFields,
 				ispointer: true,
 				isiter:    true,
 			},
@@ -438,8 +441,9 @@ func TestAnalysis(t *testing.T) {
 		want: &typespec{name: "SelectAnalysisTestOK4", kind: speckindSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
-			datatype: datatype{
+			rec: record{
 				base:      commonUserTypeinfo,
+				fields:    commonUserFields,
 				ispointer: true,
 				isiter:    true,
 			},
@@ -449,8 +453,9 @@ func TestAnalysis(t *testing.T) {
 		want: &typespec{name: "SelectAnalysisTestOK5", kind: speckindSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
-			datatype: datatype{
+			rec: record{
 				base:       commonUserTypeinfo,
+				fields:     commonUserFields,
 				ispointer:  true,
 				isiter:     true,
 				itermethod: "Fn",
@@ -461,8 +466,9 @@ func TestAnalysis(t *testing.T) {
 		want: &typespec{name: "SelectAnalysisTestOK6", kind: speckindSelect, rel: &relfield{
 			field: "User",
 			relid: relid{name: "users_table"},
-			datatype: datatype{
+			rec: record{
 				base:       commonUserTypeinfo,
+				fields:     commonUserFields,
 				ispointer:  true,
 				isiter:     true,
 				itermethod: "Fn",
@@ -473,56 +479,56 @@ func TestAnalysis(t *testing.T) {
 		want: &typespec{name: "SelectAnalysisTestOK7", kind: speckindSelect, rel: &relfield{
 			field: "Rel",
 			relid: relid{name: "relation_a"},
-			datatype: datatype{
+			rec: record{
 				base: typeinfo{
 					kind: kindstruct,
-					fields: []*fieldinfo{{
-						name:   "a",
-						typ:    typeinfo{kind: kindint},
-						colid:  colid{name: "a"},
-						tag:    tagutil.Tag{"sql": {"a", "pk", "auto"}},
-						ispkey: true,
-						auto:   true,
-					}, {
-						name:      "b",
-						typ:       typeinfo{kind: kindint},
-						colid:     colid{name: "b"},
-						tag:       tagutil.Tag{"sql": {"b", "nullempty"}},
-						nullempty: true,
-					}, {
-						name:     "c",
-						typ:      typeinfo{kind: kindint},
-						colid:    colid{name: "c"},
-						tag:      tagutil.Tag{"sql": {"c", "ro", "json"}},
-						readonly: true,
-						usejson:  true,
-					}, {
-						name:      "d",
-						typ:       typeinfo{kind: kindint},
-						colid:     colid{name: "d"},
-						tag:       tagutil.Tag{"sql": {"d", "wo"}},
-						writeonly: true,
-					}, {
-						name:   "e",
-						typ:    typeinfo{kind: kindint},
-						colid:  colid{name: "e"},
-						tag:    tagutil.Tag{"sql": {"e", "+"}},
-						binadd: true,
-					}, {
-						name:        "f",
-						typ:         typeinfo{kind: kindint},
-						colid:       colid{name: "f"},
-						tag:         tagutil.Tag{"sql": {"f", "coalesce"}},
-						usecoalesce: true,
-					}, {
-						name:        "g",
-						typ:         typeinfo{kind: kindint},
-						colid:       colid{name: "g"},
-						tag:         tagutil.Tag{"sql": {"g", "coalesce(-1)"}},
-						usecoalesce: true,
-						coalesceval: "-1",
-					}},
 				},
+				fields: []*fieldinfo{{
+					name:   "a",
+					typ:    typeinfo{kind: kindint},
+					colid:  colid{name: "a"},
+					tag:    tagutil.Tag{"sql": {"a", "pk", "auto"}},
+					ispkey: true,
+					auto:   true,
+				}, {
+					name:      "b",
+					typ:       typeinfo{kind: kindint},
+					colid:     colid{name: "b"},
+					tag:       tagutil.Tag{"sql": {"b", "nullempty"}},
+					nullempty: true,
+				}, {
+					name:     "c",
+					typ:      typeinfo{kind: kindint},
+					colid:    colid{name: "c"},
+					tag:      tagutil.Tag{"sql": {"c", "ro", "json"}},
+					readonly: true,
+					usejson:  true,
+				}, {
+					name:      "d",
+					typ:       typeinfo{kind: kindint},
+					colid:     colid{name: "d"},
+					tag:       tagutil.Tag{"sql": {"d", "wo"}},
+					writeonly: true,
+				}, {
+					name:   "e",
+					typ:    typeinfo{kind: kindint},
+					colid:  colid{name: "e"},
+					tag:    tagutil.Tag{"sql": {"e", "+"}},
+					binadd: true,
+				}, {
+					name:        "f",
+					typ:         typeinfo{kind: kindint},
+					colid:       colid{name: "f"},
+					tag:         tagutil.Tag{"sql": {"f", "coalesce"}},
+					usecoalesce: true,
+				}, {
+					name:        "g",
+					typ:         typeinfo{kind: kindint},
+					colid:       colid{name: "g"},
+					tag:         tagutil.Tag{"sql": {"g", "coalesce(-1)"}},
+					usecoalesce: true,
+					coalesceval: "-1",
+				}},
 			},
 		}},
 	}, {
@@ -530,57 +536,77 @@ func TestAnalysis(t *testing.T) {
 		want: &typespec{name: "InsertAnalysisTestOK8", kind: speckindInsert, rel: &relfield{
 			field: "Rel",
 			relid: relid{name: "relation_a"},
-			datatype: datatype{
+			rec: record{
 				base: typeinfo{
 					kind: kindstruct,
-					fields: []*fieldinfo{{
-						name:       "Foobar",
-						isexported: true,
-						typ: typeinfo{
-							name:       "Foo",
-							kind:       kindstruct,
-							pkgpath:    "github.com/frk/gosql/testdata/common",
-							pkgname:    "common",
-							pkglocal:   "common",
-							isimported: true,
-							fields: []*fieldinfo{{
-								name:       "Bar",
-								isexported: true,
-								typ: typeinfo{
-									name:       "Bar",
-									kind:       kindstruct,
-									pkgpath:    "github.com/frk/gosql/testdata/common",
-									pkgname:    "common",
-									pkglocal:   "common",
-									isimported: true,
-									fields: []*fieldinfo{{
-										name:       "Baz",
-										isexported: true,
-										isembedded: true,
-										typ: typeinfo{
-											name:       "Baz",
-											kind:       kindstruct,
-											pkgpath:    "github.com/frk/gosql/testdata/common",
-											pkgname:    "common",
-											pkglocal:   "common",
-											isimported: true,
-											fields: []*fieldinfo{{
-												name:       "Val",
-												isexported: true,
-												typ:        typeinfo{kind: kindstring},
-												colid:      colid{name: "foo_bar_baz_val"},
-												tag:        tagutil.Tag{"sql": {"val"}},
-											}},
-										},
-										tag: tagutil.Tag{"sql": {">baz_"}},
-									}},
-								},
-								tag: tagutil.Tag{"sql": {">bar_"}},
-							}},
-						},
-						tag: tagutil.Tag{"sql": {">foo_"}},
-					}},
 				},
+				fields: []*fieldinfo{{
+					name: "Val",
+					path: []*fieldelem{
+						{
+							name:         "Foobar",
+							tag:          tagutil.Tag{"sql": {">foo_"}},
+							typename:     "Foo",
+							typepkgpath:  "github.com/frk/gosql/testdata/common",
+							typepkgname:  "common",
+							typepkglocal: "common",
+							isexported:   true,
+							isimported:   true,
+						},
+						{
+							name:         "Bar",
+							tag:          tagutil.Tag{"sql": {">bar_"}},
+							typename:     "Bar",
+							typepkgpath:  "github.com/frk/gosql/testdata/common",
+							typepkgname:  "common",
+							typepkglocal: "common",
+							isimported:   true,
+							isexported:   true,
+						},
+						{
+							name:         "Baz",
+							tag:          tagutil.Tag{"sql": {">baz_"}},
+							typename:     "Baz",
+							typepkgpath:  "github.com/frk/gosql/testdata/common",
+							typepkgname:  "common",
+							typepkglocal: "common",
+							isexported:   true,
+							isembedded:   true,
+							isimported:   true,
+						},
+					},
+					isexported: true,
+					typ:        typeinfo{kind: kindstring},
+					colid:      colid{name: "foo_bar_baz_val"},
+					tag:        tagutil.Tag{"sql": {"val"}},
+				}, {
+					name: "Val",
+					path: []*fieldelem{{
+						name:         "Foobar",
+						tag:          tagutil.Tag{"sql": {">foo_"}},
+						typename:     "Foo",
+						typepkgpath:  "github.com/frk/gosql/testdata/common",
+						typepkgname:  "common",
+						typepkglocal: "common",
+						isexported:   true,
+						isimported:   true,
+					}, {
+						name:         "Baz",
+						tag:          tagutil.Tag{"sql": {">baz_"}},
+						typename:     "Baz",
+						typepkgpath:  "github.com/frk/gosql/testdata/common",
+						typepkgname:  "common",
+						typepkglocal: "common",
+						isimported:   true,
+						isexported:   true,
+						isembedded:   false,
+						ispointer:    true,
+					}},
+					isexported: true,
+					typ:        typeinfo{kind: kindstring},
+					colid:      colid{name: "foo_baz_val"},
+					tag:        tagutil.Tag{"sql": {"val"}},
+				}},
 			},
 		}},
 	}, {
@@ -589,9 +615,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK9",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{{
 				node: &wherefield{
@@ -608,9 +634,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK10",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpnotnull}},
@@ -629,9 +655,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK11",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &whereblock{name: "x", items: []*whereitem{
@@ -683,9 +709,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK12",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{name: "a", typ: typeinfo{kind: kindint}, colid: colid{name: "column_a"}, cmp: cmplt}},
@@ -703,9 +729,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK13",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpne, colid2: colid{name: "column_b"}}},
@@ -721,9 +747,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK14",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherebetween{
@@ -762,9 +788,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_DistinctFrom",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
@@ -789,9 +815,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_ArrayComparisons",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
@@ -862,9 +888,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_PatternMatching",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
@@ -923,9 +949,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_Using",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{rel: relid{name: "relation_b", alias: "b"}, items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
@@ -968,9 +994,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_From",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{rel: relid{name: "relation_b", alias: "b"}, items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
@@ -1013,9 +1039,9 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_Join",
 			kind: speckindSelect,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_b", alias: "b"}, conds: []*joincond{{
@@ -1063,9 +1089,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_All",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			all: true,
 		},
@@ -1075,9 +1101,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_All",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			all: true,
 		},
@@ -1087,9 +1113,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_Return",
 			kind: speckindDelete,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			returning: &collist{all: true},
 		},
@@ -1099,9 +1125,9 @@ func TestAnalysis(t *testing.T) {
 			name: "InsertAnalysisTestOK_Return",
 			kind: speckindInsert,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			returning: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1114,9 +1140,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_Return",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			returning: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1129,9 +1155,9 @@ func TestAnalysis(t *testing.T) {
 			name: "InsertAnalysisTestOK_Default",
 			kind: speckindInsert,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			defaults: &collist{all: true},
 		},
@@ -1141,9 +1167,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_Default",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			defaults: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1156,9 +1182,9 @@ func TestAnalysis(t *testing.T) {
 			name: "InsertAnalysisTestOK_Force",
 			kind: speckindInsert,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			force: &collist{all: true},
 		},
@@ -1168,9 +1194,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_Force",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			force: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1183,9 +1209,9 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_ErrorHandler",
 			kind: speckindSelect,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			erh: "eh",
 		},
@@ -1195,9 +1221,9 @@ func TestAnalysis(t *testing.T) {
 			name: "InsertAnalysisTestOK_ErrorHandler",
 			kind: speckindInsert,
 			rel: &relfield{
-				field:    "Rel",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{kind: kindstruct}},
+				field: "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   record{base: typeinfo{kind: kindstruct}},
 			},
 			erh: "myerrorhandler",
 		},
@@ -1304,9 +1330,9 @@ func TestAnalysis(t *testing.T) {
 			name: "FilterAnalysisTestOK_TextSearchDirective",
 			kind: speckindFilter,
 			rel: &relfield{
-				field:    "_",
-				relid:    relid{name: "relation_a", alias: "a"},
-				datatype: dummytype,
+				field: "_",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   dummytype,
 			},
 			textsearch: &colid{qual: "a", name: "ts_document"},
 		},
@@ -1369,8 +1395,8 @@ func TestAnalysis(t *testing.T) {
 				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
 			}},
 			result: &resultfield{
-				name:     "Result",
-				datatype: reldummyslice.datatype,
+				name: "Result",
+				rec:  reldummyslice.rec,
 			},
 		},
 	}, {
@@ -1404,8 +1430,8 @@ func TestAnalysis(t *testing.T) {
 			rel: &relfield{
 				field: "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{
-					kind: kindstruct,
+				rec: record{
+					base: typeinfo{kind: kindstruct},
 					fields: []*fieldinfo{{
 						name: "f1", typ: typeinfo{kind: kindbool},
 						colid: colid{name: "c1"},
@@ -1483,7 +1509,7 @@ func TestAnalysis(t *testing.T) {
 						colid: colid{name: "c19"},
 						tag:   tagutil.Tag{"sql": {"c19"}},
 					}},
-				}},
+				},
 			},
 		},
 	}, {
@@ -1494,8 +1520,8 @@ func TestAnalysis(t *testing.T) {
 			rel: &relfield{
 				field: "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{
-					kind: kindstruct,
+				rec: record{
+					base: typeinfo{kind: kindstruct},
 					fields: []*fieldinfo{{
 						name: "f1", typ: typeinfo{
 							kind: kindslice,
@@ -1669,7 +1695,7 @@ func TestAnalysis(t *testing.T) {
 						colid: colid{name: "c13"},
 						tag:   tagutil.Tag{"sql": {"c13"}},
 					}},
-				}},
+				},
 			},
 		},
 	}, {
@@ -1680,8 +1706,8 @@ func TestAnalysis(t *testing.T) {
 			rel: &relfield{
 				field: "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				datatype: datatype{base: typeinfo{
-					kind: kindstruct,
+				rec: record{
+					base: typeinfo{kind: kindstruct},
 					fields: []*fieldinfo{{
 						name: "f1", typ: typeinfo{
 							name:          "Marshaler",
@@ -1715,7 +1741,7 @@ func TestAnalysis(t *testing.T) {
 						colid: colid{name: "c3"},
 						tag:   tagutil.Tag{"sql": {"c3"}},
 					}},
-				}},
+				},
 			},
 		},
 	}}
@@ -1817,7 +1843,7 @@ func TestTypeinfo_string(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	fields := spec.rel.datatype.base.fields
+	fields := spec.rel.rec.fields
 	for i := 0; i < len(fields); i++ {
 		ff := fields[i]
 		tt := tests[i]
