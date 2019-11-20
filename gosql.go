@@ -1,5 +1,22 @@
 package gosql
 
+// TODO(mkopriva): currently handles only single file, update to handle a list of files, or a file pattern.
+//
+// https://golang.org/cmd/go/#hdr-Package_lists_and_patterns
+// The filepath argument:
+// - no argument: process package in current directory
+// - single argument:
+//	- file path: process just that file
+//	- dir path: process package in that dir
+//	- pattern: process packages matching that pattern
+// - multiple arguments:
+//	- iterate over each one and apply same rules as for "single argument"
+//
+// TODO(mkopriva): by default the generator will process only those files that import the gosql package but
+// do provide an option flag to disable that requirement. This can be useful in the case where the programmer
+// feeds a file pattern to the generator but some of the files matching that pattern are expected to be ignored
+// because the programmer knows that in those files there are no types declared that would match a valid TypeSpec...
+
 import (
 	"bytes"
 	"fmt"
@@ -33,23 +50,6 @@ type directory struct {
 	info  *types.Info
 	files []*file
 }
-
-// TODO(mkopriva): currently handles only single file, update to handle a list of files, or a file pattern.
-//
-// https://golang.org/cmd/go/#hdr-Package_lists_and_patterns
-// The filepath argument:
-// - no argument: process package in current directory
-// - single argument:
-//	- file path: process just that file
-//	- dir path: process package in that dir
-//	- pattern: process packages matching that pattern
-// - multiple arguments:
-//	- iterate over each one and apply same rules as for "single argument"
-//
-// TODO(mkopriva): by default the generator will process only those files that import the gosql package but
-// do provide an option flag to disable that requirement. This can be useful in the case where the programmer
-// feeds a file pattern to the generator but some of the files matching that pattern are expected to be ignored
-// because the programmer knows that in those files there are no types declared that would match a valid TypeSpec...
 
 type command struct {
 	pg   *postgres
@@ -90,7 +90,7 @@ func (cmd *command) exec(dburl string, files ...string) error {
 }
 
 func (cmd *command) run(f *file) (*bytes.Buffer, error) {
-	var specs []*typespec
+	var infos []*specinfo
 
 	// analyze named types
 	for _, typ := range f.types {
@@ -98,16 +98,20 @@ func (cmd *command) run(f *file) (*bytes.Buffer, error) {
 		if err != nil {
 			return nil, err
 		}
-		specs = append(specs, spec)
+		infos = append(infos, &specinfo{spec: spec})
 	}
 
 	// type-check specs against the db
-	if err := pgcheck(cmd.pg, specs); err != nil {
-		return nil, err
+	for _, si := range infos {
+		info, err := pgcheck(cmd.pg, si.spec)
+		if err != nil {
+			return nil, err
+		}
+		si.info = info
 	}
 
 	// generate code
-	return generate(f.dir.pkg.Name, specs)
+	return generate(f.dir.pkg.Name, infos)
 }
 
 // parsedir parses and type-checks the directory at its given path.

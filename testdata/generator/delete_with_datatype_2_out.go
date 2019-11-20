@@ -6,9 +6,9 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *DeleteWithWhereBlock1Query) Exec(c gosql.Conn) error {
-	const queryString = `DELETE FROM "test_user"
-	WHERE "id" = $1` // `
+func (q *DeleteWithDatatype2Query) Exec(c gosql.Conn) error {
+	const queryString = `DELETE FROM "test_user" AS u
+	WHERE u."id" = $1` // `
 
 	_, err := c.Exec(queryString, q.Where.Id)
 	return err

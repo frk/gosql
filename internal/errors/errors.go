@@ -103,5 +103,6 @@ const (
 	BadUseJSONTargetColumnError                errnum = 85
 	BadUseXMLTargetColumnError                 errnum = 86
 	NoColumnDefaultSetError                    errnum = 87
-	FieldToColumnTypeError                     errnum = 88
+	ReturnDirectiveWithNoRelfieldError         errnum = 88
+	NoFieldColumnError                         errnum = 89
 )

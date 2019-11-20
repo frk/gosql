@@ -12,27 +12,25 @@ func (NL) Walk(w *writer.Writer) {
 
 func (NL) stmtNode() {}
 
-type StmtList struct {
-	List []Stmt
-}
+type StmtList []Stmt
 
-func (s StmtList) Walk(w *writer.Writer) {
-	for _, stmt := range s.List {
+func (list StmtList) Walk(w *writer.Writer) {
+	for _, stmt := range list {
 		stmt.Walk(w)
 		w.NewLine()
 	}
 	w.NoNewLine()
 }
 
-func (s *StmtList) Add(ss ...Stmt) {
-	s.List = append(s.List, ss...)
+func (list *StmtList) Add(ss ...Stmt) {
+	*list = append(*list, ss...)
 }
 
 func (StmtList) stmtNode() {}
 
 var iferrreturn = IfStmt{
 	Cond: BinaryExpr{X: Ident{"err"}, Op: BINARY_NEQ, Y: Ident{"nil"}},
-	Body: BlockStmt{List: []Stmt{ReturnStmt{[]Expr{Ident{"err"}}}}},
+	Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"err"}}}},
 }
 
 type IfErrReturn struct{}

@@ -106,14 +106,14 @@ func TestFuncDecl(t *testing.T) {
 	}, {
 		decl: FuncDecl{
 			Name: Ident{"Foo"},
-			Recv: ParamList{{Names: []Ident{{"t"}}, Type: StarExpr{X: Ident{"Type"}}}},
+			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
 			Type: FuncType{},
 		},
 		want: "func (t *Type) Foo() {}",
 	}, {
 		decl: FuncDecl{
 			Name: Ident{"Foo"},
-			Recv: ParamList{{Names: []Ident{{"t"}}, Type: StarExpr{X: Ident{"Type"}}}},
+			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
 			Type: FuncType{
 				Params: ParamList{
 					{Names: []Ident{{"foo"}, {"bar"}}, Type: Ident{"string"}},
@@ -125,7 +125,7 @@ func TestFuncDecl(t *testing.T) {
 	}, {
 		decl: FuncDecl{
 			Name: Ident{"Foo"},
-			Recv: ParamList{{Names: []Ident{{"t"}}, Type: StarExpr{X: Ident{"Type"}}}},
+			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
 			Type: FuncType{
 				Params: ParamList{
 					{Names: []Ident{{"foo"}, {"bar"}}, Type: Ident{"string"}},

@@ -182,7 +182,7 @@ func Test_pgchecker_run(t *testing.T) {
 		err:  errors.BadUseXMLTargetColumnError,
 	}, {
 		name: "InsertPostgresTestBAD_BadFieldToColumnType",
-		err:  errors.FieldToColumnTypeError,
+		err:  errors.BadFieldToColumnTypeError,
 	}, {
 		name: "InsertPostgresTestBAD_ResultColumnNotFound",
 		err:  errors.NoDBColumnError,
@@ -663,62 +663,6 @@ func Test_pgchecker_check_force(t *testing.T) {
 		spec: &typespec{
 			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
 			force: &collist{items: []colid{
-				{qual: "c", name: "col_foo"},
-				{qual: "c", name: "col_none"},
-			}},
-		},
-		err: errors.NoDBColumnError,
-	}}
-
-	for i, tt := range tests {
-		dbc := new(pgchecker)
-		dbc.pg = testdb.pg
-		dbc.spec = tt.spec
-
-		err := dbc.run()
-		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
-			t.Error(i, e)
-		}
-	}
-}
-
-func Test_pgchecker_check_returning(t *testing.T) {
-	tests := []struct {
-		spec *typespec
-		err  error
-	}{{
-		spec: &typespec{
-			rel: &relfield{relid: relid{name: "column_tests_2"}},
-			returning: &collist{items: []colid{
-				{name: "col_foo"},
-				{name: "col_bar"},
-				{name: "col_baz"},
-			}},
-		},
-		err: nil,
-	}, {
-		spec: &typespec{
-			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
-			returning: &collist{items: []colid{
-				{qual: "c", name: "col_foo"},
-				{qual: "c", name: "col_baz"},
-			}},
-		},
-		err: nil,
-	}, {
-		spec: &typespec{
-			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
-			returning: &collist{items: []colid{
-				{qual: "c", name: "col_foo"},
-				{qual: "d", name: "col_bar"},
-			}},
-		},
-		err: errors.NoDBRelationError,
-	}, {
-		spec: &typespec{
-			rel: &relfield{relid: relid{name: "column_tests_2", alias: "c"}},
-			returning: &collist{items: []colid{
 				{qual: "c", name: "col_foo"},
 				{qual: "c", name: "col_none"},
 			}},

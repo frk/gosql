@@ -213,9 +213,25 @@ func (rc ReturningClause) Walk(w *writer.Writer) {
 		return
 	}
 
-	w.Write("RETURNING ")
+	w.Write("RETURNING")
+
+	//
+	if len(rc) < 3 {
+		w.Write(" ")
+		for i, c := range rc {
+			if i > 0 {
+				w.Write(", ")
+			}
+			c.Walk(w)
+		}
+		return // exit
+	}
+
+	//
+	w.NewLine()
 	for i, c := range rc {
 		if i > 0 {
+			w.NewLine()
 			w.Write(", ")
 		}
 		c.Walk(w)

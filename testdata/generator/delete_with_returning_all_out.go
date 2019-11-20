@@ -7,14 +7,14 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *SelectWithWhereBlockQuery) Exec(c gosql.Conn) error {
-	const queryString = `SELECT
+func (q *DeleteWithReturningAllQuery) Exec(c gosql.Conn) error {
+	const queryString = `DELETE FROM "test_user" AS u
+	WHERE u."id" = $1
+	RETURNING
 	u."id"
 	, u."email"
 	, u."full_name"
-	, u."created_at"
-	FROM "users_table" AS u
-	WHERE u."id" = $1` //`
+	, u."created_at"` // `
 
 	row := c.QueryRow(queryString, q.Where.Id)
 

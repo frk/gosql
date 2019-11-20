@@ -11,7 +11,10 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type T struct{} // stub type
+// stub type
+type T struct {
+	F string `sql:"f"`
+}
 
 //OK: user datatype
 type InsertAnalysisTestOK1 struct {
@@ -96,6 +99,7 @@ type DeleteAnalysisTestOK10 struct {
 		_ gosql.Column `sql:"column_f isfalse" bool:"or"`
 		_ gosql.Column `sql:"column_g notunknown"`
 		_ gosql.Column `sql:"column_h isunknown"`
+		_ gosql.Column `sql:"column_i"` // same as istrue
 	}
 }
 
@@ -269,19 +273,19 @@ type DeleteAnalysisTestOK_All struct {
 
 //OK: Delete with Return directive
 type DeleteAnalysisTestOK_Return struct {
-	Rel struct{}     `rel:"relation_a:a"`
+	Rel T            `rel:"relation_a:a"`
 	_   gosql.Return `sql:"*"`
 }
 
 //OK: Insert with Return directive
 type InsertAnalysisTestOK_Return struct {
-	Rel struct{}     `rel:"relation_a:a"`
+	Rel T            `rel:"relation_a:a"`
 	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
 }
 
 //OK: Update with Return directive
 type UpdateAnalysisTestOK_Return struct {
-	Rel struct{}     `rel:"relation_a:a"`
+	Rel T            `rel:"relation_a:a"`
 	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
 }
 

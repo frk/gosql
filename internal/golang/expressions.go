@@ -52,6 +52,16 @@ type Expr interface {
 	exprNode()
 }
 
+type ExprList []Expr
+
+func (list ExprList) Walk(w *writer.Writer) {
+	list[0].Walk(w)
+	for _, x := range list[1:] {
+		w.Write(", ")
+		x.Walk(w)
+	}
+}
+
 type FieldList []Field
 
 func (list FieldList) Walk(w *writer.Writer) {
@@ -139,7 +149,7 @@ type ArgsList struct {
 	Ellipsis bool
 	// If 0 the arguments will be listed all on one line, if > 0 then the
 	// arguments will be listed one per line starting from the argument whose
-	// ordinal number matches the ListArgs value.
+	// ordinal number matches the OnePerLine value.
 	OnePerLine int
 }
 
@@ -182,6 +192,19 @@ func (p Param) Walk(w *writer.Writer) {
 			w.Write(", ")
 			n.Walk(w)
 		}
+		w.Write(" ")
+	}
+	p.Type.Walk(w)
+}
+
+type RecvParam struct {
+	Name Ident
+	Type Expr
+}
+
+func (p RecvParam) Walk(w *writer.Writer) {
+	if len(p.Name.Name) > 0 {
+		p.Name.Walk(w)
 		w.Write(" ")
 	}
 	p.Type.Walk(w)
@@ -461,6 +484,7 @@ func (s AffixStringNode) Walk(w *writer.Writer) {
 	w.Write(s.Suffix)
 }
 
+func (ExprList) exprNode()        {}
 func (Ident) exprNode()           {}
 func (IdentString) exprNode()     {}
 func (StarExpr) exprNode()        {}

@@ -71,7 +71,7 @@ func (d *ImportDecl) NewLine() {
 }
 
 type FuncDecl struct {
-	Recv ParamList // empty for functions, 1 elem for methods
+	Recv RecvParam // empty for functions
 	Name Ident
 	Type FuncType
 	Body BlockStmt
@@ -80,7 +80,7 @@ type FuncDecl struct {
 
 func (d FuncDecl) Walk(w *writer.Writer) {
 	w.Write("func ")
-	if len(d.Recv) > 0 {
+	if d.Recv != (RecvParam{}) { // if not empty
 		w.Write("(")
 		d.Recv.Walk(w)
 		w.Write(") ")
@@ -100,12 +100,3 @@ func (d *FuncDecl) AddStmt(ss ...Stmt) {
 func (GenDecl) declNode()    {}
 func (FuncDecl) declNode()   {}
 func (ImportDecl) declNode() {}
-
-func (d FuncDecl) WithReceiver(typ, ident string, star bool) FuncDecl {
-	param := Param{Names: []Ident{{ident}}, Type: Ident{typ}}
-	if star {
-		param.Type = StarExpr{X: param.Type}
-	}
-	d.Recv = ParamList{param}
-	return d
-}

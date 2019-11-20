@@ -8,29 +8,76 @@ type WhereClause struct {
 	Conds []SearchCondition
 }
 
-func (c *WhereClause) Walk(w *writer.Writer) {
-	if c == nil || len(c.Conds) == 0 {
+func (wc *WhereClause) Walk(w *writer.Writer) {
+	if wc == nil || len(wc.Conds) == 0 {
 		return
 	}
 	w.Write("WHERE ")
-	for _, cond := range c.Conds {
-		cond.Walk(w)
+	if len(wc.Conds) > 2 {
+		wc.Conds[0].Walk(w)
+		for _, cond := range wc.Conds[1:] {
+			w.NewLine()
+			cond.Walk(w)
+		}
+	} else {
+		for i, cond := range wc.Conds {
+			if i > 0 {
+				w.Write(" ")
+			}
+			cond.Walk(w)
+		}
 	}
 }
 
-type SearchCondition struct {
+type SearchCondition interface {
+	Node
+	searchConditionNode()
+}
+
+type BoolExpr struct {
 	Bool BoolOp
 	Lhs  Expr
-	Op   CmpOp
+	Cmp  CmpOp
 	Rhs  Expr
 }
 
-func (c SearchCondition) Walk(w *writer.Writer) {
-	c.Bool.Walk(w)
-	c.Lhs.Walk(w)
-	c.Op.Walk(w)
-	c.Rhs.Walk(w)
+func (x BoolExpr) Walk(w *writer.Writer) {
+	x.Bool.Walk(w)
+	if len(x.Bool) > 0 {
+		w.Write(" ")
+	}
+
+	x.Lhs.Walk(w)
+	x.Cmp.Walk(w)
+
+	if x.Rhs != nil {
+		x.Rhs.Walk(w)
+	}
 }
+
+type BoolExprList struct {
+	Bool BoolOp
+	List []SearchCondition
+}
+
+func (xl BoolExprList) Walk(w *writer.Writer) {
+	xl.Bool.Walk(w)
+	if len(xl.Bool) > 0 {
+		w.Write(" ")
+	}
+
+	w.Write("(")
+	for i, x := range xl.List {
+		if i > 0 {
+			w.Write(" ")
+		}
+		x.Walk(w)
+	}
+	w.Write(")")
+}
+
+func (BoolExpr) searchConditionNode()     {}
+func (BoolExprList) searchConditionNode() {}
 
 type CmpOp string
 
@@ -38,6 +85,7 @@ const (
 	CmpNone CmpOp = ""
 	CmpEq   CmpOp = "="
 	CmpNe   CmpOp = "<>"
+	CmpNe2  CmpOp = "!="
 	CmpGt   CmpOp = ">"
 	CmpLt   CmpOp = "<"
 	CmpGe   CmpOp = ">="
@@ -68,9 +116,9 @@ func (op BoolOp) Walk(w *writer.Writer) {
 		return
 	}
 
-	w.Write(" ")
+	//w.Write(" ")
 	w.Write(string(op))
-	w.Write(" ")
+	//w.Write(" ")
 }
 
 type Modifier func(Expr) Expr

@@ -6,8 +6,8 @@ import (
 
 type DeleteStatement struct {
 	Table     Ident
-	Using     *UsingClause
-	Where     *WhereClause
+	Using     UsingClause
+	Where     WhereClause
 	Returning ReturningClause
 }
 
@@ -29,8 +29,8 @@ type UsingClause struct {
 	List []TableExpr
 }
 
-func (c *UsingClause) Walk(w *writer.Writer) {
-	if c == nil {
+func (c UsingClause) Walk(w *writer.Writer) {
+	if len(c.List) == 0 {
 		return
 	}
 

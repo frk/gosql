@@ -16,7 +16,21 @@ func TestGenerate(t *testing.T) {
 	}{
 		// deletes
 		{"delete_with_all_directive"},
-		//{"delete_with_where_block_1"},
+		{"delete_with_datatype_1"},
+		{"delete_with_datatype_2"},
+		{"delete_with_returning_all"},
+		{"delete_with_returning_collist"},
+		{"delete_with_using_join_block_1"},
+		{"delete_with_using_join_block_2"},
+		{"delete_with_where_block_1"},
+		{"delete_with_where_block_2"},
+		// delete with returning to rel field (explicit columns)
+		// delete with returning to rel field (slice)
+		// delete with returning to result field
+		// delete with returning to result field (slice)
+		// delete with custom error handler
+		// delete with rowsaffected
+		// delete with where filter
 
 		// selects
 		// {"select_with_where_block"},

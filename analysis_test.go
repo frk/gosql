@@ -70,9 +70,9 @@ func TestAnalysis(t *testing.T) {
 	}}
 
 	reldummyslice := &relfield{
-		field: "Rel",
+		name:  "Rel",
 		relid: relid{name: "relation_a", alias: "a"},
-		rec: record{
+		rec: recordtype{
 			base: typeinfo{
 				name:     "T",
 				kind:     kindstruct,
@@ -81,10 +81,17 @@ func TestAnalysis(t *testing.T) {
 				pkglocal: "testdata",
 			},
 			isslice: true,
+			fields: []*fieldinfo{{
+				typ:        typeinfo{kind: kindstring},
+				name:       "F",
+				isexported: true,
+				tag:        tagutil.Tag{"sql": {"f"}},
+				colid:      colid{name: "f"},
+			}},
 		},
 	}
 
-	dummytype := record{
+	dummyrecord := recordtype{
 		base: typeinfo{
 			name:     "T",
 			kind:     kindstruct,
@@ -92,6 +99,13 @@ func TestAnalysis(t *testing.T) {
 			pkgname:  "testdata",
 			pkglocal: "testdata",
 		},
+		fields: []*fieldinfo{{
+			typ:        typeinfo{kind: kindstring},
+			name:       "F",
+			isexported: true,
+			tag:        tagutil.Tag{"sql": {"f"}},
+			colid:      colid{name: "f"},
+		}},
 	}
 
 	tests := []struct {
@@ -398,9 +412,9 @@ func TestAnalysis(t *testing.T) {
 	}, {
 		name: "InsertAnalysisTestOK1",
 		want: &typespec{name: "InsertAnalysisTestOK1", kind: speckindInsert, rel: &relfield{
-			field: "UserRec",
+			name:  "UserRec",
 			relid: relid{name: "users_table"},
-			rec: record{
+			rec: recordtype{
 				base:      commonUserTypeinfo,
 				fields:    commonUserFields,
 				ispointer: true,
@@ -409,9 +423,9 @@ func TestAnalysis(t *testing.T) {
 	}, {
 		name: "InsertAnalysisTestOK2",
 		want: &typespec{name: "InsertAnalysisTestOK2", kind: speckindInsert, rel: &relfield{
-			field: "UserRec",
+			name:  "UserRec",
 			relid: relid{name: "users_table"},
-			rec: record{
+			rec: recordtype{
 				base: typeinfo{
 					kind: kindstruct,
 				},
@@ -427,9 +441,9 @@ func TestAnalysis(t *testing.T) {
 	}, {
 		name: "SelectAnalysisTestOK3",
 		want: &typespec{name: "SelectAnalysisTestOK3", kind: speckindSelect, rel: &relfield{
-			field: "User",
+			name:  "User",
 			relid: relid{name: "users_table"},
-			rec: record{
+			rec: recordtype{
 				base:      commonUserTypeinfo,
 				fields:    commonUserFields,
 				ispointer: true,
@@ -439,9 +453,9 @@ func TestAnalysis(t *testing.T) {
 	}, {
 		name: "SelectAnalysisTestOK4",
 		want: &typespec{name: "SelectAnalysisTestOK4", kind: speckindSelect, rel: &relfield{
-			field: "User",
+			name:  "User",
 			relid: relid{name: "users_table"},
-			rec: record{
+			rec: recordtype{
 				base:      commonUserTypeinfo,
 				fields:    commonUserFields,
 				ispointer: true,
@@ -451,9 +465,9 @@ func TestAnalysis(t *testing.T) {
 	}, {
 		name: "SelectAnalysisTestOK5",
 		want: &typespec{name: "SelectAnalysisTestOK5", kind: speckindSelect, rel: &relfield{
-			field: "User",
+			name:  "User",
 			relid: relid{name: "users_table"},
-			rec: record{
+			rec: recordtype{
 				base:       commonUserTypeinfo,
 				fields:     commonUserFields,
 				ispointer:  true,
@@ -464,9 +478,9 @@ func TestAnalysis(t *testing.T) {
 	}, {
 		name: "SelectAnalysisTestOK6",
 		want: &typespec{name: "SelectAnalysisTestOK6", kind: speckindSelect, rel: &relfield{
-			field: "User",
+			name:  "User",
 			relid: relid{name: "users_table"},
-			rec: record{
+			rec: recordtype{
 				base:       commonUserTypeinfo,
 				fields:     commonUserFields,
 				ispointer:  true,
@@ -477,9 +491,9 @@ func TestAnalysis(t *testing.T) {
 	}, {
 		name: "SelectAnalysisTestOK7",
 		want: &typespec{name: "SelectAnalysisTestOK7", kind: speckindSelect, rel: &relfield{
-			field: "Rel",
+			name:  "Rel",
 			relid: relid{name: "relation_a"},
-			rec: record{
+			rec: recordtype{
 				base: typeinfo{
 					kind: kindstruct,
 				},
@@ -534,9 +548,9 @@ func TestAnalysis(t *testing.T) {
 	}, {
 		name: "InsertAnalysisTestOK8",
 		want: &typespec{name: "InsertAnalysisTestOK8", kind: speckindInsert, rel: &relfield{
-			field: "Rel",
+			name:  "Rel",
 			relid: relid{name: "relation_a"},
-			rec: record{
+			rec: recordtype{
 				base: typeinfo{
 					kind: kindstruct,
 				},
@@ -615,9 +629,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK9",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{{
 				node: &wherefield{
@@ -634,9 +648,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK10",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpnotnull}},
@@ -647,6 +661,7 @@ func TestAnalysis(t *testing.T) {
 				{op: boolor, node: &wherecolumn{colid: colid{name: "column_f"}, cmp: cmpisfalse}},
 				{op: booland, node: &wherecolumn{colid: colid{name: "column_g"}, cmp: cmpnotunknown}},
 				{op: booland, node: &wherecolumn{colid: colid{name: "column_h"}, cmp: cmpisunknown}},
+				{op: booland, node: &wherecolumn{colid: colid{name: "column_i"}, cmp: cmpistrue}},
 			}},
 		},
 	}, {
@@ -655,9 +670,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK11",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &whereblock{name: "x", items: []*whereitem{
@@ -709,9 +724,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK12",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{name: "a", typ: typeinfo{kind: kindint}, colid: colid{name: "column_a"}, cmp: cmplt}},
@@ -729,9 +744,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK13",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpne, colid2: colid{name: "column_b"}}},
@@ -747,9 +762,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK14",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherebetween{
@@ -788,9 +803,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_DistinctFrom",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
@@ -815,9 +830,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_ArrayComparisons",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
@@ -888,9 +903,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_PatternMatching",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherefield{
@@ -949,9 +964,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_Using",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{rel: relid{name: "relation_b", alias: "b"}, items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
@@ -994,9 +1009,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_From",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{rel: relid{name: "relation_b", alias: "b"}, items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
@@ -1039,9 +1054,9 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_Join",
 			kind: speckindSelect,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{items: []*joinitem{
 				{typ: joinleft, rel: relid{name: "relation_b", alias: "b"}, conds: []*joincond{{
@@ -1089,9 +1104,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_All",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			all: true,
 		},
@@ -1101,9 +1116,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_All",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			all: true,
 		},
@@ -1113,9 +1128,9 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_Return",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   dummyrecord,
 			},
 			returning: &collist{all: true},
 		},
@@ -1125,9 +1140,9 @@ func TestAnalysis(t *testing.T) {
 			name: "InsertAnalysisTestOK_Return",
 			kind: speckindInsert,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   dummyrecord,
 			},
 			returning: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1140,9 +1155,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_Return",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   dummyrecord,
 			},
 			returning: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1155,9 +1170,9 @@ func TestAnalysis(t *testing.T) {
 			name: "InsertAnalysisTestOK_Default",
 			kind: speckindInsert,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			defaults: &collist{all: true},
 		},
@@ -1167,9 +1182,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_Default",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			defaults: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1182,9 +1197,9 @@ func TestAnalysis(t *testing.T) {
 			name: "InsertAnalysisTestOK_Force",
 			kind: speckindInsert,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			force: &collist{all: true},
 		},
@@ -1194,9 +1209,9 @@ func TestAnalysis(t *testing.T) {
 			name: "UpdateAnalysisTestOK_Force",
 			kind: speckindUpdate,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			force: &collist{items: []colid{
 				{qual: "a", name: "foo"},
@@ -1209,9 +1224,9 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_ErrorHandler",
 			kind: speckindSelect,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			erh: "eh",
 		},
@@ -1221,9 +1236,9 @@ func TestAnalysis(t *testing.T) {
 			name: "InsertAnalysisTestOK_ErrorHandler",
 			kind: speckindInsert,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   record{base: typeinfo{kind: kindstruct}},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			erh: "myerrorhandler",
 		},
@@ -1233,7 +1248,7 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_Count",
 			kind: speckindSelect,
 			rel: &relfield{
-				field: "Count",
+				name:  "Count",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
 			selkind: selectcount,
@@ -1244,7 +1259,7 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_Exists",
 			kind: speckindSelect,
 			rel: &relfield{
-				field: "Exists",
+				name:  "Exists",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
 			selkind: selectexists,
@@ -1255,7 +1270,7 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_NotExists",
 			kind: speckindSelect,
 			rel: &relfield{
-				field: "NotExists",
+				name:  "NotExists",
 				relid: relid{name: "relation_a", alias: "a"},
 			},
 			selkind: selectnotexists,
@@ -1266,7 +1281,7 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_Relation",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "_",
+				name:  "_",
 				relid: relid{name: "relation_a", alias: "a"},
 				isdir: true,
 			},
@@ -1330,9 +1345,9 @@ func TestAnalysis(t *testing.T) {
 			name: "FilterAnalysisTestOK_TextSearchDirective",
 			kind: speckindFilter,
 			rel: &relfield{
-				field: "_",
+				name:  "_",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec:   dummytype,
+				rec:   dummyrecord,
 			},
 			textsearch: &colid{qual: "a", name: "ts_document"},
 		},
@@ -1387,7 +1402,7 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_ResultField",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "_",
+				name:  "_",
 				relid: relid{name: "relation_a", alias: "a"},
 				isdir: true,
 			},
@@ -1405,7 +1420,7 @@ func TestAnalysis(t *testing.T) {
 			name: "DeleteAnalysisTestOK_RowsAffected",
 			kind: speckindDelete,
 			rel: &relfield{
-				field: "_",
+				name:  "_",
 				relid: relid{name: "relation_a", alias: "a"},
 				isdir: true,
 			},
@@ -1428,9 +1443,9 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_FieldTypesBasic",
 			kind: speckindSelect,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec: record{
+				rec: recordtype{
 					base: typeinfo{kind: kindstruct},
 					fields: []*fieldinfo{{
 						name: "f1", typ: typeinfo{kind: kindbool},
@@ -1518,9 +1533,9 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_FieldTypesSlices",
 			kind: speckindSelect,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec: record{
+				rec: recordtype{
 					base: typeinfo{kind: kindstruct},
 					fields: []*fieldinfo{{
 						name: "f1", typ: typeinfo{
@@ -1704,9 +1719,9 @@ func TestAnalysis(t *testing.T) {
 			name: "SelectAnalysisTestOK_FieldTypesInterfaces",
 			kind: speckindSelect,
 			rel: &relfield{
-				field: "Rel",
+				name:  "Rel",
 				relid: relid{name: "relation_a", alias: "a"},
-				rec: record{
+				rec: recordtype{
 					base: typeinfo{kind: kindstruct},
 					fields: []*fieldinfo{{
 						name: "f1", typ: typeinfo{

@@ -1,3 +1,5 @@
+package gosql
+
 // TODO(mkopriva):
 // - given the gosql.Index directive inside an OnConflict block use pg_get_indexdef(index_oid)
 //   to retrieve the index's definition, parse that to extract the index expression and then
@@ -5,8 +7,6 @@
 //   (https://www.postgresql.org/message-id/204ADCAA-853B-4B5A-A080-4DFA0470B790%40justatheory.com)
 // TODO the postgres types circle(arr) and interval(arr) need a corresponding go type
 // TODO "cancast" per-field tag option, as well as a global option, as well as a list-of-castable-types option
-
-package gosql
 
 import (
 	"database/sql"
@@ -158,16 +158,28 @@ type pgchecker struct {
 	rel      *pgrelation   // the target relation
 	joinlist []*pgrelation // joined relations
 	relmap   map[string]*pgrelation
+
+	// result
+	info pginfo
 }
 
-func pgcheck(pg *postgres, specs []*typespec) error {
-	for _, s := range specs {
-		c := pgchecker{pg: pg, spec: s}
-		if err := c.run(); err != nil {
-			return err
-		}
+// fieldcolumn is used to hold a field and its corresponding column.
+type fieldcolumn struct {
+	field  *fieldinfo
+	column *pgcolumn
+	colid  colid
+}
+
+type pginfo struct {
+	returning []*fieldcolumn
+}
+
+func pgcheck(pg *postgres, spec *typespec) (info *pginfo, err error) {
+	c := pgchecker{pg: pg, spec: spec}
+	if err := c.run(); err != nil {
+		return nil, err
 	}
-	return nil
+	return &c.info, nil
 }
 
 func (c *pgchecker) run() (err error) {
@@ -238,9 +250,55 @@ func (c *pgchecker) run() (err error) {
 	// If a Return directive was provided, make sure that the specified
 	// columns are present in the loaded relations.
 	if c.spec.returning != nil {
-		for _, item := range c.spec.returning.items {
-			if _, err := c.column(item); err != nil {
-				return err
+		if c.spec.returning.all {
+			// If all is set to true, collect the to-be-returned list
+			// of fieldcolumn pairs by going over the recordtype's fields
+			// and matching them up with columns from the target relation.
+			// Fields that have no matching column in the target relation
+			// will be ignored.
+			//
+			// NOTE(mkopriva): currently if all is set to true only
+			// the columns of the target relation will be considered
+			// as candidates for the RETURNING clause, other columns
+			// from joined relations will be ignored.
+			for _, field := range c.spec.rel.rec.fields {
+				if col := c.rel.column(field.colid.name); col != nil {
+					cid := colid{name: field.colid.name, qual: c.spec.rel.relid.alias}
+					pair := &fieldcolumn{field: field, column: col, colid: cid}
+					c.info.returning = append(c.info.returning, pair)
+				}
+			}
+		} else {
+			for _, colid := range c.spec.returning.items {
+				// If a list of specific columns was provided,
+				// make sure that they are present in one of the
+				// associated relations, if not return an error.
+				col, err := c.column(colid)
+				if err != nil {
+					return err
+				}
+
+				// The to-be-returned columns must have a
+				// corresponding field in the recordtype.
+				//
+				// NOTE(mkopriva): currently the to-be-returned
+				// columns are matched to fields using just the
+				// column's name, i.e. the qualifiers are ignored,
+				// this means that one could specify two separate
+				// columns that have the same name and their values
+				// would be scanned into the same field.
+				var hasfield bool
+				for _, field := range c.spec.rel.rec.fields {
+					if field.colid.name == colid.name {
+						pair := &fieldcolumn{field: field, column: col, colid: colid}
+						c.info.returning = append(c.info.returning, pair)
+						hasfield = true
+						break
+					}
+				}
+				if !hasfield {
+					return errors.NoFieldColumnError
+				}
 			}
 		}
 	}
@@ -271,7 +329,7 @@ func (c *pgchecker) run() (err error) {
 	if c.spec.kind == speckindInsert {
 		// TODO(mkopriva): if this is an insert make sure that all columns that
 		// do not have a DEFAULT set but do have a NOT NULL set, have a corresponding
-		// field in the relation's record type. (keep in mind that such a column could
+		// field in the relation's recordtype. (keep in mind that such a column could
 		// be also set by a BEFORE TRIGGER, so maybe instead of erroring only warning
 		// would be thrown, or make this check optional, something that can be turned
 		// on/off...?)
@@ -285,7 +343,7 @@ func (c *pgchecker) run() (err error) {
 	return nil
 }
 
-func (c *pgchecker) checkfields(rec record, isresult bool) (err error) {
+func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 	for _, fld := range rec.fields {
 		var col *pgcolumn
 		var atyp assigntype
@@ -331,7 +389,7 @@ func (c *pgchecker) checkfields(rec record, isresult bool) (err error) {
 		// Make sure that a value of the given field's type
 		// can be assigned to given column, and vice versa.
 		if !c.canassign(col, fld, atyp) {
-			return errors.FieldToColumnTypeError
+			return errors.BadFieldToColumnTypeError
 		}
 	}
 	return nil
@@ -675,6 +733,10 @@ func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool 
 	name := cmpop2basepgops[cmp]
 	left := col.typ.oid
 	for _, right := range rhstypes {
+		if col.typ.category == pgtypcategory_string && right == pgtyp_unknown {
+			return true
+		}
+
 		key := pgopkey{name: name, left: left, right: right}
 		if _, ok := c.pg.cat.operators[key]; ok {
 			return true
@@ -824,7 +886,7 @@ func (c *pgchecker) cancoerceoid(targetid, inputid pgoid) bool {
 	}
 
 	// if input is an untyped string constant assume it can be converted to anything
-	if inputid == pgtyp_unkown {
+	if inputid == pgtyp_unknown {
 		return true
 	}
 
@@ -1434,7 +1496,7 @@ const (
 	pgtyp_tsvectorarr    pgoid = 3643
 	pgtyp_uuid           pgoid = 2950
 	pgtyp_uuidarr        pgoid = 2951
-	pgtyp_unkown         pgoid = 705
+	pgtyp_unknown        pgoid = 705
 	pgtyp_varbit         pgoid = 1562
 	pgtyp_varbitarr      pgoid = 1563
 	pgtyp_varchar        pgoid = 1043

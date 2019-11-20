@@ -42,7 +42,7 @@ var (
 )
 
 // TODO(mkopriva): to provide more detailed error messages either pass in the
-// details about the file being analyzed, or make sure that the caller has that
+// details about the file under analysis, or make sure that the caller has that
 // information and appends it to the error.
 func analyze(named *types.Named) (*typespec, error) {
 	a := new(analyzer)
@@ -103,10 +103,10 @@ func (a *analyzer) run() (err error) {
 			}
 
 			a.spec.rel = new(relfield)
-			a.spec.rel.field = fld.Name()
+			a.spec.rel.name = fld.Name()
 			a.spec.rel.relid = rid
 
-			switch fname := strings.ToLower(a.spec.rel.field); {
+			switch fname := strings.ToLower(a.spec.rel.name); {
 			case fname == "count" && a.isint(fld.Type()):
 				if a.spec.kind != speckindSelect {
 					return errors.IllegalCountFieldError
@@ -129,7 +129,7 @@ func (a *analyzer) run() (err error) {
 				}
 				a.spec.rel.isdir = true
 			default:
-				if err := a.relrecord(a.spec.rel, fld); err != nil {
+				if err := a.relrecordtype(a.spec.rel, fld); err != nil {
 					return err
 				}
 			}
@@ -165,6 +165,10 @@ func (a *analyzer) run() (err error) {
 					return err
 				}
 			case "return":
+				if len(a.spec.rel.rec.fields) == 0 {
+					// TODO test
+					return errors.ReturnDirectiveWithNoRelfieldError
+				}
 				if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 					return errors.IllegalReturnDirectiveError
 				}
@@ -259,7 +263,7 @@ func (a *analyzer) run() (err error) {
 	return nil
 }
 
-func (a *analyzer) relrecord(rel *relfield, field *types.Var) error {
+func (a *analyzer) relrecordtype(rel *relfield, field *types.Var) error {
 	var (
 		ftyp  = field.Type()
 		named *types.Named
@@ -723,6 +727,11 @@ stackloop:
 				if err != nil {
 					return err
 				}
+
+				// If no operator was provided, default to "istrue"
+				if len(op) == 0 {
+					op = "istrue"
+				}
 				cmp := string2cmpop[op]
 				if !cmp.isunary() {
 					return errors.BadUnaryCmpopError
@@ -815,6 +824,10 @@ stackloop:
 				return err
 			}
 
+			// If no comparison operator was provided default to "="
+			if len(op) == 0 {
+				op = "="
+			}
 			cmp := string2cmpop[op]
 			if cmp.isunary() {
 				// TODO add test
@@ -1125,7 +1138,8 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
 	}
 
 	if len(lhs) == 0 {
-		return expr, "=", "", "" // default
+		// return expr, "=", "", "" // default
+		return expr, "", "", "" // default
 	}
 
 	return lhs, cop, sop, rhs
@@ -1256,13 +1270,13 @@ func (a *analyzer) resultfield(field *types.Var) error {
 	}
 
 	rel := new(relfield)
-	rel.field = field.Name()
-	if err := a.relrecord(rel, field); err != nil {
+	rel.name = field.Name()
+	if err := a.relrecordtype(rel, field); err != nil {
 		return err
 	}
 
 	result := new(resultfield)
-	result.name = rel.field
+	result.name = rel.name
 	result.rec = rel.rec
 	a.spec.result = result
 	return nil
@@ -1507,6 +1521,10 @@ type colid struct {
 	name string
 }
 
+func (id colid) isempty() bool {
+	return id == colid{}
+}
+
 type collist struct {
 	all   bool
 	items []colid
@@ -1515,32 +1533,32 @@ type collist struct {
 // relfield holds the information on a go struct type and on the
 // db relation that's associated with that struct type.
 type relfield struct {
-	field string // name of the field that references the relation of the typespec
+	name  string // name of the field that references the relation of the typespec
 	relid relid  // the relation identifier extracted from the tag
 	isdir bool   // indicates that the gosql.Relation directive was used
-	rec   record
+	rec   recordtype
 }
 
 type resultfield struct {
 	name string // name of the field that declares the result of the typespec
-	rec  record
+	rec  recordtype
 }
 
-// record holds information on the type of record a typespec should read from,
+// recordtype holds information on the type of record a typespec should read from,
 // or write to, the associated database relation.
-type record struct {
-	base      typeinfo // type info on the record
+type recordtype struct {
+	base      typeinfo // information on the record's base type
 	ispointer bool     // indicates whether or not the base type's a pointer type
 	isslice   bool     // indicates whether or not the base type's a slice type
 	isarray   bool     // indicates whether or not the base type's an array type
 	arraylen  int64    // if the base type's an array type, this field will hold the array's length
-	// if set, indicates that the record is handled by an iterator
+	// if set, indicates that the recordtype is handled by an iterator
 	isiter bool
 	// if set the value will hold the method name of the iterator interface
 	itermethod string
 	// indicates whether or not the type implements the afterscanner interface
 	isafterscanner bool
-	// fields will hold the info on the record's fields
+	// fields will hold the info on the recordtype's fields
 	fields []*fieldinfo
 }
 
@@ -1703,13 +1721,13 @@ type fieldelem struct {
 	typepkgpath  string // the package import path
 	typepkgname  string // the package's name
 	typepkglocal string // the local package name (including ".")
-	isimported   bool   // indicates whether or not the package is imported
-	isembedded   bool   // indicates whether or not the package is imported
-	isexported   bool   // indicates whether or not the package is imported
-	ispointer    bool   // indicates whether or not the package is imported
+	isimported   bool   // indicates whether or not the type is imported
+	isembedded   bool   // indicates whether or not the field is embedded
+	isexported   bool   // indicates whether or not the field is exported
+	ispointer    bool   // indicates whether or not the field type is a pointer type
 }
 
-// fieldinfo holds information about a record's struct field and the corresponding db column.
+// fieldinfo holds information about a recordtype's field and the corresponding db column.
 type fieldinfo struct {
 	typ  typeinfo // info about the field's type
 	name string   // name of the struct field

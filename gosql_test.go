@@ -108,6 +108,34 @@ CREATE TABLE test_user (
 	, created_at timestamptz not null
 );
 
+CREATE TABLE test_post (
+	id serial primary key
+	, user_id integer not null REFERENCES test_user (id)
+	, content text not null
+	, is_spam boolean not null
+	, created_at timestamptz not null
+);
+
+CREATE TABLE test_join1 (
+	id serial primary key
+	, post_id integer not null REFERENCES test_post (id)
+);
+
+CREATE TABLE test_join2 (
+	id serial primary key
+	, join1_id integer not null REFERENCES test_join1 (id)
+);
+
+CREATE TABLE test_join3 (
+	id serial primary key
+	, join2_id integer not null REFERENCES test_join2 (id)
+);
+
+CREATE TABLE test_join4 (
+	id serial primary key
+	, join3_id integer not null REFERENCES test_join3 (id)
+);
+
 CREATE VIEW view_test AS SELECT
 	col_a
 	, col_b

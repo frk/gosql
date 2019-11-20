@@ -146,18 +146,14 @@ func (s DeferStmt) Walk(w *writer.Writer) {
 }
 
 type ReturnStmt struct {
-	Results []Expr
+	Result Expr
 }
 
 func (s ReturnStmt) Walk(w *writer.Writer) {
 	w.Write("return")
-	if len(s.Results) > 0 {
+	if s.Result != nil {
 		w.Write(" ")
-		s.Results[0].Walk(w)
-		for _, x := range s.Results[1:] {
-			w.Write(", ")
-			x.Walk(w)
-		}
+		s.Result.Walk(w)
 	}
 }
 

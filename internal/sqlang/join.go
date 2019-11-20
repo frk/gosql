@@ -9,29 +9,25 @@ type TableExpr interface {
 	tableExprNode()
 }
 
-type TableRef struct {
-	Rel Ident
-}
-
-func (tr *TableRef) Walk(w *writer.Writer) {
-	tr.Rel.Walk(w)
-}
-
 type TableJoin struct {
+	Type JoinType
 	Rel  Ident
-	Join JoinType
-	On   JoinOn
+	On   JoinOn // can be left empty for cross joins
 }
 
-func (tj *TableJoin) Walk(w *writer.Writer) {
-	tj.Join.Walk(w)
+func (tj TableJoin) Walk(w *writer.Writer) {
+	tj.Type.Walk(w)
 	w.Write(" ")
 	tj.Rel.Walk(w)
-	w.Write(" ")
-	tj.On.Walk(w)
+
+	// write the join_condition if not cross join
+	if tj.Type != JoinCross {
+		w.Write(" ")
+		tj.On.Walk(w)
+	}
 }
 
-func (TableRef) tableExprNode()  {}
+func (Ident) tableExprNode()     {}
 func (TableJoin) tableExprNode() {}
 
 type JoinOn struct {
@@ -48,14 +44,14 @@ func (jo JoinOn) Walk(w *writer.Writer) {
 type JoinOnExpr struct {
 	Bool BoolOp
 	Lhs  Expr
-	Op   CmpOp
+	Cmp  CmpOp
 	Rhs  Expr
 }
 
 func (x JoinOnExpr) Walk(w *writer.Writer) {
 	x.Bool.Walk(w)
 	x.Lhs.Walk(w)
-	x.Op.Walk(w)
+	x.Cmp.Walk(w)
 	x.Rhs.Walk(w)
 }
 

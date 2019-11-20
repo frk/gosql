@@ -208,10 +208,10 @@ func TestReturnStmt(t *testing.T) {
 		stmt: ReturnStmt{},
 		want: "return",
 	}, {
-		stmt: ReturnStmt{Results: []Expr{CallExpr{Fun: Ident{"f"}}}},
+		stmt: ReturnStmt{CallExpr{Fun: Ident{"f"}}},
 		want: "return f()",
 	}, {
-		stmt: ReturnStmt{Results: []Expr{Ident{"num"}, Ident{"err"}}},
+		stmt: ReturnStmt{ExprList{Ident{"num"}, Ident{"err"}}},
 		want: "return num, err",
 	}}
 
@@ -309,27 +309,27 @@ func TestIfStmt(t *testing.T) {
 	}, {
 		stmt: IfStmt{
 			Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
-			Body: BlockStmt{List: []Stmt{ReturnStmt{[]Expr{Ident{"a"}}}}},
+			Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"a"}}}},
 		},
 		want: "if a < b {\nreturn a\n}",
 	}, {
 		stmt: IfStmt{
 			Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
-			Body: BlockStmt{List: []Stmt{ReturnStmt{[]Expr{Ident{"a"}}}}},
-			Else: BlockStmt{List: []Stmt{ReturnStmt{[]Expr{Ident{"b"}}}}},
+			Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"a"}}}},
+			Else: BlockStmt{List: []Stmt{ReturnStmt{Ident{"b"}}}},
 		},
 		want: "if a < b {\nreturn a\n} else {\nreturn b\n}",
 	}, {
 		stmt: IfStmt{
 			Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
-			Body: BlockStmt{List: []Stmt{ReturnStmt{[]Expr{Ident{"b"}}}}},
+			Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"b"}}}},
 			Else: IfStmt{
 				Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"c"}},
-				Body: BlockStmt{List: []Stmt{ReturnStmt{[]Expr{Ident{"c"}}}}},
+				Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"c"}}}},
 				Else: IfStmt{
 					Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"d"}},
-					Body: BlockStmt{List: []Stmt{ReturnStmt{[]Expr{Ident{"d"}}}}},
-					Else: BlockStmt{List: []Stmt{ReturnStmt{[]Expr{Ident{"a"}}}}},
+					Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"d"}}}},
+					Else: BlockStmt{List: []Stmt{ReturnStmt{Ident{"a"}}}},
 				},
 			},
 		},
@@ -382,10 +382,10 @@ func TestSwitchStmt(t *testing.T) {
 	}, {
 		stmt: SwitchStmt{Body: []CaseClause{{
 			List: []Expr{BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}}},
-			Body: []Stmt{ReturnStmt{[]Expr{Ident{"a"}}}},
+			Body: []Stmt{ReturnStmt{Ident{"a"}}},
 		}, {
 			List: []Expr{BinaryExpr{X: Ident{"a"}, Op: BINARY_GTR, Y: Ident{"b"}}},
-			Body: []Stmt{ReturnStmt{[]Expr{Ident{"b"}}}},
+			Body: []Stmt{ReturnStmt{Ident{"b"}}},
 		}}},
 		want: "switch {\ncase a < b:\nreturn a\ncase a > b:\nreturn b\n}",
 	}}
