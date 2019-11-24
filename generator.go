@@ -13,25 +13,29 @@ const (
 )
 
 var (
-	idblank    = gol.Ident{"_"}
-	idrecv     = gol.Ident{"q"}
-	idconn     = gol.Ident{"c"}
-	ididx      = gol.Ident{"i"}
-	iderr      = gol.Ident{"err"}
-	idnew      = gol.Ident{"new"}
-	idnil      = gol.Ident{"nil"}
-	idquery    = gol.Ident{"queryString"}
-	idparams   = gol.Ident{"params"}
-	idrow      = gol.Ident{"row"}
-	idrows     = gol.Ident{"rows"}
-	idexec     = gol.Ident{"Exec"}
-	idiface    = gol.Ident{"interface{}"}
-	iderror    = gol.Ident{"error"}
-	sxconn     = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"Conn"}}
-	sxexec     = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Exec"}}
-	sxquery    = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Query"}}
-	sxqueryrow = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"QueryRow"}}
-	sxrowscan  = gol.SelectorExpr{X: gol.Ident{"row"}, Sel: gol.Ident{"Scan"}}
+	idblank     = gol.Ident{"_"}
+	idrecv      = gol.Ident{"q"}
+	idconn      = gol.Ident{"c"}
+	ididx       = gol.Ident{"i"}
+	iderr       = gol.Ident{"err"}
+	idnew       = gol.Ident{"new"}
+	idnil       = gol.Ident{"nil"}
+	idquery     = gol.Ident{"queryString"}
+	idparams    = gol.Ident{"params"}
+	idrow       = gol.Ident{"row"}
+	idrows      = gol.Ident{"rows"}
+	idexec      = gol.Ident{"Exec"}
+	idiface     = gol.Ident{"interface{}"}
+	iderror     = gol.Ident{"error"}
+	sxconn      = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"Conn"}}
+	sxexec      = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Exec"}}
+	sxquery     = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Query"}}
+	sxqueryrow  = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"QueryRow"}}
+	sxrowscan   = gol.SelectorExpr{X: gol.Ident{"row"}, Sel: gol.Ident{"Scan"}}
+	sxrowsscan  = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Scan"}}
+	sxrowsclose = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Close"}}
+	sxrowsnext  = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Next"}}
+	sxrowserr   = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Err"}}
 )
 
 type specinfo struct {
@@ -88,14 +92,12 @@ func (g *generator) execdecl(si *specinfo) (fn gol.FuncDecl) {
 }
 
 func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
-	decl := gol.GenDecl{
-		Token: gol.GENDECL_CONST,
-		Specs: []gol.Spec{gol.ValueSpec{
-			Names:   []gol.Ident{idquery},
-			Values:  []gol.Expr{gol.RawStringNode{g.sqldelete(si)}},
-			Comment: gol.CommentList{{Text: " `"}},
-		}},
-	}
+	decl := gol.GenDecl{Token: gol.GENDECL_CONST}
+	decl.Specs = []gol.Spec{gol.ValueSpec{
+		Names:   []gol.Ident{idquery},
+		Values:  []gol.Expr{gol.RawStringNode{g.sqldelete(si)}},
+		Comment: gol.CommentList{{Text: " `"}},
+	}}
 
 	stmt = gol.DeclStmt{decl}
 	return stmt
@@ -109,12 +111,112 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 		asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
 		asn.Lhs = []gol.Expr{idblank, iderr}
 		asn.Rhs = []gol.Expr{gol.CallExpr{Fun: sxexec, Args: args}}
-		stmt = asn
-	} else {
+		return asn
+	}
+
+	if !si.spec.rel.rec.isslice {
 		asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
 		asn.Lhs = []gol.Expr{idrow}
 		asn.Rhs = []gol.Expr{gol.CallExpr{Fun: sxqueryrow, Args: args}}
-		stmt = gol.StmtList{asn, gol.NL{}}
+		return gol.StmtList{asn, gol.NL{}}
+	}
+
+	asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+	asn.Lhs = []gol.Expr{idrows, iderr}
+	asn.Rhs = []gol.Expr{gol.CallExpr{Fun: sxquery, Args: args}}
+
+	iferr := gol.IfStmt{}
+	iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
+	iferr.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+
+	defclose := gol.DeferStmt{}
+	defclose.Call = gol.CallExpr{Fun: sxrowsclose}
+
+	fornext := g.fornext(si)
+	return gol.StmtList{asn, iferr, defclose, gol.NL{}, fornext}
+}
+
+func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
+	stmt.Cond = gol.CallExpr{Fun: sxrowsnext}
+	// initialize
+	{
+		if record := si.spec.rel.rec; record.ispointer {
+			init := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+			init.Lhs = []gol.Expr{gol.Ident{"v"}}
+			init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.rectype(record)}}}}
+			stmt.Body.List = append(stmt.Body.List, init)
+		} else {
+			vs := gol.ValueSpec{Names: []gol.Ident{{"v"}}, Type: g.rectype(record)}
+			init := gol.GenDecl{Token: gol.GENDECL_VAR}
+			init.Specs = append(init.Specs, vs)
+			stmt.Body.List = append(stmt.Body.List, gol.DeclStmt{init})
+		}
+	}
+
+	// scan & assign error
+	{
+		var args gol.ArgsList
+		if len(si.info.returning) > 2 {
+			args.OnePerLine = 1
+		}
+
+		// The pfieldhandled map is used to keep track of pointer fields
+		// that have already been initialized and their types imported.
+		var pfieldhandled = make(map[string]bool)
+
+		for _, item := range si.info.returning {
+			var fx gol.Expr = gol.Ident{"v"}
+
+			var fieldkey string // key for the pfieldhandled map
+			for _, fe := range item.field.path {
+				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{fe.name}}
+
+				fieldkey += fe.name
+				if fe.ispointer && !pfieldhandled[fieldkey] {
+					if fe.isimported {
+						g.addimport(fe.typepkgpath, fe.typepkgname, fe.typepkglocal)
+					}
+
+					// initialize nested pointer field
+					init := gol.AssignStmt{Token: gol.ASSIGN}
+					init.Lhs = []gol.Expr{fx}
+					init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.fieldelemtype(fe)}}}}
+					stmt.Body.List = append(stmt.Body.List, init)
+
+					pfieldhandled[fieldkey] = true
+				}
+			}
+
+			fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
+			args.List = append(args.List, gol.UnaryExpr{Op: gol.UNARY_AMP, X: fx})
+		}
+
+		asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+		asn.Lhs = []gol.Expr{iderr}
+		asn.Rhs = []gol.Expr{gol.CallExpr{Fun: sxrowsscan, Args: args}}
+		stmt.Body.List = append(stmt.Body.List, asn)
+	}
+
+	// check error & newline
+	{
+		iferr := gol.IfStmt{}
+		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
+		iferr.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+		stmt.Body.List = append(stmt.Body.List, iferr, gol.NL{})
+	}
+
+	// append
+	{
+		appnd := gol.CallExpr{Fun: gol.Ident{"append"}}
+		appnd.Args = gol.ArgsList{List: []gol.Expr{
+			gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.rel.name}},
+			gol.Ident{"v"},
+		}}
+
+		asn := gol.AssignStmt{Token: gol.ASSIGN}
+		asn.Lhs = []gol.Expr{gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.rel.name}}}
+		asn.Rhs = []gol.Expr{appnd}
+		stmt.Body.List = append(stmt.Body.List, asn)
 	}
 	return stmt
 }
@@ -146,60 +248,66 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 	}
 
 	if len(si.info.returning) > 0 {
-		var list gol.StmtList
+		rel := si.spec.rel
+		// does the record type need pre-allocation? and is it imported?
+		if rel.rec.base.isimported && (rel.rec.isslice || rel.rec.ispointer) {
+			g.addimport(rel.rec.base.pkgpath, rel.rec.base.pkgname, rel.rec.base.pkglocal)
+		}
 
-		// if the gosql.Return directive was used, make sure that the rel
-		// field is properly initialized to avoid "nil pointer" panics.
-		if rel := si.spec.rel; rel.rec.ispointer && !(rel.rec.isslice || rel.rec.isarray) {
-			if typ := rel.rec.base; typ.isimported {
-				g.addimport(typ.pkgpath, typ.pkgname, typ.pkglocal)
+		if rel.rec.isslice || rel.rec.isarray {
+			return &gol.ReturnStmt{gol.CallExpr{Fun: sxrowserr}}
+		} else {
+			var list gol.StmtList // result
+
+			// if the gosql.Return directive was used, make sure that the rel
+			// field is properly initialized to avoid "nil pointer" panics.
+			if rel.rec.ispointer {
+				// initialize rel field
+				init := gol.AssignStmt{Token: gol.ASSIGN}
+				init.Lhs = []gol.Expr{gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}}
+				init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.rectype(rel.rec)}}}}
+				list = append(list, init)
 			}
 
-			// initialize rel field
-			init := gol.AssignStmt{Token: gol.ASSIGN}
-			init.Lhs = []gol.Expr{gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}}
-			init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.rectype(rel.rec)}}}}
-			list = append(list, init)
-		}
+			var args gol.ArgsList
+			if len(si.info.returning) > 2 {
+				args.OnePerLine = 1
+			}
 
-		var args gol.ArgsList
-		if len(si.info.returning) > 2 {
-			args.OnePerLine = 1
-		}
+			// The pfieldhandled map is used to keep track of pointer fields
+			// that have already been initialized and their types imported.
+			var pfieldhandled = make(map[string]bool)
 
-		// The pfieldhandled map is used to keep track of pointer fields
-		// that have already been initialized and their types imported.
-		var pfieldhandled = make(map[string]bool)
+			for _, item := range si.info.returning {
+				fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
 
-		for _, item := range si.info.returning {
-			fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.rel.name}}
+				var fieldkey string // key for the pfieldhandled map
+				for _, fe := range item.field.path {
+					fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{fe.name}}
 
-			var fieldkey string // key for the pfieldhandled map
-			for _, fe := range item.field.path {
-				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{fe.name}}
+					fieldkey += fe.name
+					if fe.ispointer && !pfieldhandled[fieldkey] {
+						if fe.isimported {
+							g.addimport(fe.typepkgpath, fe.typepkgname, fe.typepkglocal)
+						}
 
-				fieldkey += fe.name
-				if fe.ispointer && !pfieldhandled[fieldkey] {
-					if fe.isimported {
-						g.addimport(fe.typepkgpath, fe.typepkgname, fe.typepkglocal)
+						// initialize nested pointer field
+						init := gol.AssignStmt{Token: gol.ASSIGN}
+						init.Lhs = []gol.Expr{fx}
+						init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.fieldelemtype(fe)}}}}
+						list = append(list, init)
+
+						pfieldhandled[fieldkey] = true
 					}
-
-					// initialize nested pointer field
-					init := gol.AssignStmt{Token: gol.ASSIGN}
-					init.Lhs = []gol.Expr{fx}
-					init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.fieldelemtype(fe)}}}}
-					list = append(list, init)
-
-					pfieldhandled[fieldkey] = true
 				}
+
+				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
+				args.List = append(args.List, gol.UnaryExpr{Op: gol.UNARY_AMP, X: fx})
 			}
 
-			fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
-			args.List = append(args.List, gol.UnaryExpr{Op: gol.UNARY_AMP, X: fx})
+			list = append(list, &gol.ReturnStmt{gol.CallExpr{Fun: sxrowscan, Args: args}})
+			return list
 		}
-
-		list = append(list, &gol.ReturnStmt{gol.CallExpr{Fun: sxrowscan, Args: args}})
-		return list
 	}
 
 	return stmt
