@@ -107,7 +107,7 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 	args := gol.ArgsList{List: []gol.Expr{idquery}}
 	args.AddExprs(g.queryargs(si.spec.where)...)
 
-	if si.spec.returning == nil {
+	if si.spec.returning == nil && si.spec.result == nil {
 		asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
 		asn.Lhs = []gol.Expr{idblank, iderr}
 		asn.Rhs = []gol.Expr{gol.CallExpr{Fun: sxexec, Args: args}}
@@ -247,8 +247,9 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 		return &gol.ReturnStmt{iderr}
 	}
 
-	if len(si.info.returning) > 0 {
+	if si.spec.returning != nil {
 		rel := si.spec.rel
+
 		// does the record type need pre-allocation? and is it imported?
 		if rel.rec.base.isimported && (rel.rec.isslice || rel.rec.ispointer) {
 			g.addimport(rel.rec.base.pkgpath, rel.rec.base.pkgname, rel.rec.base.pkglocal)
@@ -310,6 +311,69 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 		}
 	}
 
+	// result field
+	if si.spec.result != nil {
+		rel := si.spec.result
+		// does the record type need pre-allocation? and is it imported?
+		if rel.rec.base.isimported && (rel.rec.isslice || rel.rec.ispointer) {
+			g.addimport(rel.rec.base.pkgpath, rel.rec.base.pkgname, rel.rec.base.pkglocal)
+		}
+
+		if rel.rec.isslice || rel.rec.isarray {
+			return &gol.ReturnStmt{gol.CallExpr{Fun: sxrowserr}}
+		} else {
+			var list gol.StmtList // result
+
+			// if the gosql.Return directive was used, make sure that the rel
+			// field is properly initialized to avoid "nil pointer" panics.
+			if rel.rec.ispointer {
+				// initialize rel field
+				init := gol.AssignStmt{Token: gol.ASSIGN}
+				init.Lhs = []gol.Expr{gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}}
+				init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.rectype(rel.rec)}}}}
+				list = append(list, init)
+			}
+
+			var args gol.ArgsList
+			if len(si.info.returning) > 2 {
+				args.OnePerLine = 1
+			}
+
+			// The pfieldhandled map is used to keep track of pointer fields
+			// that have already been initialized and their types imported.
+			var pfieldhandled = make(map[string]bool)
+
+			for _, item := range si.info.returning {
+				fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
+
+				var fieldkey string // key for the pfieldhandled map
+				for _, fe := range item.field.path {
+					fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{fe.name}}
+
+					fieldkey += fe.name
+					if fe.ispointer && !pfieldhandled[fieldkey] {
+						if fe.isimported {
+							g.addimport(fe.typepkgpath, fe.typepkgname, fe.typepkglocal)
+						}
+
+						// initialize nested pointer field
+						init := gol.AssignStmt{Token: gol.ASSIGN}
+						init.Lhs = []gol.Expr{fx}
+						init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.fieldelemtype(fe)}}}}
+						list = append(list, init)
+
+						pfieldhandled[fieldkey] = true
+					}
+				}
+
+				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
+				args.List = append(args.List, gol.UnaryExpr{Op: gol.UNARY_AMP, X: fx})
+			}
+
+			list = append(list, &gol.ReturnStmt{gol.CallExpr{Fun: sxrowscan, Args: args}})
+			return list
+		}
+	}
 	return stmt
 }
 

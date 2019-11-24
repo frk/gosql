@@ -391,6 +391,15 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 		if !c.canassign(col, fld, atyp) {
 			return errors.BadFieldToColumnTypeError
 		}
+
+		if isresult {
+			cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
+			pair := &fieldcolumn{field: fld, column: col, colid: cid}
+			c.info.returning = append(c.info.returning, pair)
+			///////////////////////////////////////////////////////
+			// pair := &fieldcolumn{field: field, column: col, colid: colid}
+			// c.info.returning = append(c.info.returning, pair)
+		}
 	}
 	return nil
 }

@@ -21,13 +21,12 @@ func TestGenerate(t *testing.T) {
 		{"delete_with_returning_all"},
 		{"delete_with_returning_collist"},
 		{"delete_with_returning_slice_all"},
+		{"delete_with_returning_slice_collist"},
+		{"delete_with_result"}, // delete with returning to result field
 		{"delete_with_using_join_block_1"},
 		{"delete_with_using_join_block_2"},
 		{"delete_with_where_block_1"},
 		{"delete_with_where_block_2"},
-		// delete with returning to rel field (explicit columns)
-		// delete with returning to rel field (slice)
-		// delete with returning to result field
 		// delete with returning to result field (slice)
 		// delete with returning with afterscan
 		// delete with returning with iterator
