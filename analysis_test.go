@@ -1427,7 +1427,10 @@ func TestAnalysis(t *testing.T) {
 			where: &whereblock{name: "Where", items: []*whereitem{
 				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
 			}},
-			rowsaffected: "RowsAffected",
+			rowsaffected: &rowsaffectedfield{
+				name: "RowsAffected",
+				kind: kindint,
+			},
 		},
 	}, {
 		name: "SelectAnalysisTestOK_FilterField",

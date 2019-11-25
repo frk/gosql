@@ -4,11 +4,30 @@ import (
 	"time"
 )
 
+type UserIterator interface {
+	NextUser(*User) error
+}
+
 type User struct {
 	Id        int       `sql:"id"`
 	Email     string    `sql:"email"`
 	FullName  string    `sql:"full_name"`
 	CreatedAt time.Time `sql:"created_at"`
+}
+
+type User2Iterator interface {
+	NextUser(*User2) error
+}
+
+type User2 struct {
+	Id        int       `sql:"id"`
+	Email     string    `sql:"email"`
+	FullName  string    `sql:"full_name"`
+	CreatedAt time.Time `sql:"created_at"`
+}
+
+func (u *User2) AfterScan() {
+	// ...
 }
 
 // for testing nested struct fields

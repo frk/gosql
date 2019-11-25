@@ -172,7 +172,7 @@ func (a *analyzer) run() (err error) {
 				if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 					return errors.IllegalReturnDirectiveError
 				}
-				if a.spec.returning != nil || a.spec.result != nil || len(a.spec.rowsaffected) > 0 {
+				if a.spec.returning != nil || a.spec.result != nil || a.spec.rowsaffected != nil {
 					return errors.ConflictResultProducerError
 				}
 				if a.spec.returning, err = a.collist(tag["sql"], fld); err != nil {
@@ -1265,7 +1265,7 @@ func (a *analyzer) resultfield(field *types.Var) error {
 	if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 		return errors.IllegalResultFieldError
 	}
-	if a.spec.returning != nil || a.spec.result != nil || len(a.spec.rowsaffected) > 0 {
+	if a.spec.returning != nil || a.spec.result != nil || a.spec.rowsaffected != nil {
 		return errors.ConflictResultProducerError
 	}
 
@@ -1286,14 +1286,18 @@ func (a *analyzer) rowsaffected(field *types.Var) error {
 	if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate && a.spec.kind != speckindDelete {
 		return errors.IllegalRowsAffectedFieldError
 	}
-	if a.spec.returning != nil || a.spec.result != nil || len(a.spec.rowsaffected) > 0 {
+	if a.spec.returning != nil || a.spec.result != nil || a.spec.rowsaffected != nil {
 		return errors.ConflictResultProducerError
 	}
 
-	if !a.isint(field.Type()) {
+	ftyp := field.Type()
+	if !a.isint(ftyp) {
 		return errors.BadRowsAffectedTypeError
 	}
-	a.spec.rowsaffected = field.Name()
+
+	a.spec.rowsaffected = new(rowsaffectedfield)
+	a.spec.rowsaffected.name = field.Name()
+	a.spec.rowsaffected.kind = a.typekind(ftyp)
 	return nil
 }
 
@@ -1495,7 +1499,7 @@ type typespec struct {
 	force        *collist
 	returning    *collist
 	result       *resultfield
-	rowsaffected string
+	rowsaffected *rowsaffectedfield
 
 	limit    *limitvar
 	offset   *offsetvar
@@ -1542,6 +1546,11 @@ type relfield struct {
 type resultfield struct {
 	name string // name of the field that declares the result of the typespec
 	rec  recordtype
+}
+
+type rowsaffectedfield struct {
+	name string // name of the rowsaffected field
+	kind typekind
 }
 
 // recordtype holds information on the type of record a typespec should read from,
