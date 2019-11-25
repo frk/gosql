@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *DeleteWithReturningIteratorAllQuery) Exec(c gosql.Conn) error {
+func (q *DeleteWithReturningIteratorQuery) Exec(c gosql.Conn) error {
 	const queryString = `DELETE FROM "test_user" AS u
 	WHERE u."created_at" < $1
 	RETURNING

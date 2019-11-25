@@ -13,33 +13,34 @@ const (
 )
 
 var (
-	idblank           = gol.Ident{"_"}
-	idrecv            = gol.Ident{"q"}
-	idconn            = gol.Ident{"c"}
-	ididx             = gol.Ident{"i"}
-	iderr             = gol.Ident{"err"}
-	idnew             = gol.Ident{"new"}
-	idnil             = gol.Ident{"nil"}
-	idquery           = gol.Ident{"queryString"}
-	idparams          = gol.Ident{"params"}
-	idi64             = gol.Ident{"i64"}
-	idres             = gol.Ident{"res"}
-	idrow             = gol.Ident{"row"}
-	idrows            = gol.Ident{"rows"}
-	idexec            = gol.Ident{"Exec"}
-	idiface           = gol.Ident{"interface{}"}
-	iderror           = gol.Ident{"error"}
-	idafterscan       = gol.Ident{"AfterScan"}
-	sxconn            = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"Conn"}}
-	sxexec            = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Exec"}}
-	sxquery           = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Query"}}
-	sxqueryrow        = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"QueryRow"}}
-	sxrowscan         = gol.SelectorExpr{X: gol.Ident{"row"}, Sel: gol.Ident{"Scan"}}
-	sxrowsscan        = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Scan"}}
-	sxrowsclose       = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Close"}}
-	sxrowsnext        = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Next"}}
-	sxrowserr         = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Err"}}
-	sxresrowsaffected = gol.SelectorExpr{X: gol.Ident{"res"}, Sel: gol.Ident{"RowsAffected"}}
+	idblank             = gol.Ident{"_"}
+	idrecv              = gol.Ident{"q"}
+	idconn              = gol.Ident{"c"}
+	ididx               = gol.Ident{"i"}
+	iderr               = gol.Ident{"err"}
+	idnew               = gol.Ident{"new"}
+	idnil               = gol.Ident{"nil"}
+	idquery             = gol.Ident{"queryString"}
+	idparams            = gol.Ident{"params"}
+	idi64               = gol.Ident{"i64"}
+	idres               = gol.Ident{"res"}
+	idrow               = gol.Ident{"row"}
+	idrows              = gol.Ident{"rows"}
+	idexec              = gol.Ident{"Exec"}
+	idiface             = gol.Ident{"interface{}"}
+	iderror             = gol.Ident{"error"}
+	idafterscan         = gol.Ident{"AfterScan"}
+	sxconn              = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"Conn"}}
+	sxerrorinfo         = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"ErrorInfo"}}
+	sxexec              = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Exec"}}
+	sxquery             = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Query"}}
+	sxqueryrow          = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"QueryRow"}}
+	sxrowscan           = gol.SelectorExpr{X: gol.Ident{"row"}, Sel: gol.Ident{"Scan"}}
+	sxrowsscan          = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Scan"}}
+	sxrowsclose         = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Close"}}
+	callrowserr         = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Err"}}}
+	callrowsnext        = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Next"}}}
+	callresrowsaffected = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"res"}, Sel: gol.Ident{"RowsAffected"}}}
 )
 
 type specinfo struct {
@@ -124,17 +125,17 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 				// check err
 				iferr := gol.IfStmt{}
 				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
 
 				// call RowsAffected & assing i64, err
 				asn2 := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
 				asn2.Lhs = []gol.Expr{idi64, iderr}
-				asn2.Rhs = []gol.Expr{gol.CallExpr{Fun: sxresrowsaffected}}
+				asn2.Rhs = []gol.Expr{callresrowsaffected}
 
 				// check err
 				iferr2 := gol.IfStmt{}
 				iferr2.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr2.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+				iferr2.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
 
 				//
 				asn3 := gol.AssignStmt{Token: gol.ASSIGN}
@@ -180,7 +181,7 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 
 		iferr := gol.IfStmt{}
 		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-		iferr.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+		iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
 
 		defclose := gol.DeferStmt{}
 		defclose.Call = gol.CallExpr{Fun: sxrowsclose}
@@ -191,8 +192,35 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 	return stmt
 }
 
+func (g *generator) returnerr(si *specinfo, errx gol.Expr) gol.ReturnStmt {
+	if si.spec.erh == nil {
+		return gol.ReturnStmt{errx}
+	}
+	if si.spec.erh.isinfo {
+		lit := gol.CompositeLit{Type: sxerrorinfo, Comma: true, Compact: true}
+		lit.Elts = append(lit.Elts, gol.KeyValueExpr{Key: gol.Ident{"Error"}, Value: iderr})
+		lit.Elts = append(lit.Elts, gol.KeyValueExpr{Key: gol.Ident{"Query"}, Value: idquery})
+		lit.Elts = append(lit.Elts, gol.KeyValueExpr{Key: gol.Ident{"SpecKind"}, Value: gol.String(si.spec.kind.String())})
+		lit.Elts = append(lit.Elts, gol.KeyValueExpr{Key: gol.Ident{"SpecName"}, Value: gol.String(si.spec.name)})
+		lit.Elts = append(lit.Elts, gol.KeyValueExpr{Key: gol.Ident{"SpecValue"}, Value: idrecv})
+		litptr := gol.UnaryExpr{Op: gol.UNARY_AMP, X: lit}
+
+		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.erh.name}}
+		fun := gol.SelectorExpr{X: sx, Sel: gol.Ident{"HandleErrorInfo"}}
+		call := gol.CallExpr{Fun: fun, Args: gol.ArgsList{List: []gol.Expr{litptr}}}
+		return gol.ReturnStmt{call}
+
+		// TODO if errx is not iderr, then errx is probably a CallFunc and
+		// should first be executed and it's result passed into HandleErrorInfo..
+	}
+	sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.erh.name}}
+	fun := gol.SelectorExpr{X: sx, Sel: gol.Ident{"HandleError"}}
+	call := gol.CallExpr{Fun: fun, Args: gol.ArgsList{List: []gol.Expr{errx}}}
+	return gol.ReturnStmt{call}
+}
+
 func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
-	stmt.Cond = gol.CallExpr{Fun: sxrowsnext}
+	stmt.Cond = callrowsnext
 	// initialize
 	{
 		rec := si.spec.rel.rec
@@ -261,7 +289,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 	{
 		iferr := gol.IfStmt{}
 		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-		iferr.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+		iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
 		stmt.Body.List = append(stmt.Body.List, iferr, gol.NL{})
 	}
 
@@ -295,7 +323,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 			iferr := gol.IfStmt{}
 			iferr.Init = asn
 			iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-			iferr.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+			iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
 			stmt.Body.List = append(stmt.Body.List, iferr)
 		} else {
 			appnd := gol.CallExpr{Fun: gol.Ident{"append"}}
@@ -347,7 +375,19 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 		}
 
 		if rel.rec.isslice || rel.rec.isarray || rel.rec.isiter {
-			return &gol.ReturnStmt{gol.CallExpr{Fun: sxrowserr}}
+			if si.spec.erh != nil && si.spec.erh.isinfo {
+				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn.Lhs = []gol.Expr{iderr}
+				asn.Rhs = []gol.Expr{callrowserr}
+
+				iferr := gol.IfStmt{}
+				iferr.Init = asn
+				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
+				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+
+				return gol.StmtList{iferr, gol.ReturnStmt{idnil}}
+			}
+			return g.returnerr(si, callrowserr)
 		} else {
 			var list gol.StmtList // result
 
@@ -398,7 +438,20 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 			}
 
 			if !rel.rec.isafterscanner {
-				list = append(list, &gol.ReturnStmt{gol.CallExpr{Fun: sxrowscan, Args: args}})
+				call := gol.CallExpr{Fun: sxrowscan, Args: args}
+				if si.spec.erh != nil && si.spec.erh.isinfo {
+					asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+					asn.Lhs = []gol.Expr{iderr}
+					asn.Rhs = []gol.Expr{call}
+
+					iferr := gol.IfStmt{}
+					iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
+					iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+
+					list = append(list, asn, iferr, gol.ReturnStmt{idnil})
+				} else {
+					list = append(list, g.returnerr(si, call))
+				}
 			} else {
 				// scan & assing error
 				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
@@ -408,7 +461,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 				// check error
 				iferr := gol.IfStmt{}
 				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
 
 				// call afterscan
 				sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
@@ -435,7 +488,19 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 		}
 
 		if rel.rec.isslice || rel.rec.isarray || rel.rec.isiter {
-			return &gol.ReturnStmt{gol.CallExpr{Fun: sxrowserr}}
+			if si.spec.erh != nil && si.spec.erh.isinfo {
+				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn.Lhs = []gol.Expr{iderr}
+				asn.Rhs = []gol.Expr{callrowserr}
+
+				iferr := gol.IfStmt{}
+				iferr.Init = asn
+				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
+				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+
+				return gol.StmtList{iferr, gol.ReturnStmt{idnil}}
+			}
+			return g.returnerr(si, callrowserr)
 		} else {
 			var list gol.StmtList // result
 
@@ -486,7 +551,20 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 			}
 
 			if !rel.rec.isafterscanner {
-				list = append(list, &gol.ReturnStmt{gol.CallExpr{Fun: sxrowscan, Args: args}})
+				call := gol.CallExpr{Fun: sxrowscan, Args: args}
+				if si.spec.erh != nil && si.spec.erh.isinfo {
+					asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+					asn.Lhs = []gol.Expr{iderr}
+					asn.Rhs = []gol.Expr{call}
+
+					iferr := gol.IfStmt{}
+					iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
+					iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+
+					list = append(list, asn, iferr, gol.ReturnStmt{idnil})
+				} else {
+					list = append(list, g.returnerr(si, call))
+				}
 			} else {
 				// scan & assing error
 				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
@@ -496,7 +574,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 				// check error
 				iferr := gol.IfStmt{}
 				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.Stmt{gol.ReturnStmt{iderr}}}
+				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
 
 				// call afterscan
 				sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
@@ -514,7 +592,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 		}
 	}
 
-	return gol.ReturnStmt{iderr}
+	return g.returnerr(si, iderr)
 }
 
 func (g *generator) rectype(rec recordtype) gol.Expr {

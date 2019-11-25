@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *DeleteWithReturningSliceAfterScanAllQuery) Exec(c gosql.Conn) error {
+func (q *DeleteWithReturningSliceErrorHandlerQuery) Exec(c gosql.Conn) error {
 	const queryString = `DELETE FROM "test_user" AS u
 	WHERE u."created_at" < $1
 	RETURNING
@@ -18,12 +18,12 @@ func (q *DeleteWithReturningSliceAfterScanAllQuery) Exec(c gosql.Conn) error {
 
 	rows, err := c.Query(queryString, q.Where.CreatedBefore)
 	if err != nil {
-		return err
+		return q.eh.HandleError(err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		v := new(common.User2)
+		v := new(common.User)
 		err := rows.Scan(
 			&v.Id,
 			&v.Email,
@@ -31,11 +31,10 @@ func (q *DeleteWithReturningSliceAfterScanAllQuery) Exec(c gosql.Conn) error {
 			&v.CreatedAt,
 		)
 		if err != nil {
-			return err
+			return q.eh.HandleError(err)
 		}
 
-		v.AfterScan()
 		q.Users = append(q.Users, v)
 	}
-	return rows.Err()
+	return q.eh.HandleError(rows.Err())
 }

@@ -405,22 +405,27 @@ func (lit BasicLit) Walk(w *writer.Writer) {
 }
 
 type CompositeLit struct {
-	Type  Expr
-	Elts  []Expr
-	Comma bool
+	Type    Expr
+	Elts    []Expr
+	Comma   bool
+	Compact bool
 }
 
 func (lit CompositeLit) Walk(w *writer.Writer) {
 	lit.Type.Walk(w)
 	w.Write("{")
 	for _, x := range lit.Elts {
-		w.Write("\n")
+		if !lit.Compact {
+			w.Write("\n")
+		}
+
 		x.Walk(w)
+
 		if lit.Comma {
 			w.Write(",")
 		}
 	}
-	if len(lit.Elts) > 0 {
+	if len(lit.Elts) > 0 && !lit.Compact {
 		w.Write("\n")
 	}
 	w.Write("}")

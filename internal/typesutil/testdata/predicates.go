@@ -245,6 +245,41 @@ func (ImplementsErrorHandlerTest6) HandleError(err error) error { return nil }
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// Does not implement the "gosql.ErrorHandler" interface, should return false
+type ImplementsErrorInfoHandlerTest1 struct{}
+
+// Does not implement the "gosql.ErrorInfoHandler" interface, should return false
+type ImplementsErrorInfoHandlerTest2 struct{}
+
+func (ImplementsErrorInfoHandlerTest2) HandleErrorInfo() error { return nil }
+
+// Does not implement the "gosql.ErrorInfoHandler" interface, should return false
+type ImplementsErrorInfoHandlerTest3 struct{}
+
+func (ImplementsErrorInfoHandlerTest3) HandleErrorInfo(err error) {}
+
+// Does not implement the "gosql.ErrorInfoHandler" interface, should return false
+type ImplementsErrorInfoHandlerTest4 struct{}
+
+func (ImplementsErrorInfoHandlerTest4) HandleErrorInfo(err interface{}) error { return nil }
+
+// Does not implement the "gosql.ErrorInfoHandler" interface, should return false
+type ImplementsErrorInfoHandlerTest5 struct{}
+
+func (ImplementsErrorInfoHandlerTest5) HandleErrorInfo(err error) interface{} { return nil }
+
+// Does not implement the "gosql.ErrorInfoHandler" interface, should return false
+type ImplementsErrorInfoHandlerTest6 struct{}
+
+func (ImplementsErrorInfoHandlerTest6) HandleErrorInfo(err error) error { return nil }
+
+// Does implement the "gosql.ErrorInfoHandler" interface, should return true
+type ImplementsErrorInfoHandlerTest7 struct{}
+
+func (ImplementsErrorInfoHandlerTest7) HandleErrorInfo(info *gosql.ErrorInfo) error { return nil }
+
+////////////////////////////////////////////////////////////////////////////////
+
 // Does not implement the "json.Marshaler" interface, should return false
 type ImplementsJSONMarshalerTest1 struct{}
 

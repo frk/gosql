@@ -150,6 +150,18 @@ type ErrorHandler interface {
 	HandleError(err error) error
 }
 
+type ErrorInfo struct {
+	Error     error
+	Query     string
+	SpecName  string
+	SpecKind  string
+	SpecValue interface{}
+}
+
+type ErrorInfoHandler interface {
+	HandleErrorInfo(info *ErrorInfo) error
+}
+
 type Filter struct {
 	// TODO(mkopriva): ...
 }

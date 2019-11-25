@@ -7,10 +7,11 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type DeleteWithReturningIteratorAllQuery struct {
-	Iter  common.UserIterator `rel:"test_user:u"`
+type DeleteWithResultIteratorErrorInfoHandlerQuery struct {
+	_     gosql.Relation `rel:"test_user:u"`
 	Where struct {
 		CreatedBefore time.Time `sql:"u.created_at <"`
 	}
-	_ gosql.Return `sql:"*"`
+	Result     common.User2Iterator
+	errhandler common.ErrorInfoHandler
 }

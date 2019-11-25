@@ -129,6 +129,38 @@ func ImplementsErrorHandler(named *types.Named) bool {
 	return IsError(sig.Params().At(0).Type()) && IsError(sig.Results().At(0).Type())
 }
 
+// ImplementsErrorInfoHandler reports whether or not the given named type
+// implements the "gosql.ErrorInfoHandler" interface.
+func ImplementsErrorInfoHandler(named *types.Named) bool {
+	var sig *types.Signature
+	for i := 0; i < named.NumMethods(); i++ {
+		if m := named.Method(i); m.Name() == "HandleErrorInfo" {
+			sig = m.Type().(*types.Signature)
+			break
+		}
+	}
+	if sig == nil || sig.Params().Len() != 1 || sig.Results().Len() != 1 {
+		return false
+	}
+	if !IsError(sig.Results().At(0).Type()) {
+		return false
+	}
+
+	// check that the method's argument is of type *gosql.ErrorInfo
+	argtyp := sig.Params().At(0).Type()
+	argptr, ok := argtyp.(*types.Pointer)
+	if !ok {
+		return false
+	}
+	argnamed, ok := argptr.Elem().(*types.Named)
+	if !ok {
+		return false
+	}
+	name := argnamed.Obj().Name()
+	path := argnamed.Obj().Pkg().Path()
+	return strings.HasSuffix(path, "github.com/frk/gosql") && name == "ErrorInfo"
+}
+
 // ImplementsScanner reports whether or not the given named type implements the
 // "database/sql.Scanner" interface. If the named type's underlying type is an
 // interface type, ImplementsScanner will report whether or not that interface

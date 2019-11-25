@@ -2,6 +2,8 @@ package common
 
 import (
 	"time"
+
+	"github.com/frk/gosql"
 )
 
 type UserIterator interface {
@@ -47,3 +49,11 @@ type Baz struct {
 type BadIterator interface { // unexported method
 	fn(*User) error
 }
+
+type ErrorHandler struct{}
+
+func (ErrorHandler) HandleError(err error) error { return err }
+
+type ErrorInfoHandler struct{}
+
+func (ErrorInfoHandler) HandleErrorInfo(info *gosql.ErrorInfo) error { return nil }

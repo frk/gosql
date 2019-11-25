@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *DeleteWithResultQuery) Exec(c gosql.Conn) error {
+func (q *DeleteWithResultSingleAfterScanQuery) Exec(c gosql.Conn) error {
 	const queryString = `DELETE FROM "test_user" AS u
 	WHERE u."id" = $1
 	RETURNING
@@ -18,11 +18,17 @@ func (q *DeleteWithResultQuery) Exec(c gosql.Conn) error {
 
 	row := c.QueryRow(queryString, q.Where.Id)
 
-	q.Result = new(common.User)
-	return row.Scan(
+	q.Result = new(common.User2)
+	err := row.Scan(
 		&q.Result.Id,
 		&q.Result.Email,
 		&q.Result.FullName,
 		&q.Result.CreatedAt,
 	)
+	if err != nil {
+		return err
+	}
+
+	q.Result.AfterScan()
+	return nil
 }

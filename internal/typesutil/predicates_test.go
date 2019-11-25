@@ -264,6 +264,36 @@ func TestImplementsErrorHandler(t *testing.T) {
 	}
 }
 
+func TestImplementsErrorInfoHandler(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "ImplementsErrorInfoHandlerTest1", want: false},
+		{name: "ImplementsErrorInfoHandlerTest2", want: false},
+		{name: "ImplementsErrorInfoHandlerTest3", want: false},
+		{name: "ImplementsErrorInfoHandlerTest4", want: false},
+		{name: "ImplementsErrorInfoHandlerTest5", want: false},
+		{name: "ImplementsErrorInfoHandlerTest6", want: false},
+		{name: "ImplementsErrorInfoHandlerTest7", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			got := ImplementsErrorInfoHandler(named)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestImplementsJSONMarshaler(t *testing.T) {
 	tests := []struct {
 		name string

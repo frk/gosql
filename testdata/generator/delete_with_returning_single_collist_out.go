@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *DeleteWithReturningCollistQuery) Exec(c gosql.Conn) error {
+func (q *DeleteWithReturningSingleCollistQuery) Exec(c gosql.Conn) error {
 	const queryString = `DELETE FROM "test_user" AS u
 	WHERE u."id" = $1
 	RETURNING u."email", u."full_name"` // `

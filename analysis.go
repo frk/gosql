@@ -247,10 +247,18 @@ func (a *analyzer) run() (err error) {
 					}
 					a.spec.filter = fld.Name()
 				case a.iserrorhandler(fld.Type()):
-					if len(a.spec.erh) > 0 {
+					if a.spec.erh != nil {
 						return errors.ConflictErrorHandlerFieldError
 					}
-					a.spec.erh = fld.Name()
+					a.spec.erh = new(errhandlerfield)
+					a.spec.erh.name = fld.Name()
+				case a.iserrorinfohandler(fld.Type()):
+					if a.spec.erh != nil {
+						return errors.ConflictErrorHandlerFieldError
+					}
+					a.spec.erh = new(errhandlerfield)
+					a.spec.erh.name = fld.Name()
+					a.spec.erh.isinfo = true
 				}
 			}
 		}
@@ -1402,6 +1410,15 @@ func (a *analyzer) iserrorhandler(typ types.Type) bool {
 	return typesutil.ImplementsErrorHandler(named)
 }
 
+// iserrorinfohandler returns true if the given type implements the ErrorInfoHandler interface.
+func (a *analyzer) iserrorinfohandler(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+	return typesutil.ImplementsErrorInfoHandler(named)
+}
+
 // isfilter returns true if the given type is the gosql.Filter type.
 func (a *analyzer) isfilter(typ types.Type) bool {
 	named, ok := typ.(*types.Named)
@@ -1505,11 +1522,11 @@ type typespec struct {
 	offset   *offsetvar
 	override overridingkind
 
+	erh *errhandlerfield
+
 	// Indicates that the query to be generated should be executed
 	// against all the rows of the relation.
 	all bool
-	// The name of the ErrorHandler field, if any.
-	erh string
 	// The name of the Filter type field, if any.
 	filter string
 }
@@ -1551,6 +1568,13 @@ type resultfield struct {
 type rowsaffectedfield struct {
 	name string // name of the rowsaffected field
 	kind typekind
+}
+
+type errhandlerfield struct {
+	// name of the error handler field
+	name string
+	// indicates whether or not the field's type implements the ErrorInfoHandler interface.
+	isinfo bool
 }
 
 // recordtype holds information on the type of record a typespec should read from,

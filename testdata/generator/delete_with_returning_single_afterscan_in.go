@@ -5,8 +5,8 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type DeleteWithReturningAllQuery struct {
-	User  *common.User `rel:"test_user:u"`
+type DeleteWithReturningSingleAfterScanQuery struct {
+	User  *common.User2 `rel:"test_user:u"`
 	Where struct {
 		Id int `sql:"u.id"`
 	}

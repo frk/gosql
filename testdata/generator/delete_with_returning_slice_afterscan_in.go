@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type DeleteWithReturningSliceAfterScanAllQuery struct {
+type DeleteWithReturningSliceAfterScanQuery struct {
 	Users []*common.User2 `rel:"test_user:u"`
 	Where struct {
 		CreatedBefore time.Time `sql:"u.created_at <"`

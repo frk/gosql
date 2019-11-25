@@ -2,12 +2,11 @@ package testutil
 
 import (
 	"go/ast"
+	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
 	"log"
-
-	"github.com/frk/gosql/internal/typesutil"
 )
 
 type Testdata struct {
@@ -29,7 +28,7 @@ func ParseTestdata(dir string) Testdata {
 		files = append(files, f)
 	}
 
-	conf := types.Config{Importer: typesutil.NewImporter()}
+	conf := types.Config{Importer: newimporter()}
 	info := types.Info{Defs: make(map[*ast.Ident]types.Object)}
 	if _, err = conf.Check("path/to/test", fset, files, &info); err != nil {
 		log.Fatal(err)
@@ -65,4 +64,29 @@ func FindNamedType(name string, tdata Testdata) *types.Named {
 	}
 
 	return nil
+}
+
+type pkgimporter struct {
+	def types.Importer // default
+	src types.Importer // fallback
+}
+
+// newimporter initializes and returns a new instance of types.Importer.
+func newimporter() types.Importer {
+	return &pkgimporter{
+		def: importer.Default(),
+		src: importer.For("source", nil),
+	}
+}
+
+// Import returns the imported package for the given import path. Import first
+// attempts to import the package using the default importer, if that fails
+// another attempt is made to import the package using a "source" importer,
+// but if that fails as well an error will be returned.
+func (i pkgimporter) Import(path string) (*types.Package, error) {
+	pkg, err := i.def.Import(path)
+	if err != nil {
+		return i.src.Import(path)
+	}
+	return pkg, nil
 }

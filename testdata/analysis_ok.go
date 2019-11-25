@@ -329,6 +329,22 @@ type InsertAnalysisTestOK_ErrorHandler struct {
 	myerrorhandler
 }
 
+type myerrorinfohandler struct{}
+
+func (myerrorinfohandler) HandleErrorInfo(info *gosql.ErrorInfo) error { return nil }
+
+//OK: Select with ErrorInfoHandler field
+type SelectAnalysisTestOK_ErrorInfoHandler struct {
+	Rel struct{} `rel:"relation_a:a"`
+	eh  myerrorinfohandler
+}
+
+//OK: Insert with embedded ErrorInfoHandler field
+type InsertAnalysisTestOK_ErrorInfoHandler struct {
+	Rel struct{} `rel:"relation_a:a"`
+	myerrorinfohandler
+}
+
 //OK: Select with Count field
 type SelectAnalysisTestOK_Count struct {
 	Count int `rel:"relation_a:a"`

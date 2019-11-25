@@ -4,7 +4,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-type DeleteWithReturningCollistQuery struct {
+type DeleteWithReturningSingleCollistQuery struct {
 	User struct {
 		Email    string `sql:"email"`
 		FullName string `sql:"full_name"`

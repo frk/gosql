@@ -1228,7 +1228,7 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a", alias: "a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			erh: "eh",
+			erh: &errhandlerfield{name: "eh"},
 		},
 	}, {
 		name: "InsertAnalysisTestOK_ErrorHandler",
@@ -1240,7 +1240,31 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a", alias: "a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			erh: "myerrorhandler",
+			erh: &errhandlerfield{name: "myerrorhandler"},
+		},
+	}, {
+		name: "SelectAnalysisTestOK_ErrorInfoHandler",
+		want: &typespec{
+			name: "SelectAnalysisTestOK_ErrorInfoHandler",
+			kind: speckindSelect,
+			rel: &relfield{
+				name:  "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
+			},
+			erh: &errhandlerfield{name: "eh", isinfo: true},
+		},
+	}, {
+		name: "InsertAnalysisTestOK_ErrorInfoHandler",
+		want: &typespec{
+			name: "InsertAnalysisTestOK_ErrorInfoHandler",
+			kind: speckindInsert,
+			rel: &relfield{
+				name:  "Rel",
+				relid: relid{name: "relation_a", alias: "a"},
+				rec:   recordtype{base: typeinfo{kind: kindstruct}},
+			},
+			erh: &errhandlerfield{name: "myerrorinfohandler", isinfo: true},
 		},
 	}, {
 		name: "SelectAnalysisTestOK_Count",
