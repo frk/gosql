@@ -2,6 +2,8 @@ package gosql
 
 import (
 	"database/sql"
+
+	"github.com/frk/gosql/internal/filter"
 )
 
 // documentation purpose only
@@ -163,5 +165,5 @@ type ErrorInfoHandler interface {
 }
 
 type Filter struct {
-	// TODO(mkopriva): ...
+	filter.Filter
 }
