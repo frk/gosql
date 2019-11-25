@@ -104,13 +104,35 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 		Comment: gol.CommentList{{Text: " `"}},
 	}}
 
-	stmt = gol.DeclStmt{decl}
-	return stmt
+	if len(si.spec.filter) > 0 {
+		decl.Token = gol.GENDECL_VAR
+
+		asn := gol.AssignStmt{Token: gol.ASSIGN_ADD}
+		asn.Lhs = []gol.Expr{idquery}
+		asn.Rhs = []gol.Expr{gol.CallExpr{Fun: gol.SelectorExpr{
+			X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.filter}},
+			Sel: gol.Ident{"ToSQL"},
+		}}}
+
+		asn2 := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+		asn2.Lhs = []gol.Expr{idparams}
+		asn2.Rhs = []gol.Expr{gol.CallExpr{Fun: gol.SelectorExpr{
+			X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.filter}},
+			Sel: gol.Ident{"Params"},
+		}}}
+		return gol.StmtList{gol.DeclStmt{decl}, gol.NL{}, asn, asn2, gol.NL{}}
+	}
+	return gol.DeclStmt{decl}
 }
 
 func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 	args := gol.ArgsList{List: []gol.Expr{idquery}}
-	args.AddExprs(g.queryargs(si.spec.where)...)
+	if len(si.spec.filter) > 0 {
+		args.AddExprs(idparams)
+		args.Ellipsis = true
+	} else {
+		args.AddExprs(g.queryargs(si.spec.where)...)
+	}
 
 	// produce c.Exec( ... ) call
 	{

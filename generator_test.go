@@ -18,6 +18,7 @@ func TestGenerate(t *testing.T) {
 		{"delete_with_all_directive"},
 		{"delete_with_datatype_1"},
 		{"delete_with_datatype_2"},
+		{"delete_with_filter"},
 		{"delete_with_result_iterator_afterscan"},
 		{"delete_with_result_iterator_errorhandler"},
 		{"delete_with_result_iterator_errorinfohandler"},
@@ -45,8 +46,6 @@ func TestGenerate(t *testing.T) {
 		{"delete_with_using_join_block_2"},
 		{"delete_with_where_block_1"},
 		{"delete_with_where_block_2"},
-
-		// TODO delete with where filter
 
 		// selects
 		// {"select_with_where_block"},
