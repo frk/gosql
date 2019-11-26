@@ -171,7 +171,7 @@ type fieldcolumn struct {
 }
 
 type pginfo struct {
-	returning []*fieldcolumn
+	output []*fieldcolumn
 }
 
 func pgcheck(pg *postgres, spec *typespec) (info *pginfo, err error) {
@@ -265,7 +265,7 @@ func (c *pgchecker) run() (err error) {
 				if col := c.rel.column(field.colid.name); col != nil {
 					cid := colid{name: field.colid.name, qual: c.spec.rel.relid.alias}
 					pair := &fieldcolumn{field: field, column: col, colid: cid}
-					c.info.returning = append(c.info.returning, pair)
+					c.info.output = append(c.info.output, pair)
 				}
 			}
 		} else {
@@ -291,7 +291,7 @@ func (c *pgchecker) run() (err error) {
 				for _, field := range c.spec.rel.rec.fields {
 					if field.colid.name == colid.name {
 						pair := &fieldcolumn{field: field, column: col, colid: colid}
-						c.info.returning = append(c.info.returning, pair)
+						c.info.output = append(c.info.output, pair)
 						hasfield = true
 						break
 					}
@@ -392,13 +392,10 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 			return errors.BadFieldToColumnTypeError
 		}
 
-		if isresult {
+		if c.spec.kind == speckindSelect || isresult {
 			cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
 			pair := &fieldcolumn{field: fld, column: col, colid: cid}
-			c.info.returning = append(c.info.returning, pair)
-			///////////////////////////////////////////////////////
-			// pair := &fieldcolumn{field: field, column: col, colid: colid}
-			// c.info.returning = append(c.info.returning, pair)
+			c.info.output = append(c.info.output, pair)
 		}
 	}
 	return nil

@@ -100,7 +100,7 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 	decl := gol.GenDecl{Token: gol.GENDECL_CONST}
 	decl.Specs = []gol.Spec{gol.ValueSpec{
 		Names:   []gol.Ident{idquery},
-		Values:  []gol.Expr{gol.RawStringNode{g.sqldelete(si)}},
+		Values:  []gol.Expr{gol.RawStringNode{g.sqlnode(si)}},
 		Comment: gol.CommentList{{Text: " `"}},
 	}}
 
@@ -136,7 +136,7 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 
 	// produce c.Exec( ... ) call
 	{
-		if si.spec.returning == nil && si.spec.result == nil {
+		if si.spec.kind != speckindSelect && si.spec.returning == nil && si.spec.result == nil {
 
 			if rafield := si.spec.rowsaffected; rafield != nil {
 				// call exec & assign res, err
@@ -266,7 +266,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 	// scan & assign error
 	{
 		var args gol.ArgsList
-		if len(si.info.returning) > 2 {
+		if len(si.info.output) > 2 {
 			args.OnePerLine = 1
 		}
 
@@ -274,7 +274,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 		// that have already been initialized and their types imported.
 		var pfieldhandled = make(map[string]bool)
 
-		for _, item := range si.info.returning {
+		for _, item := range si.info.output {
 			var fx gol.Expr = gol.Ident{"v"}
 
 			var fieldkey string // key for the pfieldhandled map
@@ -388,7 +388,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 		return gol.ReturnStmt{idnil}
 	}
 
-	if si.spec.returning != nil {
+	if si.spec.kind == speckindSelect || si.spec.returning != nil {
 		rel := si.spec.rel
 
 		// does the record type need pre-allocation? and is it imported?
@@ -424,7 +424,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 			}
 
 			var args gol.ArgsList
-			if len(si.info.returning) > 2 {
+			if len(si.info.output) > 2 {
 				args.OnePerLine = 1
 			}
 
@@ -432,7 +432,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 			// that have already been initialized and their types imported.
 			var pfieldhandled = make(map[string]bool)
 
-			for _, item := range si.info.returning {
+			for _, item := range si.info.output {
 				fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
 
 				var fieldkey string // key for the pfieldhandled map
@@ -537,7 +537,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 			}
 
 			var args gol.ArgsList
-			if len(si.info.returning) > 2 {
+			if len(si.info.output) > 2 {
 				args.OnePerLine = 1
 			}
 
@@ -545,7 +545,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 			// that have already been initialized and their types imported.
 			var pfieldhandled = make(map[string]bool)
 
-			for _, item := range si.info.returning {
+			for _, item := range si.info.output {
 				fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
 
 				var fieldkey string // key for the pfieldhandled map
@@ -650,12 +650,54 @@ func (g *generator) addimport(path, name, local string) {
 	g.file.Imports = append(g.file.Imports, spec)
 }
 
+func (g *generator) sqlnode(si *specinfo) (node gol.Node) {
+	switch si.spec.kind {
+	case speckindInsert:
+		return g.sqlinsert(si)
+	case speckindUpdate:
+		return g.sqlupdate(si)
+	case speckindSelect:
+		return g.sqlselect(si)
+	case speckindDelete:
+		return g.sqldelete(si)
+	}
+	return node
+}
+
+func (g *generator) sqlinsert(si *specinfo) (insstmt sql.InsertStatement) {
+	// TODO
+	return insstmt
+}
+
+func (g *generator) sqlupdate(si *specinfo) (updstmt sql.UpdateStatement) {
+	// TODO
+	return updstmt
+}
+
+func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
+	selstmt.Columns = g.sqlcolumns(si.info.output) //  sql.ColumnExprSlice
+	selstmt.Table = g.sqlrelid(si.spec.rel.relid)  //  sql.Ident
+	selstmt.Join = g.sqljoin(si.spec.join)         //  sql.JoinClause
+	selstmt.Where = g.sqlwhere(si.spec.where)      //  sql.WhereClause
+	//selstmt.Order                                 //  sql.OrderClause
+	selstmt.Limit = g.sqllimit(si.spec) //  sql.LimitClause
+	//selstmt.Offset                                //  sql.OffsetClause
+	return selstmt
+}
+
 func (g *generator) sqldelete(si *specinfo) (delstmt sql.DeleteStatement) {
 	delstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	delstmt.Using = g.sqlusing(si.spec.join)
 	delstmt.Where = g.sqlwhere(si.spec.where)
-	delstmt.Returning = g.sqlreturning(si.info.returning)
+	delstmt.Returning = g.sqlreturning(si.info.output)
 	return delstmt
+}
+
+func (g *generator) sqlcolumns(fcs []*fieldcolumn) (cols sql.ColumnExprSlice) {
+	for _, fc := range fcs {
+		cols = append(cols, g.sqlcolexpr(fc))
+	}
+	return cols
 }
 
 func (g *generator) sqlwhere(w *whereblock) (where sql.WhereClause) {
@@ -725,6 +767,29 @@ func (g *generator) sqlusing(jb *joinblock) (using sql.UsingClause) {
 	return using
 }
 
+func (g *generator) sqljoin(jb *joinblock) (jc sql.JoinClause) {
+	if jb == nil {
+		return jc
+	}
+
+	for _, item := range jb.items {
+		var join sql.TableJoin
+		join.Type = jointype2sqlnode[item.typ]
+		join.Rel = g.sqlrelid(item.rel)
+		for _, cond := range item.conds {
+			var on sql.JoinOnExpr
+			on.Bool = boolop2sqlnode[cond.op]
+			on.Lhs = g.sqlcolid(cond.col1)
+			on.Cmp = cmpop2sqlnode[cond.cmp]
+			on.Rhs = g.sqlcolid(cond.col2)
+			join.On.List = append(join.On.List, on)
+		}
+
+		jc.List = append(jc.List, join)
+	}
+	return jc
+}
+
 func (g *generator) sqlreturning(fcs []*fieldcolumn) (returning sql.ReturningClause) {
 	if fcs == nil {
 		return returning
@@ -736,12 +801,51 @@ func (g *generator) sqlreturning(fcs []*fieldcolumn) (returning sql.ReturningCla
 	return returning
 }
 
+// sqllimit generates and returns an sql.LimitClause based on the given spec's "limit" field.
+func (g *generator) sqllimit(spec *typespec) (limit sql.LimitClause) {
+	if spec.limit != nil {
+		if len(spec.limit.field) > 0 {
+			limit.Value = g.sqlparam()
+		} else if spec.limit.value > 0 {
+			limit.Value = sql.LimitUint(spec.limit.value)
+		}
+		return limit
+	}
+
+	// In case the spec doesn't have a "limit" field, but the relation
+	// field handles only a single record (i.e. it's not a slice, etc.)
+	// then, by default, generate a `LIMIT 1` clause.
+	if r := spec.rel.rec; !r.isarray && !r.isslice && !r.isiter {
+		limit.Value = sql.LimitInt(1)
+		return limit
+	}
+	return limit
+}
+
 func (g *generator) sqlrelid(id relid) sql.Ident {
 	return sql.Ident{
 		Name:  sql.Name(id.name),
 		Qual:  id.qual,
 		Alias: id.alias,
 	}
+}
+
+func (g *generator) sqlcolexpr(fc *fieldcolumn) sql.ColumnExpr {
+	id := g.sqlcolid(fc.colid)
+	//if f.UseCOALESCE || (f.IsNULLable && canCoalesce && !f.Type.IsPointer) {
+	//	coalesce := sqlang.Coalesce{}
+	//	coalesce.A = col
+	//	coalesce.B = _sql_empty_literal(f)
+
+	//	if (f.ColTypeIsEnum || f.ColTypeName == "uuid") && len(f.COALESCEValue) == 0 {
+	//		coalesce.A = sqlang.CastExpr{
+	//			X:    coalesce.A,
+	//			Type: sqlang.Literal("text"),
+	//		}
+	//	}
+	//	return coalesce
+	//}
+	return id
 }
 
 func (g *generator) sqlcolid(id colid) sql.ColumnIdent {

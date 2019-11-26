@@ -7,14 +7,15 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *SelectWithWhereBlockQuery) Exec(c gosql.Conn) error {
+func (q *SelectWithWhereBlockSingleQuery) Exec(c gosql.Conn) error {
 	const queryString = `SELECT
 	u."id"
 	, u."email"
 	, u."full_name"
 	, u."created_at"
-	FROM "users_table" AS u
-	WHERE u."id" = $1` //`
+	FROM "test_user" AS u
+	WHERE u."id" = $1
+	LIMIT 1` // `
 
 	row := c.QueryRow(queryString, q.Where.Id)
 

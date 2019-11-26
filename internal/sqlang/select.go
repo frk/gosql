@@ -10,7 +10,7 @@ type SelectStatement struct {
 	Columns ColumnExprSlice
 	Table   Ident
 	Join    JoinClause
-	Where   *WhereClause
+	Where   WhereClause
 	Order   OrderClause
 	Limit   LimitClause
 	Offset  OffsetClause
@@ -57,19 +57,19 @@ func (s SelectStatement) Walk(w *writer.Writer) {
 }
 
 type LimitClause struct {
-	Count LimitCount
+	Value LimitValue
 }
 
 func (l LimitClause) Walk(w *writer.Writer) {
-	if l.Count == nil {
+	if l.Value == nil {
 		return
 	}
 	w.NewLine()
 	w.Write("LIMIT ")
-	l.Count.Walk(w)
+	l.Value.Walk(w)
 }
 
-type LimitCount interface {
+type LimitValue interface {
 	Expr
 	limitCountNode()
 }
@@ -160,7 +160,7 @@ func (o OrderBy) Walk(w *writer.Writer) {
 }
 
 type JoinClause struct {
-	List []*TableJoin
+	List []TableJoin
 }
 
 func (c JoinClause) Walk(w *writer.Writer) {
