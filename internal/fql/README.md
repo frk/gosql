@@ -1,8 +1,6 @@
-# wip
+## FQL (WIP)
 
 -----
-
-## FQL
 
 Package fql implements a tokenizer for FQL.
 

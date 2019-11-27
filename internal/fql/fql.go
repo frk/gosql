@@ -12,127 +12,69 @@ import (
 )
 
 // EOF is the error returned by the Tokenizer when no more input is available.
+//
+// The io.EOF value is re-declared here only so that client code will not have
+// to import the "io" package when using the "fql" package.
 var EOF = io.EOF
 
-type nullType int
-
-type boolType bool
-
 const (
-	Null nullType = 1 // Null represents a "null" value in a filter rule.
-
-	True  boolType = true
-	False boolType = false
-
 	// The eof rune signals the graceful end of a filter rule expression.
-	eof = -1
+	eof rune = -1
 
-	// These are the space characters defined by Go itself.
-	spaceChars = " \t\r\n"
+	// These are the whitespace characters defined by Go itself.
+	spacechars = " \t\r\n"
 )
 
-// OpType represents the type of a comparison operator.
-type OpType uint32
+// The nullbit type is used to represent a value that is either "null" or not.
+type nullbit bool
 
 const (
-	// OpEq looks like ":" and indicates the equality operator.
-	OpEq OpType = 1 + iota
-	// OpNe looks like ":!" and indicates the inequality operator.
-	OpNe
-	// OpGt looks like ":>" and indicates the greater-than operator.
-	OpGt
-	// OpLt looks like ":<" and indicates the less-than operator.
-	OpLt
-	// OpGe looks like ":>=" and indicates the greater-than-or-equal operator.
-	OpGe
-	// OpLe looks like ":<=" and indicates the less-than-or-equal operator.
-	OpLe
+	Null nullbit = true // Null represents a "null" value in a filter rule.
 )
 
-// String returns a string representation of the OpType.
-func (t OpType) String() string {
-	switch t {
-	case OpEq:
-		return "="
-	case OpNe:
-		return "!="
-	case OpGt:
-		return ">"
-	case OpLt:
-		return "<"
-	case OpGe:
-		return ">="
-	case OpLe:
-		return "<="
-	}
-	return "Invalid(" + strconv.Itoa(int(t)) + ")"
-}
+// CmpOp represents a comparison operator.
+type CmpOp uint32
 
-// length returns the rune count of the OpType.
-func (t OpType) length() int {
+const (
+	_     CmpOp = iota
+	CmpEq       // ":" equality operator
+	CmpNe       // ":!" inequality operator
+	CmpGt       // ":>" greater-than operator
+	CmpLt       // ":<" less-than operator
+	CmpGe       // ":>=" greater-than-or-equal operator
+	CmpLe       // ":<=" less-than-or-equal operator
+)
+
+// length returns the rune count of the CmpOp but minus the ":".
+func (t CmpOp) length() int {
 	switch t {
-	case OpEq:
+	case CmpEq:
 		return 0
-	case OpNe:
+	case CmpNe:
 		return 1
-	case OpGt:
+	case CmpGt:
 		return 1
-	case OpLt:
+	case CmpLt:
 		return 1
-	case OpGe:
+	case CmpGe:
 		return 2
-	case OpLe:
+	case CmpLe:
 		return 2
 	}
 	return -1
 }
 
-// A TokenType is the type of a Token.
-type TokenType uint32
+// A Token is the set of lexical tokens of FQL.
+type Token uint32
 
 const (
-	// TokenGroupStart looks like "(" and indicates the start of a rule group.
-	TokenGroupStart TokenType = 1 + iota
-	// TokenGroupEnd looks like ")" and indicates the end of a rule group.
-	TokenGroupEnd
-	// TokenAND looks like ";" and indicates the logical AND operator.
-	TokenAND
-	// TokenOR looks like "," and indicates the logical OR operator.
-	TokenOR
-	// TokenRule looks like "<key>:[op]<value>" and indicates a filter rule.
-	TokenRule
+	_      Token = iota
+	LPAREN       // (
+	RPAREN       // )
+	AND          // ;
+	OR           // ,
+	RULE         // <key>:[op]<value>
 )
-
-// String returns a string representation of the TokenType.
-func (t TokenType) String() string {
-	switch t {
-	case TokenGroupStart:
-		return "GroupStart"
-	case TokenGroupEnd:
-		return "GroupEnd"
-	case TokenAND:
-		return "AND"
-	case TokenOR:
-		return "OR"
-	case TokenRule:
-		return "Rule"
-	}
-	return "Invalid(" + strconv.Itoa(int(t)) + ")"
-}
-
-// A Token consists of a TokenType and a Rule if the TokenType is TokenRule,
-// otherwise Rule will be nil.
-type Token struct {
-	Type TokenType
-	Rule *Rule
-}
-
-// A Rule consists of a Key, an OpType, and a Value.
-type Rule struct {
-	Key string
-	Op  OpType
-	Val interface{}
-}
 
 // A Tokenizer returns a stream of FQL Tokens.
 type Tokenizer struct {
@@ -145,17 +87,14 @@ type Tokenizer struct {
 	width int
 	// The current token's starting position in the input.
 	start int
-	// The current number of read open round brackets without a matching
-	// closing bracket.
+	// The current number of read open parentheses without a matching
+	// closing parenthesis.
 	group int
 	// The type of the last token read.
-	last TokenType
-	// The current rule's op, used to check if it can be applied to the
-	// subsequent value. For example if the rule's value is parsed as a
-	// boolean we make sure that the op is not ( ">" | ">=" | "<" | "<=" ).
-	op OpType
-	// The current rule's key, used for error reporting.
-	key string
+	last Token
+	// If the last Token is RULE this field will hold the parsed Rule,
+	// otherwise it will be nil.
+	rule *Rule
 	// The first error encountered during tokenization.
 	err error
 }
@@ -165,8 +104,87 @@ func NewTokenizer(fqlString string) *Tokenizer {
 	return &Tokenizer{input: fqlString}
 }
 
-// nextRune returns the next rune in the input.
-func (t *Tokenizer) nextRune() (r rune) {
+// Rule returns the current parsed Rule node, or nil if there isn't one.
+func (t *Tokenizer) Rule() *Rule {
+	return t.rule
+}
+
+// Next scans, parses, and returns the next token.
+func (t *Tokenizer) Next() (Token, error) {
+	if t.err != nil {
+		return 0, t.err
+	}
+	t.rule = nil // reset
+
+	t.eatspace()
+	r := t.next()
+	switch r {
+	case eof:
+		if t.group > 0 {
+			t.err = &Error{Pos: t.pos, Code: ErrNoClosingParen}
+			return 0, t.err
+		}
+		t.err = EOF
+		return 0, t.err
+	case '(':
+		t.group += 1
+		t.last = LPAREN
+		return LPAREN, nil
+	case ')':
+		if t.last == LPAREN {
+			t.err = &Error{Pos: t.pos, LastToken: t.last, CurrentToken: RPAREN, Code: ErrBadTokenSequence}
+			return 0, t.err
+		}
+		if t.group < 1 {
+			t.err = &Error{Pos: t.pos, Code: ErrExtraClosingParen}
+			return 0, t.err
+		}
+
+		t.group -= 1
+		t.last = RPAREN
+		return RPAREN, nil
+	case ';':
+		if t.last == AND || t.last == OR || t.last == LPAREN {
+			t.err = &Error{Pos: t.pos, LastToken: t.last, CurrentToken: AND, Code: ErrBadTokenSequence}
+			return 0, t.err
+		}
+		t.last = AND
+		return AND, nil
+	case ',':
+		if t.last == AND || t.last == OR || t.last == LPAREN {
+			t.err = &Error{Pos: t.pos, LastToken: t.last, CurrentToken: OR, Code: ErrBadTokenSequence}
+			return 0, t.err
+		}
+		t.last = OR
+		return OR, nil
+	}
+
+	if !isfirstkeyrune(r) {
+		badKey := t.current()
+		t.backup()
+		t.err = &Error{Key: badKey, Pos: t.pos, Code: ErrBadKey}
+		return 0, t.err
+	}
+	t.backup()
+
+	if t.last == RPAREN || t.last == RULE {
+		t.err = &Error{Pos: t.pos, LastToken: t.last, CurrentToken: RULE, Code: ErrBadTokenSequence}
+		return 0, t.err
+	}
+
+	rule := new(Rule)
+	if err := rule.parse(t); err != nil {
+		t.err = err
+		return 0, t.err
+	}
+
+	t.last = RULE
+	t.rule = rule
+	return RULE, nil
+}
+
+// next returns the next rune in the input.
+func (t *Tokenizer) next() (r rune) {
 	if t.pos >= len(t.input) {
 		t.width = 0
 		return eof
@@ -176,261 +194,201 @@ func (t *Tokenizer) nextRune() (r rune) {
 	return r
 }
 
-// backupRune steps back one rune. Can only be called once per call of next.
-func (t *Tokenizer) backupRune() {
+// backup steps back one rune. Can only be called once per call of next.
+func (t *Tokenizer) backup() {
 	t.pos -= t.width
 }
 
 // accept consumes the next rune if it is from the valid set.
 func (t *Tokenizer) accept(valid string) bool {
-	if strings.IndexRune(valid, t.nextRune()) >= 0 {
+	if strings.IndexRune(valid, t.next()) >= 0 {
 		return true
 	}
-	t.backupRune()
+	t.backup()
 	return false
 }
 
-// acceptRun consumes a run of runes from the valid set.
-func (t *Tokenizer) acceptRun(valid string) {
-	for strings.ContainsRune(valid, t.nextRune()) {
+// acceptrun consumes a run of runes from the valid set.
+func (t *Tokenizer) acceptrun(valid string) {
+	for strings.ContainsRune(valid, t.next()) {
 	}
-	t.backupRune()
+	t.backup()
 }
 
-// ignore skips over the pending input before this point.
+// eatspace consumes and ignores a run of space runes.
+func (t *Tokenizer) eatspace() {
+	t.acceptrun(spacechars)
+	t.ignore()
+}
+
+// ignore skips over the pending input before the current position.
 func (t *Tokenizer) ignore() {
 	t.start = t.pos
 }
 
-// ignoreSpace consumes and ignores a run of space runes.
-func (t *Tokenizer) ignoreSpace() {
-	t.acceptRun(spaceChars)
-	t.ignore()
-}
-
-// cursegment returns the current segment in the input.
-func (t *Tokenizer) cursegment() string {
+// current returns the current segment in the input.
+func (t *Tokenizer) current() string {
 	return t.input[t.start:t.pos]
 }
 
-// Next scans, parses, and returns the next token.
-func (t *Tokenizer) Next() (*Token, error) {
-	if t.err != nil {
-		return nil, t.err
-	}
-
-	t.ignoreSpace()
-	r := t.nextRune()
-	switch r {
-	case eof:
-		if t.group > 0 {
-			t.err = &Error{Pos: t.pos, Code: ErrNoClosingParen}
-			return nil, t.err
-		}
-		t.err = EOF
-		return nil, t.err
-	case '(':
-		t.group += 1
-		t.last = TokenGroupStart
-		return &Token{Type: TokenGroupStart}, nil
-	case ')':
-		if t.last == TokenGroupStart {
-			t.err = &Error{Pos: t.pos, LastToken: t.last, CurrentToken: TokenGroupEnd, Code: ErrBadTokenSequence}
-			return nil, t.err
-		}
-		if t.group < 1 {
-			t.err = &Error{Pos: t.pos, Code: ErrExtraClosingParen}
-			return nil, t.err
-		}
-
-		t.group -= 1
-		t.last = TokenGroupEnd
-		return &Token{Type: TokenGroupEnd}, nil
-	case ';':
-		if t.last == TokenAND || t.last == TokenOR || t.last == TokenGroupStart {
-			t.err = &Error{Pos: t.pos, LastToken: t.last, CurrentToken: TokenAND, Code: ErrBadTokenSequence}
-			return nil, t.err
-		}
-		t.last = TokenAND
-		return &Token{Type: TokenAND}, nil
-	case ',':
-		if t.last == TokenAND || t.last == TokenOR || t.last == TokenGroupStart {
-			t.err = &Error{Pos: t.pos, LastToken: t.last, CurrentToken: TokenOR, Code: ErrBadTokenSequence}
-			return nil, t.err
-		}
-		t.last = TokenOR
-		return &Token{Type: TokenOR}, nil
-	}
-
-	if !isFirstKeyRune(r) {
-		badKey := t.cursegment()
-		t.backupRune()
-		t.err = &Error{Key: badKey, Pos: t.pos, Code: ErrBadKey}
-		return nil, t.err
-	}
-	t.backupRune()
-
-	if t.last == TokenGroupEnd || t.last == TokenRule {
-		t.err = &Error{Pos: t.pos, LastToken: t.last, CurrentToken: TokenRule, Code: ErrBadTokenSequence}
-		return nil, t.err
-	}
-	t.last = TokenRule
-
-	tok, err := parseRuleToken(t)
-	if err != nil {
-		t.err = err
-		return nil, t.err
-	}
-	return tok, nil
+// A Rule represents a filter rule and consists of a Key, a CmpOp, and a Value.
+type Rule struct {
+	Key string
+	Cmp CmpOp
+	Val interface{}
 }
 
-// parseRuleToken parses the next segment of the input as a rule. The next
+// parse parses the next segment of the input as a rule. The next
 // rune in the input is known to be a valid initial rule-key rune.
-func parseRuleToken(t *Tokenizer) (tok *Token, err error) {
-	tok = &Token{Type: TokenRule, Rule: new(Rule)}
-	if tok.Rule.Key, err = parseRuleKey(t); err != nil {
-		return nil, err
+func (rule *Rule) parse(t *Tokenizer) (err error) {
+	if err = rule.parsekey(t); err != nil {
+		return err
 	}
-	t.key = tok.Rule.Key // track key
-
-	if tok.Rule.Op, err = parseRuleOp(t); err != nil {
-		return nil, err
+	if err = rule.parsecmp(t); err != nil {
+		return err
 	}
-	t.op = tok.Rule.Op // track operator
-
-	if tok.Rule.Val, err = parseRuleValue(t); err != nil {
-		return nil, err
+	if err = rule.parsevalue(t); err != nil {
+		return err
 	}
-
-	return tok, nil
+	return nil
 }
 
-// parseRuleKey parses the next segment of the input as a rule-key. The next
+// parsekey parses the next segment of the input as a rule-key. The next
 // rune in the input is known to be a valid initial rule-key rune.
-func parseRuleKey(t *Tokenizer) (string, error) {
-	keyStart := t.pos
+func (rule *Rule) parsekey(t *Tokenizer) error {
+	keystart := t.pos
 	for {
-		r := t.nextRune()
-		if isKeyRune(r) || (r == '.' && isFirstKeyRune(t.nextRune())) {
+		r := t.next()
+		if iskeyrune(r) || (r == '.' && isfirstkeyrune(t.next())) {
 			continue
 		}
 
 		break
 	}
-	t.backupRune()
+	t.backup()
 
-	key := t.input[keyStart:t.pos]
+	key := t.input[keystart:t.pos]
 
-	t.acceptRun(spaceChars)
-	if t.nextRune() != ':' {
-		keyEnd := len(t.input)
-		if i := strings.IndexByte(t.input[keyStart:], ':'); i > -1 {
-			keyEnd = keyStart + i
+	t.acceptrun(spacechars)
+	if t.next() != ':' {
+		keyend := len(t.input)
+		if i := strings.IndexByte(t.input[keystart:], ':'); i > -1 {
+			keyend = keystart + i
 		}
 
-		badKey := strings.TrimSpace(t.input[keyStart:keyEnd])
-		return "", &Error{Key: badKey, Pos: keyStart, Code: ErrBadKey}
+		badKey := strings.TrimSpace(t.input[keystart:keyend])
+		return &Error{Key: badKey, Pos: keystart, Code: ErrBadKey}
 	}
-	return key, nil
+
+	rule.Key = key
+	return nil
 }
 
-// parseRuleOp parses the next segment of the input as a rule-op. The rule's
+// parsecmp parses the next segment of the input as a rule-op. The rule's
 // key-value separator ":" is known to be present.
-func parseRuleOp(t *Tokenizer) (OpType, error) {
-	t.acceptRun(spaceChars)
-	switch r := t.nextRune(); r {
+func (rule *Rule) parsecmp(t *Tokenizer) error {
+	t.acceptrun(spacechars)
+	switch r := t.next(); r {
 	case eof:
-		return 0, &Error{Pos: t.pos, Key: t.key, Code: ErrNoRuleValue}
+		return &Error{Pos: t.pos, Key: rule.Key, Code: ErrNoRuleValue}
 	case '!':
-		return OpNe, nil
+		rule.Cmp = CmpNe
+		return nil
 	case '>':
-		if t.nextRune() == '=' {
-			return OpGe, nil
+		if t.next() == '=' {
+			rule.Cmp = CmpGe
+			return nil
 		}
-		t.backupRune()
-		return OpGt, nil
+		t.backup()
+		rule.Cmp = CmpGt
+		return nil
 	case '<':
-		if t.nextRune() == '=' {
-			return OpLe, nil
+		if t.next() == '=' {
+			rule.Cmp = CmpLe
+			return nil
 		}
-		t.backupRune()
-		return OpLt, nil
+		t.backup()
+		rule.Cmp = CmpLt
+		return nil
 	}
 
-	t.backupRune()
-	return OpEq, nil
+	t.backup()
+	rule.Cmp = CmpEq
+	return nil
 }
 
-// parseRuleValue parses the next segment of the input as a rule-value.
-func parseRuleValue(t *Tokenizer) (v interface{}, err error) {
-	t.acceptRun(spaceChars)
+// parsevalue parses the next segment of the input as a rule-value.
+func (rule *Rule) parsevalue(t *Tokenizer) (err error) {
+	t.acceptrun(spacechars)
 
-	r := t.nextRune()
+	r := t.next()
 	t.start = t.pos
 	switch r {
 	case eof:
-		return 0, &Error{Pos: t.pos, Key: t.key, Code: ErrNoRuleValue}
+		return &Error{Pos: t.pos, Key: rule.Key, Code: ErrNoRuleValue}
 	case '"':
-		return parseText(t)
+		return rule.parsetext(t)
 	case 'd':
-		return parseTime(t)
+		return rule.parsetime(t)
 	}
 
-	t.backupRune()
+	t.backup()
 	t.start = t.pos
+
 	if r == 'n' {
-		// get the operator position (for error reporting)
-		opPos := t.pos - t.op.length()
+		// get the position of the comparison operator  (for error reporting)
+		cmppos := t.pos - rule.Cmp.length()
 
-		val, err := parseNull(t)
-		if err != nil {
-			return nil, err
+		if err := rule.parsenull(t); err != nil {
+			return err
 		}
 
-		// Assuming the value is a valid null check that the current
-		// rule's operator is compatible with that type of value.
-		if t.op != OpEq && t.op != OpNe {
-			return nil, &Error{Pos: opPos, Key: t.key, Op: t.op, Code: ErrBadNullOp}
+		// Assuming the value is a valid null, then check that the current
+		// rule's comparison operator is compatible with that type of value.
+		if rule.Cmp != CmpEq && rule.Cmp != CmpNe {
+			return &Error{Pos: cmppos, Key: rule.Key, Cmp: rule.Cmp, Code: ErrBadNullOp}
 		}
-		return val, nil
+		return nil
 	}
+
 	if r == 'f' || r == 't' {
-		// get the operator position (for error reporting)
-		opPos := t.pos - t.op.length()
+		// get the position of the comparison operator  (for error reporting)
+		cmppos := t.pos - rule.Cmp.length()
 
-		val, err := parseBool(t)
-		if err != nil {
-			return nil, err
+		if err := rule.parsebool(t); err != nil {
+			return err
 		}
 
-		// Assuming the value is a valid boolean check that the current
-		// rule's operator is compatible with that type of value.
-		if t.op != OpEq && t.op != OpNe {
-			return nil, &Error{Pos: opPos, Key: t.key, Op: t.op, Val: strconv.FormatBool(bool(val)), Code: ErrBadBooleanOp}
+		// Assuming the value is a valid boolean, then check that the current
+		// rule's comparison operator is compatible with that type of value.
+		if rule.Cmp != CmpEq && rule.Cmp != CmpNe {
+			val, _ := rule.Val.(bool)
+			return &Error{Pos: cmppos, Key: rule.Key, Cmp: rule.Cmp, Val: strconv.FormatBool(val), Code: ErrBadBooleanOp}
 		}
-		return val, nil
+		return nil
 	}
+
 	if r == '+' || r == '-' || r == '.' || (r >= '0' && r <= '9') {
-		return parseNumber(t)
+		return rule.parsenumber(t)
 	}
 
-	return nil, &Error{Pos: t.pos, Key: t.key, Code: ErrNoRuleValue}
+	return &Error{Pos: t.pos, Key: rule.Key, Code: ErrNoRuleValue}
 }
 
-// parseText parses the next segment of the input as a string and returns it.
-// The opening double quote '"' is known to be present. parseText scans and
-// parses up until the next unescaped double quote.
-func parseText(t *Tokenizer) (string, error) {
+// parsetext parses the next segment of the input as a string and sets it as the
+// rule's value. The opening double quote `"` is known to be present. parsetext
+// scans and parses up until the next unescaped double quote.
+func (rule *Rule) parsetext(t *Tokenizer) error {
 	var esc bool
 Loop:
 	for {
-		switch r := t.nextRune(); {
+		switch r := t.next(); {
 		case r == eof:
-			return "", &Error{Pos: t.pos, Key: t.key, Val: t.input[t.start:], Code: ErrNoClosingDoubleQuote}
+			return &Error{Pos: t.pos, Key: rule.Key, Val: t.input[t.start:], Code: ErrNoClosingDoubleQuote}
 		case r == '\\':
 			esc = !esc
 			if esc {
-				t.backupRune()
+				t.backup()
 				// Delete the escape char so it doesn't get escaped by Go.
 				t.input = t.input[:t.pos] + t.input[t.pos+1:]
 			}
@@ -441,90 +399,96 @@ Loop:
 		}
 	}
 
-	text := t.input[t.start : t.pos-1]
-	return text, nil
+	rule.Val = t.input[t.start : t.pos-1]
+	return nil
 }
 
-// parseTime parses the next segment of the input as time.Time and returns it.
-// The value should be an integer denoted by a preceding 'd' which is known
-// to be present, the integer should represent the number of seconds elapsed since
-// January 1, 1970 UTC.
+// parsetime parses the next segment of the input as time.Time and sets it as the
+// rule's value. The value should be an integer denoted by a preceding 'd' which
+// is known to be present, the integer should represent the number of seconds
+// elapsed since January 1, 1970 UTC.
 //
 // NOTE(mkopriva): timezones are currently not supported.
-func parseTime(t *Tokenizer) (time.Time, error) {
+func (rule *Rule) parsetime(t *Tokenizer) error {
 	// optional leading sign
 	t.accept("+-")
 
-	t.acceptRun("0123456789")
-	d, err := strconv.ParseInt(t.cursegment(), 10, 64)
+	t.acceptrun("0123456789")
+	d, err := strconv.ParseInt(t.current(), 10, 64)
 	if err != nil {
-		return time.Time{}, &Error{Pos: t.pos, Key: t.key, Val: t.cursegment(), Code: ErrBadDuration}
+		return &Error{Pos: t.pos, Key: rule.Key, Val: t.current(), Code: ErrBadDuration}
 	}
-	return time.Unix(d, 0), nil
+
+	rule.Val = time.Unix(d, 0)
+	return nil
 }
 
-// parseNull parses the next segment of the input as the Null const and
-// returns it. It is known that the next rune is 'n'.
-func parseNull(t *Tokenizer) (nullType, error) {
+// parsenull parses the next segment of the input as the Null const and sets it
+// as the rule's value. It is known that the next rune is 'n'.
+func (rule *Rule) parsenull(t *Tokenizer) error {
 	if strings.HasPrefix(t.input[t.pos:], "null") {
 		t.pos += 4 // len("null")
-		return Null, nil
+		rule.Val = Null
+		return nil
 	}
-	return 0, errors.New("bad null")
+	return errors.New("bad null")
 
 }
 
-// parseBool parses the next segment in the input as a bool and returns it.
-// It is known that the next rune is either 't' or 'f'.
-func parseBool(t *Tokenizer) (boolType, error) {
+// parsebool parses the next segment in the input as a bool and sets it as
+// the rule's value. It is known that the next rune is either 't' or 'f'.
+func (rule *Rule) parsebool(t *Tokenizer) error {
 	if strings.HasPrefix(t.input[t.pos:], "true") {
 		t.pos += 4 // len("true")
-		return True, nil
+		rule.Val = true
+		return nil
 	} else if strings.HasPrefix(t.input[t.pos:], "false") {
 		t.pos += 5 // len("false")
-		return False, nil
+		rule.Val = false
+		return nil
 	}
-	return false, &Error{Pos: t.pos, Key: t.key, Code: ErrBadBoolean}
+	return &Error{Pos: t.pos, Key: rule.Key, Code: ErrBadBoolean}
 }
 
-// parseNumber parses the next segment in the input as either an int64 or a float64
-// and returns it. The value should be an integer, a float, or a float with an exponent,
-// it can also be preceded by a hyphen in which case it will be parsed as negative.
-func parseNumber(t *Tokenizer) (v interface{}, err error) {
+// parsenumber parses the next segment in the input as either an int64 or a float64
+// and sets it as the rule's value. The value can be an integer, a float, or a float
+// with an exponent, it can also be preceded by a hyphen in which case it will be
+// parsed as negative.
+func (rule *Rule) parsenumber(t *Tokenizer) (err error) {
 	const digits = "0123456789"
 	var isfloat bool
 
 	// optional leading sign
 	t.accept("+-")
 
-	t.acceptRun(digits)
+	t.acceptrun(digits)
 	if t.accept(".") {
 		isfloat = true
-		t.acceptRun(digits)
+		t.acceptrun(digits)
 	}
 	if t.accept("eE") {
 		t.accept("+-")
-		t.acceptRun(digits)
+		t.acceptrun(digits)
 	}
 
 	if isfloat {
-		v, err = strconv.ParseFloat(t.cursegment(), 64)
+		rule.Val, err = strconv.ParseFloat(t.current(), 64)
 	} else {
-		v, err = strconv.ParseInt(t.cursegment(), 10, 64)
+		rule.Val, err = strconv.ParseInt(t.current(), 10, 64)
 	}
 	if err != nil {
-		return nil, &Error{Pos: t.pos, Key: t.key, Val: t.cursegment(), Code: ErrBadNumber}
+		return &Error{Pos: t.pos, Key: rule.Key, Val: t.current(), Code: ErrBadNumber}
 	}
-	return v, nil
+	return nil
 }
 
-// isKeyRune reports whether r is a valid "key" rune.
-func isKeyRune(r rune) bool {
+// iskeyrune reports whether r is a valid "key" rune.
+func iskeyrune(r rune) bool {
 	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
-// isFirstKeyRune reports whether r is a valid first "key" rune.
-func isFirstKeyRune(r rune) bool {
+// isfirstkeyrune reports whether r is a valid first "key" rune.
+func isfirstkeyrune(r rune) bool {
 	return r == '_' || unicode.IsLetter(r)
 }
 
@@ -548,10 +512,10 @@ type Error struct {
 	Code         ErrorCode
 	Pos          int
 	Key          string
-	Op           OpType
+	Cmp          CmpOp
 	Val          string
-	LastToken    TokenType
-	CurrentToken TokenType
+	LastToken    Token
+	CurrentToken Token
 }
 
 func (e *Error) Error() string {
@@ -566,9 +530,9 @@ func (e *Error) Error() string {
 
 	switch e.Code {
 	case ErrExtraClosingParen:
-		return fmt.Sprintf("pos(%d): Unexpected closing round bracket.", e.Pos)
+		return fmt.Sprintf("pos(%d): Unexpected closing parenthesis.", e.Pos)
 	case ErrNoClosingParen:
-		return fmt.Sprintf("pos(%d): Missing closing round bracket to match the open bracket.", e.Pos)
+		return fmt.Sprintf("pos(%d): Missing closing parenthesis to match the openning parenthesis.", e.Pos)
 	case ErrNoClosingDoubleQuote:
 		return fmt.Sprintf("pos(%d): The %q string %q is missing an end quote.", e.Pos, key, val)
 	case ErrNoRuleValue:
@@ -581,14 +545,41 @@ func (e *Error) Error() string {
 	case ErrBadDuration:
 		return fmt.Sprintf("pos(%d): %q is not a valid duration value for key %q.", e.Pos, val, key)
 	case ErrBadNullOp:
-		return fmt.Sprintf("pos(%d): Invalid operator %q for %q's null value.", e.Pos, e.Op, key)
+		return fmt.Sprintf("pos(%d): Invalid operator %q for %q's null value.", e.Pos, cmpop2string[e.Cmp], key)
 	case ErrBadBooleanOp:
-		return fmt.Sprintf("pos(%d): Invalid operator %q for %q's boolean value %q.", e.Pos, e.Op, key, val)
+		return fmt.Sprintf("pos(%d): Invalid operator %q for %q's boolean value %q.", e.Pos, cmpop2string[e.Cmp], key, val)
 	case ErrBadKey:
 		return fmt.Sprintf("pos(%d): The key %q is not valid, keys can contain only alphanumeric"+
 			" characters and the underscore character [_0-9a-Z].", e.Pos, key)
 	case ErrBadTokenSequence:
-		return fmt.Sprintf("pos(%d): Invalid token sequence. %q token cannot be followed by a %q token.", e.Pos, e.LastToken, e.CurrentToken)
+		return fmt.Sprintf("pos(%d): Invalid token sequence. %q token cannot be followed by a %q token.", e.Pos, token2string[e.LastToken], token2string[e.CurrentToken])
 	}
 	return "bad syntax"
+}
+
+// TODO
+type RuleError struct {
+	Pos int
+	Key string
+	Cmp CmpOp
+	Val string
+}
+
+// used or debugging
+var cmpop2string = map[CmpOp]string{
+	CmpEq: ":",
+	CmpNe: ":!",
+	CmpGt: ":>",
+	CmpLt: ":<",
+	CmpGe: ":>=",
+	CmpLe: ":<=",
+}
+
+// used or debugging
+var token2string = map[Token]string{
+	LPAREN: "(",
+	RPAREN: ")",
+	AND:    ";",
+	OR:     ",",
+	RULE:   "<Rule>",
 }

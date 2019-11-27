@@ -14,46 +14,73 @@ type SelectStatement struct {
 	Order   OrderClause
 	Limit   LimitClause
 	Offset  OffsetClause
-
-	Close  bool
-	Exists bool
-	Count  bool
 }
 
 func (s SelectStatement) Walk(w *writer.Writer) {
 	w.NoIndent()
-	if s.Exists {
-		w.Write("SELECT EXISTS(SELECT 1 FROM ")
-		s.Table.Walk(w)
-		w.Indent()
-		s.Join.Walk(w)
-		w.NewLine()
-	} else if s.Count {
-		w.Write("SELECT COUNT(1) FROM ")
-		s.Table.Walk(w)
-		w.Indent()
-		s.Join.Walk(w)
-		w.NewLine()
-	} else {
-		w.Write("SELECT")
-		w.NewLine()
-		w.Indent()
-		s.Columns.Walk(w)
-		w.NewLine()
-		w.Write("FROM ")
-		s.Table.Walk(w)
-		s.Join.Walk(w)
-		w.NewLine()
-	}
+	w.Write("SELECT")
+	w.NewLine()
+	w.Indent()
+	s.Columns.Walk(w)
+	w.NewLine()
+	w.Write("FROM ")
+	s.Table.Walk(w)
+	s.Join.Walk(w)
+	w.NewLine()
+	s.Where.Walk(w)
+	s.Order.Walk(w)
+	s.Limit.Walk(w)
+	s.Offset.Walk(w)
+}
 
+type SelectExistsStatement struct {
+	Table  Ident
+	Join   JoinClause
+	Where  WhereClause
+	Order  OrderClause
+	Limit  LimitClause
+	Offset OffsetClause
+	Open   bool
+}
+
+func (s SelectExistsStatement) Walk(w *writer.Writer) {
+	w.NoIndent()
+	w.Write("SELECT EXISTS(SELECT 1 FROM ")
+	s.Table.Walk(w)
+	w.Indent()
+	s.Join.Walk(w)
+	w.NewLine()
 	s.Where.Walk(w)
 	s.Order.Walk(w)
 	s.Limit.Walk(w)
 	s.Offset.Walk(w)
 
-	if s.Exists && s.Close {
+	if !s.Open {
 		w.Write(")")
 	}
+}
+
+type SelectCountStatement struct {
+	Columns ColumnExprSlice
+	Table   Ident
+	Join    JoinClause
+	Where   WhereClause
+	Order   OrderClause
+	Limit   LimitClause
+	Offset  OffsetClause
+}
+
+func (s SelectCountStatement) Walk(w *writer.Writer) {
+	w.NoIndent()
+	w.Write("SELECT COUNT(*) FROM ")
+	s.Table.Walk(w)
+	w.Indent()
+	s.Join.Walk(w)
+	w.NewLine()
+	s.Where.Walk(w)
+	s.Order.Walk(w)
+	s.Limit.Walk(w)
+	s.Offset.Walk(w)
 }
 
 type LimitClause struct {
