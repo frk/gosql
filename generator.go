@@ -2,6 +2,7 @@ package gosql
 
 import (
 	"bytes"
+	"strconv"
 
 	gol "github.com/frk/gosql/internal/golang"
 	sql "github.com/frk/gosql/internal/sqlang"
@@ -91,6 +92,7 @@ func (g *generator) execdecl(si *specinfo) (fn gol.FuncDecl) {
 
 	fn.Body.Add(g.querybuild(si))
 	fn.Body.Add(gol.NL{})
+	fn.Body.Add(g.querydefaults(si))
 	fn.Body.Add(g.queryexec(si))
 	fn.Body.Add(g.returnstmt(si))
 	return fn
@@ -125,13 +127,29 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 	return gol.DeclStmt{decl}
 }
 
+func (g *generator) querydefaults(si *specinfo) (stmt gol.Stmt) {
+	if l := si.spec.limit; l != nil && l.value > 0 && len(l.field) > 0 {
+		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{l.field}}
+
+		asn := gol.AssignStmt{Token: gol.ASSIGN}
+		asn.Lhs = []gol.Expr{sx}
+		asn.Rhs = []gol.Expr{gol.BasicLit{strconv.FormatUint(l.value, 10)}}
+
+		ifzero := gol.IfStmt{}
+		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BINARY_EQL, Y: gol.BasicLit{"0"}}
+		ifzero.Body = gol.BlockStmt{List: []gol.Stmt{asn}}
+		return gol.StmtList{ifzero, gol.NL{}}
+	}
+	return gol.NoOp{}
+}
+
 func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 	args := gol.ArgsList{List: []gol.Expr{idquery}}
 	if len(si.spec.filter) > 0 {
 		args.AddExprs(idparams)
 		args.Ellipsis = true
 	} else {
-		args.AddExprs(g.queryargs(si.spec.where)...)
+		args.AddExprs(g.queryargs(si.spec)...)
 	}
 
 	// produce c.Exec( ... ) call
@@ -363,22 +381,24 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 	return stmt
 }
 
-func (g *generator) queryargs(w *whereblock) (args []gol.Expr) {
-	if w == nil {
-		return args
+func (g *generator) queryargs(spec *typespec) (args []gol.Expr) {
+	if spec.where != nil && len(spec.where.items) > 0 {
+		for _, item := range spec.where.items {
+			switch node := item.node.(type) {
+			case *wherefield:
+				sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
+				sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{node.name}}
+				args = append(args, sx)
+			case *wherecolumn:
+			case *wherebetween:
+			case *whereblock:
+			}
+		}
 	}
 
-	for _, item := range w.items {
-		switch node := item.node.(type) {
-		case *wherefield:
-			sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{w.name}}
-			sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{node.name}}
-			args = append(args, sx)
-		case *wherecolumn:
-		case *wherebetween:
-		case *whereblock:
-		}
-
+	if spec.limit != nil && len(spec.limit.field) > 0 {
+		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.limit.field}}
+		args = append(args, sx)
 	}
 	return args
 }

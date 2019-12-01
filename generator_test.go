@@ -55,6 +55,22 @@ func TestGenerate(t *testing.T) {
 			"joinblock_slice",
 			"whereblock_single",
 			"whereblock_slice",
+			"limit_directive",
+			"limit_field_default",
+			"limit_field",
+			// iterator
+			// limit
+			// default limit
+			// offset
+			// limit & offset
+			// orderby
+			// filter
+			// textsearch
+			// errorhandler
+			// with modifier function
+
+			// exists
+			// count
 		},
 	}}
 
