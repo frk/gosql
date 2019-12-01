@@ -128,6 +128,7 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 }
 
 func (g *generator) querydefaults(si *specinfo) (stmt gol.Stmt) {
+	var list gol.StmtList
 	if l := si.spec.limit; l != nil && l.value > 0 && len(l.field) > 0 {
 		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{l.field}}
 
@@ -138,9 +139,28 @@ func (g *generator) querydefaults(si *specinfo) (stmt gol.Stmt) {
 		ifzero := gol.IfStmt{}
 		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BINARY_EQL, Y: gol.BasicLit{"0"}}
 		ifzero.Body = gol.BlockStmt{List: []gol.Stmt{asn}}
-		return gol.StmtList{ifzero, gol.NL{}}
+		list = append(list, ifzero)
 	}
-	return gol.NoOp{}
+
+	if o := si.spec.offset; o != nil && o.value > 0 && len(o.field) > 0 {
+		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{o.field}}
+
+		asn := gol.AssignStmt{Token: gol.ASSIGN}
+		asn.Lhs = []gol.Expr{sx}
+		asn.Rhs = []gol.Expr{gol.BasicLit{strconv.FormatUint(o.value, 10)}}
+
+		ifzero := gol.IfStmt{}
+		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BINARY_EQL, Y: gol.BasicLit{"0"}}
+		ifzero.Body = gol.BlockStmt{List: []gol.Stmt{asn}}
+		list = append(list, ifzero)
+	}
+
+	if len(list) == 0 {
+		return gol.NoOp{}
+	}
+
+	list = append(list, gol.NL{})
+	return list
 }
 
 func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
@@ -398,6 +418,10 @@ func (g *generator) queryargs(spec *typespec) (args []gol.Expr) {
 
 	if spec.limit != nil && len(spec.limit.field) > 0 {
 		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.limit.field}}
+		args = append(args, sx)
+	}
+	if spec.offset != nil && len(spec.offset.field) > 0 {
+		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.offset.field}}
 		args = append(args, sx)
 	}
 	return args
@@ -700,8 +724,8 @@ func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
 	selstmt.Join = g.sqljoin(si.spec.join)         //  sql.JoinClause
 	selstmt.Where = g.sqlwhere(si.spec.where)      //  sql.WhereClause
 	//selstmt.Order                                 //  sql.OrderClause
-	selstmt.Limit = g.sqllimit(si.spec) //  sql.LimitClause
-	//selstmt.Offset                                //  sql.OffsetClause
+	selstmt.Limit = g.sqllimit(si.spec)   //  sql.LimitClause
+	selstmt.Offset = g.sqloffset(si.spec) //  sql.OffsetClause
 	return selstmt
 }
 
@@ -840,6 +864,19 @@ func (g *generator) sqllimit(spec *typespec) (limit sql.LimitClause) {
 		return limit
 	}
 	return limit
+}
+
+// sqloffset generates and returns an sql.OffsetClause based on the given spec's "offset" field.
+func (g *generator) sqloffset(spec *typespec) (offset sql.OffsetClause) {
+	if spec.offset != nil {
+		if len(spec.offset.field) > 0 {
+			offset.Value = g.sqlparam()
+		} else if spec.offset.value > 0 {
+			offset.Value = sql.OffsetUint(spec.offset.value)
+		}
+		return offset
+	}
+	return offset
 }
 
 func (g *generator) sqlrelid(id relid) sql.Ident {

@@ -98,7 +98,7 @@ func (l LimitClause) Walk(w *writer.Writer) {
 
 type LimitValue interface {
 	Expr
-	limitCountNode()
+	limitValueNode()
 }
 
 type LimitInt int64
@@ -114,21 +114,21 @@ func (u LimitUint) Walk(w *writer.Writer) {
 }
 
 type OffsetClause struct {
-	Start OffsetStart
+	Value OffsetValue
 }
 
 func (l OffsetClause) Walk(w *writer.Writer) {
-	if l.Start == nil {
+	if l.Value == nil {
 		return
 	}
 	w.NewLine()
 	w.Write("OFFSET ")
-	l.Start.Walk(w)
+	l.Value.Walk(w)
 }
 
-type OffsetStart interface {
+type OffsetValue interface {
 	Expr
-	offsetStartNode()
+	offsetValueNode()
 }
 
 type OffsetInt int64
@@ -137,15 +137,24 @@ func (i OffsetInt) Walk(w *writer.Writer) {
 	w.Write(strconv.FormatInt(int64(i), 10))
 }
 
-func (LimitInt) limitCountNode()            {}
-func (LimitUint) limitCountNode()           {}
-func (PositionalParameter) limitCountNode() {}
+type OffsetUint uint64
 
-func (LimitInt) exprNode()  {}
-func (LimitUint) exprNode() {}
+func (u OffsetUint) Walk(w *writer.Writer) {
+	w.Write(strconv.FormatUint(uint64(u), 10))
+}
 
-func (OffsetInt) offsetStartNode()           {}
-func (PositionalParameter) offsetStartNode() {}
+func (LimitInt) exprNode()   {}
+func (LimitUint) exprNode()  {}
+func (OffsetInt) exprNode()  {}
+func (OffsetUint) exprNode() {}
+
+func (LimitInt) limitValueNode()    {}
+func (LimitUint) limitValueNode()   {}
+func (OffsetInt) offsetValueNode()  {}
+func (OffsetUint) offsetValueNode() {}
+
+func (PositionalParameter) limitValueNode()  {}
+func (PositionalParameter) offsetValueNode() {}
 
 type OrderClause struct {
 	List []OrderBy

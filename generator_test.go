@@ -58,11 +58,10 @@ func TestGenerate(t *testing.T) {
 			"limit_directive",
 			"limit_field_default",
 			"limit_field",
+			"offset_directive",
+			"offset_field_default",
+			"offset_field",
 			// iterator
-			// limit
-			// default limit
-			// offset
-			// limit & offset
 			// orderby
 			// filter
 			// textsearch
