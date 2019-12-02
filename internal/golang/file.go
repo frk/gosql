@@ -8,11 +8,11 @@ type File struct {
 	PkgName  string
 	Imports  ImportDecl
 	Decls    []Decl
-	Preamble CommentList
+	Preamble Comment
 }
 
 func (f File) Walk(w *writer.Writer) {
-	if len(f.Preamble) > 0 {
+	if f.Preamble != nil {
 		f.Preamble.Walk(w)
 		w.Write("\n\n")
 	}

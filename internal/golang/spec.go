@@ -30,14 +30,18 @@ func (s ImportSpec) Walk(w *writer.Writer) {
 }
 
 type ValueSpec struct {
-	Names   []Ident
-	Type    Expr
-	Values  []Expr
-	Comment CommentList
-	// Doc
+	Names       []Ident
+	Type        Expr
+	Values      []Expr
+	LineComment LineComment
+	Doc         Comment
 }
 
 func (s ValueSpec) Walk(w *writer.Writer) {
+	if s.Doc != nil {
+		s.Doc.Walk(w)
+	}
+
 	s.Names[0].Walk(w)
 	for _, name := range s.Names[1:] {
 		w.Write(", ")
@@ -55,7 +59,7 @@ func (s ValueSpec) Walk(w *writer.Writer) {
 			value.Walk(w)
 		}
 	}
-	s.Comment.Walk(w)
+	s.LineComment.Walk(w)
 }
 
 type TypeSpec struct {

@@ -52,26 +52,35 @@ func TestGenerate(t *testing.T) {
 	}, {
 		dirname: "select",
 		filenames: []string{
+			"afterscan_single",
+			"afterscan_slice",
+			"iterator",
+			"filter_slice",
+			"filter_iterator",
 			"joinblock_slice",
-			"whereblock_single",
-			"whereblock_slice",
 			"limit_directive",
 			"limit_field_default",
 			"limit_field",
 			"offset_directive",
 			"offset_field_default",
 			"offset_field",
-			// iterator
-			// orderby
-			// filter
-			// textsearch
+			"orderby_directive",
+			"whereblock_single",
+			"whereblock_slice",
+			"whereblock_between",
 			// errorhandler
+			// where with nested whereblock
+			// where with between
 			// with modifier function
+			// nested record fields (to test allocation)
 
 			// exists
 			// count
 		},
 	}}
+
+	// filter
+	// - textsearch
 
 	for _, tt := range tests {
 		cmd := new(command)

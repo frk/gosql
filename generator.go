@@ -70,7 +70,7 @@ type generator struct {
 
 func (g *generator) run(pkgname string) error {
 	g.file.PkgName = pkgname
-	g.file.Preamble = gol.CommentList{{filepreamble}}
+	g.file.Preamble = gol.LineComment{filepreamble}
 	g.file.Imports = gol.ImportDecl{{Path: gosqlimport}}
 
 	for _, si := range g.infos {
@@ -99,15 +99,15 @@ func (g *generator) execdecl(si *specinfo) (fn gol.FuncDecl) {
 }
 
 func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
-	decl := gol.GenDecl{Token: gol.GENDECL_CONST}
+	decl := gol.GenDecl{Token: gol.DECL_CONST}
 	decl.Specs = []gol.Spec{gol.ValueSpec{
-		Names:   []gol.Ident{idquery},
-		Values:  []gol.Expr{gol.RawStringNode{g.sqlnode(si)}},
-		Comment: gol.CommentList{{Text: " `"}},
+		Names:       []gol.Ident{idquery},
+		Values:      []gol.Expr{gol.RawStringNode{g.sqlnode(si)}},
+		LineComment: gol.LineComment{" `"},
 	}}
 
 	if len(si.spec.filter) > 0 {
-		decl.Token = gol.GENDECL_VAR
+		decl.Token = gol.DECL_VAR
 
 		asn := gol.AssignStmt{Token: gol.ASSIGN_ADD}
 		asn.Lhs = []gol.Expr{idquery}
@@ -295,7 +295,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 			stmt.Body.List = append(stmt.Body.List, init)
 		} else {
 			vs := gol.ValueSpec{Names: []gol.Ident{{"v"}}, Type: g.rectype(rec)}
-			init := gol.GenDecl{Token: gol.GENDECL_VAR}
+			init := gol.GenDecl{Token: gol.DECL_VAR}
 			init.Specs = append(init.Specs, vs)
 			stmt.Body.List = append(stmt.Body.List, gol.DeclStmt{init})
 		}
@@ -411,6 +411,18 @@ func (g *generator) queryargs(spec *typespec) (args []gol.Expr) {
 				args = append(args, sx)
 			case *wherecolumn:
 			case *wherebetween:
+				if x, ok := node.x.(*varinfo); ok {
+					sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
+					sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{node.name}}
+					sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{x.name}}
+					args = append(args, sx)
+				}
+				if y, ok := node.y.(*varinfo); ok {
+					sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
+					sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{node.name}}
+					sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{y.name}}
+					args = append(args, sx)
+				}
 			case *whereblock:
 			}
 		}
@@ -719,13 +731,13 @@ func (g *generator) sqlupdate(si *specinfo) (updstmt sql.UpdateStatement) {
 }
 
 func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
-	selstmt.Columns = g.sqlcolumns(si.info.output) //  sql.ColumnExprSlice
-	selstmt.Table = g.sqlrelid(si.spec.rel.relid)  //  sql.Ident
-	selstmt.Join = g.sqljoin(si.spec.join)         //  sql.JoinClause
-	selstmt.Where = g.sqlwhere(si.spec.where)      //  sql.WhereClause
-	//selstmt.Order                                 //  sql.OrderClause
-	selstmt.Limit = g.sqllimit(si.spec)   //  sql.LimitClause
-	selstmt.Offset = g.sqloffset(si.spec) //  sql.OffsetClause
+	selstmt.Columns = g.sqlcolumns(si.info.output)
+	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
+	selstmt.Join = g.sqljoin(si.spec.join)
+	selstmt.Where = g.sqlwhere(si.spec.where)
+	selstmt.Order = g.sqlorderby(si.spec)
+	selstmt.Limit = g.sqllimit(si.spec)
+	selstmt.Offset = g.sqloffset(si.spec)
 	return selstmt
 }
 
@@ -776,7 +788,21 @@ func (g *generator) sqlsearchconds(w *whereblock) (conds []sql.SearchCondition) 
 			}
 			conds = append(conds, x)
 		case *wherebetween:
-			// TODO
+			p := sql.BetweenPredicate{}
+			p.A = g.sqlcolid(node.colid)
+
+			if x, ok := node.x.(colid); ok {
+				p.X = g.sqlcolid(x)
+			} else {
+				p.X = g.sqlparam() // assume *varinfo
+			}
+			if y, ok := node.y.(colid); ok {
+				p.Y = g.sqlcolid(y)
+			} else {
+				p.Y = g.sqlparam() // assume *varinfo
+			}
+
+			conds = append(conds, p)
 		case *whereblock:
 			xl := sql.BoolExprList{Bool: sqlbool}
 			xl.List = g.sqlsearchconds(node)
@@ -785,6 +811,20 @@ func (g *generator) sqlsearchconds(w *whereblock) (conds []sql.SearchCondition) 
 
 	}
 	return conds
+}
+
+func (g *generator) sqlorderby(spec *typespec) (order sql.OrderClause) {
+	if spec.orderby == nil {
+		return order
+	}
+
+	for _, item := range spec.orderby.items {
+		by := sql.OrderBy{}
+		by.Column = g.sqlcolid(item.col)
+		by.Desc = (item.dir == orderdesc)
+		order.List = append(order.List, by)
+	}
+	return order
 }
 
 func (g *generator) sqlusing(jb *joinblock) (using sql.UsingClause) {

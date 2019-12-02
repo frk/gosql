@@ -9,16 +9,16 @@ type Decl interface {
 	declNode()
 }
 
-type GENDECL_TOKEN string
+type DECL_TOKEN string
 
 const (
-	GENDECL_CONST GENDECL_TOKEN = "const"
-	GENDECL_TYPE  GENDECL_TOKEN = "type"
-	GENDECL_VAR   GENDECL_TOKEN = "var"
+	DECL_CONST DECL_TOKEN = "const"
+	DECL_TYPE  DECL_TOKEN = "type"
+	DECL_VAR   DECL_TOKEN = "var"
 )
 
 type GenDecl struct {
-	Token GENDECL_TOKEN
+	Token DECL_TOKEN
 	Specs []Spec
 	// Doc
 }

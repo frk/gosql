@@ -142,3 +142,28 @@ func (fx FuncExpr) Walk(w *writer.Writer) {
 }
 
 func (FuncExpr) exprNode() {}
+
+type BetweenPredicate struct {
+	Not     bool
+	Sym     bool
+	A, X, Y Expr
+}
+
+func (p BetweenPredicate) Walk(w *writer.Writer) {
+	p.A.Walk(w)
+	w.Write(" ")
+
+	if p.Not {
+		w.Write("NOT ")
+	}
+	w.Write("BETWEEN ")
+	if p.Sym {
+		w.Write("SYMMETRIC ")
+	}
+
+	p.X.Walk(w)
+	w.Write(" AND ")
+	p.Y.Walk(w)
+}
+
+func (BetweenPredicate) searchConditionNode() {}
