@@ -323,18 +323,18 @@ func (p ArrayComparisonPredicate) Walk(w *writer.Writer) {
 // equality comparison, treating nulls as ordinary values.
 type DistinctPredicate struct {
 	Not        bool
-	LPredicate ValueExpr
-	RPredicate ValueExpr
+	LPredicand ValueExpr
+	RPredicand ValueExpr
 }
 
 func (p DistinctPredicate) Walk(w *writer.Writer) {
-	p.LPredicate.Walk(w)
+	p.LPredicand.Walk(w)
 	if p.Not {
 		w.Write(" IS NOT DISTINCT FROM ")
 	} else {
 		w.Write(" IS DISTINCT FROM ")
 	}
-	p.RPredicate.Walk(w)
+	p.RPredicand.Walk(w)
 }
 
 func (TruthPredicate) predicateNode()           {}

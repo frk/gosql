@@ -814,67 +814,122 @@ func (g *generator) sqlsearchcond(w *whereblock, nested bool) sql.BoolValueExpr 
 }
 
 func (g *generator) sqlboolexpr(node interface{}) sql.BoolValueExpr {
+
 	switch n := node.(type) {
-	case *wherefield:
-		switch n.cmp {
-		case cmpeq, cmpne, cmpne2, cmplt, cmpgt, cmple, cmpge:
-			p := sql.ComparisonPredicate{}
-			p.LPredicand = g.sqlcolref(n.colid)
-			p.Cmp = cmpop2sqlnode[n.cmp]
-			p.RPredicand = g.sqlparam()
-			return p
-		case cmpislike, cmpnotlike:
-			p := sql.LikePredicate{}
-			p.Not = (n.cmp == cmpnotlike)
-			p.Predicand = g.sqlcolref(n.colid)
-			p.Pattern = g.sqlparam()
-			return p
-		}
+	// nested: build & return
+	case *whereblock:
+		return g.sqlsearchcond(n, true)
 
-	case *wherecolumn:
-		p := sql.ComparisonPredicate{}
-		p.LPredicand = g.sqlcolref(n.colid)
-		p.Cmp = cmpop2sqlnode[n.cmp]
-		if !n.colid2.isempty() {
-			p.RPredicand = g.sqlcolref(n.colid2)
-		} else if len(n.lit) > 0 {
-			p.RPredicand = sql.Literal{n.lit}
-		} else {
-			p.RPredicand = sql.NOOP
-		}
-		return p
-
-	case *joincond:
-		p := sql.ComparisonPredicate{}
-		p.LPredicand = g.sqlcolref(n.col1)
-		p.Cmp = cmpop2sqlnode[n.cmp]
-		if !n.col2.isempty() {
-			p.RPredicand = g.sqlcolref(n.col2)
-		} else if len(n.lit) > 0 {
-			p.RPredicand = sql.Literal{n.lit}
-		} else {
-			p.RPredicand = sql.NOOP
-		}
-		return p
-
+	// 3-arg predicate: build & return
 	case *wherebetween:
 		p := sql.BetweenPredicate{}
 		p.Predicand = g.sqlcolref(n.colid)
 		if x, ok := n.x.(colid); ok {
 			p.LowEnd = g.sqlcolref(x)
 		} else {
-			p.LowEnd = g.sqlparam() // assume *varinfo
+			// assume n.x is *varinfo
+			p.LowEnd = g.sqlparam()
 		}
 		if y, ok := n.y.(colid); ok {
 			p.HighEnd = g.sqlcolref(y)
 		} else {
-			p.HighEnd = g.sqlparam() // assume *varinfo
+			// assume n.x is *varinfo
+			p.HighEnd = g.sqlparam()
 		}
 		return p
 
-	case *whereblock:
-		return g.sqlsearchcond(n, true)
+	// 2-arg predicates: prepare first, then build & return
+	case *wherefield, *wherecolumn, *joincond:
+		var (
+			lhs sql.ColumnReference
+			rhs sql.ValueExpr
+			cmp cmpop
+		)
+
+		// prepare
+		switch n := node.(type) {
+		case *wherefield:
+			cmp = n.cmp
+			lhs = g.sqlcolref(n.colid)
+			rhs = g.sqlparam()
+		case *wherecolumn:
+			cmp = n.cmp
+			lhs = g.sqlcolref(n.colid)
+			if !n.colid2.isempty() {
+				rhs = g.sqlcolref(n.colid2)
+			} else if len(n.lit) > 0 {
+				rhs = sql.Literal{n.lit}
+			}
+		case *joincond:
+			cmp = n.cmp
+			lhs = g.sqlcolref(n.col1)
+			if !n.col2.isempty() {
+				rhs = g.sqlcolref(n.col2)
+			} else if len(n.lit) > 0 {
+				rhs = sql.Literal{n.lit}
+			}
+		}
+
+		// build & return
+		switch cmp {
+		case cmpeq, cmpne, cmpne2, cmplt, cmpgt, cmple, cmpge:
+			p := sql.ComparisonPredicate{}
+			p.Cmp = cmpop2sqlnode[cmp]
+			p.LPredicand = lhs
+			p.RPredicand = rhs
+			return p
+		case cmpislike, cmpnotlike:
+			p := sql.LikePredicate{}
+			p.Not = (cmp == cmpnotlike)
+			p.Predicand = lhs
+			p.Pattern = rhs
+			return p
+		case cmpisilike, cmpnotilike:
+			p := sql.ILikePredicate{}
+			p.Not = (cmp == cmpnotilike)
+			p.Predicand = lhs
+			p.Pattern = rhs
+			return p
+		case cmpissimilar, cmpnotsimilar:
+			p := sql.SimilarPredicate{}
+			p.Not = (cmp == cmpnotsimilar)
+			p.Predicand = lhs
+			p.Pattern = rhs
+			return p
+		case cmpisdistinct, cmpnotdistinct:
+			p := sql.DistinctPredicate{}
+			p.Not = (cmp == cmpnotdistinct)
+			p.LPredicand = lhs
+			p.RPredicand = rhs
+			return p
+		case cmprexp, cmprexpi, cmpnotrexp, cmpnotrexpi:
+			p := sql.RegexPredicate{}
+			p.Op = cmpop2sqlregexop[cmp]
+			p.Predicand = lhs
+			p.Pattern = rhs
+			return p
+		case cmpisin, cmpnotin:
+			p := sql.InPredicate{}
+			p.Not = (cmp == cmpnotin)
+			p.Predicand = lhs
+			p.ValueList = rhs
+			return p
+		case cmpistrue, cmpnottrue, cmpisfalse, cmpnotfalse, cmpisunknown, cmpnotunknown:
+			p := sql.TruthPredicate{}
+			p.Not = (cmp == cmpnottrue || cmp == cmpnotfalse || cmp == cmpnotunknown)
+			p.Truth = cmpop2sqltruth[cmp]
+			p.Predicand = lhs
+			return p
+		case cmpisnull, cmpnotnull:
+			p := sql.NullPredicate{}
+			p.Not = (cmp == cmpnotnull)
+			p.Predicand = lhs
+			return p
+		default:
+			return lhs // no comparison
+		}
 	}
+
 	return nil
 }
 
@@ -1041,6 +1096,22 @@ var cmpop2sqlnode = map[cmpop]sql.CMPOP{
 	cmpgt:  sql.GREATER_THAN,
 	cmple:  sql.LESS_THAN_EQUAL,
 	cmpge:  sql.GREATER_THAN_EQUAL,
+}
+
+var cmpop2sqlregexop = map[cmpop]sql.REGEXOP{
+	cmprexp:     sql.MATCH,
+	cmprexpi:    sql.MATCH_CI,
+	cmpnotrexp:  sql.NOT_MATCH,
+	cmpnotrexpi: sql.NOT_MATCH_CI,
+}
+
+var cmpop2sqltruth = map[cmpop]sql.TRUTH{
+	cmpisunknown:  sql.UNKNOWN,
+	cmpnotunknown: sql.UNKNOWN,
+	cmpistrue:     sql.TRUE,
+	cmpnottrue:    sql.TRUE,
+	cmpisfalse:    sql.FALSE,
+	cmpnotfalse:   sql.FALSE,
 }
 
 var jointype2sqlnode = map[jointype]sql.JoinType{

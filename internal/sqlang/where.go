@@ -96,6 +96,7 @@ func (op OR) Walk(w *writer.Writer) {
 }
 
 func (BoolValueExprList) boolValueExpr() {}
+func (ColumnReference) boolValueExpr()   {}
 
 func (AND) boolOpExpr() {}
 func (OR) boolOpExpr()  {}

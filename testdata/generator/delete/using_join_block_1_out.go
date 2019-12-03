@@ -9,7 +9,7 @@ import (
 func (q *DeleteWithUsingJoinBlock1Query) Exec(c gosql.Conn) error {
 	const queryString = `DELETE FROM "test_user" AS u
 	USING "test_post" AS p
-	WHERE u."id" = p."user_id" AND p."is_spam"` // `
+	WHERE u."id" = p."user_id" AND p."is_spam" IS TRUE` // `
 
 	_, err := c.Exec(queryString)
 	return err
