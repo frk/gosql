@@ -170,6 +170,9 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 		args.Ellipsis = true
 	} else {
 		args.AddExprs(g.queryargs(si.spec)...)
+		if len(args.List) > 3 {
+			args.OnePerLine = 2
+		}
 	}
 
 	// produce c.Exec( ... ) call
@@ -403,28 +406,48 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 
 func (g *generator) queryargs(spec *typespec) (args []gol.Expr) {
 	if spec.where != nil && len(spec.where.items) > 0 {
-		for _, item := range spec.where.items {
-			switch node := item.node.(type) {
-			case *wherefield:
-				sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
-				sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{node.name}}
-				args = append(args, sx)
-			case *wherecolumn:
-			case *wherebetween:
-				if x, ok := node.x.(*varinfo); ok {
-					sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
-					sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{node.name}}
-					sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{x.name}}
+		type loopstate struct {
+			where *whereblock      // the current iteration whereblock
+			idx   int              // keeps track of the item index
+			sx    gol.SelectorExpr // the selector expression for the current whereblock
+		}
+
+		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
+		stack := []*loopstate{{where: spec.where, sx: sx}}
+
+	stackloop:
+		for len(stack) > 0 {
+			loop := stack[len(stack)-1]
+			for loop.idx < len(loop.where.items) {
+				item := loop.where.items[loop.idx]
+				loop.idx++
+
+				switch node := item.node.(type) {
+				case *wherefield:
+					sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
 					args = append(args, sx)
+				case *wherebetween:
+					if x, ok := node.x.(*varinfo); ok {
+						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
+						sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{x.name}}
+						args = append(args, sx)
+					}
+					if y, ok := node.y.(*varinfo); ok {
+						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
+						sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{y.name}}
+						args = append(args, sx)
+					}
+				case *whereblock:
+					loop2 := new(loopstate)
+					loop2.where = node
+					loop2.sx = gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
+					stack = append(stack, loop2)
+					continue stackloop
+				case *wherecolumn:
+					// nothing to do
 				}
-				if y, ok := node.y.(*varinfo); ok {
-					sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
-					sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{node.name}}
-					sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{y.name}}
-					args = append(args, sx)
-				}
-			case *whereblock:
 			}
+			stack = stack[:len(stack)-1]
 		}
 	}
 
@@ -730,6 +753,7 @@ func (g *generator) sqlupdate(si *specinfo) (updstmt sql.UpdateStatement) {
 	return updstmt
 }
 
+// sqlselect builds and returns an sql.SelectStatement.
 func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
 	selstmt.Columns = g.sqlcolumns(si.info.output)
 	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
@@ -741,6 +765,7 @@ func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
 	return selstmt
 }
 
+// sqldelete builds and returns an sql.DeleteStatement.
 func (g *generator) sqldelete(si *specinfo) (delstmt sql.DeleteStatement) {
 	delstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	delstmt.Using = g.sqlusing(si.spec.join)
@@ -749,11 +774,12 @@ func (g *generator) sqldelete(si *specinfo) (delstmt sql.DeleteStatement) {
 	return delstmt
 }
 
-func (g *generator) sqlcolumns(fcs []*fieldcolumn) (cols sql.ColumnExprSlice) {
-	for _, fc := range fcs {
-		cols = append(cols, g.sqlcolexpr(fc))
+// sqlcolumns builds and returns a list of sql.ValueExpr values.
+func (g *generator) sqlcolumns(columns []*fieldcolumn) (list sql.ValueExprList) {
+	for _, c := range columns {
+		list = append(list, g.sqlcolexpr(c))
 	}
-	return cols
+	return list
 }
 
 func (g *generator) sqlwhere(w *whereblock) (where sql.WhereClause) {
@@ -761,56 +787,95 @@ func (g *generator) sqlwhere(w *whereblock) (where sql.WhereClause) {
 		return where
 	}
 
-	where.Conds = g.sqlsearchconds(w)
+	where.SearchCondition = g.sqlsearchcond(w, false)
 	return where
 }
 
-func (g *generator) sqlsearchconds(w *whereblock) (conds []sql.SearchCondition) {
-	for _, item := range w.items {
-		sqlbool := boolop2sqlnode[item.op]
+func (g *generator) sqlsearchcond(w *whereblock, nested bool) sql.BoolValueExpr {
+	if len(w.items) == 1 {
+		return g.sqlboolexpr(w.items[0].node)
+	}
 
-		switch node := item.node.(type) {
-		case *wherefield:
-			x := sql.BoolExpr{Bool: sqlbool}
-			x.Lhs = g.sqlcolid(node.colid)
-			x.Cmp = cmpop2sqlnode[node.cmp]
-			x.Rhs = g.sqlparam()
-			conds = append(conds, x)
+	var list sql.BoolValueExprList
+	list.Parenthesized = nested
+	list.Initial = g.sqlboolexpr(w.items[0].node)
 
-		case *wherecolumn:
-			x := sql.BoolExpr{Bool: sqlbool}
-			x.Lhs = g.sqlcolid(node.colid)
-			x.Cmp = cmpop2sqlnode[node.cmp]
-			if !node.colid2.isempty() {
-				x.Rhs = g.sqlcolid(node.colid2)
-			} else if len(node.lit) > 0 {
-				x.Rhs = sql.Literal(node.lit)
-			}
-			conds = append(conds, x)
-		case *wherebetween:
-			p := sql.BetweenPredicate{}
-			p.A = g.sqlcolid(node.colid)
-
-			if x, ok := node.x.(colid); ok {
-				p.X = g.sqlcolid(x)
-			} else {
-				p.X = g.sqlparam() // assume *varinfo
-			}
-			if y, ok := node.y.(colid); ok {
-				p.Y = g.sqlcolid(y)
-			} else {
-				p.Y = g.sqlparam() // assume *varinfo
-			}
-
-			conds = append(conds, p)
-		case *whereblock:
-			xl := sql.BoolExprList{Bool: sqlbool}
-			xl.List = g.sqlsearchconds(node)
-			conds = append(conds, xl)
+	for _, item := range w.items[1:] {
+		x := g.sqlboolexpr(item.node)
+		switch item.op {
+		case booland:
+			list.Items = append(list.Items, sql.AND{Operand: x})
+		case boolor:
+			list.Items = append(list.Items, sql.OR{Operand: x})
 		}
 
 	}
-	return conds
+	return list
+}
+
+func (g *generator) sqlboolexpr(node interface{}) sql.BoolValueExpr {
+	switch n := node.(type) {
+	case *wherefield:
+		switch n.cmp {
+		case cmpeq, cmpne, cmpne2, cmplt, cmpgt, cmple, cmpge:
+			p := sql.ComparisonPredicate{}
+			p.LPredicand = g.sqlcolref(n.colid)
+			p.Cmp = cmpop2sqlnode[n.cmp]
+			p.RPredicand = g.sqlparam()
+			return p
+		case cmpislike, cmpnotlike:
+			p := sql.LikePredicate{}
+			p.Not = (n.cmp == cmpnotlike)
+			p.Predicand = g.sqlcolref(n.colid)
+			p.Pattern = g.sqlparam()
+			return p
+		}
+
+	case *wherecolumn:
+		p := sql.ComparisonPredicate{}
+		p.LPredicand = g.sqlcolref(n.colid)
+		p.Cmp = cmpop2sqlnode[n.cmp]
+		if !n.colid2.isempty() {
+			p.RPredicand = g.sqlcolref(n.colid2)
+		} else if len(n.lit) > 0 {
+			p.RPredicand = sql.Literal{n.lit}
+		} else {
+			p.RPredicand = sql.NOOP
+		}
+		return p
+
+	case *joincond:
+		p := sql.ComparisonPredicate{}
+		p.LPredicand = g.sqlcolref(n.col1)
+		p.Cmp = cmpop2sqlnode[n.cmp]
+		if !n.col2.isempty() {
+			p.RPredicand = g.sqlcolref(n.col2)
+		} else if len(n.lit) > 0 {
+			p.RPredicand = sql.Literal{n.lit}
+		} else {
+			p.RPredicand = sql.NOOP
+		}
+		return p
+
+	case *wherebetween:
+		p := sql.BetweenPredicate{}
+		p.Predicand = g.sqlcolref(n.colid)
+		if x, ok := n.x.(colid); ok {
+			p.LowEnd = g.sqlcolref(x)
+		} else {
+			p.LowEnd = g.sqlparam() // assume *varinfo
+		}
+		if y, ok := n.y.(colid); ok {
+			p.HighEnd = g.sqlcolref(y)
+		} else {
+			p.HighEnd = g.sqlparam() // assume *varinfo
+		}
+		return p
+
+	case *whereblock:
+		return g.sqlsearchcond(n, true)
+	}
+	return nil
 }
 
 func (g *generator) sqlorderby(spec *typespec) (order sql.OrderClause) {
@@ -820,7 +885,7 @@ func (g *generator) sqlorderby(spec *typespec) (order sql.OrderClause) {
 
 	for _, item := range spec.orderby.items {
 		by := sql.OrderBy{}
-		by.Column = g.sqlcolid(item.col)
+		by.Column = g.sqlcolref(item.col)
 		by.Desc = (item.dir == orderdesc)
 		order.List = append(order.List, by)
 	}
@@ -837,15 +902,7 @@ func (g *generator) sqlusing(jb *joinblock) (using sql.UsingClause) {
 		var join sql.TableJoin
 		join.Type = jointype2sqlnode[item.typ]
 		join.Rel = g.sqlrelid(item.rel)
-		for _, cond := range item.conds {
-			var on sql.JoinOnExpr
-			on.Bool = boolop2sqlnode[cond.op]
-			on.Lhs = g.sqlcolid(cond.col1)
-			on.Cmp = cmpop2sqlnode[cond.cmp]
-			on.Rhs = g.sqlcolid(cond.col2)
-			join.On.List = append(join.On.List, on)
-		}
-
+		join.Cond = g.sqljoincond(item.conds)
 		using.List = append(using.List, join)
 	}
 	return using
@@ -860,18 +917,37 @@ func (g *generator) sqljoin(jb *joinblock) (jc sql.JoinClause) {
 		var join sql.TableJoin
 		join.Type = jointype2sqlnode[item.typ]
 		join.Rel = g.sqlrelid(item.rel)
-		for _, cond := range item.conds {
-			var on sql.JoinOnExpr
-			on.Bool = boolop2sqlnode[cond.op]
-			on.Lhs = g.sqlcolid(cond.col1)
-			on.Cmp = cmpop2sqlnode[cond.cmp]
-			on.Rhs = g.sqlcolid(cond.col2)
-			join.On.List = append(join.On.List, on)
-		}
-
+		join.Cond = g.sqljoincond(item.conds)
 		jc.List = append(jc.List, join)
 	}
 	return jc
+}
+
+func (g *generator) sqljoincond(cc []*joincond) (cond sql.JoinCondition) {
+	if len(cc) == 0 {
+		return cond
+	}
+
+	if len(cc) == 1 {
+		cond.SearchCondition = g.sqlboolexpr(cc[0])
+		return cond
+	}
+
+	var list sql.BoolValueExprList
+	list.Initial = g.sqlboolexpr(cc[0])
+
+	for _, c := range cc[1:] {
+		x := g.sqlboolexpr(c)
+		switch c.op {
+		case booland:
+			list.Items = append(list.Items, sql.AND{Operand: x})
+		case boolor:
+			list.Items = append(list.Items, sql.OR{Operand: x})
+		}
+	}
+
+	cond.SearchCondition = list
+	return cond
 }
 
 func (g *generator) sqlreturning(fcs []*fieldcolumn) (returning sql.ReturningClause) {
@@ -880,7 +956,7 @@ func (g *generator) sqlreturning(fcs []*fieldcolumn) (returning sql.ReturningCla
 	}
 
 	for _, fc := range fcs {
-		returning = append(returning, g.sqlcolid(fc.colid))
+		returning = append(returning, g.sqlcolref(fc.colid))
 	}
 	return returning
 }
@@ -927,8 +1003,8 @@ func (g *generator) sqlrelid(id relid) sql.Ident {
 	}
 }
 
-func (g *generator) sqlcolexpr(fc *fieldcolumn) sql.ColumnExpr {
-	id := g.sqlcolid(fc.colid)
+func (g *generator) sqlcolexpr(fc *fieldcolumn) sql.ValueExpr {
+	id := g.sqlcolref(fc.colid)
 	//if f.UseCOALESCE || (f.IsNULLable && canCoalesce && !f.Type.IsPointer) {
 	//	coalesce := sqlang.Coalesce{}
 	//	coalesce.A = col
@@ -945,32 +1021,26 @@ func (g *generator) sqlcolexpr(fc *fieldcolumn) sql.ColumnExpr {
 	return id
 }
 
-func (g *generator) sqlcolid(id colid) sql.ColumnIdent {
-	return sql.ColumnIdent{
-		Name: sql.Name(id.name),
+func (g *generator) sqlcolref(id colid) sql.ColumnReference {
+	return sql.ColumnReference{
 		Qual: id.qual,
+		Name: sql.Name(id.name),
 	}
 }
 
-func (g *generator) sqlparam() sql.PositionalParameter {
+func (g *generator) sqlparam() sql.OrdinalParameterSpec {
 	g.nparam += 1
-	return sql.PositionalParameter(g.nparam)
+	return sql.OrdinalParameterSpec{g.nparam}
 }
 
-var boolop2sqlnode = map[boolop]sql.BoolOp{
-	booland: sql.BoolAnd,
-	boolor:  sql.BoolOr,
-	boolnot: sql.BoolNot,
-}
-
-var cmpop2sqlnode = map[cmpop]sql.CmpOp{
-	cmpeq:  sql.CmpEq,
-	cmpne:  sql.CmpNe,
-	cmpne2: sql.CmpNe2,
-	cmplt:  sql.CmpLt,
-	cmpgt:  sql.CmpGt,
-	cmple:  sql.CmpLe,
-	cmpge:  sql.CmpGe,
+var cmpop2sqlnode = map[cmpop]sql.CMPOP{
+	cmpeq:  sql.EQUAL,
+	cmpne:  sql.NOT_EQUAL,
+	cmpne2: sql.NOT_EQUAL2,
+	cmplt:  sql.LESS_THAN,
+	cmpgt:  sql.GREATER_THAN,
+	cmple:  sql.LESS_THAN_EQUAL,
+	cmpge:  sql.GREATER_THAN_EQUAL,
 }
 
 var jointype2sqlnode = map[jointype]sql.JoinType{

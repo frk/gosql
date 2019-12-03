@@ -17,12 +17,6 @@ type NoOp struct{}
 
 func (NoOp) Walk(w *writer.Writer) {}
 
-type Literal string
-
-func (lit Literal) Walk(w *writer.Writer) {
-	w.Write(string(lit))
-}
-
 type SpaceChar struct{}
 
 func (SpaceChar) Walk(w *writer.Writer) {

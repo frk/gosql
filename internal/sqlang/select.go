@@ -7,7 +7,7 @@ import (
 )
 
 type SelectStatement struct {
-	Columns ColumnExprSlice
+	Columns ValueExpr
 	Table   Ident
 	Join    JoinClause
 	Where   WhereClause
@@ -61,13 +61,12 @@ func (s SelectExistsStatement) Walk(w *writer.Writer) {
 }
 
 type SelectCountStatement struct {
-	Columns ColumnExprSlice
-	Table   Ident
-	Join    JoinClause
-	Where   WhereClause
-	Order   OrderClause
-	Limit   LimitClause
-	Offset  OffsetClause
+	Table  Ident
+	Join   JoinClause
+	Where  WhereClause
+	Order  OrderClause
+	Limit  LimitClause
+	Offset OffsetClause
 }
 
 func (s SelectCountStatement) Walk(w *writer.Writer) {
@@ -97,7 +96,7 @@ func (l LimitClause) Walk(w *writer.Writer) {
 }
 
 type LimitValue interface {
-	Expr
+	Node
 	limitValueNode()
 }
 
@@ -127,7 +126,7 @@ func (l OffsetClause) Walk(w *writer.Writer) {
 }
 
 type OffsetValue interface {
-	Expr
+	Node
 	offsetValueNode()
 }
 
@@ -153,8 +152,11 @@ func (LimitUint) limitValueNode()   {}
 func (OffsetInt) offsetValueNode()  {}
 func (OffsetUint) offsetValueNode() {}
 
-func (PositionalParameter) limitValueNode()  {}
-func (PositionalParameter) offsetValueNode() {}
+func (OrdinalParameterSpec) limitValueNode()  {}
+func (OrdinalParameterSpec) offsetValueNode() {}
+
+func (DynamicParmeterSpec) limitValueNode()  {}
+func (DynamicParmeterSpec) offsetValueNode() {}
 
 type OrderClause struct {
 	List []OrderBy
@@ -175,7 +177,7 @@ func (c OrderClause) Walk(w *writer.Writer) {
 }
 
 type OrderBy struct {
-	Column     ColumnIdent
+	Column     ColumnReference
 	Desc       bool
 	NullsFirst bool
 }

@@ -5,165 +5,97 @@ import (
 )
 
 type WhereClause struct {
-	Conds []SearchCondition
+	SearchCondition BoolValueExpr
 }
 
-func (wc *WhereClause) Walk(w *writer.Writer) {
-	if wc == nil || len(wc.Conds) == 0 {
-		return
+func (where WhereClause) Walk(w *writer.Writer) {
+	if where.SearchCondition != nil {
+		w.Write("WHERE ")
+		where.SearchCondition.Walk(w)
 	}
-	w.Write("WHERE ")
-	if len(wc.Conds) > 2 {
-		wc.Conds[0].Walk(w)
-		for _, cond := range wc.Conds[1:] {
+}
+
+type BoolValueExpr interface {
+	Node
+	boolValueExpr()
+}
+
+type BoolValueExprList struct {
+	Parenthesized bool
+	Initial       BoolValueExpr
+	Items         []BoolOpExpr
+}
+
+func (list BoolValueExprList) Walk(w *writer.Writer) {
+	if len(list.Items) > 1 {
+
+		// list style
+		if list.Parenthesized {
+			w.Write("(")
+			w.Indent()
 			w.NewLine()
-			cond.Walk(w)
+		}
+		list.Initial.Walk(w)
+		for _, x := range list.Items {
+			w.NewLine()
+			x.Walk(w)
+		}
+		if list.Parenthesized {
+			w.Unindent()
+			w.NewLine()
+			w.Write(")")
 		}
 	} else {
-		for i, cond := range wc.Conds {
-			if i > 0 {
-				w.Write(" ")
-			}
-			cond.Walk(w)
+
+		// compact style
+		if list.Parenthesized {
+			w.Write("(")
 		}
-	}
-}
-
-type SearchCondition interface {
-	Node
-	searchConditionNode()
-}
-
-type BoolExpr struct {
-	Bool BoolOp
-	Lhs  Expr
-	Cmp  CmpOp
-	Rhs  Expr
-}
-
-func (x BoolExpr) Walk(w *writer.Writer) {
-	x.Bool.Walk(w)
-	if len(x.Bool) > 0 {
-		w.Write(" ")
-	}
-
-	x.Lhs.Walk(w)
-	x.Cmp.Walk(w)
-
-	if x.Rhs != nil {
-		x.Rhs.Walk(w)
-	}
-}
-
-type BoolExprList struct {
-	Bool BoolOp
-	List []SearchCondition
-}
-
-func (xl BoolExprList) Walk(w *writer.Writer) {
-	xl.Bool.Walk(w)
-	if len(xl.Bool) > 0 {
-		w.Write(" ")
-	}
-
-	w.Write("(")
-	for i, x := range xl.List {
-		if i > 0 {
+		list.Initial.Walk(w)
+		for _, x := range list.Items {
 			w.Write(" ")
+			x.Walk(w)
 		}
-		x.Walk(w)
+		if list.Parenthesized {
+			w.Write(")")
+		}
 	}
-	w.Write(")")
 }
 
-func (BoolExpr) searchConditionNode()     {}
-func (BoolExprList) searchConditionNode() {}
-
-type CmpOp string
-
-const (
-	CmpNone CmpOp = ""
-	CmpEq   CmpOp = "="
-	CmpNe   CmpOp = "<>"
-	CmpNe2  CmpOp = "!="
-	CmpGt   CmpOp = ">"
-	CmpLt   CmpOp = "<"
-	CmpGe   CmpOp = ">="
-	CmpLe   CmpOp = "<="
-)
-
-func (op CmpOp) Walk(w *writer.Writer) {
-	if op == CmpNone {
-		return
-	}
-
-	w.Write(" ")
-	w.Write(string(op))
-	w.Write(" ")
+type BoolOpExpr interface {
+	Node
+	boolOpExpr()
 }
 
-type BoolOp string
-
-const (
-	BoolNone BoolOp = ""
-	BoolNot  BoolOp = "NOT"
-	BoolAnd  BoolOp = "AND"
-	BoolOr   BoolOp = "OR"
-)
-
-func (op BoolOp) Walk(w *writer.Writer) {
-	if op == BoolNone {
-		return
-	}
-
-	//w.Write(" ")
-	w.Write(string(op))
-	//w.Write(" ")
-}
-
-type Modifier func(Expr) Expr
-
-func ModIdent(x Expr) Expr { return x }
-
-func ModLower(x Expr) Expr { return FuncExpr{"lower", x} }
-
-func ModUpper(x Expr) Expr { return FuncExpr{"upper", x} }
-
-type FuncExpr struct {
-	Name string
-	X    Expr
-}
-
-func (fx FuncExpr) Walk(w *writer.Writer) {
-	w.Write(fx.Name)
-	w.Write("(")
-	fx.X.Walk(w)
-	w.Write(")")
-}
-
-func (FuncExpr) exprNode() {}
-
-type BetweenPredicate struct {
+type AND struct {
 	Not     bool
-	Sym     bool
-	A, X, Y Expr
+	Operand BoolValueExpr
 }
 
-func (p BetweenPredicate) Walk(w *writer.Writer) {
-	p.A.Walk(w)
-	w.Write(" ")
-
-	if p.Not {
-		w.Write("NOT ")
+func (op AND) Walk(w *writer.Writer) {
+	if op.Not {
+		w.Write("AND NOT ")
+	} else {
+		w.Write("AND ")
 	}
-	w.Write("BETWEEN ")
-	if p.Sym {
-		w.Write("SYMMETRIC ")
-	}
-
-	p.X.Walk(w)
-	w.Write(" AND ")
-	p.Y.Walk(w)
+	op.Operand.Walk(w)
 }
 
-func (BetweenPredicate) searchConditionNode() {}
+type OR struct {
+	Not     bool
+	Operand BoolValueExpr
+}
+
+func (op OR) Walk(w *writer.Writer) {
+	if op.Not {
+		w.Write("OR NOT ")
+	} else {
+		w.Write("OR ")
+	}
+	op.Operand.Walk(w)
+}
+
+func (BoolValueExprList) boolValueExpr() {}
+
+func (AND) boolOpExpr() {}
+func (OR) boolOpExpr()  {}

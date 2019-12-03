@@ -206,7 +206,7 @@ func (ex UpdateExcluded) Walk(w *writer.Writer) {
 	}
 }
 
-type ReturningClause []ColumnExpr
+type ReturningClause []ValueExpr
 
 func (rc ReturningClause) Walk(w *writer.Writer) {
 	if len(rc) < 1 {

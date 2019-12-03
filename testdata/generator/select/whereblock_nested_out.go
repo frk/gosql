@@ -7,21 +7,22 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *SelectWithIteratorQuery) Exec(c gosql.Conn) error {
+func (q *SelectWithWhereBlockNestedQuery) Exec(c gosql.Conn) error {
 	const queryString = `SELECT
 	u."id"
 	, u."email"
 	, u."full_name"
 	, u."created_at"
 	FROM "test_user" AS u
-	WHERE u."created_at" > $1
-	LIMIT $2
-	OFFSET $3` // `
+	WHERE u."full_name" LIKE $1
+	AND u."created_at" > $2
+	OR (u."full_name" LIKE $3 AND u."created_at" < $4)` // `
 
 	rows, err := c.Query(queryString,
-		q.where.createdafter,
-		q.limit,
-		q.offset,
+		q.Where.FullName,
+		q.Where.CreatedAfter,
+		q.Where.Or.FullName,
+		q.Where.Or.CreatedBefore,
 	)
 	if err != nil {
 		return err
@@ -40,9 +41,7 @@ func (q *SelectWithIteratorQuery) Exec(c gosql.Conn) error {
 			return err
 		}
 
-		if err := q.iter.NextUser(v); err != nil {
-			return err
-		}
+		q.Users = append(q.Users, v)
 	}
 	return rows.Err()
 }

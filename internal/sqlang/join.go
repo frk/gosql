@@ -9,52 +9,6 @@ type TableExpr interface {
 	tableExprNode()
 }
 
-type TableJoin struct {
-	Type JoinType
-	Rel  Ident
-	On   JoinOn // can be left empty for cross joins
-}
-
-func (tj TableJoin) Walk(w *writer.Writer) {
-	tj.Type.Walk(w)
-	w.Write(" ")
-	tj.Rel.Walk(w)
-
-	// write the join_condition if not cross join
-	if tj.Type != JoinCross {
-		w.Write(" ")
-		tj.On.Walk(w)
-	}
-}
-
-func (Ident) tableExprNode()     {}
-func (TableJoin) tableExprNode() {}
-
-type JoinOn struct {
-	List []JoinOnExpr
-}
-
-func (jo JoinOn) Walk(w *writer.Writer) {
-	w.Write("ON ")
-	for _, x := range jo.List {
-		x.Walk(w)
-	}
-}
-
-type JoinOnExpr struct {
-	Bool BoolOp
-	Lhs  Expr
-	Cmp  CmpOp
-	Rhs  Expr
-}
-
-func (x JoinOnExpr) Walk(w *writer.Writer) {
-	x.Bool.Walk(w)
-	x.Lhs.Walk(w)
-	x.Cmp.Walk(w)
-	x.Rhs.Walk(w)
-}
-
 type JoinType string
 
 func (typ JoinType) Walk(w *writer.Writer) {
@@ -68,3 +22,35 @@ const (
 	JoinFull  JoinType = "FULL JOIN"
 	JoinCross JoinType = "CROSS JOIN"
 )
+
+type TableJoin struct {
+	Type JoinType
+	Rel  Ident
+	Cond JoinCondition // can be left empty for cross joins
+}
+
+func (tj TableJoin) Walk(w *writer.Writer) {
+	tj.Type.Walk(w)
+	w.Write(" ")
+	tj.Rel.Walk(w)
+
+	// write the join_condition if not cross join
+	if tj.Type != JoinCross {
+		w.Write(" ")
+		tj.Cond.Walk(w)
+	}
+}
+
+type JoinCondition struct {
+	SearchCondition BoolValueExpr
+}
+
+func (cond JoinCondition) Walk(w *writer.Writer) {
+	if cond.SearchCondition != nil {
+		w.Write("ON ")
+		cond.SearchCondition.Walk(w)
+	}
+}
+
+func (Ident) tableExprNode()     {}
+func (TableJoin) tableExprNode() {}

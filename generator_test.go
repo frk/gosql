@@ -65,12 +65,12 @@ func TestGenerate(t *testing.T) {
 			"offset_field_default",
 			"offset_field",
 			"orderby_directive",
+			"whereblock_between",
+			"whereblock_nested",
 			"whereblock_single",
 			"whereblock_slice",
-			"whereblock_between",
-			// errorhandler
 			// where with nested whereblock
-			// where with between
+			// errorhandler
 			// with modifier function
 			// nested record fields (to test allocation)
 
