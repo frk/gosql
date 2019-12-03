@@ -116,6 +116,13 @@ CREATE TABLE test_post (
 	, created_at timestamptz not null
 );
 
+CREATE TABLE test_nested (
+	foo_bar_baz_val text not null default ''
+	, foo_baz_val text not null default ''
+	, foo2_bar_baz_val text not null default ''
+	, foo2_baz_val text not null default ''
+);
+
 CREATE TABLE test_join1 (
 	id serial primary key
 	, post_id integer not null REFERENCES test_post (id)

@@ -33,6 +33,12 @@ func (u *User2) AfterScan() {
 }
 
 // for testing nested struct fields
+
+type Nested struct {
+	FOO  *Foo `sql:">foo_"`
+	*Foo `sql:">foo2_"`
+}
+
 type Foo struct {
 	Bar Bar  `sql:">bar_"`
 	Baz *Baz `sql:">baz_"`

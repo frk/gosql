@@ -814,7 +814,6 @@ func (g *generator) sqlsearchcond(w *whereblock, nested bool) sql.BoolValueExpr 
 }
 
 func (g *generator) sqlboolexpr(node interface{}) sql.BoolValueExpr {
-
 	switch n := node.(type) {
 	// nested: build & return
 	case *whereblock:
