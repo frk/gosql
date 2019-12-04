@@ -840,7 +840,7 @@ func (g *generator) sqlboolexpr(node interface{}) sql.BoolValueExpr {
 	// 2-arg predicates: prepare first, then build & return
 	case *wherefield, *wherecolumn, *joincond:
 		var (
-			lhs sql.ColumnReference
+			lhs sql.ValueExpr
 			rhs sql.ValueExpr
 			cmp cmpop
 		)
@@ -851,6 +851,17 @@ func (g *generator) sqlboolexpr(node interface{}) sql.BoolValueExpr {
 			cmp = n.cmp
 			lhs = g.sqlcolref(n.colid)
 			rhs = g.sqlparam()
+			if len(n.modfunc) > 0 {
+				li := sql.RoutineInvocation{}
+				li.Name = string(n.modfunc)
+				li.Args = []sql.ValueExpr{lhs}
+				lhs = li
+
+				ri := sql.RoutineInvocation{}
+				ri.Name = string(n.modfunc)
+				ri.Args = []sql.ValueExpr{rhs}
+				rhs = ri
+			}
 		case *wherecolumn:
 			cmp = n.cmp
 			lhs = g.sqlcolref(n.colid)
@@ -925,7 +936,10 @@ func (g *generator) sqlboolexpr(node interface{}) sql.BoolValueExpr {
 			p.Predicand = lhs
 			return p
 		default:
-			return lhs // no comparison
+			// no comparison, assume lhs is by itself a boolean value expression
+			if x, ok := lhs.(sql.BoolValueExpr); ok {
+				return x
+			}
 		}
 	}
 

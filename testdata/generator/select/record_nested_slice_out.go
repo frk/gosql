@@ -26,7 +26,6 @@ func (q *SelectWithRecordNestedSliceQuery) Exec(c gosql.Conn) error {
 		v := new(common.Nested)
 		v.FOO = new(common.Foo)
 		v.FOO.Baz = new(common.Baz)
-		v.Foo = new(common.Foo)
 		v.Foo.Baz = new(common.Baz)
 		err := rows.Scan(
 			&v.FOO.Bar.Baz.Val,

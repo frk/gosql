@@ -161,6 +161,12 @@ UNIQUE (col_conkey1, col_conkey2);
 ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_nonunique_constraint
 FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
 
+CREATE FUNCTION increment(i integer) RETURNS integer AS $$
+BEGIN
+	RETURN i + 1;
+END;
+$$ LANGUAGE plpgsql;
+
 ` //`
 
 	if _, err = t.pg.db.Exec(populatedbquery); err != nil {

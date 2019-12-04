@@ -72,6 +72,26 @@ func (lit Literal) Walk(w *writer.Writer) {
 	w.Write(lit.Value)
 }
 
+// RoutineInvocation produces an SQL function call.
+type RoutineInvocation struct {
+	Name string
+	Args []ValueExpr
+}
+
+func (r RoutineInvocation) Walk(w *writer.Writer) {
+	w.Write(r.Name)
+	w.Write("(")
+
+	for i, a := range r.Args {
+		if i > 0 {
+			w.Write(", ")
+		}
+		a.Walk(w)
+	}
+
+	w.Write(")")
+}
+
 type nooptype uint8
 
 func (nooptype) Walk(w *writer.Writer) {}
@@ -81,4 +101,5 @@ func (ColumnReference) valueExprNode()      {}
 func (DynamicParmeterSpec) valueExprNode()  {}
 func (OrdinalParameterSpec) valueExprNode() {}
 func (Literal) valueExprNode()              {}
+func (RoutineInvocation) valueExprNode()    {}
 func (nooptype) valueExprNode()             {}

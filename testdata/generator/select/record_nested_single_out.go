@@ -21,7 +21,6 @@ func (q *SelectWithRecordNestedSingleQuery) Exec(c gosql.Conn) error {
 	q.Nested = new(common.Nested)
 	q.Nested.FOO = new(common.Foo)
 	q.Nested.FOO.Baz = new(common.Baz)
-	q.Nested.Foo = new(common.Foo)
 	q.Nested.Foo.Baz = new(common.Baz)
 	return row.Scan(
 		&q.Nested.FOO.Bar.Baz.Val,

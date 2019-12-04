@@ -170,7 +170,6 @@ func (p LikePredicate) Walk(w *writer.Writer) {
 	} else {
 		w.Write(" LIKE ")
 	}
-
 	p.Pattern.Walk(w)
 
 	if p.Escape != nil {
@@ -196,7 +195,6 @@ func (p ILikePredicate) Walk(w *writer.Writer) {
 	} else {
 		w.Write(" ILIKE ")
 	}
-
 	p.Pattern.Walk(w)
 
 	if p.Escape != nil {
@@ -222,7 +220,6 @@ func (p SimilarPredicate) Walk(w *writer.Writer) {
 	} else {
 		w.Write(" SIMILAR TO ")
 	}
-
 	p.Pattern.Walk(w)
 
 	if p.Escape != nil {

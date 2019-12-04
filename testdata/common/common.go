@@ -17,6 +17,8 @@ type User struct {
 	CreatedAt time.Time `sql:"created_at"`
 }
 
+// for testing AfterScan
+
 type User2Iterator interface {
 	NextUser(*User2) error
 }
@@ -35,8 +37,8 @@ func (u *User2) AfterScan() {
 // for testing nested struct fields
 
 type Nested struct {
-	FOO  *Foo `sql:">foo_"`
-	*Foo `sql:">foo2_"`
+	FOO *Foo `sql:">foo_"`
+	Foo `sql:">foo2_"`
 }
 
 type Foo struct {

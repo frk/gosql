@@ -68,6 +68,7 @@ func TestGenerate(t *testing.T) {
 			"record_nested_single",
 			"record_nested_slice",
 			"whereblock_between",
+			"whereblock_modifierfunc_single",
 			"whereblock_nested",
 			"whereblock_single",
 			"whereblock_slice",
