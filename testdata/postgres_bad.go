@@ -99,8 +99,8 @@ type SelectPostgresTestBAD_JoinBadLiteralExpression struct {
 	}
 }
 
-//BAD: Join column with bad scalar op colum type
-type SelectPostgresTestBAD_JoinBadScalarOpColumnType struct {
+//BAD: Join column with bad quantifier colum type
+type SelectPostgresTestBAD_JoinBadQuantifierColumnType struct {
 	Columns CT1 `rel:"column_tests_1:a"`
 	Join    struct {
 		_ gosql.LeftJoin `sql:"column_tests_2:b,b.col_foo >any a.col_a"`
@@ -196,8 +196,8 @@ type SelectPostgresTestBAD_WherePointerFieldForNonNullColumn struct {
 	}
 }
 
-//BAD: whereblock wrong field type for scalar op
-type SelectPostgresTestBAD_WhereBadFieldTypeForScalarOp struct {
+//BAD: whereblock wrong field type for quantifier
+type SelectPostgresTestBAD_WhereBadFieldTypeForQuantifier struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
 		B string `sql:"c.col_b isin"`
@@ -276,8 +276,8 @@ type SelectPostgresTestBAD_WhereColumnBadLiteralExpression struct {
 	}
 }
 
-//BAD: whereblock wrong column type for scalar op
-type SelectPostgresTestBAD_WhereColumnBadTypeForScalarOp struct {
+//BAD: whereblock wrong column type for quantifier
+type SelectPostgresTestBAD_WhereColumnBadTypeForQuantifier struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
 		_ gosql.Column `sql:"c.col_a isin c.col_b"`

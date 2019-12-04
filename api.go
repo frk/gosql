@@ -23,7 +23,7 @@ type (
 	// for a WHERE clause condition. The type of comparison that can be produced
 	// depends on the `sql` tag value supplied to the directive.
 	// The expected format of the tag's value is:
-	// { column [ comparison-operator [ scalar-operator ] { column | literal } ] }
+	// { column [ comparison-operator [ quantifier ] { column | literal } ] }
 	//
 	// (2) It can be used in an OnConflict block to specify the resulting
 	// ON CONFLICT clause's conflict_target as a list of index_column_names.

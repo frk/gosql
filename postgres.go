@@ -462,11 +462,11 @@ func (c *pgchecker) checkjoin(jb *joinblock) error {
 					typ = c.pg.cat.types[oid]
 				}
 
-				if cond.cmp.isarr() || cond.sop > 0 {
-					// Check that the scalar array operator can
-					// be used with the type of the RHS expression.
+				if cond.cmp.isarr() || cond.qua > 0 {
+					// Check that the quantifier can be used
+					// with the type of the RHS expression.
 					if typ.category != pgtypcategory_array {
-						return errors.BadExpressionTypeForScalarrOpError
+						return errors.BadExpressionTypeForQuantifierError
 					}
 					typ = c.pg.cat.types[typ.elem]
 				}
@@ -596,13 +596,13 @@ stackloop:
 				// list of types to which the field type can potentially be converted
 				var fieldoids = c.typeoids(node.typ)
 
-				// If this is a scalar array comparison then check that
+				// If this is a quantified comparison then check that
 				// the field is a slice or array, and also make sure that
 				// the column's type can be compared to the element type
 				// of the slice / array.
-				if node.sop > 0 || node.cmp.isarr() {
+				if node.qua > 0 || node.cmp.isarr() {
 					if node.typ.kind != kindslice && node.typ.kind != kindarray {
-						return errors.IllegalFieldTypeForScalarOpError
+						return errors.IllegalFieldTypeForQuantifierError
 					}
 					fieldoids = c.typeoids(*node.typ.elem)
 				}
@@ -661,11 +661,11 @@ stackloop:
 						panic("shouldn't happen")
 					}
 
-					if node.cmp.isarr() || node.sop > 0 {
-						// Check that the scalar array operator can
-						// be used with the type of the RHS expression.
+					if node.cmp.isarr() || node.qua > 0 {
+						// Check that the quantifier can be used
+						// with the type of the RHS expression.
 						if typ.category != pgtypcategory_array {
-							return errors.BadExpressionTypeForScalarrOpError
+							return errors.BadExpressionTypeForQuantifierError
 						}
 						typ = c.pg.cat.types[typ.elem]
 					}

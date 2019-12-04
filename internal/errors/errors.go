@@ -24,7 +24,7 @@ const (
 	EmptyOrderByListError                      errnum = 7
 	BadUnaryCmpopError                         errnum = 8
 	BadCmpopComboError                         errnum = 9
-	ExtraScalarropError                        errnum = 10
+	ExtraQuantifierError                       errnum = 10
 	BadRelIdError                              errnum = 11
 	BadColIdError                              errnum = 12
 	BadBoolTagValueError                       errnum = 13
@@ -39,7 +39,7 @@ const (
 	BadBetweenTypeError                        errnum = 22
 	BadLimitTypeError                          errnum = 23
 	BadOffsetTypeError                         errnum = 24
-	BadScalarFieldTypeError                    errnum = 25
+	BadQuantifierFieldTypeError                errnum = 25
 	BadRowsAffectedTypeError                   errnum = 26
 	IllegalCommandDirectiveError               errnum = 27
 	IllegalJoinBlockDirectiveError             errnum = 28
@@ -87,12 +87,12 @@ const (
 	UnsupportedColumnTypeError                 errnum = 69
 	IllegalPtrFieldForNotNullColumnError       errnum = 70
 	IllegalNullemptyForNotNullColumnError      errnum = 71
-	IllegalFieldTypeForScalarOpError           errnum = 72
+	IllegalFieldTypeForQuantifierError         errnum = 72
 	BadFieldToColumnTypeError                  errnum = 73
 	BadColumnTypeForDBFuncError                errnum = 74
 	IllegalUnaryComparisonOperatorError        errnum = 75
-	BadColumnTypeForScalarrOpError             errnum = 76
-	BadExpressionTypeForScalarrOpError         errnum = 77
+	BadColumnTypeForQuantifierError            errnum = 76
+	BadExpressionTypeForQuantifierError        errnum = 77
 	BadLiteralExpressionError                  errnum = 78
 	UnknownPostgresTypeError                   errnum = 79
 	BadColumnTypeForUnaryOpError               errnum = 80

@@ -46,8 +46,8 @@ func Test_pgchecker_run(t *testing.T) {
 		name: "SelectPostgresTestBAD_JoinBadLiteralExpression",
 		err:  errors.BadLiteralExpressionError,
 	}, {
-		name: "SelectPostgresTestBAD_JoinBadScalarOpColumnType",
-		err:  errors.BadExpressionTypeForScalarrOpError,
+		name: "SelectPostgresTestBAD_JoinBadQuantifierColumnType",
+		err:  errors.BadExpressionTypeForQuantifierError,
 	}, {
 		name: "SelectPostgresTestBAD_JoinBadComparisonOperandType",
 		err:  errors.BadColumnToLiteralComparisonError,
@@ -82,8 +82,8 @@ func Test_pgchecker_run(t *testing.T) {
 		name: "SelectPostgresTestBAD_WherePointerFieldForNonNullColumn",
 		err:  errors.IllegalPtrFieldForNotNullColumnError,
 	}, {
-		name: "SelectPostgresTestBAD_WhereBadFieldTypeForScalarOp",
-		err:  errors.IllegalFieldTypeForScalarOpError,
+		name: "SelectPostgresTestBAD_WhereBadFieldTypeForQuantifier",
+		err:  errors.IllegalFieldTypeForQuantifierError,
 	}, {
 		name: "SelectPostgresTestBAD_WhereCannotCompareTypes",
 		err:  errors.BadFieldToColumnTypeError,
@@ -109,8 +109,8 @@ func Test_pgchecker_run(t *testing.T) {
 		name: "SelectPostgresTestBAD_WhereColumnBadLiteralExpression",
 		err:  errors.BadLiteralExpressionError,
 	}, {
-		name: "SelectPostgresTestBAD_WhereColumnBadTypeForScalarOp",
-		err:  errors.BadExpressionTypeForScalarrOpError,
+		name: "SelectPostgresTestBAD_WhereColumnBadTypeForQuantifier",
+		err:  errors.BadExpressionTypeForQuantifierError,
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnBadTypeComparison",
 		err:  errors.BadColumnToLiteralComparisonError,

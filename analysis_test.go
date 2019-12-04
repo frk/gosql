@@ -269,8 +269,8 @@ func TestAnalysis(t *testing.T) {
 		name: "UpdateAnalysisTestBAD_BadUnaryOp",
 		err:  errors.BadUnaryCmpopError,
 	}, {
-		name: "UpdateAnalysisTestBAD_ExtraScalarrop",
-		err:  errors.ExtraScalarropError,
+		name: "UpdateAnalysisTestBAD_ExtraQuantifier",
+		err:  errors.ExtraQuantifierError,
 	}, {
 		name: "SelectAnalysisTestBAD_BadBetweenFieldType",
 		err:  errors.BadBetweenTypeError,
@@ -296,8 +296,8 @@ func TestAnalysis(t *testing.T) {
 		name: "DeleteAnalysisTestBAD_IllegalWhereFieldUnaryCmp",
 		err:  errors.IllegalUnaryComparisonOperatorError,
 	}, {
-		name: "UpdateAnalysisTestBAD_BadWhereFieldTypeForScalarrop",
-		err:  errors.BadScalarFieldTypeError,
+		name: "UpdateAnalysisTestBAD_BadWhereFieldTypeForQuantifier",
+		err:  errors.BadQuantifierFieldTypeError,
 	}, {
 		name: "SelectAnalysisTestBAD_BadJoinBlockType",
 		err:  errors.BadJoinBlockTypeError,
@@ -320,8 +320,8 @@ func TestAnalysis(t *testing.T) {
 		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpop",
 		err:  errors.BadUnaryCmpopError,
 	}, {
-		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraScalarrop",
-		err:  errors.ExtraScalarropError,
+		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier",
+		err:  errors.ExtraQuantifierError,
 	}, {
 		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpopCombo",
 		err:  errors.BadCmpopComboError,
@@ -868,7 +868,7 @@ func TestAnalysis(t *testing.T) {
 					},
 					colid: colid{name: "column_c"},
 					cmp:   cmpeq,
-					sop:   scalarrany,
+					qua:   quantany,
 				}},
 				{op: booland, node: &wherefield{
 					name: "d",
@@ -881,7 +881,7 @@ func TestAnalysis(t *testing.T) {
 					},
 					colid: colid{name: "column_d"},
 					cmp:   cmpgt,
-					sop:   scalarrsome,
+					qua:   quantsome,
 				}},
 				{op: booland, node: &wherefield{
 					name: "e",
@@ -893,7 +893,7 @@ func TestAnalysis(t *testing.T) {
 					},
 					colid: colid{name: "column_e"},
 					cmp:   cmple,
-					sop:   scalarrall,
+					qua:   quantall,
 				}},
 			}},
 		},

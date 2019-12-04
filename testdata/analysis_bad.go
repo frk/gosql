@@ -351,8 +351,8 @@ type UpdateAnalysisTestBAD_BadUnaryOp struct {
 	}
 }
 
-//BAD: Update with extra scalar array op
-type UpdateAnalysisTestBAD_ExtraScalarrop struct {
+//BAD: Update with extra quantifier
+type UpdateAnalysisTestBAD_ExtraQuantifier struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
 		_ gosql.Column `sql:"x isnull any"`
@@ -434,8 +434,8 @@ type DeleteAnalysisTestBAD_IllegalWhereFieldUnaryCmp struct {
 	}
 }
 
-//BAD: Update with bad where field type for scalarrop
-type UpdateAnalysisTestBAD_BadWhereFieldTypeForScalarrop struct {
+//BAD: Update with bad where field type for quantifier
+type UpdateAnalysisTestBAD_BadWhereFieldTypeForQuantifier struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
 		Id int `sql:"a.id = any"`
@@ -497,8 +497,8 @@ type SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpop struct {
 	}
 }
 
-//BAD: Select with bad gosql.JoinXxx directive expression extra scalarrop
-type SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraScalarrop struct {
+//BAD: Select with bad gosql.JoinXxx directive expression extra quantifier
+type SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
 		_ gosql.LeftJoin `sql:"relation_b:b,b.foo isnull any"`

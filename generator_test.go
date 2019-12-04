@@ -73,8 +73,7 @@ func TestGenerate(t *testing.T) {
 			"whereblock_single",
 			"whereblock_slice",
 			// errorhandler
-			// with modifier function
-			// nested record fields (to test allocation)
+			// quantifier
 
 			// exists
 			// count

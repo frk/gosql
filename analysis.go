@@ -711,7 +711,7 @@ stackloop:
 					wn := new(wherecolumn)
 					wn.colid = colid
 					wn.cmp = string2cmpop[op]
-					wn.sop = string2scalarrop[op2]
+					wn.qua = string2quantifier[op2]
 
 					if a.iscolid(rhs) {
 						wn.colid2, _ = a.colid(rhs, fld) // ignore error since iscolid returned true
@@ -722,7 +722,7 @@ stackloop:
 					if wn.cmp.isunary() {
 						// TODO add test
 						return errors.IllegalUnaryComparisonOperatorError
-					} else if wn.sop > 0 && !wn.cmp.canusescalar() {
+					} else if wn.qua > 0 && !wn.cmp.canquantify() {
 						return errors.BadCmpopComboError
 					}
 
@@ -745,7 +745,7 @@ stackloop:
 					return errors.BadUnaryCmpopError
 				}
 				if len(op2) > 0 {
-					return errors.ExtraScalarropError
+					return errors.ExtraQuantifierError
 				}
 
 				wn := new(wherecolumn)
@@ -765,7 +765,7 @@ stackloop:
 			if strings.Contains(op, "between") {
 				if len(op2) > 0 {
 					// TODO test
-					return errors.ExtraScalarropError
+					return errors.ExtraQuantifierError
 				}
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
@@ -842,8 +842,8 @@ stackloop:
 				return errors.IllegalUnaryComparisonOperatorError
 			}
 
-			sop := string2scalarrop[op2]
-			if sop > 0 && !cmp.canusescalar() {
+			qua := string2quantifier[op2]
+			if qua > 0 && !cmp.canquantify() {
 				return errors.BadCmpopComboError
 			}
 
@@ -852,11 +852,11 @@ stackloop:
 			wf.colid = colid
 			wf.typ, _ = a.typeinfo(fld.Type())
 			wf.cmp = cmp
-			wf.sop = sop
+			wf.qua = qua
 			wf.modfunc = a.funcname(tag["sql"][1:])
 
-			if wf.sop > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
-				return errors.BadScalarFieldTypeError
+			if wf.qua > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
+				return errors.BadQuantifierFieldTypeError
 			}
 
 			item.node = wf
@@ -942,20 +942,20 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 					}
 
 					cond.cmp = string2cmpop[op]
-					cond.sop = string2scalarrop[op2]
+					cond.qua = string2quantifier[op2]
 
 					if len(rhs) > 0 {
 						if cond.cmp.isunary() {
 							// TODO add test
 							return errors.IllegalUnaryComparisonOperatorError
-						} else if cond.sop > 0 && !cond.cmp.canusescalar() {
+						} else if cond.qua > 0 && !cond.cmp.canquantify() {
 							return errors.BadCmpopComboError
 						}
 					} else {
 						if !cond.cmp.isunary() {
 							return errors.BadUnaryCmpopError
 						} else if len(op2) > 0 {
-							return errors.ExtraScalarropError
+							return errors.ExtraQuantifierError
 						}
 					}
 
@@ -1051,8 +1051,8 @@ func (a *analyzer) onconflictblock(field *types.Var) (err error) {
 
 // Parses the given string as a comparison expression and returns the
 // individual elements of that expression. The expected format is:
-// { column [ comparison-operator [ scalar-operator ] { column | literal } ] }
-func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
+// { column [ comparison-operator [ quantifier ] { column | literal } ] }
+func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, qua, rhs string) {
 	expr = strings.TrimSpace(expr)
 
 	for i := range expr {
@@ -1132,16 +1132,16 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
 		case 'a': // ANY or ALL
 			n := len("any") // any and all have the same length so we test against both at the same time
 			if len(x) >= n && (x[:n] == "any" || x[:n] == "all") && (len(x) == n || x[n] == ' ') {
-				sop, rhs = x[:n], rhs[n:]
+				qua, rhs = x[:n], rhs[n:]
 			}
 		case 's': // SOME
 			n := len("some")
 			if len(x) >= n && x[:n] == "some" && (len(x) == n || x[n] == ' ') {
-				sop, rhs = x[:n], rhs[n:]
+				qua, rhs = x[:n], rhs[n:]
 			}
 		}
 
-		sop = strings.TrimSpace(sop)
+		qua = strings.TrimSpace(qua)
 		rhs = strings.TrimSpace(rhs)
 	}
 
@@ -1150,7 +1150,7 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, sop, rhs string) {
 		return expr, "", "", "" // default
 	}
 
-	return lhs, cop, sop, rhs
+	return lhs, cop, qua, rhs
 }
 
 func (a *analyzer) limitvar(field *types.Var, tag string) error {
@@ -1829,7 +1829,7 @@ type joincond struct {
 	col2 colid  // the optional 2nd column to be compared to col1
 	lit  string // the optional literal value
 	cmp  cmpop  // the comparison operator of the join condition
-	sop  scalarrop
+	qua  quantifier
 }
 
 type varinfo struct {
@@ -1852,7 +1852,7 @@ type wherefield struct {
 	typ   typeinfo //
 	colid colid    //
 	cmp   cmpop    //
-	sop   scalarrop
+	qua   quantifier
 	// The name of the function to be used to modify the comparison
 	// operands' values before comparing them.
 	modfunc funcname
@@ -1874,7 +1874,7 @@ type wherecolumn struct {
 	// the target column either using a predicate unary operator, or a binary
 	// operator comparing against the colid2 column or the lit value.
 	cmp cmpop
-	sop scalarrop
+	qua quantifier
 }
 
 type wherebetween struct {
@@ -1999,8 +1999,8 @@ func (op cmpop) is(oo ...cmpop) bool {
 	return false
 }
 
-// canusescalar returns true if op can be used together with a scalar array operator.
-func (op cmpop) canusescalar() bool {
+// canquantify returns true if op can be used together with a quantifier.
+func (op cmpop) canquantify() bool {
 	return op.isbinary() || op.ispatmatch()
 }
 
@@ -2130,19 +2130,19 @@ var predicateadjectives = []string{ // and adverbs
 	"unknown",
 }
 
-type scalarrop uint8 // scalar array operator
+type quantifier uint8
 
 const (
-	_           scalarrop = iota // no operator
-	scalarrany                   // ANY
-	scalarrsome                  // SOME
-	scalarrall                   // ALL
+	_         quantifier = iota // no operator
+	quantany                    // ANY
+	quantsome                   // SOME
+	quantall                    // ALL
 )
 
-var string2scalarrop = map[string]scalarrop{
-	"any":  scalarrany,
-	"some": scalarrsome,
-	"all":  scalarrall,
+var string2quantifier = map[string]quantifier{
+	"any":  quantany,
+	"some": quantsome,
+	"all":  quantall,
 }
 
 type orderdirection uint8
