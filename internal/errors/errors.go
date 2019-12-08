@@ -22,8 +22,8 @@ const (
 	NoBetweenXYArgsError                       errnum = 5
 	EmptyColListError                          errnum = 6
 	EmptyOrderByListError                      errnum = 7
-	BadUnaryCmpopError                         errnum = 8
-	BadCmpopComboError                         errnum = 9
+	BadUnaryPredicateError                     errnum = 8
+	BadPredicateComboError                     errnum = 9
 	ExtraQuantifierError                       errnum = 10
 	BadRelIdError                              errnum = 11
 	BadColIdError                              errnum = 12
@@ -90,7 +90,7 @@ const (
 	IllegalFieldTypeForQuantifierError         errnum = 72
 	BadFieldToColumnTypeError                  errnum = 73
 	BadColumnTypeForDBFuncError                errnum = 74
-	IllegalUnaryComparisonOperatorError        errnum = 75
+	IllegalUnaryPredicateError                 errnum = 75
 	BadColumnTypeForQuantifierError            errnum = 76
 	BadExpressionTypeForQuantifierError        errnum = 77
 	BadLiteralExpressionError                  errnum = 78

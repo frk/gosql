@@ -327,8 +327,8 @@ type SelectAnalysisTestBAD_BadColumnExpressionLHS struct {
 	}
 }
 
-//BAD: Select with bad gosql.Column cmpop combo
-type SelectAnalysisTestBAD_BadColumnCmpopCombo struct {
+//BAD: Select with bad gosql.Column predicate combo
+type SelectAnalysisTestBAD_BadColumnPredicateCombo struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
 		_ gosql.Column `sql:"x isin any y"`
@@ -418,8 +418,8 @@ type DeleteAnalysisTestBAD_BadWhereFieldColId struct {
 	}
 }
 
-//BAD: Delete with bad where field cmpop combo
-type DeleteAnalysisTestBAD_BadWhereFieldCmpopCombo struct {
+//BAD: Delete with bad where field predicate combo
+type DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
 		Id int `sql:"a.id notin any"`
@@ -427,7 +427,7 @@ type DeleteAnalysisTestBAD_BadWhereFieldCmpopCombo struct {
 }
 
 //BAD: Delete with illegal where field unary comparison
-type DeleteAnalysisTestBAD_IllegalWhereFieldUnaryCmp struct {
+type DeleteAnalysisTestBAD_IllegalWhereFieldUnaryPredicate struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
 		Id int `sql:"a.id istrue"`
@@ -489,8 +489,8 @@ type SelectAnalysisTestBAD_BadJoinDirectiveExpressionColId struct {
 	}
 }
 
-//BAD: Select with bad gosql.JoinXxx directive expression cmpop
-type SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpop struct {
+//BAD: Select with bad gosql.JoinXxx directive expression predicate
+type SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicate struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
 		_ gosql.LeftJoin `sql:"relation_b:b,b.foo ="`
@@ -505,8 +505,8 @@ type SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier struct {
 	}
 }
 
-//BAD: Select with bad gosql.JoinXxx directive expression cmpop combo
-type SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpopCombo struct {
+//BAD: Select with bad gosql.JoinXxx directive expression predicate combo
+type SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicateCombo struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
 		_ gosql.LeftJoin `sql:"relation_b:b,b.foo isin any a.bar"`

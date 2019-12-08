@@ -165,7 +165,7 @@ type pgchecker struct {
 
 // fieldcolumn is used to hold a field and its corresponding column.
 type fieldcolumn struct {
-	field  *fieldinfo
+	field  *recfield
 	column *pgcolumn
 	colid  colid
 }
@@ -417,64 +417,70 @@ func (c *pgchecker) checkjoin(jb *joinblock) error {
 		c.joinlist = append(c.joinlist, rel)
 
 		for _, cond := range join.conds {
-			// A join condition's left-hand-side column MUST always
-			// reference a column of the relation being joined, so to
-			// avoid confusion make sure that cond.col1 has either no
-			// qualifier or, if it has one, it matches the alias of
-			// the joined table.
-			if cond.col1.qual != "" && cond.col1.qual != join.rel.alias {
-				return errors.NoDBRelationError
-			}
-
-			// Make sure that col1 is present in relation being joined.
-			col := rel.column(cond.col1.name)
-			if col == nil {
-				return errors.NoDBColumnError
-			}
-
-			if cond.cmp.isunary() {
-				// Column type must be bool if the comparison operator
-				// is one of the IS [NOT] {FALSE|TRUE|UNKNOWN} operators.
-				if cond.cmp.isbool() && col.typ.oid != pgtyp_bool {
-					return errors.BadColumnTypeForUnaryOpError
+			switch node := cond.node.(type) {
+			case *columnpredicate:
+				// A join condition's left-hand-side column MUST always
+				// reference a column of the relation being joined, so to
+				// avoid confusion make sure that node.colid has either no
+				// qualifier or, if it has one, it matches the alias of
+				// the joined table.
+				if node.colid.qual != "" && node.colid.qual != join.rel.alias {
+					return errors.NoDBRelationError
 				}
-				// Column must be NULLable if the comparison operator
-				// is one of the IS [NOT] NULL operators.
-				if col.hasnotnull && (cond.cmp == cmpisnull || cond.cmp == cmpnotnull) {
-					return errors.BadColumnNULLSettingForNULLOpError
+
+				// Make sure that colid is present in relation being joined.
+				col := rel.column(node.colid.name)
+				if col == nil {
+					return errors.NoDBColumnError
 				}
-			} else {
-				var typ *pgtype
-				// Get the type of the right hand side, which is
-				// either a column or a literal expression.
-				if len(cond.col2.name) > 0 {
-					col2, err := c.column(cond.col2)
-					if err != nil {
-						return err
+
+				if node.pred.isunary() {
+					// Column type must be bool if the predicate type produces
+					// the "IS [NOT] { FALSE | TRUE | UNKNOWN }" SQL predicate.
+					if node.pred.istruth() && col.typ.oid != pgtyp_bool {
+						return errors.BadColumnTypeForUnaryOpError
 					}
-					typ = col2.typ
-				} else if len(cond.lit) > 0 {
-					var oid pgoid
-					row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, cond.lit))
-					if err := row.Scan(&oid); err != nil {
-						return errors.BadLiteralExpressionError
+					// Column must be NULLable if the predicate type
+					// produces the "IS [NOT] NULL" SQL predicate.
+					if col.hasnotnull && (node.pred == isnull || node.pred == notnull) {
+						return errors.BadColumnNULLSettingForNULLOpError
 					}
-					typ = c.pg.cat.types[oid]
-				}
-
-				if cond.cmp.isarr() || cond.qua > 0 {
-					// Check that the quantifier can be used
-					// with the type of the RHS expression.
-					if typ.category != pgtypcategory_array {
-						return errors.BadExpressionTypeForQuantifierError
+				} else {
+					var typ *pgtype
+					// Get the type of the right hand side, which is
+					// either a column or a literal expression.
+					if len(node.colid2.name) > 0 {
+						colid2, err := c.column(node.colid2)
+						if err != nil {
+							return err
+						}
+						typ = colid2.typ
+					} else if len(node.lit) > 0 {
+						var oid pgoid
+						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, node.lit))
+						if err := row.Scan(&oid); err != nil {
+							return errors.BadLiteralExpressionError
+						}
+						typ = c.pg.cat.types[oid]
 					}
-					typ = c.pg.cat.types[typ.elem]
-				}
 
-				rhsoids := []pgoid{typ.oid}
-				if !c.cancompare(col, rhsoids, cond.cmp) {
-					return errors.BadColumnToLiteralComparisonError
+					if node.pred.isarrcmp() || node.qua > 0 {
+						// Check that the quantifier can be used
+						// with the type of the RHS expression.
+						if typ.category != pgtypcategory_array {
+							return errors.BadExpressionTypeForQuantifierError
+						}
+						typ = c.pg.cat.types[typ.elem]
+					}
+
+					rhsoids := []pgoid{typ.oid}
+					if !c.cancompare(col, rhsoids, node.pred) {
+						return errors.BadColumnToLiteralComparisonError
+					}
 				}
+			default:
+				// NOTE(mkopriva): currently predicates other than
+				// columnpredicate are not supported as a join condition.
 			}
 		}
 	}
@@ -577,7 +583,7 @@ stackloop:
 			loop.idx++
 
 			switch node := item.node.(type) {
-			case *wherefield:
+			case *fieldpredicate:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
 				col, err := c.column(node.colid)
@@ -588,23 +594,23 @@ stackloop:
 				// If the column cannot be set to NULL, then make
 				// sure that the field's not a pointer.
 				if col.hasnotnull {
-					if node.typ.kind == kindptr {
+					if node.field.typ.kind == kindptr {
 						return errors.IllegalPtrFieldForNotNullColumnError
 					}
 				}
 
 				// list of types to which the field type can potentially be converted
-				var fieldoids = c.typeoids(node.typ)
+				var fieldoids = c.typeoids(node.field.typ)
 
-				// If this is a quantified comparison then check that
+				// If this is a quantified predicate then check that
 				// the field is a slice or array, and also make sure that
 				// the column's type can be compared to the element type
 				// of the slice / array.
-				if node.qua > 0 || node.cmp.isarr() {
-					if node.typ.kind != kindslice && node.typ.kind != kindarray {
+				if node.qua > 0 || node.pred.isarrcmp() {
+					if node.field.typ.kind != kindslice && node.field.typ.kind != kindarray {
 						return errors.IllegalFieldTypeForQuantifierError
 					}
-					fieldoids = c.typeoids(*node.typ.elem)
+					fieldoids = c.typeoids(*node.field.typ.elem)
 				}
 
 				if len(node.modfunc) > 0 {
@@ -616,11 +622,11 @@ stackloop:
 				} else {
 					// Check that the Field's type can be
 					// compared to that of the Column.
-					if !c.cancompare(col, fieldoids, node.cmp) {
+					if !c.cancompare(col, fieldoids, node.pred) {
 						return errors.BadFieldToColumnTypeError
 					}
 				}
-			case *wherecolumn:
+			case *columnpredicate:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
 				col, err := c.column(node.colid)
@@ -628,15 +634,15 @@ stackloop:
 					return err
 				}
 
-				if node.cmp.isunary() {
-					// Column type must be bool if the comparison operator
-					// is one of the IS [NOT] {FALSE|TRUE|UNKNOWN} operators.
-					if node.cmp.isbool() && col.typ.oid != pgtyp_bool {
+				if node.pred.isunary() {
+					// Column type must be bool if the predicate type produces
+					// the "IS [NOT] { FALSE | TRUE | UNKNOWN }" SQL predicate.
+					if node.pred.istruth() && col.typ.oid != pgtyp_bool {
 						return errors.BadColumnTypeForUnaryOpError
 					}
-					// Column must be NULLable if the comparison operator
-					// is one of the IS [NOT] NULL operators.
-					if col.hasnotnull && (node.cmp == cmpisnull || node.cmp == cmpnotnull) {
+					// Column must be NULLable if the predicate type
+					// produces the "IS [NOT] NULL" SQL predicate.
+					if col.hasnotnull && (node.pred == isnull || node.pred == notnull) {
 						return errors.BadColumnNULLSettingForNULLOpError
 					}
 				} else {
@@ -661,7 +667,7 @@ stackloop:
 						panic("shouldn't happen")
 					}
 
-					if node.cmp.isarr() || node.qua > 0 {
+					if node.pred.isarrcmp() || node.qua > 0 {
 						// Check that the quantifier can be used
 						// with the type of the RHS expression.
 						if typ.category != pgtypcategory_array {
@@ -671,11 +677,11 @@ stackloop:
 					}
 
 					rhsoids := []pgoid{typ.oid}
-					if !c.cancompare(col, rhsoids, node.cmp) {
+					if !c.cancompare(col, rhsoids, node.pred) {
 						return errors.BadColumnToLiteralComparisonError
 					}
 				}
-			case *wherebetween:
+			case *betweenpredicate:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
 				col, err := c.column(node.colid)
@@ -683,7 +689,7 @@ stackloop:
 					return err
 				}
 
-				// Check that both arguments, x and y, can be compared to the column.
+				// Check that both predicands, x and y, can be compared to the column.
 				for _, arg := range []interface{}{node.x, node.y} {
 					var argoids []pgoid
 					switch a := arg.(type) {
@@ -693,11 +699,11 @@ stackloop:
 							return err
 						}
 						argoids = []pgoid{col2.typ.oid}
-					case *varinfo:
+					case *paramfield:
 						argoids = c.typeoids(a.typ)
 					}
 
-					if !c.cancompare(col, argoids, cmpgt) {
+					if !c.cancompare(col, argoids, isgt) {
 						return errors.BadColumnToColumnTypeComparisonError
 					}
 				}
@@ -734,9 +740,9 @@ func (c *pgchecker) typeoids(typ typeinfo) []pgoid {
 }
 
 // cancompare reports whether a value of the given col's type can be compared to,
-// using the cmp operator, a value of one of the types specified by the given oids.
-func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool {
-	name := cmpop2basepgops[cmp]
+// using the predicate, a value of one of the types specified by the given oids.
+func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, pred predicate) bool {
+	name := predicate2basepgops[pred]
 	left := col.typ.oid
 	for _, right := range rhstypes {
 		if col.typ.category == pgtypcategory_string && right == pgtyp_unknown {
@@ -752,7 +758,7 @@ func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, cmp cmpop) bool 
 }
 
 // canassign reports whether a value
-func (c *pgchecker) canassign(col *pgcolumn, field *fieldinfo, atyp assigntype) bool {
+func (c *pgchecker) canassign(col *pgcolumn, field *recfield, atyp assigntype) bool {
 	// TODO(mkopriva): this returns on success, so write tests that test
 	// successful scenarios...
 
@@ -837,7 +843,7 @@ func (c *pgchecker) canassign(col *pgcolumn, field *fieldinfo, atyp assigntype) 
 
 // cancoerce reports whether or not a value of the given field's type can
 // be coerced into a value of the column's type.
-func (c *pgchecker) cancoerce(col *pgcolumn, field *fieldinfo) bool {
+func (c *pgchecker) cancoerce(col *pgcolumn, field *recfield) bool {
 	// if the target type is of the string category, accept.
 	if col.typ.category == pgtypcategory_string {
 		return true
@@ -1795,32 +1801,32 @@ var go2pgoids = map[string][]pgoid{
 	// gotypnullstringms: {},
 }
 
-// Map of supported cmpops to *equivalent* postgres comparison operators. For example
+// Map of supported predicates to *equivalent* postgres comparison operators. For example
 // the constructs IN and NOT IN are essentially the same as comparing the LHS to every
 // element of the RHS with the operators "=" and "<>" respectively, and therefore the
-// cmpisin maps to "=" and cmpnotin maps to "<>".
-var cmpop2basepgops = map[cmpop]string{
-	cmpeq:          "=",
-	cmpne:          "<>",
-	cmpne2:         "<>",
-	cmplt:          "<",
-	cmpgt:          ">",
-	cmple:          "<=",
-	cmpge:          ">=",
-	cmprexp:        "~",
-	cmprexpi:       "~*",
-	cmpnotrexp:     "!~",
-	cmpnotrexpi:    "!~*",
-	cmpisdistinct:  "<>",
-	cmpnotdistinct: "=",
-	cmpislike:      "~~",
-	cmpnotlike:     "!~~",
-	cmpisilike:     "~~*",
-	cmpnotilike:    "!~~*",
-	cmpissimilar:   "~~",
-	cmpnotsimilar:  "!~~",
-	cmpisin:        "=",
-	cmpnotin:       "<>",
+// isin maps to "=" and notin maps to "<>".
+var predicate2basepgops = map[predicate]string{
+	iseq:        "=",
+	noteq:       "<>",
+	noteq2:      "<>",
+	islt:        "<",
+	isgt:        ">",
+	islte:       "<=",
+	isgte:       ">=",
+	ismatch:     "~",
+	ismatchi:    "~*",
+	notmatch:    "!~",
+	notmatchi:   "!~*",
+	isdistinct:  "<>",
+	notdistinct: "=",
+	islike:      "~~",
+	notlike:     "!~~",
+	isilike:     "~~*",
+	notilike:    "!~~*",
+	issimilar:   "~~",
+	notsimilar:  "!~~",
+	isin:        "=",
+	notin:       "<>",
 }
 
 ////////////////////////////////////////////////////////////////////////////////

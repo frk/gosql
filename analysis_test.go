@@ -33,7 +33,7 @@ func TestAnalysis(t *testing.T) {
 		isimported: true,
 	}
 
-	commonUserFields := []*fieldinfo{{
+	commonUserFields := []*recfield{{
 		name:       "Id",
 		typ:        typeinfo{kind: kindint},
 		isexported: true,
@@ -81,7 +81,7 @@ func TestAnalysis(t *testing.T) {
 				pkglocal: "testdata",
 			},
 			isslice: true,
-			fields: []*fieldinfo{{
+			fields: []*recfield{{
 				typ:        typeinfo{kind: kindstring},
 				name:       "F",
 				isexported: true,
@@ -99,7 +99,7 @@ func TestAnalysis(t *testing.T) {
 			pkgname:  "testdata",
 			pkglocal: "testdata",
 		},
-		fields: []*fieldinfo{{
+		fields: []*recfield{{
 			typ:        typeinfo{kind: kindstring},
 			name:       "F",
 			isexported: true,
@@ -260,14 +260,14 @@ func TestAnalysis(t *testing.T) {
 		name: "SelectAnalysisTestBAD_BadColumnExpressionLHS",
 		err:  errors.BadColIdError,
 	}, {
-		name: "SelectAnalysisTestBAD_BadColumnCmpopCombo",
-		err:  errors.BadCmpopComboError,
+		name: "SelectAnalysisTestBAD_BadColumnPredicateCombo",
+		err:  errors.BadPredicateComboError,
 	}, {
 		name: "DeleteAnalysisTestBAD_BadColumnExpressionLHS",
 		err:  errors.BadColIdError,
 	}, {
 		name: "UpdateAnalysisTestBAD_BadUnaryOp",
-		err:  errors.BadUnaryCmpopError,
+		err:  errors.BadUnaryPredicateError,
 	}, {
 		name: "UpdateAnalysisTestBAD_ExtraQuantifier",
 		err:  errors.ExtraQuantifierError,
@@ -290,11 +290,11 @@ func TestAnalysis(t *testing.T) {
 		name: "DeleteAnalysisTestBAD_BadWhereFieldColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "DeleteAnalysisTestBAD_BadWhereFieldCmpopCombo",
-		err:  errors.BadCmpopComboError,
+		name: "DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo",
+		err:  errors.BadPredicateComboError,
 	}, {
-		name: "DeleteAnalysisTestBAD_IllegalWhereFieldUnaryCmp",
-		err:  errors.IllegalUnaryComparisonOperatorError,
+		name: "DeleteAnalysisTestBAD_IllegalWhereFieldUnaryPredicate",
+		err:  errors.IllegalUnaryPredicateError,
 	}, {
 		name: "UpdateAnalysisTestBAD_BadWhereFieldTypeForQuantifier",
 		err:  errors.BadQuantifierFieldTypeError,
@@ -317,14 +317,14 @@ func TestAnalysis(t *testing.T) {
 		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionColId",
 		err:  errors.BadColIdError,
 	}, {
-		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpop",
-		err:  errors.BadUnaryCmpopError,
+		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicate",
+		err:  errors.BadUnaryPredicateError,
 	}, {
 		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier",
 		err:  errors.ExtraQuantifierError,
 	}, {
-		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionCmpopCombo",
-		err:  errors.BadCmpopComboError,
+		name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicateCombo",
+		err:  errors.BadPredicateComboError,
 	}, {
 		name: "DeleteAnalysisTestBAD_IllegalJoinBlockDirective",
 		err:  errors.IllegalJoinBlockDirectiveError,
@@ -429,7 +429,7 @@ func TestAnalysis(t *testing.T) {
 				base: typeinfo{
 					kind: kindstruct,
 				},
-				fields: []*fieldinfo{{
+				fields: []*recfield{{
 					name:       "Name3",
 					typ:        typeinfo{kind: kindstring},
 					isexported: true,
@@ -497,7 +497,7 @@ func TestAnalysis(t *testing.T) {
 				base: typeinfo{
 					kind: kindstruct,
 				},
-				fields: []*fieldinfo{{
+				fields: []*recfield{{
 					name:   "a",
 					typ:    typeinfo{kind: kindint},
 					colid:  colid{name: "a"},
@@ -554,9 +554,9 @@ func TestAnalysis(t *testing.T) {
 				base: typeinfo{
 					kind: kindstruct,
 				},
-				fields: []*fieldinfo{{
+				fields: []*recfield{{
 					name: "Val",
-					path: []*fieldelem{
+					path: []*pathelem{
 						{
 							name:         "Foobar",
 							tag:          tagutil.Tag{"sql": {">foo_"}},
@@ -595,7 +595,7 @@ func TestAnalysis(t *testing.T) {
 					tag:        tagutil.Tag{"sql": {"val"}},
 				}, {
 					name: "Val",
-					path: []*fieldelem{{
+					path: []*pathelem{{
 						name:         "Foobar",
 						tag:          tagutil.Tag{"sql": {">foo_"}},
 						typename:     "Foo",
@@ -633,12 +633,11 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{{
-				node: &wherefield{
-					name:  "ID",
+			where: &whereblock{name: "Where", items: []*predicateitem{{
+				node: &fieldpredicate{
+					field: paramfield{name: "ID", typ: typeinfo{kind: kindint}},
 					colid: colid{name: "id"},
-					typ:   typeinfo{kind: kindint},
-					cmp:   cmpeq,
+					pred:  iseq,
 				},
 			}}},
 		},
@@ -652,16 +651,16 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpnotnull}},
-				{op: booland, node: &wherecolumn{colid: colid{name: "column_b"}, cmp: cmpisnull}},
-				{op: boolor, node: &wherecolumn{colid: colid{name: "column_c"}, cmp: cmpnottrue}},
-				{op: booland, node: &wherecolumn{colid: colid{name: "column_d"}, cmp: cmpistrue}},
-				{op: boolor, node: &wherecolumn{colid: colid{name: "column_e"}, cmp: cmpnotfalse}},
-				{op: boolor, node: &wherecolumn{colid: colid{name: "column_f"}, cmp: cmpisfalse}},
-				{op: booland, node: &wherecolumn{colid: colid{name: "column_g"}, cmp: cmpnotunknown}},
-				{op: booland, node: &wherecolumn{colid: colid{name: "column_h"}, cmp: cmpisunknown}},
-				{op: booland, node: &wherecolumn{colid: colid{name: "column_i"}, cmp: cmpistrue}},
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &columnpredicate{colid: colid{name: "column_a"}, pred: notnull}},
+				{op: booland, node: &columnpredicate{colid: colid{name: "column_b"}, pred: isnull}},
+				{op: boolor, node: &columnpredicate{colid: colid{name: "column_c"}, pred: nottrue}},
+				{op: booland, node: &columnpredicate{colid: colid{name: "column_d"}, pred: istrue}},
+				{op: boolor, node: &columnpredicate{colid: colid{name: "column_e"}, pred: notfalse}},
+				{op: boolor, node: &columnpredicate{colid: colid{name: "column_f"}, pred: isfalse}},
+				{op: booland, node: &columnpredicate{colid: colid{name: "column_g"}, pred: notunknown}},
+				{op: booland, node: &columnpredicate{colid: colid{name: "column_h"}, pred: isunknown}},
+				{op: booland, node: &columnpredicate{colid: colid{name: "column_i"}, pred: istrue}},
 			}},
 		},
 	}, {
@@ -674,47 +673,42 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &whereblock{name: "x", items: []*whereitem{
-					{node: &wherefield{
-						name:  "foo",
-						typ:   typeinfo{kind: kindint},
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &nestedpredicate{name: "x", items: []*predicateitem{
+					{node: &fieldpredicate{
+						field: paramfield{name: "foo", typ: typeinfo{kind: kindint}},
 						colid: colid{name: "column_foo"},
-						cmp:   cmpeq,
+						pred:  iseq,
 					}},
-					{op: booland, node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpisnull}},
+					{op: booland, node: &columnpredicate{colid: colid{name: "column_a"}, pred: isnull}},
 				}}},
-				{op: boolor, node: &whereblock{name: "y", items: []*whereitem{
-					{node: &wherecolumn{colid: colid{name: "column_b"}, cmp: cmpnottrue}},
-					{op: boolor, node: &wherefield{
-						name:  "bar",
-						typ:   typeinfo{kind: kindstring},
+				{op: boolor, node: &nestedpredicate{name: "y", items: []*predicateitem{
+					{node: &columnpredicate{colid: colid{name: "column_b"}, pred: nottrue}},
+					{op: boolor, node: &fieldpredicate{
+						field: paramfield{name: "bar", typ: typeinfo{kind: kindstring}},
 						colid: colid{name: "column_bar"},
-						cmp:   cmpeq,
+						pred:  iseq,
 					}},
-					{op: booland, node: &whereblock{name: "z", items: []*whereitem{
-						{node: &wherefield{
-							name:  "baz",
-							typ:   typeinfo{kind: kindbool},
+					{op: booland, node: &nestedpredicate{name: "z", items: []*predicateitem{
+						{node: &fieldpredicate{
+							field: paramfield{name: "baz", typ: typeinfo{kind: kindbool}},
 							colid: colid{name: "column_baz"},
-							cmp:   cmpeq,
+							pred:  iseq,
 						}},
-						{op: booland, node: &wherefield{
-							name:  "quux",
-							typ:   typeinfo{kind: kindstring},
+						{op: booland, node: &fieldpredicate{
+							field: paramfield{name: "quux", typ: typeinfo{kind: kindstring}},
 							colid: colid{name: "column_quux"},
-							cmp:   cmpeq,
+							pred:  iseq,
 						}},
-						{op: boolor, node: &wherecolumn{colid: colid{name: "column_c"}, cmp: cmpistrue}},
+						{op: boolor, node: &columnpredicate{colid: colid{name: "column_c"}, pred: istrue}},
 					}}},
 				}}},
-				{op: boolor, node: &wherecolumn{colid: colid{name: "column_d"}, cmp: cmpnotfalse}},
-				{op: booland, node: &wherecolumn{colid: colid{name: "column_e"}, cmp: cmpisfalse}},
-				{op: booland, node: &wherefield{
-					name:  "foo",
-					typ:   typeinfo{kind: kindint},
+				{op: boolor, node: &columnpredicate{colid: colid{name: "column_d"}, pred: notfalse}},
+				{op: booland, node: &columnpredicate{colid: colid{name: "column_e"}, pred: isfalse}},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "foo", typ: typeinfo{kind: kindint}},
 					colid: colid{name: "column_foo"},
-					cmp:   cmpeq,
+					pred:  iseq,
 				}},
 			}},
 		},
@@ -728,14 +722,14 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherefield{name: "a", typ: typeinfo{kind: kindint}, colid: colid{name: "column_a"}, cmp: cmplt}},
-				{op: booland, node: &wherefield{name: "b", typ: typeinfo{kind: kindint}, colid: colid{name: "column_b"}, cmp: cmpgt}},
-				{op: booland, node: &wherefield{name: "c", typ: typeinfo{kind: kindint}, colid: colid{name: "column_c"}, cmp: cmple}},
-				{op: booland, node: &wherefield{name: "d", typ: typeinfo{kind: kindint}, colid: colid{name: "column_d"}, cmp: cmpge}},
-				{op: booland, node: &wherefield{name: "e", typ: typeinfo{kind: kindint}, colid: colid{name: "column_e"}, cmp: cmpeq}},
-				{op: booland, node: &wherefield{name: "f", typ: typeinfo{kind: kindint}, colid: colid{name: "column_f"}, cmp: cmpne}},
-				{op: booland, node: &wherefield{name: "g", typ: typeinfo{kind: kindint}, colid: colid{name: "column_g"}, cmp: cmpeq}},
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &fieldpredicate{field: paramfield{name: "a", typ: typeinfo{kind: kindint}}, colid: colid{name: "column_a"}, pred: islt}},
+				{op: booland, node: &fieldpredicate{field: paramfield{name: "b", typ: typeinfo{kind: kindint}}, colid: colid{name: "column_b"}, pred: isgt}},
+				{op: booland, node: &fieldpredicate{field: paramfield{name: "c", typ: typeinfo{kind: kindint}}, colid: colid{name: "column_c"}, pred: islte}},
+				{op: booland, node: &fieldpredicate{field: paramfield{name: "d", typ: typeinfo{kind: kindint}}, colid: colid{name: "column_d"}, pred: isgte}},
+				{op: booland, node: &fieldpredicate{field: paramfield{name: "e", typ: typeinfo{kind: kindint}}, colid: colid{name: "column_e"}, pred: iseq}},
+				{op: booland, node: &fieldpredicate{field: paramfield{name: "f", typ: typeinfo{kind: kindint}}, colid: colid{name: "column_f"}, pred: noteq}},
+				{op: booland, node: &fieldpredicate{field: paramfield{name: "g", typ: typeinfo{kind: kindint}}, colid: colid{name: "column_g"}, pred: iseq}},
 			}},
 		},
 	}, {
@@ -748,12 +742,12 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherecolumn{colid: colid{name: "column_a"}, cmp: cmpne, colid2: colid{name: "column_b"}}},
-				{op: booland, node: &wherecolumn{colid: colid{qual: "t", name: "column_c"}, cmp: cmpeq, colid2: colid{qual: "u", name: "column_d"}}},
-				{op: booland, node: &wherecolumn{colid: colid{qual: "t", name: "column_e"}, cmp: cmpgt, lit: "123"}},
-				{op: booland, node: &wherecolumn{colid: colid{qual: "t", name: "column_f"}, cmp: cmpeq, lit: "'active'"}},
-				{op: booland, node: &wherecolumn{colid: colid{qual: "t", name: "column_g"}, cmp: cmpne, lit: "true"}},
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &columnpredicate{colid: colid{name: "column_a"}, pred: noteq, colid2: colid{name: "column_b"}}},
+				{op: booland, node: &columnpredicate{colid: colid{qual: "t", name: "column_c"}, pred: iseq, colid2: colid{qual: "u", name: "column_d"}}},
+				{op: booland, node: &columnpredicate{colid: colid{qual: "t", name: "column_e"}, pred: isgt, lit: "123"}},
+				{op: booland, node: &columnpredicate{colid: colid{qual: "t", name: "column_f"}, pred: iseq, lit: "'active'"}},
+				{op: booland, node: &columnpredicate{colid: colid{qual: "t", name: "column_g"}, pred: noteq, lit: "true"}},
 			}},
 		},
 	}, {
@@ -766,33 +760,33 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherebetween{
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &betweenpredicate{
 					name:  "a",
 					colid: colid{name: "column_a"},
-					cmp:   cmpisbetween,
-					x:     &varinfo{name: "x", typ: typeinfo{kind: kindint}},
-					y:     &varinfo{name: "y", typ: typeinfo{kind: kindint}},
+					pred:  isbetween,
+					x:     &paramfield{name: "x", typ: typeinfo{kind: kindint}},
+					y:     &paramfield{name: "y", typ: typeinfo{kind: kindint}},
 				}},
-				{op: booland, node: &wherebetween{
+				{op: booland, node: &betweenpredicate{
 					name:  "b",
 					colid: colid{name: "column_b"},
-					cmp:   cmpisbetweensym,
+					pred:  isbetweensym,
 					x:     colid{name: "column_x"},
 					y:     colid{name: "column_y"},
 				}},
-				{op: booland, node: &wherebetween{
+				{op: booland, node: &betweenpredicate{
 					name:  "c",
 					colid: colid{name: "column_c"},
-					cmp:   cmpnotbetweensym,
+					pred:  notbetweensym,
 					x:     colid{name: "column_z"},
-					y:     &varinfo{name: "z", typ: typeinfo{kind: kindint}},
+					y:     &paramfield{name: "z", typ: typeinfo{kind: kindint}},
 				}},
-				{op: booland, node: &wherebetween{
+				{op: booland, node: &betweenpredicate{
 					name:  "d",
 					colid: colid{name: "column_d"},
-					cmp:   cmpnotbetween,
-					x:     &varinfo{name: "z", typ: typeinfo{kind: kindint}},
+					pred:  notbetween,
+					x:     &paramfield{name: "z", typ: typeinfo{kind: kindint}},
 					y:     colid{name: "column_z"},
 				}},
 			}},
@@ -807,92 +801,100 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherefield{
-					name:  "a",
-					typ:   typeinfo{kind: kindint},
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &fieldpredicate{
+					field: paramfield{name: "a", typ: typeinfo{kind: kindint}},
 					colid: colid{name: "column_a"},
-					cmp:   cmpisdistinct,
+					pred:  isdistinct,
 				}},
-				{op: booland, node: &wherefield{
-					name:  "b",
-					typ:   typeinfo{kind: kindint},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "b", typ: typeinfo{kind: kindint}},
 					colid: colid{name: "column_b"},
-					cmp:   cmpnotdistinct,
+					pred:  notdistinct,
 				}},
-				{op: booland, node: &wherecolumn{colid: colid{name: "column_c"}, cmp: cmpisdistinct, colid2: colid{name: "column_x"}}},
-				{op: booland, node: &wherecolumn{colid: colid{name: "column_d"}, cmp: cmpnotdistinct, colid2: colid{name: "column_y"}}},
+				{op: booland, node: &columnpredicate{colid: colid{name: "column_c"}, pred: isdistinct, colid2: colid{name: "column_x"}}},
+				{op: booland, node: &columnpredicate{colid: colid{name: "column_d"}, pred: notdistinct, colid2: colid{name: "column_y"}}},
 			}},
 		},
 	}, {
-		name: "DeleteAnalysisTestOK_ArrayComparisons",
+		name: "DeleteAnalysisTestOK_ArrayPredicate",
 		want: &typespec{
-			name: "DeleteAnalysisTestOK_ArrayComparisons",
+			name: "DeleteAnalysisTestOK_ArrayPredicate",
 			kind: speckindDelete,
 			rel: &relfield{
 				name:  "Rel",
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherefield{
-					name: "a",
-					typ: typeinfo{
-						kind: kindslice,
-						elem: &typeinfo{
-							kind: kindint,
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &fieldpredicate{
+					field: paramfield{
+						name: "a",
+						typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kindint,
+							},
 						},
 					},
 					colid: colid{name: "column_a"},
-					cmp:   cmpisin,
+					pred:  isin,
 				}},
-				{op: booland, node: &wherefield{
-					name: "b",
-					typ: typeinfo{
-						kind: kindarray,
-						elem: &typeinfo{
-							kind: kindint,
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{
+						name: "b",
+						typ: typeinfo{
+							kind: kindarray,
+							elem: &typeinfo{
+								kind: kindint,
+							},
+							arraylen: 5,
 						},
-						arraylen: 5,
 					},
 					colid: colid{name: "column_b"},
-					cmp:   cmpnotin,
+					pred:  notin,
 				}},
-				{op: booland, node: &wherefield{
-					name: "c",
-					typ: typeinfo{
-						kind: kindslice,
-						elem: &typeinfo{
-							kind: kindint,
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{
+						name: "c",
+						typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kindint,
+							},
 						},
 					},
 					colid: colid{name: "column_c"},
-					cmp:   cmpeq,
+					pred:  iseq,
 					qua:   quantany,
 				}},
-				{op: booland, node: &wherefield{
-					name: "d",
-					typ: typeinfo{
-						kind: kindarray,
-						elem: &typeinfo{
-							kind: kindint,
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{
+						name: "d",
+						typ: typeinfo{
+							kind: kindarray,
+							elem: &typeinfo{
+								kind: kindint,
+							},
+							arraylen: 10,
 						},
-						arraylen: 10,
 					},
 					colid: colid{name: "column_d"},
-					cmp:   cmpgt,
+					pred:  isgt,
 					qua:   quantsome,
 				}},
-				{op: booland, node: &wherefield{
-					name: "e",
-					typ: typeinfo{
-						kind: kindslice,
-						elem: &typeinfo{
-							kind: kindint,
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{
+						name: "e",
+						typ: typeinfo{
+							kind: kindslice,
+							elem: &typeinfo{
+								kind: kindint,
+							},
 						},
 					},
 					colid: colid{name: "column_e"},
-					cmp:   cmple,
+					pred:  islte,
 					qua:   quantall,
 				}},
 			}},
@@ -907,54 +909,46 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a"},
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherefield{
-					name:  "a",
-					typ:   typeinfo{kind: kindstring},
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &fieldpredicate{
+					field: paramfield{name: "a", typ: typeinfo{kind: kindstring}},
 					colid: colid{name: "column_a"},
-					cmp:   cmpislike,
+					pred:  islike,
 				}},
-				{op: booland, node: &wherefield{
-					name:  "b",
-					typ:   typeinfo{kind: kindstring},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "b", typ: typeinfo{kind: kindstring}},
 					colid: colid{name: "column_b"},
-					cmp:   cmpnotlike,
+					pred:  notlike,
 				}},
-				{op: booland, node: &wherefield{
-					name:  "c",
-					typ:   typeinfo{kind: kindstring},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "c", typ: typeinfo{kind: kindstring}},
 					colid: colid{name: "column_c"},
-					cmp:   cmpissimilar,
+					pred:  issimilar,
 				}},
-				{op: booland, node: &wherefield{
-					name:  "d",
-					typ:   typeinfo{kind: kindstring},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "d", typ: typeinfo{kind: kindstring}},
 					colid: colid{name: "column_d"},
-					cmp:   cmpnotsimilar,
+					pred:  notsimilar,
 				}},
-				{op: booland, node: &wherefield{
-					name:  "e",
-					typ:   typeinfo{kind: kindstring},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "e", typ: typeinfo{kind: kindstring}},
 					colid: colid{name: "column_e"},
-					cmp:   cmprexp,
+					pred:  ismatch,
 				}},
-				{op: booland, node: &wherefield{
-					name:  "f",
-					typ:   typeinfo{kind: kindstring},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "f", typ: typeinfo{kind: kindstring}},
 					colid: colid{name: "column_f"},
-					cmp:   cmprexpi,
+					pred:  ismatchi,
 				}},
-				{op: booland, node: &wherefield{
-					name:  "g",
-					typ:   typeinfo{kind: kindstring},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "g", typ: typeinfo{kind: kindstring}},
 					colid: colid{name: "column_g"},
-					cmp:   cmpnotrexp,
+					pred:  notmatch,
 				}},
-				{op: booland, node: &wherefield{
-					name:  "h",
-					typ:   typeinfo{kind: kindstring},
+				{op: booland, node: &fieldpredicate{
+					field: paramfield{name: "h", typ: typeinfo{kind: kindstring}},
 					colid: colid{name: "column_h"},
-					cmp:   cmpnotrexpi,
+					pred:  notmatchi,
 				}},
 			}},
 		},
@@ -969,36 +963,45 @@ func TestAnalysis(t *testing.T) {
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{rel: relid{name: "relation_b", alias: "b"}, items: []*joinitem{
-				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
-					col1: colid{qual: "c", name: "b_id"},
-					col2: colid{qual: "b", name: "id"},
-					cmp:  cmpeq,
-				}}},
-				{typ: joinright, rel: relid{name: "relation_d", alias: "d"}, conds: []*joincond{{
-					col1: colid{qual: "d", name: "c_id"},
-					col2: colid{qual: "c", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "c", name: "b_id"},
+						colid2: colid{qual: "b", name: "id"},
+						pred:   iseq,
+					}}}},
+				{typ: joinright, rel: relid{name: "relation_d", alias: "d"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "d", name: "c_id"},
+						colid2: colid{qual: "c", name: "id"},
+						pred:   iseq,
+					},
 				}, {
-					op:   boolor,
-					col1: colid{qual: "d", name: "num"},
-					col2: colid{qual: "b", name: "num"},
-					cmp:  cmpgt,
+					op: boolor,
+					node: &columnpredicate{
+						colid:  colid{qual: "d", name: "num"},
+						colid2: colid{qual: "b", name: "num"},
+						pred:   isgt,
+					},
 				}}},
-				{typ: joinfull, rel: relid{name: "relation_e", alias: "e"}, conds: []*joincond{{
-					col1: colid{qual: "e", name: "d_id"},
-					col2: colid{qual: "d", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinfull, rel: relid{name: "relation_e", alias: "e"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "e", name: "d_id"},
+						colid2: colid{qual: "d", name: "id"},
+						pred:   iseq,
+					},
 				}, {
-					op:   booland,
-					col1: colid{qual: "e", name: "is_foo"},
-					cmp:  cmpisfalse,
+					op: booland,
+					node: &columnpredicate{
+						colid: colid{qual: "e", name: "is_foo"},
+						pred:  isfalse,
+					},
 				}}},
 				{typ: joincross, rel: relid{name: "relation_f", alias: "f"}},
 			}},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherecolumn{
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &columnpredicate{
 					colid:  colid{qual: "a", name: "id"},
-					cmp:    cmpeq,
+					pred:   iseq,
 					colid2: colid{qual: "d", name: "a_id"},
 				}},
 			}},
@@ -1014,37 +1017,47 @@ func TestAnalysis(t *testing.T) {
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{rel: relid{name: "relation_b", alias: "b"}, items: []*joinitem{
-				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
-					col1: colid{qual: "c", name: "b_id"},
-					col2: colid{qual: "b", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "c", name: "b_id"},
+						colid2: colid{qual: "b", name: "id"},
+						pred:   iseq,
+					},
 				}}},
-				{typ: joinright, rel: relid{name: "relation_d", alias: "d"}, conds: []*joincond{{
-					col1: colid{qual: "d", name: "c_id"},
-					col2: colid{qual: "c", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinright, rel: relid{name: "relation_d", alias: "d"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "d", name: "c_id"},
+						colid2: colid{qual: "c", name: "id"},
+						pred:   iseq,
+					},
 				}, {
-					op:   boolor,
-					col1: colid{qual: "d", name: "num"},
-					col2: colid{qual: "b", name: "num"},
-					cmp:  cmpgt,
+					op: boolor,
+					node: &columnpredicate{
+						colid:  colid{qual: "d", name: "num"},
+						colid2: colid{qual: "b", name: "num"},
+						pred:   isgt,
+					},
 				}}},
-				{typ: joinfull, rel: relid{name: "relation_e", alias: "e"}, conds: []*joincond{{
-					col1: colid{qual: "e", name: "d_id"},
-					col2: colid{qual: "d", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinfull, rel: relid{name: "relation_e", alias: "e"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "e", name: "d_id"},
+						colid2: colid{qual: "d", name: "id"},
+						pred:   iseq,
+					},
 				}, {
-					op:   booland,
-					col1: colid{qual: "e", name: "is_foo"},
-					cmp:  cmpisfalse,
+					op: booland,
+					node: &columnpredicate{
+						colid: colid{qual: "e", name: "is_foo"},
+						pred:  isfalse,
+					},
 				}}},
 				{typ: joincross, rel: relid{name: "relation_f", alias: "f"}},
 			}},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherecolumn{
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &columnpredicate{
 					colid:  colid{qual: "a", name: "id"},
-					cmp:    cmpeq,
 					colid2: colid{qual: "d", name: "a_id"},
+					pred:   iseq,
 				}},
 			}},
 		},
@@ -1059,41 +1072,53 @@ func TestAnalysis(t *testing.T) {
 				rec:   recordtype{base: typeinfo{kind: kindstruct}},
 			},
 			join: &joinblock{items: []*joinitem{
-				{typ: joinleft, rel: relid{name: "relation_b", alias: "b"}, conds: []*joincond{{
-					col1: colid{qual: "b", name: "a_id"},
-					col2: colid{qual: "a", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinleft, rel: relid{name: "relation_b", alias: "b"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "b", name: "a_id"},
+						colid2: colid{qual: "a", name: "id"},
+						pred:   iseq,
+					},
 				}}},
-				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*joincond{{
-					col1: colid{qual: "c", name: "b_id"},
-					col2: colid{qual: "b", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinleft, rel: relid{name: "relation_c", alias: "c"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "c", name: "b_id"},
+						colid2: colid{qual: "b", name: "id"},
+						pred:   iseq,
+					},
 				}}},
-				{typ: joinright, rel: relid{name: "relation_d", alias: "d"}, conds: []*joincond{{
-					col1: colid{qual: "d", name: "c_id"},
-					col2: colid{qual: "c", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinright, rel: relid{name: "relation_d", alias: "d"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "d", name: "c_id"},
+						colid2: colid{qual: "c", name: "id"},
+						pred:   iseq,
+					},
 				}, {
-					op:   boolor,
-					col1: colid{qual: "d", name: "num"},
-					col2: colid{qual: "b", name: "num"},
-					cmp:  cmpgt,
+					op: boolor,
+					node: &columnpredicate{
+						colid:  colid{qual: "d", name: "num"},
+						colid2: colid{qual: "b", name: "num"},
+						pred:   isgt,
+					},
 				}}},
-				{typ: joinfull, rel: relid{name: "relation_e", alias: "e"}, conds: []*joincond{{
-					col1: colid{qual: "e", name: "d_id"},
-					col2: colid{qual: "d", name: "id"},
-					cmp:  cmpeq,
+				{typ: joinfull, rel: relid{name: "relation_e", alias: "e"}, conds: []*predicateitem{{
+					node: &columnpredicate{
+						colid:  colid{qual: "e", name: "d_id"},
+						colid2: colid{qual: "d", name: "id"},
+						pred:   iseq,
+					},
 				}, {
-					op:   booland,
-					col1: colid{qual: "e", name: "is_foo"},
-					cmp:  cmpisfalse,
+					op: booland,
+					node: &columnpredicate{
+						colid: colid{qual: "e", name: "is_foo"},
+						pred:  isfalse,
+					},
 				}}},
 				{typ: joincross, rel: relid{name: "relation_f", alias: "f"}},
 			}},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherecolumn{
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &columnpredicate{
 					colid:  colid{qual: "a", name: "id"},
-					cmp:    cmpeq,
+					pred:   iseq,
 					colid2: colid{qual: "d", name: "a_id"},
 				}},
 			}},
@@ -1430,8 +1455,8 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a", alias: "a"},
 				isdir: true,
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &columnpredicate{colid: colid{qual: "a", name: "is_inactive"}, pred: istrue}},
 			}},
 			result: &resultfield{
 				name: "Result",
@@ -1448,8 +1473,8 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a", alias: "a"},
 				isdir: true,
 			},
-			where: &whereblock{name: "Where", items: []*whereitem{
-				{node: &wherecolumn{colid: colid{qual: "a", name: "is_inactive"}, cmp: cmpistrue}},
+			where: &whereblock{name: "Where", items: []*predicateitem{
+				{node: &columnpredicate{colid: colid{qual: "a", name: "is_inactive"}, pred: istrue}},
 			}},
 			rowsaffected: &rowsaffectedfield{
 				name: "RowsAffected",
@@ -1474,7 +1499,7 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a", alias: "a"},
 				rec: recordtype{
 					base: typeinfo{kind: kindstruct},
-					fields: []*fieldinfo{{
+					fields: []*recfield{{
 						name: "f1", typ: typeinfo{kind: kindbool},
 						colid: colid{name: "c1"},
 						tag:   tagutil.Tag{"sql": {"c1"}},
@@ -1564,7 +1589,7 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a", alias: "a"},
 				rec: recordtype{
 					base: typeinfo{kind: kindstruct},
-					fields: []*fieldinfo{{
+					fields: []*recfield{{
 						name: "f1", typ: typeinfo{
 							kind: kindslice,
 							elem: &typeinfo{kind: kindbool},
@@ -1750,7 +1775,7 @@ func TestAnalysis(t *testing.T) {
 				relid: relid{name: "relation_a", alias: "a"},
 				rec: recordtype{
 					base: typeinfo{kind: kindstruct},
-					fields: []*fieldinfo{{
+					fields: []*recfield{{
 						name: "f1", typ: typeinfo{
 							name:          "Marshaler",
 							kind:          kindinterface,

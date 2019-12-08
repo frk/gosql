@@ -319,19 +319,19 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 			var fx gol.Expr = gol.Ident{"v"}
 
 			var fieldkey string // key for the pfieldhandled map
-			for _, fe := range item.field.path {
-				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{fe.name}}
+			for _, pe := range item.field.path {
+				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
 
-				fieldkey += fe.name
-				if fe.ispointer && !pfieldhandled[fieldkey] {
-					if fe.isimported {
-						g.addimport(fe.typepkgpath, fe.typepkgname, fe.typepkglocal)
+				fieldkey += pe.name
+				if pe.ispointer && !pfieldhandled[fieldkey] {
+					if pe.isimported {
+						g.addimport(pe.typepkgpath, pe.typepkgname, pe.typepkglocal)
 					}
 
 					// initialize nested pointer field
 					init := gol.AssignStmt{Token: gol.ASSIGN}
 					init.Lhs = []gol.Expr{fx}
-					init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.fieldelemtype(fe)}}}}
+					init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.pathelemtype(pe)}}}}
 					stmt.Body.List = append(stmt.Body.List, init)
 
 					pfieldhandled[fieldkey] = true
@@ -407,43 +407,43 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 func (g *generator) queryargs(spec *typespec) (args []gol.Expr) {
 	if spec.where != nil && len(spec.where.items) > 0 {
 		type loopstate struct {
-			where *whereblock      // the current iteration whereblock
+			items []*predicateitem // the current iteration predicate items
 			idx   int              // keeps track of the item index
-			sx    gol.SelectorExpr // the selector expression for the current whereblock
+			sx    gol.SelectorExpr // the selector expression for the current predicate field
 		}
 
 		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
-		stack := []*loopstate{{where: spec.where, sx: sx}}
+		stack := []*loopstate{{items: spec.where.items, sx: sx}}
 
 	stackloop:
 		for len(stack) > 0 {
 			loop := stack[len(stack)-1]
-			for loop.idx < len(loop.where.items) {
-				item := loop.where.items[loop.idx]
+			for loop.idx < len(loop.items) {
+				item := loop.items[loop.idx]
 				loop.idx++
 
 				switch node := item.node.(type) {
-				case *wherefield:
-					sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
+				case *fieldpredicate:
+					sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.field.name}}
 					args = append(args, sx)
-				case *wherebetween:
-					if x, ok := node.x.(*varinfo); ok {
+				case *betweenpredicate:
+					if x, ok := node.x.(*paramfield); ok {
 						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
 						sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{x.name}}
 						args = append(args, sx)
 					}
-					if y, ok := node.y.(*varinfo); ok {
+					if y, ok := node.y.(*paramfield); ok {
 						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
 						sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{y.name}}
 						args = append(args, sx)
 					}
-				case *whereblock:
+				case *nestedpredicate:
 					loop2 := new(loopstate)
-					loop2.where = node
+					loop2.items = node.items
 					loop2.sx = gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
 					stack = append(stack, loop2)
 					continue stackloop
-				case *wherecolumn:
+				case *columnpredicate:
 					// nothing to do
 				}
 			}
@@ -515,19 +515,19 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 				fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
 
 				var fieldkey string // key for the pfieldhandled map
-				for _, fe := range item.field.path {
-					fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{fe.name}}
+				for _, pe := range item.field.path {
+					fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
 
-					fieldkey += fe.name
-					if fe.ispointer && !pfieldhandled[fieldkey] {
-						if fe.isimported {
-							g.addimport(fe.typepkgpath, fe.typepkgname, fe.typepkglocal)
+					fieldkey += pe.name
+					if pe.ispointer && !pfieldhandled[fieldkey] {
+						if pe.isimported {
+							g.addimport(pe.typepkgpath, pe.typepkgname, pe.typepkglocal)
 						}
 
 						// initialize nested pointer field
 						init := gol.AssignStmt{Token: gol.ASSIGN}
 						init.Lhs = []gol.Expr{fx}
-						init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.fieldelemtype(fe)}}}}
+						init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.pathelemtype(pe)}}}}
 						list = append(list, init)
 
 						pfieldhandled[fieldkey] = true
@@ -628,19 +628,19 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 				fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
 
 				var fieldkey string // key for the pfieldhandled map
-				for _, fe := range item.field.path {
-					fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{fe.name}}
+				for _, pe := range item.field.path {
+					fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
 
-					fieldkey += fe.name
-					if fe.ispointer && !pfieldhandled[fieldkey] {
-						if fe.isimported {
-							g.addimport(fe.typepkgpath, fe.typepkgname, fe.typepkglocal)
+					fieldkey += pe.name
+					if pe.ispointer && !pfieldhandled[fieldkey] {
+						if pe.isimported {
+							g.addimport(pe.typepkgpath, pe.typepkgname, pe.typepkglocal)
 						}
 
 						// initialize nested pointer field
 						init := gol.AssignStmt{Token: gol.ASSIGN}
 						init.Lhs = []gol.Expr{fx}
-						init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.fieldelemtype(fe)}}}}
+						init.Rhs = []gol.Expr{gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: []gol.Expr{g.pathelemtype(pe)}}}}
 						list = append(list, init)
 
 						pfieldhandled[fieldkey] = true
@@ -704,10 +704,10 @@ func (g *generator) rectype(rec recordtype) gol.Expr {
 	return id
 }
 
-func (g *generator) fieldelemtype(fe *fieldelem) gol.Expr {
-	id := gol.Ident{fe.typename}
-	if fe.isimported {
-		return gol.SelectorExpr{X: gol.Ident{fe.typepkgname}, Sel: id}
+func (g *generator) pathelemtype(pe *pathelem) gol.Expr {
+	id := gol.Ident{pe.typename}
+	if pe.isimported {
+		return gol.SelectorExpr{X: gol.Ident{pe.typepkgname}, Sel: id}
 	}
 	return id
 }
@@ -755,7 +755,12 @@ func (g *generator) sqlupdate(si *specinfo) (updstmt sql.UpdateStatement) {
 
 // sqlselect builds and returns an sql.SelectStatement.
 func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
-	selstmt.Columns = g.sqlcolumns(si.info.output)
+	var columns sql.ValueExprList
+	for _, col := range si.info.output {
+		columns = append(columns, g.sqlcolexpr(col))
+	}
+
+	selstmt.Columns = columns
 	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	selstmt.Join = g.sqljoin(si.spec.join)
 	selstmt.Where = g.sqlwhere(si.spec.where)
@@ -774,35 +779,144 @@ func (g *generator) sqldelete(si *specinfo) (delstmt sql.DeleteStatement) {
 	return delstmt
 }
 
-// sqlcolumns builds and returns a list of sql.ValueExpr values.
-func (g *generator) sqlcolumns(columns []*fieldcolumn) (list sql.ValueExprList) {
-	for _, c := range columns {
-		list = append(list, g.sqlcolexpr(c))
-	}
-	return list
-}
-
 func (g *generator) sqlwhere(w *whereblock) (where sql.WhereClause) {
-	if w == nil {
-		return where
+	if w != nil {
+		where.SearchCondition = g.sqlsearchcond(w.items, false)
 	}
-
-	where.SearchCondition = g.sqlsearchcond(w, false)
 	return where
 }
 
-func (g *generator) sqlsearchcond(w *whereblock, nested bool) sql.BoolValueExpr {
-	if len(w.items) == 1 {
-		return g.sqlboolexpr(w.items[0].node)
-	}
-
+func (g *generator) sqlsearchcond(items []*predicateitem, parenthesized bool) sql.BoolValueExpr {
 	var list sql.BoolValueExprList
-	list.Parenthesized = nested
-	list.Initial = g.sqlboolexpr(w.items[0].node)
+	list.Parenthesized = parenthesized
 
-	for _, item := range w.items[1:] {
-		x := g.sqlboolexpr(item.node)
+	for _, item := range items {
+
+		var x sql.BoolValueExpr
+		switch node := item.node.(type) {
+		// nested: recurse
+		case *nestedpredicate:
+			x = g.sqlsearchcond(node.items, true)
+
+		// 3-arg predicate: build & return
+		case *betweenpredicate:
+			p := sql.BetweenPredicate{}
+			p.Predicand = g.sqlcolref(node.colid)
+			if x, ok := node.x.(colid); ok {
+				p.LowEnd = g.sqlcolref(x)
+			} else {
+				// assume node.x is *paramfield
+				p.LowEnd = g.sqlparam()
+			}
+			if y, ok := node.y.(colid); ok {
+				p.HighEnd = g.sqlcolref(y)
+			} else {
+				// assume node.x is *paramfield
+				p.HighEnd = g.sqlparam()
+			}
+			x = p
+
+		// 2-arg predicates: prepare first, then build & return
+		case *fieldpredicate, *columnpredicate:
+			var (
+				lhs  sql.ValueExpr
+				rhs  sql.ValueExpr
+				pred predicate
+			)
+
+			// prepare
+			switch node := node.(type) {
+			case *fieldpredicate:
+				pred = node.pred
+				lhs = g.sqlcolref(node.colid)
+				rhs = g.sqlparam()
+				if len(node.modfunc) > 0 {
+					li := sql.RoutineInvocation{}
+					li.Name = string(node.modfunc)
+					li.Args = []sql.ValueExpr{lhs}
+					lhs = li
+
+					ri := sql.RoutineInvocation{}
+					ri.Name = string(node.modfunc)
+					ri.Args = []sql.ValueExpr{rhs}
+					rhs = ri
+				}
+			case *columnpredicate:
+				pred = node.pred
+				lhs = g.sqlcolref(node.colid)
+				if !node.colid2.isempty() {
+					rhs = g.sqlcolref(node.colid2)
+				} else if len(node.lit) > 0 {
+					rhs = sql.Literal{node.lit}
+				}
+			}
+
+			// build & return
+			switch pred {
+			case iseq, noteq, noteq2, islt, isgt, islte, isgte:
+				p := sql.ComparisonPredicate{}
+				p.Cmp = predicate2sqlcmpop[pred]
+				p.LPredicand = lhs
+				p.RPredicand = rhs
+				x = p
+			case islike, notlike:
+				p := sql.LikePredicate{}
+				p.Not = (pred == notlike)
+				p.Predicand = lhs
+				p.Pattern = rhs
+				x = p
+			case isilike, notilike:
+				p := sql.ILikePredicate{}
+				p.Not = (pred == notilike)
+				p.Predicand = lhs
+				p.Pattern = rhs
+				x = p
+			case issimilar, notsimilar:
+				p := sql.SimilarPredicate{}
+				p.Not = (pred == notsimilar)
+				p.Predicand = lhs
+				p.Pattern = rhs
+				x = p
+			case isdistinct, notdistinct:
+				p := sql.DistinctPredicate{}
+				p.Not = (pred == notdistinct)
+				p.LPredicand = lhs
+				p.RPredicand = rhs
+				x = p
+			case ismatch, ismatchi, notmatch, notmatchi:
+				p := sql.RegexPredicate{}
+				p.Op = predicate2sqlregexop[pred]
+				p.Predicand = lhs
+				p.Pattern = rhs
+				x = p
+			case isin, notin:
+				p := sql.InPredicate{}
+				p.Not = (pred == notin)
+				p.Predicand = lhs
+				p.ValueList = rhs
+				x = p
+			case istrue, nottrue, isfalse, notfalse, isunknown, notunknown:
+				p := sql.TruthPredicate{}
+				p.Not = (pred == nottrue || pred == notfalse || pred == notunknown)
+				p.Truth = predicate2sqltruth[pred]
+				p.Predicand = lhs
+				x = p
+			case isnull, notnull:
+				p := sql.NullPredicate{}
+				p.Not = (pred == notnull)
+				p.Predicand = lhs
+				x = p
+			default:
+				// no predicate, assume lhs is by itself a boolean value expression
+				if p, ok := lhs.(sql.BoolValueExpr); ok {
+					x = p
+				}
+			}
+		}
+
 		switch item.op {
+		default: // initial
+			list.Initial = x
 		case booland:
 			list.Items = append(list.Items, sql.AND{Operand: x})
 		case boolor:
@@ -811,139 +925,6 @@ func (g *generator) sqlsearchcond(w *whereblock, nested bool) sql.BoolValueExpr 
 
 	}
 	return list
-}
-
-func (g *generator) sqlboolexpr(node interface{}) sql.BoolValueExpr {
-	switch n := node.(type) {
-	// nested: build & return
-	case *whereblock:
-		return g.sqlsearchcond(n, true)
-
-	// 3-arg predicate: build & return
-	case *wherebetween:
-		p := sql.BetweenPredicate{}
-		p.Predicand = g.sqlcolref(n.colid)
-		if x, ok := n.x.(colid); ok {
-			p.LowEnd = g.sqlcolref(x)
-		} else {
-			// assume n.x is *varinfo
-			p.LowEnd = g.sqlparam()
-		}
-		if y, ok := n.y.(colid); ok {
-			p.HighEnd = g.sqlcolref(y)
-		} else {
-			// assume n.x is *varinfo
-			p.HighEnd = g.sqlparam()
-		}
-		return p
-
-	// 2-arg predicates: prepare first, then build & return
-	case *wherefield, *wherecolumn, *joincond:
-		var (
-			lhs sql.ValueExpr
-			rhs sql.ValueExpr
-			cmp cmpop
-		)
-
-		// prepare
-		switch n := node.(type) {
-		case *wherefield:
-			cmp = n.cmp
-			lhs = g.sqlcolref(n.colid)
-			rhs = g.sqlparam()
-			if len(n.modfunc) > 0 {
-				li := sql.RoutineInvocation{}
-				li.Name = string(n.modfunc)
-				li.Args = []sql.ValueExpr{lhs}
-				lhs = li
-
-				ri := sql.RoutineInvocation{}
-				ri.Name = string(n.modfunc)
-				ri.Args = []sql.ValueExpr{rhs}
-				rhs = ri
-			}
-		case *wherecolumn:
-			cmp = n.cmp
-			lhs = g.sqlcolref(n.colid)
-			if !n.colid2.isempty() {
-				rhs = g.sqlcolref(n.colid2)
-			} else if len(n.lit) > 0 {
-				rhs = sql.Literal{n.lit}
-			}
-		case *joincond:
-			cmp = n.cmp
-			lhs = g.sqlcolref(n.col1)
-			if !n.col2.isempty() {
-				rhs = g.sqlcolref(n.col2)
-			} else if len(n.lit) > 0 {
-				rhs = sql.Literal{n.lit}
-			}
-		}
-
-		// build & return
-		switch cmp {
-		case cmpeq, cmpne, cmpne2, cmplt, cmpgt, cmple, cmpge:
-			p := sql.ComparisonPredicate{}
-			p.Cmp = cmpop2sqlnode[cmp]
-			p.LPredicand = lhs
-			p.RPredicand = rhs
-			return p
-		case cmpislike, cmpnotlike:
-			p := sql.LikePredicate{}
-			p.Not = (cmp == cmpnotlike)
-			p.Predicand = lhs
-			p.Pattern = rhs
-			return p
-		case cmpisilike, cmpnotilike:
-			p := sql.ILikePredicate{}
-			p.Not = (cmp == cmpnotilike)
-			p.Predicand = lhs
-			p.Pattern = rhs
-			return p
-		case cmpissimilar, cmpnotsimilar:
-			p := sql.SimilarPredicate{}
-			p.Not = (cmp == cmpnotsimilar)
-			p.Predicand = lhs
-			p.Pattern = rhs
-			return p
-		case cmpisdistinct, cmpnotdistinct:
-			p := sql.DistinctPredicate{}
-			p.Not = (cmp == cmpnotdistinct)
-			p.LPredicand = lhs
-			p.RPredicand = rhs
-			return p
-		case cmprexp, cmprexpi, cmpnotrexp, cmpnotrexpi:
-			p := sql.RegexPredicate{}
-			p.Op = cmpop2sqlregexop[cmp]
-			p.Predicand = lhs
-			p.Pattern = rhs
-			return p
-		case cmpisin, cmpnotin:
-			p := sql.InPredicate{}
-			p.Not = (cmp == cmpnotin)
-			p.Predicand = lhs
-			p.ValueList = rhs
-			return p
-		case cmpistrue, cmpnottrue, cmpisfalse, cmpnotfalse, cmpisunknown, cmpnotunknown:
-			p := sql.TruthPredicate{}
-			p.Not = (cmp == cmpnottrue || cmp == cmpnotfalse || cmp == cmpnotunknown)
-			p.Truth = cmpop2sqltruth[cmp]
-			p.Predicand = lhs
-			return p
-		case cmpisnull, cmpnotnull:
-			p := sql.NullPredicate{}
-			p.Not = (cmp == cmpnotnull)
-			p.Predicand = lhs
-			return p
-		default:
-			// no comparison, assume lhs is by itself a boolean value expression
-			if x, ok := lhs.(sql.BoolValueExpr); ok {
-				return x
-			}
-		}
-	}
-
-	return nil
 }
 
 func (g *generator) sqlorderby(spec *typespec) (order sql.OrderClause) {
@@ -991,30 +972,10 @@ func (g *generator) sqljoin(jb *joinblock) (jc sql.JoinClause) {
 	return jc
 }
 
-func (g *generator) sqljoincond(cc []*joincond) (cond sql.JoinCondition) {
-	if len(cc) == 0 {
-		return cond
+func (g *generator) sqljoincond(items []*predicateitem) (cond sql.JoinCondition) {
+	if len(items) > 0 {
+		cond.SearchCondition = g.sqlsearchcond(items, false)
 	}
-
-	if len(cc) == 1 {
-		cond.SearchCondition = g.sqlboolexpr(cc[0])
-		return cond
-	}
-
-	var list sql.BoolValueExprList
-	list.Initial = g.sqlboolexpr(cc[0])
-
-	for _, c := range cc[1:] {
-		x := g.sqlboolexpr(c)
-		switch c.op {
-		case booland:
-			list.Items = append(list.Items, sql.AND{Operand: x})
-		case boolor:
-			list.Items = append(list.Items, sql.OR{Operand: x})
-		}
-	}
-
-	cond.SearchCondition = list
 	return cond
 }
 
@@ -1101,30 +1062,30 @@ func (g *generator) sqlparam() sql.OrdinalParameterSpec {
 	return sql.OrdinalParameterSpec{g.nparam}
 }
 
-var cmpop2sqlnode = map[cmpop]sql.CMPOP{
-	cmpeq:  sql.EQUAL,
-	cmpne:  sql.NOT_EQUAL,
-	cmpne2: sql.NOT_EQUAL2,
-	cmplt:  sql.LESS_THAN,
-	cmpgt:  sql.GREATER_THAN,
-	cmple:  sql.LESS_THAN_EQUAL,
-	cmpge:  sql.GREATER_THAN_EQUAL,
+var predicate2sqlcmpop = map[predicate]sql.CMPOP{
+	iseq:   sql.EQUAL,
+	noteq:  sql.NOT_EQUAL,
+	noteq2: sql.NOT_EQUAL2,
+	islt:   sql.LESS_THAN,
+	isgt:   sql.GREATER_THAN,
+	islte:  sql.LESS_THAN_EQUAL,
+	isgte:  sql.GREATER_THAN_EQUAL,
 }
 
-var cmpop2sqlregexop = map[cmpop]sql.REGEXOP{
-	cmprexp:     sql.MATCH,
-	cmprexpi:    sql.MATCH_CI,
-	cmpnotrexp:  sql.NOT_MATCH,
-	cmpnotrexpi: sql.NOT_MATCH_CI,
+var predicate2sqlregexop = map[predicate]sql.REGEXOP{
+	ismatch:   sql.MATCH,
+	ismatchi:  sql.MATCH_CI,
+	notmatch:  sql.NOT_MATCH,
+	notmatchi: sql.NOT_MATCH_CI,
 }
 
-var cmpop2sqltruth = map[cmpop]sql.TRUTH{
-	cmpisunknown:  sql.UNKNOWN,
-	cmpnotunknown: sql.UNKNOWN,
-	cmpistrue:     sql.TRUE,
-	cmpnottrue:    sql.TRUE,
-	cmpisfalse:    sql.FALSE,
-	cmpnotfalse:   sql.FALSE,
+var predicate2sqltruth = map[predicate]sql.TRUTH{
+	isunknown:  sql.UNKNOWN,
+	notunknown: sql.UNKNOWN,
+	istrue:     sql.TRUE,
+	nottrue:    sql.TRUE,
+	isfalse:    sql.FALSE,
+	notfalse:   sql.FALSE,
 }
 
 var jointype2sqlnode = map[jointype]sql.JoinType{

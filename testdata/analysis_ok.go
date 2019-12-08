@@ -187,8 +187,8 @@ type DeleteAnalysisTestOK_DistinctFrom struct {
 	}
 }
 
-//OK: where block with array comparisons
-type DeleteAnalysisTestOK_ArrayComparisons struct {
+//OK: where block with array predicates
+type DeleteAnalysisTestOK_ArrayPredicate struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		a []int   `sql:"column_a isin"`

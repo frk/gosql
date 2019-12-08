@@ -232,10 +232,10 @@ func (p SimilarPredicate) Walk(w *writer.Writer) {
 type REGEXOP uint8
 
 const (
-	MATCH REGEXOP = iota
-	MATCH_CI
+	MATCH    REGEXOP = iota
+	MATCH_CI         // case insensitive
 	NOT_MATCH
-	NOT_MATCH_CI
+	NOT_MATCH_CI // case insensitive
 )
 
 func (op REGEXOP) Walk(w *writer.Writer) {

@@ -337,17 +337,17 @@ func (a *analyzer) relrecordtype(rel *relfield, field *types.Var) error {
 	}
 
 	styp := ftyp.(*types.Struct)
-	return a.relfields(rel, styp)
+	return a.recfields(rel, styp)
 }
 
-func (a *analyzer) relfields(rel *relfield, styp *types.Struct) error {
+func (a *analyzer) recfields(rel *relfield, styp *types.Struct) error {
 	// The loopstate type holds the state of a loop over a struct's fields.
 	type loopstate struct {
 		styp *types.Struct // the struct type whose fields are being analyzed
-		typ  *typeinfo     // info on the struct type; holds the resulting slice of analyzed fieldinfo
+		typ  *typeinfo     // info on the struct type; holds the resulting slice of analyzed recfield
 		idx  int           // keeps track of the field index
 		pfx  string        // column prefix
-		path []*fieldelem
+		path []*pathelem
 	}
 
 	// LIFO stack of states used for depth first traversal of struct fields.
@@ -378,7 +378,7 @@ stackloop:
 				continue
 			}
 
-			f := new(fieldinfo)
+			f := new(recfield)
 			f.tag = tag
 			f.name = fld.Name()
 			f.isembedded = fld.Embedded()
@@ -399,7 +399,7 @@ stackloop:
 				loop2.pfx = loop.pfx + strings.TrimPrefix(sqltag, ">")
 
 				// Allocate path of the appropriate size an copy it.
-				loop2.path = make([]*fieldelem, len(loop.path))
+				loop2.path = make([]*pathelem, len(loop.path))
 				_ = copy(loop2.path, loop.path)
 
 				// If the parent node is a pointer to a struct,
@@ -409,7 +409,7 @@ stackloop:
 					typ = *typ.elem
 				}
 
-				fe := new(fieldelem)
+				fe := new(pathelem)
 				fe.name = f.name
 				fe.tag = f.tag
 				fe.isembedded = f.isembedded
@@ -612,22 +612,24 @@ func (a *analyzer) whereblock(field *types.Var) (err error) {
 	if a.spec.all || a.spec.where != nil || len(a.spec.filter) > 0 {
 		return errors.ConflictWhereProducerError
 	}
-	// The loopstate type holds the state of a loop over a struct's fields.
-	type loopstate struct {
-		wb  *whereblock
-		ns  *typesutil.NamedStruct // the struct type of the whereblock
-		idx int                    // keeps track of the field index
-	}
 
-	wb := new(whereblock)
-	wb.name = field.Name()
 	ns, err := typesutil.GetStruct(field)
 	if err != nil { // fails only if non struct
 		return errors.BadWhereBlockTypeError
 	}
 
+	// The loopstate type holds the state of a loop over a struct's fields.
+	type loopstate struct {
+		items  []*predicateitem
+		nested *nestedpredicate
+		ns     *typesutil.NamedStruct // the struct type of the whereblock
+		idx    int                    // keeps track of the field index
+	}
+
+	// root holds the reference to the root level predicate items
+	root := &loopstate{ns: ns}
 	// LIFO stack of states used for depth first traversal of struct fields.
-	stack := []*loopstate{{wb: wb, ns: ns}}
+	stack := []*loopstate{root}
 
 stackloop:
 	for len(stack) > 0 {
@@ -653,13 +655,13 @@ stackloop:
 				continue
 			}
 
-			item := new(whereitem)
-			loop.wb.items = append(loop.wb.items, item)
+			item := new(predicateitem)
+			loop.items = append(loop.items, item)
 
 			// Analyze the bool operation for any but the first
 			// item in a whereblock. Fail if a value was provided
 			// but it is not "or" nor "and".
-			if len(loop.wb.items) > 1 {
+			if len(loop.items) > 1 {
 				item.op = booland // default to "and"
 				if booltag := tag.First("bool"); len(booltag) > 0 {
 					v := strings.ToLower(booltag)
@@ -679,18 +681,18 @@ stackloop:
 					return errors.BadWhereBlockTypeError
 				}
 
-				wb := new(whereblock)
-				wb.name = fld.Name()
-				item.node = wb
+				nested := new(nestedpredicate)
+				nested.name = fld.Name()
+				item.node = nested
 
 				loop2 := new(loopstate)
-				loop2.wb = wb
 				loop2.ns = ns
+				loop2.nested = nested
 				stack = append(stack, loop2)
 				continue stackloop
 			}
 
-			lhs, op, op2, rhs := a.splitcmpexpr(sqltag)
+			lhs, op, op2, rhs := a.splitpredicateexpr(sqltag)
 
 			// Analyze directive where item.
 			if fld.Name() == "_" {
@@ -708,25 +710,25 @@ stackloop:
 						return err
 					}
 
-					wn := new(wherecolumn)
-					wn.colid = colid
-					wn.cmp = string2cmpop[op]
-					wn.qua = string2quantifier[op2]
+					node := new(columnpredicate)
+					node.colid = colid
+					node.pred = string2predicate[op]
+					node.qua = string2quantifier[op2]
 
 					if a.iscolid(rhs) {
-						wn.colid2, _ = a.colid(rhs, fld) // ignore error since iscolid returned true
+						node.colid2, _ = a.colid(rhs, fld) // ignore error since iscolid returned true
 					} else {
-						wn.lit = rhs // assume literal expression
+						node.lit = rhs // assume literal expression
 					}
 
-					if wn.cmp.isunary() {
+					if node.pred.isunary() {
 						// TODO add test
-						return errors.IllegalUnaryComparisonOperatorError
-					} else if wn.qua > 0 && !wn.cmp.canquantify() {
-						return errors.BadCmpopComboError
+						return errors.IllegalUnaryPredicateError
+					} else if node.qua > 0 && !node.pred.canquantify() {
+						return errors.BadPredicateComboError
 					}
 
-					item.node = wn
+					item.node = node
 					continue
 				}
 
@@ -740,18 +742,18 @@ stackloop:
 				if len(op) == 0 {
 					op = "istrue"
 				}
-				cmp := string2cmpop[op]
-				if !cmp.isunary() {
-					return errors.BadUnaryCmpopError
+				pred := string2predicate[op]
+				if !pred.isunary() {
+					return errors.BadUnaryPredicateError
 				}
 				if len(op2) > 0 {
 					return errors.ExtraQuantifierError
 				}
 
-				wn := new(wherecolumn)
-				wn.colid = colid
-				wn.cmp = cmp
-				item.node = wn
+				node := new(columnpredicate)
+				node.colid = colid
+				node.pred = pred
+				item.node = node
 				continue
 			}
 
@@ -796,7 +798,7 @@ stackloop:
 					}
 
 					if a.isaccessible(fld, ns.Named) {
-						v := new(varinfo)
+						v := new(paramfield)
 						v.name = fld.Name()
 						v.typ, _ = a.typeinfo(fld.Type())
 
@@ -817,12 +819,12 @@ stackloop:
 					return err
 				}
 
-				bw := new(wherebetween)
-				bw.name = fld.Name()
-				bw.colid = colid
-				bw.cmp = string2cmpop[op]
-				bw.x, bw.y = x, y
-				item.node = bw
+				node := new(betweenpredicate)
+				node.name = fld.Name()
+				node.colid = colid
+				node.pred = string2predicate[op]
+				node.x, node.y = x, y
+				item.node = node
 				continue
 			}
 
@@ -832,38 +834,46 @@ stackloop:
 				return err
 			}
 
-			// If no comparison operator was provided default to "="
+			// If no predicate was provided default to "="
 			if len(op) == 0 {
 				op = "="
 			}
-			cmp := string2cmpop[op]
-			if cmp.isunary() {
+			pred := string2predicate[op]
+			if pred.isunary() {
 				// TODO add test
-				return errors.IllegalUnaryComparisonOperatorError
+				return errors.IllegalUnaryPredicateError
 			}
 
 			qua := string2quantifier[op2]
-			if qua > 0 && !cmp.canquantify() {
-				return errors.BadCmpopComboError
+			if qua > 0 && !pred.canquantify() {
+				return errors.BadPredicateComboError
 			}
 
-			wf := new(wherefield)
-			wf.name = fld.Name()
-			wf.colid = colid
-			wf.typ, _ = a.typeinfo(fld.Type())
-			wf.cmp = cmp
-			wf.qua = qua
-			wf.modfunc = a.funcname(tag["sql"][1:])
+			node := new(fieldpredicate)
+			node.field.name = fld.Name()
+			node.field.typ, _ = a.typeinfo(fld.Type())
+			node.colid = colid
+			node.pred = pred
+			node.qua = qua
+			node.modfunc = a.funcname(tag["sql"][1:])
 
-			if wf.qua > 0 && wf.typ.kind != kindslice && wf.typ.kind != kindarray {
+			if node.qua > 0 && node.field.typ.kind != kindslice && node.field.typ.kind != kindarray {
 				return errors.BadQuantifierFieldTypeError
 			}
 
-			item.node = wf
+			item.node = node
 		}
+
+		if loop.nested != nil {
+			loop.nested.items = loop.items
+		}
+
 		stack = stack[:len(stack)-1]
 	}
 
+	wb := new(whereblock)
+	wb.name = field.Name()
+	wb.items = root.items
 	a.spec.where = wb
 	return nil
 }
@@ -917,49 +927,51 @@ func (a *analyzer) joinblock(field *types.Var) (err error) {
 				return err
 			}
 
-			var conds []*joincond
+			var conds []*predicateitem
 			for _, val := range tag["sql"][1:] {
 				vals := strings.Split(val, ";")
 				for i, val := range vals {
 
-					cond := new(joincond)
-					if len(conds) > 0 && i == 0 {
-						cond.op = booland
-					} else if len(conds) > 0 && i > 0 {
-						cond.op = boolor
-					}
-
-					lhs, op, op2, rhs := a.splitcmpexpr(val)
-					if cond.col1, err = a.colid(lhs, fld); err != nil {
+					node := new(columnpredicate)
+					lhs, op, op2, rhs := a.splitpredicateexpr(val)
+					if node.colid, err = a.colid(lhs, fld); err != nil {
 						return err
 					}
 
 					// optional right-hand side
 					if a.iscolid(rhs) {
-						cond.col2, _ = a.colid(rhs, fld) // ignore error since iscolid returned true
+						node.colid2, _ = a.colid(rhs, fld) // ignore error since iscolid returned true
 					} else {
-						cond.lit = rhs
+						node.lit = rhs
 					}
 
-					cond.cmp = string2cmpop[op]
-					cond.qua = string2quantifier[op2]
+					node.pred = string2predicate[op]
+					node.qua = string2quantifier[op2]
 
 					if len(rhs) > 0 {
-						if cond.cmp.isunary() {
+						if node.pred.isunary() {
 							// TODO add test
-							return errors.IllegalUnaryComparisonOperatorError
-						} else if cond.qua > 0 && !cond.cmp.canquantify() {
-							return errors.BadCmpopComboError
+							return errors.IllegalUnaryPredicateError
+						} else if node.qua > 0 && !node.pred.canquantify() {
+							return errors.BadPredicateComboError
 						}
 					} else {
-						if !cond.cmp.isunary() {
-							return errors.BadUnaryCmpopError
+						if !node.pred.isunary() {
+							return errors.BadUnaryPredicateError
 						} else if len(op2) > 0 {
 							return errors.ExtraQuantifierError
 						}
 					}
 
-					conds = append(conds, cond)
+					item := new(predicateitem)
+					item.node = node
+					if len(conds) > 0 && i == 0 {
+						item.op = booland
+					} else if len(conds) > 0 && i > 0 {
+						item.op = boolor
+					}
+
+					conds = append(conds, item)
 				}
 			}
 
@@ -1049,10 +1061,10 @@ func (a *analyzer) onconflictblock(field *types.Var) (err error) {
 	return nil
 }
 
-// Parses the given string as a comparison expression and returns the
-// individual elements of that expression. The expected format is:
-// { column [ comparison-operator [ quantifier ] { column | literal } ] }
-func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, qua, rhs string) {
+// Parses the given string as a predicate expression and returns the individual
+// elements of that expression. The expected format is:
+// { column [ predicate-type [ quantifier ] { column | literal } ] }
+func (a *analyzer) splitpredicateexpr(expr string) (lhs, cop, qua, rhs string) {
 	expr = strings.TrimSpace(expr)
 
 	for i := range expr {
@@ -1146,7 +1158,6 @@ func (a *analyzer) splitcmpexpr(expr string) (lhs, cop, qua, rhs string) {
 	}
 
 	if len(lhs) == 0 {
-		// return expr, "=", "", "" // default
 		return expr, "", "", "" // default
 	}
 
@@ -1592,7 +1603,7 @@ type recordtype struct {
 	// indicates whether or not the type implements the afterscanner interface
 	isafterscanner bool
 	// fields will hold the info on the recordtype's fields
-	fields []*fieldinfo
+	fields []*recfield
 }
 
 type typeinfo struct {
@@ -1747,25 +1758,19 @@ func (t *typeinfo) canxmlunmarshal() bool {
 	return t.isxmlunmarshaler || (t.kind == kindptr && t.elem.isxmlunmarshaler)
 }
 
-type fieldelem struct {
-	name         string
-	tag          tagutil.Tag
-	typename     string // the name of a named type or empty string for unnamed types
-	typepkgpath  string // the package import path
-	typepkgname  string // the package's name
-	typepkglocal string // the local package name (including ".")
-	isimported   bool   // indicates whether or not the type is imported
-	isembedded   bool   // indicates whether or not the field is embedded
-	isexported   bool   // indicates whether or not the field is exported
-	ispointer    bool   // indicates whether or not the field type is a pointer type
+// paramfield holds the bare minimum info of a field, its name and type,
+// and it is used to represent a parameter of a predicate.
+type paramfield struct {
+	name string
+	typ  typeinfo
 }
 
-// fieldinfo holds information about a recordtype's field and the corresponding db column.
-type fieldinfo struct {
+// recfield holds information about a recordtype's field and the corresponding db column.
+type recfield struct {
 	typ  typeinfo // info about the field's type
 	name string   // name of the struct field
 	// if the field is nested, path will hold the parent fields' information
-	path []*fieldelem
+	path []*pathelem
 	// indicates whether or not the field is embedded
 	isembedded bool
 	// indicates whether or not the field is exported
@@ -1810,6 +1815,19 @@ type fieldinfo struct {
 	cancast bool
 }
 
+type pathelem struct {
+	name         string
+	tag          tagutil.Tag
+	typename     string // the name of a named type or empty string for unnamed types
+	typepkgpath  string // the package import path
+	typepkgname  string // the package's name
+	typepkglocal string // the local package name (including ".")
+	isimported   bool   // indicates whether or not the type is imported
+	isembedded   bool   // indicates whether or not the field is embedded
+	isexported   bool   // indicates whether or not the field is exported
+	ispointer    bool   // indicates whether or not the field type is a pointer type
+}
+
 type joinblock struct {
 	// The relid of the top relation in a DELETE-USING / UPDATE-FROM
 	// clause, empty in SELECT commands.
@@ -1820,68 +1838,59 @@ type joinblock struct {
 type joinitem struct {
 	typ   jointype
 	rel   relid
-	conds []*joincond
-}
-
-type joincond struct {
-	op   boolop
-	col1 colid  // the target column of the join condition
-	col2 colid  // the optional 2nd column to be compared to col1
-	lit  string // the optional literal value
-	cmp  cmpop  // the comparison operator of the join condition
-	qua  quantifier
-}
-
-type varinfo struct {
-	name string
-	typ  typeinfo
+	conds []*predicateitem
 }
 
 type whereblock struct {
 	name  string
-	items []*whereitem
+	items []*predicateitem
 }
 
-type whereitem struct {
+// predicateitem
+type predicateitem struct {
 	op   boolop
-	node interface{} // wherefield, wherecolumn, wherebetween, or whereblock
+	node interface{} // fieldpredicate, columnpredicate, betweenpredicate, or nestedpredicate
 }
 
-type wherefield struct {
+type nestedpredicate struct {
 	name  string
-	typ   typeinfo //
-	colid colid    //
-	cmp   cmpop    //
+	items []*predicateitem
+}
+
+// fieldpredicate
+type fieldpredicate struct {
+	field paramfield
+	colid colid     //
+	pred  predicate //
 	qua   quantifier
-	// The name of the function to be used to modify the comparison
-	// operands' values before comparing them.
+	// The name of the function to be applied to the predicands.
 	modfunc funcname
 }
 
-// wherecolumn is produced from a gosql.Column directive and its tag value.
-// wherecolumn represents either a column with a unary comparison predicate,
+// columnpredicate is produced from a gosql.Column directive and its tag value.
+// columnpredicate represents either a column with a unary comparison predicate,
 // a column-to-column comparison, or a column-to-literal comparison.
-type wherecolumn struct {
-	// The target column of the wherecolumn item.
+type columnpredicate struct {
+	// The column representing the LHS predicand.
 	colid colid
-	// If set, it will hold the id of the column that should be compared
-	// to the target column.
+	// If set, the column representing the RHS predicand.
 	colid2 colid
-	// If set, it will hold the literal value that should be compared
-	// to the target column.
+	// If set, the literal value representing the RHS predicand.
 	lit string
-	// If set, it will hold the comparison operator to be used to compare
-	// the target column either using a predicate unary operator, or a binary
-	// operator comparing against the colid2 column or the lit value.
-	cmp cmpop
+	// If set, indentifies the type of the predicate.
+	pred predicate
+	// If set, indentifies the quantifier to be used with the predicate.
 	qua quantifier
 }
 
-type wherebetween struct {
-	name  string
+type betweenpredicate struct {
+	// the name of the field declaring the predicate
+	name string
+	// the primary predicand of the predicate
 	colid colid
-	cmp   cmpop
-	x, y  interface{}
+	// identifies the type of the between predicate
+	pred predicate
+	x, y interface{}
 }
 
 type onconflictblock struct {
@@ -1939,181 +1948,147 @@ const (
 	boolnot               // negation
 )
 
-type cmpop uint // comparison operation
+type predicate uint
 
 const (
-	_ cmpop = iota // no comparison
-
-	// binary comparison operators
-	cmpeq  // equals
-	cmpne  // not equals
-	cmpne2 // not equals
-	cmplt  // less than
-	cmpgt  // greater than
-	cmple  // less than or equal
-	cmpge  // greater than or equal
+	_ predicate = iota // no predicate
 
 	// binary comparison predicates
-	cmpisdistinct  // IS DISTINCT FROM
-	cmpnotdistinct // IS NOT DISTINCT FROM
+	iseq        // equals
+	noteq       // not equals
+	noteq2      // not equals
+	islt        // less than
+	isgt        // greater than
+	islte       // less than or equal
+	isgte       // greater than or equal
+	isdistinct  // IS DISTINCT FROM
+	notdistinct // IS NOT DISTINCT FROM
 
-	// pattern matching operators
-	cmprexp       // match regular expression
-	cmprexpi      // match regular expression (case insensitive)
-	cmpnotrexp    // not match regular expression
-	cmpnotrexpi   // not match regular expression (case insensitive)
-	cmpislike     // LIKE
-	cmpnotlike    // NOT LIKE
-	cmpisilike    // ILIKE
-	cmpnotilike   // NOT ILIKE
-	cmpissimilar  // IS SIMILAR TO
-	cmpnotsimilar // IS NOT SIMILAR TO
+	// pattern matching predicates
+	ismatch    // match regular expression
+	ismatchi   // match regular expression (case insensitive)
+	notmatch   // not match regular expression
+	notmatchi  // not match regular expression (case insensitive)
+	islike     // LIKE
+	notlike    // NOT LIKE
+	isilike    // ILIKE
+	notilike   // NOT ILIKE
+	issimilar  // IS SIMILAR TO
+	notsimilar // IS NOT SIMILAR TO
 
-	// array comparison operators
-	cmpisin  // IN
-	cmpnotin // NOT IN
+	// array predicates
+	isin  // IN
+	notin // NOT IN
 
-	// range comparison operators
-	cmpisbetween     // BETWEEN x AND y
-	cmpnotbetween    // NOT BETWEEN x AND y
-	cmpisbetweensym  // BETWEEN SYMMETRIC x AND y
-	cmpnotbetweensym // NOT BETWEEN SYMMETRIC x AND y
+	// range predicates
+	isbetween      // BETWEEN x AND y
+	notbetween     // NOT BETWEEN x AND y
+	isbetweensym   // BETWEEN SYMMETRIC x AND y
+	notbetweensym  // NOT BETWEEN SYMMETRIC x AND y
+	isbetweenasym  // BETWEEN ASYMMETRIC x AND y
+	notbetweenasym // NOT BETWEEN ASYMMETRIC x AND y
 
-	// unary comparison predicates
-	cmpisnull     // IS NULL
-	cmpnotnull    // IS NOT NULL
-	cmpistrue     // IS TRUE
-	cmpnottrue    // IS NOT TRUE
-	cmpisfalse    // IS FALSE
-	cmpnotfalse   // IS NOT FALSE
-	cmpisunknown  // IS UNKNOWN
-	cmpnotunknown // IS NOT UNKNOWN
+	// null predicates
+	isnull  // IS NULL
+	notnull // IS NOT NULL
+
+	// truth predicates
+	istrue     // IS TRUE
+	nottrue    // IS NOT TRUE
+	isfalse    // IS FALSE
+	notfalse   // IS NOT FALSE
+	isunknown  // IS UNKNOWN
+	notunknown // IS NOT UNKNOWN
 )
 
-func (op cmpop) is(oo ...cmpop) bool {
-	for _, o := range oo {
-		if op == o {
+func (p predicate) is(tt ...predicate) bool {
+	for _, t := range tt {
+		if p == t {
 			return true
 		}
 	}
 	return false
 }
 
-// canquantify returns true if op can be used together with a quantifier.
-func (op cmpop) canquantify() bool {
-	return op.isbinary() || op.ispatmatch()
+// canquantify returns true if the predicate can be used together with a quantifier.
+func (p predicate) canquantify() bool {
+	return p.isbincmp() || p.ispatmatch()
 }
 
-// isbinbasic returns true if op is a basic binary comparison operator/predicate.
-func (op cmpop) isbinary() bool {
-	return op.is(cmpeq, cmpne, cmpne2, cmplt, cmpgt, cmple, cmpge,
-		cmpisdistinct, cmpnotdistinct)
+// isbincmp returns true if the predicate is a binary comparison predicate.
+func (p predicate) isbincmp() bool {
+	return p.is(iseq, noteq, noteq2, islt, isgt, islte, isgte,
+		isdistinct, notdistinct)
 }
 
-// ispatmatch returns true if op is a pattern matching comparison operator/predicate.
-func (op cmpop) ispatmatch() bool {
-	return op.is(cmprexp, cmprexpi, cmpnotrexp, cmpnotrexpi, cmpislike,
-		cmpnotlike, cmpisilike, cmpnotilike, cmpissimilar, cmpnotsimilar)
+// ispatmatch returns true if the predicate is a pattern matching predicate.
+func (p predicate) ispatmatch() bool {
+	return p.is(ismatch, ismatchi, notmatch, notmatchi, islike, notlike,
+		isilike, notilike, issimilar, notsimilar)
 }
 
-// isrange returns true if op is a range-specific comparison predicate.
-func (op cmpop) isrange() bool {
-	return op.is(cmpisbetween, cmpnotbetween, cmpisbetweensym, cmpnotbetweensym)
+// isrange returns true if the predicate is a range predicate.
+func (p predicate) isrange() bool {
+	return p.is(isbetween, notbetween, isbetweensym, notbetweensym,
+		isbetweenasym, notbetweenasym)
 }
 
-// isunary returns true if op is a "unary" comparison predicate.
-func (op cmpop) isunary() bool {
-	return op.is(cmpisnull, cmpnotnull, cmpistrue, cmpnottrue,
-		cmpisfalse, cmpnotfalse, cmpisunknown, cmpnotunknown)
+// isunary returns true if the predicate is a "unary" predicate.
+func (p predicate) isunary() bool {
+	return p.is(isnull, notnull, istrue, nottrue, isfalse, notfalse,
+		isunknown, notunknown)
 }
 
-// isbool returns true if op is one of the "unary" comparison predicates
-// that requires a boolean expression.
-func (op cmpop) isbool() bool {
-	return op.is(cmpistrue, cmpnottrue, cmpisfalse, cmpnotfalse,
-		cmpisunknown, cmpnotunknown)
+// istruth returns true if the predicate is a "truth" predicate.
+func (p predicate) istruth() bool {
+	return p.is(istrue, nottrue, isfalse, notfalse, isunknown, notunknown)
 }
 
-// isarr returns true if op is a array comparison predicate.
-func (op cmpop) isarr() bool {
-	return op.is(cmpisin, cmpnotin)
+// isarrcmp returns true if the predicate is an array predicate.
+func (p predicate) isarrcmp() bool {
+	return p.is(isin, notin)
 }
 
-var string2cmpop = map[string]cmpop{
-	"=":  cmpeq,
-	"<>": cmpne,
-	"!=": cmpne2,
-	"<":  cmplt,
-	">":  cmpgt,
-	"<=": cmple,
-	">=": cmpge,
+var string2predicate = map[string]predicate{
+	"=":           iseq,
+	"<>":          noteq,
+	"!=":          noteq2,
+	"<":           islt,
+	">":           isgt,
+	"<=":          islte,
+	">=":          isgte,
+	"isdistinct":  isdistinct,
+	"notdistinct": notdistinct,
 
-	"isdistinct":  cmpisdistinct,
-	"notdistinct": cmpnotdistinct,
+	"~":          ismatch,
+	"~*":         ismatchi,
+	"!~":         notmatch,
+	"!~*":        notmatchi,
+	"islike":     islike,
+	"notlike":    notlike,
+	"isilike":    isilike,
+	"notilike":   notilike,
+	"issimilar":  issimilar,
+	"notsimilar": notsimilar,
 
-	"~":          cmprexp,
-	"~*":         cmprexpi,
-	"!~":         cmpnotrexp,
-	"!~*":        cmpnotrexpi,
-	"islike":     cmpislike,
-	"notlike":    cmpnotlike,
-	"isilike":    cmpisilike,
-	"notilike":   cmpnotilike,
-	"issimilar":  cmpissimilar,
-	"notsimilar": cmpnotsimilar,
+	"isin":  isin,
+	"notin": notin,
 
-	"isin":  cmpisin,
-	"notin": cmpnotin,
+	"isbetween":      isbetween,
+	"notbetween":     notbetween,
+	"isbetweensym":   isbetweensym,
+	"notbetweensym":  notbetweensym,
+	"isbetweenasym":  isbetweenasym,
+	"notbetweenasym": notbetweenasym,
 
-	"isbetween":     cmpisbetween,
-	"notbetween":    cmpnotbetween,
-	"isbetweensym":  cmpisbetweensym,
-	"notbetweensym": cmpnotbetweensym,
-
-	"isnull":     cmpisnull,
-	"notnull":    cmpnotnull,
-	"istrue":     cmpistrue,
-	"nottrue":    cmpnottrue,
-	"isfalse":    cmpisfalse,
-	"notfalse":   cmpnotfalse,
-	"isunknown":  cmpisunknown,
-	"notunknown": cmpnotunknown,
-}
-
-var cmpop2sql = map[cmpop]string{
-	cmpeq:            "=",
-	cmpne:            "<>",
-	cmpne2:           "!=",
-	cmplt:            "<",
-	cmpgt:            ">",
-	cmple:            "<=",
-	cmpge:            ">=",
-	cmpisdistinct:    "IS DISTINCT FROM",
-	cmpnotdistinct:   "IS NOT DISTINCT FROM",
-	cmprexp:          "~",
-	cmprexpi:         "~*",
-	cmpnotrexp:       "!~",
-	cmpnotrexpi:      "!~*",
-	cmpislike:        "LIKE",
-	cmpnotlike:       "NOT LIKE",
-	cmpisilike:       "ILIKE",
-	cmpnotilike:      "NOT ILIKE",
-	cmpissimilar:     "SIMILAR TO",
-	cmpnotsimilar:    "NOT SIMILAR TO",
-	cmpisin:          "IN",
-	cmpnotin:         "NOT IN",
-	cmpisbetween:     "BETWEEN",
-	cmpnotbetween:    "NOT BETWEEN",
-	cmpisbetweensym:  "BETWEEN SYMMETRIC",
-	cmpnotbetweensym: "NOT BETWEEN SYMMETRIC",
-	cmpisnull:        "IS NULL",
-	cmpnotnull:       "IS NOT NULL",
-	cmpistrue:        "IS TRUE",
-	cmpnottrue:       "IS NOT TRUE",
-	cmpisfalse:       "IS FALSE",
-	cmpnotfalse:      "IS NOT FALSE",
-	cmpisunknown:     "IS UNKNOWN",
-	cmpnotunknown:    "IS NOT UNKNOWN",
+	"isnull":     isnull,
+	"notnull":    notnull,
+	"istrue":     istrue,
+	"nottrue":    nottrue,
+	"isfalse":    isfalse,
+	"notfalse":   notfalse,
+	"isunknown":  isunknown,
+	"notunknown": notunknown,
 }
 
 var predicateadjectives = []string{ // and adverbs
