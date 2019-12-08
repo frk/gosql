@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *SelectWithIteratorQuery) Exec(c gosql.Conn) error {
+func (q *SelectWithIteratorFuncQuery) Exec(c gosql.Conn) error {
 	const queryString = `SELECT
 	u."id"
 	, u."email"
@@ -40,7 +40,7 @@ func (q *SelectWithIteratorQuery) Exec(c gosql.Conn) error {
 			return err
 		}
 
-		if err := q.iter.NextUser(v); err != nil {
+		if err := q.next(v); err != nil {
 			return err
 		}
 	}

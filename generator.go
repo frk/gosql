@@ -373,15 +373,24 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 		}
 
 		if rec.isiter {
+			var call gol.CallExpr
+			if len(rec.itermethod) > 0 {
+				call = gol.CallExpr{Fun: gol.SelectorExpr{
+					X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{fieldname}},
+					Sel: gol.Ident{rec.itermethod}},
+					Args: gol.ArgsList{List: []gol.Expr{gol.Ident{"v"}}},
+				}
+			} else {
+				call = gol.CallExpr{Fun: gol.SelectorExpr{
+					X:   idrecv,
+					Sel: gol.Ident{fieldname}},
+					Args: gol.ArgsList{List: []gol.Expr{gol.Ident{"v"}}},
+				}
+			}
+
 			asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
 			asn.Lhs = []gol.Expr{iderr}
-			asn.Rhs = []gol.Expr{gol.CallExpr{
-				Fun: gol.SelectorExpr{
-					X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{fieldname}},
-					Sel: gol.Ident{rec.itermethod},
-				},
-				Args: gol.ArgsList{List: []gol.Expr{gol.Ident{"v"}}},
-			}}
+			asn.Rhs = []gol.Expr{call}
 
 			iferr := gol.IfStmt{}
 			iferr.Init = asn

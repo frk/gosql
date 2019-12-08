@@ -54,7 +54,9 @@ func TestGenerate(t *testing.T) {
 		filenames: []string{
 			"afterscan_single",
 			"afterscan_slice",
-			"iterator",
+			"iterator_func",
+			"iterator_func_errorhandler",
+			"iterator_iface",
 			"filter_slice",
 			"filter_iterator",
 			"joinblock_slice",
@@ -72,7 +74,6 @@ func TestGenerate(t *testing.T) {
 			"whereblock_nested",
 			"whereblock_single",
 			"whereblock_slice",
-			// errorhandler
 			// quantifier
 
 			// exists
