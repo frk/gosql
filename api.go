@@ -2,6 +2,8 @@ package gosql
 
 import (
 	"database/sql"
+	"strconv"
+	"strings"
 
 	"github.com/frk/gosql/internal/filter"
 )
@@ -167,3 +169,27 @@ type ErrorInfoHandler interface {
 type Filter struct {
 	filter.Filter
 }
+
+func InValueList(num, pos int) string {
+	var b strings.Builder
+
+	// write the first parameter
+	if num > 0 {
+		b.WriteString(ordinalparams[pos])
+	}
+
+	// write the rest
+	for i := 1; i < num; i++ {
+		b.WriteByte(',')
+		b.WriteString(ordinalparams[pos+i])
+	}
+
+	return b.String()
+}
+
+var ordinalparams = func() (a [65535]string) {
+	for i := 1; i < len(a); i++ {
+		a[i] = "$" + strconv.Itoa(i)
+	}
+	return a
+}()

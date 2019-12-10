@@ -21,16 +21,19 @@ var (
 	iderr               = gol.Ident{"err"}
 	idnew               = gol.Ident{"new"}
 	idnil               = gol.Ident{"nil"}
-	idquery             = gol.Ident{"queryString"}
-	idparams            = gol.Ident{"params"}
+	idlen               = gol.Ident{"len"}
 	idi64               = gol.Ident{"i64"}
 	idres               = gol.Ident{"res"}
 	idrow               = gol.Ident{"row"}
+	idmake              = gol.Ident{"make"}
 	idrows              = gol.Ident{"rows"}
 	idexec              = gol.Ident{"Exec"}
-	idiface             = gol.Ident{"interface{}"}
 	iderror             = gol.Ident{"error"}
+	idparams            = gol.Ident{"params"}
 	idafterscan         = gol.Ident{"AfterScan"}
+	idquery             = gol.Ident{"queryString"}
+	idiface             = gol.Ident{"interface{}"}
+	idifaces            = gol.Ident{"[]interface{}"}
 	sxconn              = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"Conn"}}
 	sxerrorinfo         = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"ErrorInfo"}}
 	sxexec              = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Exec"}}
@@ -42,6 +45,8 @@ var (
 	callrowserr         = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Err"}}}
 	callrowsnext        = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Next"}}}
 	callresrowsaffected = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"res"}, Sel: gol.Ident{"RowsAffected"}}}
+	callinvaluelist     = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"InValueList"}}}
+	callmakeparams      = gol.CallExpr{Fun: gol.Ident{"make"}, Args: gol.ArgsList{List: []gol.Expr{idifaces}}}
 )
 
 type specinfo struct {
@@ -65,7 +70,10 @@ type generator struct {
 	file gol.File
 
 	// spec specific state, needs to be reset on each iteration
-	nparam int // number of parameters
+	nparam int                // number of parameters
+	asvar  bool               // if true, the query string should be declared as a var, not const.
+	qargs  []gol.Expr         // query arguments
+	insx   []gol.SelectorExpr // slice fields for IN clauses
 }
 
 func (g *generator) run(pkgname string) error {
@@ -75,6 +83,9 @@ func (g *generator) run(pkgname string) error {
 
 	for _, si := range g.infos {
 		g.nparam = 0
+		g.asvar = false
+		g.qargs = nil
+		g.insx = nil
 
 		execdecl := g.execdecl(si)
 		g.file.Decls = append(g.file.Decls, execdecl)
@@ -90,6 +101,8 @@ func (g *generator) execdecl(si *specinfo) (fn gol.FuncDecl) {
 	fn.Type.Params = gol.ParamList{{Names: []gol.Ident{idconn}, Type: sxconn}}
 	fn.Type.Results = gol.ParamList{{Type: iderror}}
 
+	g.queryargs(si.spec)
+
 	fn.Body.Add(g.querybuild(si))
 	fn.Body.Add(gol.NL{})
 	fn.Body.Add(g.querydefaults(si))
@@ -99,16 +112,99 @@ func (g *generator) execdecl(si *specinfo) (fn gol.FuncDecl) {
 }
 
 func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
-	decl := gol.GenDecl{Token: gol.DECL_CONST}
+	sqlnode := g.sqlnode(si)
+
+	token := gol.DECL_CONST
+	if g.asvar || len(si.spec.filter) > 0 {
+		token = gol.DECL_VAR
+	}
+
+	decl := gol.GenDecl{Token: token}
 	decl.Specs = []gol.Spec{gol.ValueSpec{
 		Names:       []gol.Ident{idquery},
-		Values:      []gol.Expr{gol.RawStringNode{g.sqlnode(si)}},
+		Values:      []gol.Expr{gol.RawStringNode{sqlnode}},
 		LineComment: gol.LineComment{" `"},
 	}}
 
-	if len(si.spec.filter) > 0 {
-		decl.Token = gol.DECL_VAR
+	if len(g.insx) > 0 {
+		// prepare the var declarations
+		vardecl := gol.GenDecl{Token: gol.DECL_VAR}
 
+		nstatic := gol.ValueSpec{}
+		nstatic.Names = []gol.Ident{gol.Ident{"nstatic"}}
+		nstatic.Values = []gol.Expr{gol.Int(g.nparam)}
+		nstatic.LineComment = gol.LineComment{" number of static parameters"}
+		vardecl.Specs = append(vardecl.Specs, nstatic)
+
+		for i, sx := range g.insx {
+			num := strconv.Itoa(i + 1)
+
+			lenspec := gol.ValueSpec{}
+			lenspec.Names = []gol.Ident{gol.Ident{"len" + num}}
+			lenspec.Values = []gol.Expr{gol.CallExpr{Fun: idlen, Args: gol.ArgsList{List: []gol.Expr{sx}}}}
+			lenspec.LineComment = gol.LineComment{" length of slice #" + num + " to be unnested"}
+
+			posspec := gol.ValueSpec{}
+			posspec.Names = []gol.Ident{gol.Ident{"pos" + num}}
+			if i == 0 {
+				// the first position is set to the value of nstatic
+				posspec.Values = []gol.Expr{gol.Ident{"nstatic"}}
+			} else {
+				// the rest of the positions are calculated from
+				// adding the previous length to the previous position
+				prev := strconv.Itoa(i)
+				prevlen, prevpos := gol.Ident{"len" + prev}, gol.Ident{"pos" + prev}
+				posspec.Values = []gol.Expr{gol.BinaryExpr{X: prevpos, Op: gol.BINARY_ADD, Y: prevlen}}
+			}
+			posspec.LineComment = gol.LineComment{" starting position of slice #" + num + " parameters"}
+
+			vardecl.Specs = append(vardecl.Specs, lenspec, posspec)
+		}
+
+		// next is the query declaration
+		list := gol.StmtList{gol.DeclStmt{vardecl}, gol.NL{}, gol.DeclStmt{decl}, gol.NL{}}
+
+		// define the params variable
+		asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+		asn.Lhs = []gol.Expr{idparams}
+		callmake := callmakeparams
+		bin := gol.BinaryExpr{X: gol.Ident{"nstatic"}, Op: gol.BINARY_ADD, Y: gol.Ident{"len1"}}
+		for i := 1; i < len(g.insx); i++ {
+			y := gol.Ident{"len" + strconv.Itoa(i+1)}
+			bin = gol.BinaryExpr{X: bin, Op: gol.BINARY_ADD, Y: y}
+		}
+		callmake.Args.List = append(callmake.Args.List, bin)
+		asn.Rhs = []gol.Expr{callmake}
+		list = append(list, asn)
+
+		// directly assign non-slice params
+		for i, arg := range g.qargs {
+			asn := gol.AssignStmt{Token: gol.ASSIGN}
+			asn.Lhs = []gol.Expr{gol.IndexExpr{X: idparams, Index: gol.Int(i)}}
+			asn.Rhs = []gol.Expr{arg}
+			list = append(list, asn)
+		}
+
+		for i, sx := range g.insx {
+			lenid := gol.Ident{"len" + strconv.Itoa(i+1)}
+			posid := gol.Ident{"pos" + strconv.Itoa(i+1)}
+
+			loop := gol.ForStmt{}
+			loop.Init = gol.AssignStmt{Token: gol.ASSIGN_DEFINE, Lhs: []gol.Expr{ididx}, Rhs: []gol.Expr{gol.Int(0)}}
+			loop.Cond = gol.BinaryExpr{X: ididx, Op: gol.BINARY_LSS, Y: lenid}
+			loop.Post = gol.IncDecStmt{X: ididx, Token: gol.INCDEC_INC}
+
+			asn := gol.AssignStmt{Token: gol.ASSIGN}
+			asn.Lhs = []gol.Expr{gol.IndexExpr{X: idparams, Index: gol.BinaryExpr{X: posid, Op: gol.BINARY_ADD, Y: ididx}}}
+			asn.Rhs = []gol.Expr{gol.IndexExpr{X: sx, Index: ididx}}
+
+			loop.Body = gol.BlockStmt{List: []gol.Stmt{asn}}
+
+			list = append(list, loop)
+		}
+
+		return append(list, gol.NL{})
+	} else if len(si.spec.filter) > 0 {
 		asn := gol.AssignStmt{Token: gol.ASSIGN_ADD}
 		asn.Lhs = []gol.Expr{idquery}
 		asn.Rhs = []gol.Expr{gol.CallExpr{Fun: gol.SelectorExpr{
@@ -165,11 +261,11 @@ func (g *generator) querydefaults(si *specinfo) (stmt gol.Stmt) {
 
 func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 	args := gol.ArgsList{List: []gol.Expr{idquery}}
-	if len(si.spec.filter) > 0 {
+	if len(g.insx) > 0 || len(si.spec.filter) > 0 {
 		args.AddExprs(idparams)
 		args.Ellipsis = true
 	} else {
-		args.AddExprs(g.queryargs(si.spec)...)
+		args.AddExprs(g.qargs...)
 		if len(args.List) > 3 {
 			args.OnePerLine = 2
 		}
@@ -413,7 +509,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 	return stmt
 }
 
-func (g *generator) queryargs(spec *typespec) (args []gol.Expr) {
+func (g *generator) queryargs(spec *typespec) {
 	if spec.where != nil && len(spec.where.items) > 0 {
 		type loopstate struct {
 			items []*predicateitem // the current iteration predicate items
@@ -433,18 +529,20 @@ func (g *generator) queryargs(spec *typespec) (args []gol.Expr) {
 
 				switch node := item.node.(type) {
 				case *fieldpredicate:
-					sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.field.name}}
-					args = append(args, sx)
+					if node.pred != isin && node.pred != notin {
+						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.field.name}}
+						g.qargs = append(g.qargs, sx)
+					}
 				case *betweenpredicate:
 					if x, ok := node.x.(*paramfield); ok {
 						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
 						sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{x.name}}
-						args = append(args, sx)
+						g.qargs = append(g.qargs, sx)
 					}
 					if y, ok := node.y.(*paramfield); ok {
 						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
 						sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{y.name}}
-						args = append(args, sx)
+						g.qargs = append(g.qargs, sx)
 					}
 				case *nestedpredicate:
 					loop2 := new(loopstate)
@@ -462,13 +560,12 @@ func (g *generator) queryargs(spec *typespec) (args []gol.Expr) {
 
 	if spec.limit != nil && len(spec.limit.field) > 0 {
 		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.limit.field}}
-		args = append(args, sx)
+		g.qargs = append(g.qargs, sx)
 	}
 	if spec.offset != nil && len(spec.offset.field) > 0 {
 		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.offset.field}}
-		args = append(args, sx)
+		g.qargs = append(g.qargs, sx)
 	}
-	return args
 }
 
 func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
@@ -781,31 +878,40 @@ func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
 
 // sqldelete builds and returns an sql.DeleteStatement.
 func (g *generator) sqldelete(si *specinfo) (delstmt sql.DeleteStatement) {
+	var returning sql.ReturningClause
+	for _, col := range si.info.output {
+		returning = append(returning, g.sqlcolexpr(col))
+	}
+
 	delstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	delstmt.Using = g.sqlusing(si.spec.join)
 	delstmt.Where = g.sqlwhere(si.spec.where)
-	delstmt.Returning = g.sqlreturning(si.info.output)
+	delstmt.Returning = returning
 	return delstmt
 }
 
 func (g *generator) sqlwhere(w *whereblock) (where sql.WhereClause) {
 	if w != nil {
-		where.SearchCondition = g.sqlsearchcond(w.items, false)
+		sel := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{w.name}}
+		where.SearchCondition, _ = g.sqlsearchcond(w.items, sel, false)
 	}
 	return where
 }
 
-func (g *generator) sqlsearchcond(items []*predicateitem, parenthesized bool) sql.BoolValueExpr {
-	var list sql.BoolValueExprList
-	list.Parenthesized = parenthesized
-
+func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, parenthesized bool) (list sql.BoolValueExprList, count int) {
 	for _, item := range items {
+		count += 1
 
 		var x sql.BoolValueExpr
 		switch node := item.node.(type) {
 		// nested: recurse
 		case *nestedpredicate:
-			x = g.sqlsearchcond(node.items, true)
+			var ncount int
+
+			sel := gol.SelectorExpr{X: sel, Sel: gol.Ident{node.name}}
+			x, ncount = g.sqlsearchcond(node.items, sel, true)
+
+			count += ncount - 1
 
 		// 3-arg predicate: build & return
 		case *betweenpredicate:
@@ -828,9 +934,10 @@ func (g *generator) sqlsearchcond(items []*predicateitem, parenthesized bool) sq
 		// 2-arg predicates: prepare first, then build & return
 		case *fieldpredicate, *columnpredicate:
 			var (
-				lhs  sql.ValueExpr
-				rhs  sql.ValueExpr
-				pred predicate
+				lhs   sql.ValueExpr
+				rhs   sql.ValueExpr
+				pred  predicate
+				field string
 			)
 
 			// prepare
@@ -850,6 +957,8 @@ func (g *generator) sqlsearchcond(items []*predicateitem, parenthesized bool) sq
 					ri.Args = []sql.ValueExpr{rhs}
 					rhs = ri
 				}
+
+				field = node.field.name // needed for isin/notin predicates
 			case *columnpredicate:
 				pred = node.pred
 				lhs = g.sqlcolref(node.colid)
@@ -899,10 +1008,22 @@ func (g *generator) sqlsearchcond(items []*predicateitem, parenthesized bool) sq
 				p.Pattern = rhs
 				x = p
 			case isin, notin:
+				sx := gol.SelectorExpr{X: sel, Sel: gol.Ident{field}}
+				g.insx = append(g.insx, sx)
+				g.nparam -= 1  // ordinal param won't be used directly
+				g.asvar = true // queryString should be var not const
+
+				num := strconv.Itoa(len(g.insx))
+				arg1 := gol.Ident{"len" + num}
+				arg2 := gol.BinaryExpr{X: gol.Ident{"pos" + num}, Op: gol.BINARY_ADD, Y: gol.Int(1)}
+
+				call := callinvaluelist
+				call.Args = gol.ArgsList{List: []gol.Expr{arg1, arg2}}
+
 				p := sql.InPredicate{}
 				p.Not = (pred == notin)
 				p.Predicand = lhs
-				p.ValueList = rhs
+				p.ValueList = sql.HostValue{gol.RawStringImplant{call}}
 				x = p
 			case istrue, nottrue, isfalse, notfalse, isunknown, notunknown:
 				p := sql.TruthPredicate{}
@@ -933,7 +1054,13 @@ func (g *generator) sqlsearchcond(items []*predicateitem, parenthesized bool) sq
 		}
 
 	}
-	return list
+
+	if count > 2 {
+		list.ListStyle = true
+	}
+
+	list.Parenthesized = parenthesized
+	return list, count
 }
 
 func (g *generator) sqlorderby(spec *typespec) (order sql.OrderClause) {
@@ -958,7 +1085,7 @@ func (g *generator) sqlusing(jb *joinblock) (using sql.UsingClause) {
 	using.List = []sql.TableExpr{g.sqlrelid(jb.rel)}
 	for _, item := range jb.items {
 		var join sql.TableJoin
-		join.Type = jointype2sqlnode[item.typ]
+		join.Type = jointype2sqljointype[item.typ]
 		join.Rel = g.sqlrelid(item.rel)
 		join.Cond = g.sqljoincond(item.conds)
 		using.List = append(using.List, join)
@@ -973,7 +1100,7 @@ func (g *generator) sqljoin(jb *joinblock) (jc sql.JoinClause) {
 
 	for _, item := range jb.items {
 		var join sql.TableJoin
-		join.Type = jointype2sqlnode[item.typ]
+		join.Type = jointype2sqljointype[item.typ]
 		join.Rel = g.sqlrelid(item.rel)
 		join.Cond = g.sqljoincond(item.conds)
 		jc.List = append(jc.List, join)
@@ -983,20 +1110,12 @@ func (g *generator) sqljoin(jb *joinblock) (jc sql.JoinClause) {
 
 func (g *generator) sqljoincond(items []*predicateitem) (cond sql.JoinCondition) {
 	if len(items) > 0 {
-		cond.SearchCondition = g.sqlsearchcond(items, false)
+		list, _ := g.sqlsearchcond(items, gol.SelectorExpr{}, false)
+		list.ListStyle = false
+
+		cond.SearchCondition = list
 	}
 	return cond
-}
-
-func (g *generator) sqlreturning(fcs []*fieldcolumn) (returning sql.ReturningClause) {
-	if fcs == nil {
-		return returning
-	}
-
-	for _, fc := range fcs {
-		returning = append(returning, g.sqlcolref(fc.colid))
-	}
-	return returning
 }
 
 // sqllimit generates and returns an sql.LimitClause based on the given spec's "limit" field.
@@ -1043,6 +1162,7 @@ func (g *generator) sqlrelid(id relid) sql.Ident {
 
 func (g *generator) sqlcolexpr(fc *fieldcolumn) sql.ValueExpr {
 	id := g.sqlcolref(fc.colid)
+	// TODO
 	//if f.UseCOALESCE || (f.IsNULLable && canCoalesce && !f.Type.IsPointer) {
 	//	coalesce := sqlang.Coalesce{}
 	//	coalesce.A = col
@@ -1097,7 +1217,7 @@ var predicate2sqltruth = map[predicate]sql.TRUTH{
 	notfalse:   sql.FALSE,
 }
 
-var jointype2sqlnode = map[jointype]sql.JoinType{
+var jointype2sqljointype = map[jointype]sql.JoinType{
 	joinleft:  sql.JoinLeft,
 	joinright: sql.JoinRight,
 	joinfull:  sql.JoinFull,

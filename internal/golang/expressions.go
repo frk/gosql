@@ -1,6 +1,8 @@
 package golang
 
 import (
+	"strconv"
+
 	"github.com/frk/gosql/internal/writer"
 )
 
@@ -369,6 +371,12 @@ func (x TypeAssertExpr) Walk(w *writer.Writer) {
 	w.Write(")")
 }
 
+type Int int
+
+func (i Int) Walk(w *writer.Writer) {
+	w.Write(strconv.Itoa(int(i)))
+}
+
 type String string
 
 func (s String) Walk(w *writer.Writer) {
@@ -383,6 +391,16 @@ func (s RawString) Walk(w *writer.Writer) {
 	w.Write("`")
 	w.Write(string(s))
 	w.Write("`")
+}
+
+type RawStringImplant struct {
+	X Expr
+}
+
+func (s RawStringImplant) Walk(w *writer.Writer) {
+	w.Write("` + ")
+	s.X.Walk(w)
+	w.Write(" + `")
 }
 
 type Ellipsis struct {
@@ -502,6 +520,7 @@ func (IndexExpr) exprNode()       {}
 func (KeyValueExpr) exprNode()    {}
 func (SliceExpr) exprNode()       {}
 func (TypeAssertExpr) exprNode()  {}
+func (Int) exprNode()             {}
 func (String) exprNode()          {}
 func (RawString) exprNode()       {}
 func (Ellipsis) exprNode()        {}

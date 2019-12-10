@@ -106,6 +106,7 @@ CREATE TABLE test_user (
 	, email text not null
 	, full_name text not null
 	, created_at timestamptz not null
+	, is_active boolean not null default true
 );
 
 CREATE TABLE test_post (

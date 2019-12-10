@@ -92,6 +92,16 @@ func (r RoutineInvocation) Walk(w *writer.Writer) {
 	w.Write(")")
 }
 
+// HostValue produces non-SQL code that should produce an SQL value
+// when executed in the host environment.
+type HostValue struct {
+	Value Node
+}
+
+func (v HostValue) Walk(w *writer.Writer) {
+	v.Value.Walk(w)
+}
+
 type nooptype uint8
 
 func (nooptype) Walk(w *writer.Writer) {}
@@ -102,4 +112,5 @@ func (DynamicParmeterSpec) valueExprNode()  {}
 func (OrdinalParameterSpec) valueExprNode() {}
 func (Literal) valueExprNode()              {}
 func (RoutineInvocation) valueExprNode()    {}
+func (HostValue) valueExprNode()            {}
 func (nooptype) valueExprNode()             {}

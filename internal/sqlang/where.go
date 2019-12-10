@@ -24,10 +24,11 @@ type BoolValueExprList struct {
 	Parenthesized bool
 	Initial       BoolValueExpr
 	Items         []BoolOpExpr
+	ListStyle     bool
 }
 
 func (list BoolValueExprList) Walk(w *writer.Writer) {
-	if len(list.Items) > 1 {
+	if list.ListStyle {
 
 		// list style
 		if list.Parenthesized {
