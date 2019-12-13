@@ -167,7 +167,6 @@ BEGIN
 	RETURN i + 1;
 END;
 $$ LANGUAGE plpgsql;
-
 ` //`
 
 	if _, err = t.pg.db.Exec(populatedbquery); err != nil {

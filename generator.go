@@ -262,10 +262,10 @@ func (g *generator) querydefaults(si *specinfo) (stmt gol.Stmt) {
 func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 	args := gol.ArgsList{List: []gol.Expr{idquery}}
 	if len(g.insx) > 0 || len(si.spec.filter) > 0 {
-		args.AddExprs(idparams)
+		args.List = append(args.List, idparams)
 		args.Ellipsis = true
 	} else {
-		args.AddExprs(g.qargs...)
+		args.List = append(args.List, g.qargs...)
 		if len(args.List) > 3 {
 			args.OnePerLine = 2
 		}
