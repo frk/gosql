@@ -41,7 +41,7 @@
 *[][3]float64: [linearr]
 *[]byte: [bpchar bytea char json jsonb text varchar xml]
 *[][]byte: [bpchararr byteaarr chararr jsonarr jsonbarr textarr varchararr xmlarr]
-*rune: [bpchar bytea char varchar]
+*rune: [bpchar char varchar]
 *[]rune: [bpchararr byteaarr chararr text varchararr]
 *[][]rune: [bpchararr byteaarr chararr textarr varchararr]
 *string: [bpchar bytea char json jsonb text cidr inet uuid tsquery tsvector varchar xml]

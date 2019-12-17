@@ -1,6 +1,6 @@
 package convert
 
-//import "fmt"
+import "bytes"
 
 func srcbytes(src interface{}) ([]byte, error) {
 	switch src := src.(type) {
@@ -30,6 +30,61 @@ func pgparsearray1(a []byte) (out [][]byte) {
 	if len(a) > 0 {
 		out = append(out, a[n:])
 	}
+	return out
+}
+
+// parse as single bytes
+func pgparsearray2(a []byte) (out []byte) {
+	out = make([]byte, 0, len(a))
+
+	a = a[1 : len(a)-1] // drop curly braces
+
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' {
+			if a[i+1] == '\\' {
+				out = append(out, a[i+2])
+				i += 3
+				continue
+			} else {
+				out = append(out, a[i+1])
+				i += 2
+				continue
+			}
+		}
+
+		if a[i] != ',' {
+			out = append(out, a[i])
+		}
+	}
+
+	return out
+}
+
+// parse as single runes
+func pgparsearray3(a []byte) (out []rune) {
+	out = make([]rune, 0)
+
+	a = a[1 : len(a)-1] // drop curly braces
+	r := bytes.Runes(a)
+
+	for i := 0; i < len(r); i++ {
+		if r[i] == '"' {
+			if r[i+1] == '\\' {
+				out = append(out, r[i+2])
+				i += 3
+				continue
+			} else {
+				out = append(out, r[i+1])
+				i += 2
+				continue
+			}
+		}
+
+		if r[i] != ',' {
+			out = append(out, r[i])
+		}
+	}
+
 	return out
 }
 

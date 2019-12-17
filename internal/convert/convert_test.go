@@ -210,6 +210,7 @@ type testrow struct {
 }
 
 type test_table []struct {
+	dest func() interface{}
 	scnr func() (sql.Scanner, interface{})
 	rows []testrow
 }
@@ -217,9 +218,16 @@ type test_table []struct {
 func (table test_table) execute(t *testing.T) {
 	for _, tt := range table {
 		for _, r := range tt.rows {
-			s, got := tt.scnr()
+			var dest, got interface{}
+			if tt.dest != nil {
+				d := tt.dest()
+				dest, got = d, d
+			} else if tt.scnr != nil {
+				dest, got = tt.scnr()
 
-			name := fmt.Sprintf("%T::<%s>_to_<%T>_using_%s", s, r.typ, r.want, r.in)
+			}
+
+			name := fmt.Sprintf("%T::<%s>_to_<%T>_using_%s", dest, r.typ, r.want, r.in)
 			t.Run(name, func(t *testing.T) {
 				var id int
 				var col = "col_" + r.typ
@@ -229,7 +237,7 @@ func (table test_table) execute(t *testing.T) {
 				}
 
 				row = testdb.db.QueryRow(`select `+col+` from coltype_test where id = $1`, id)
-				if err := row.Scan(s); err != nil {
+				if err := row.Scan(dest); err != nil {
 					t.Error(err)
 				} else if e := compare.Compare(got, r.want); e != nil {
 					t.Error(e)
@@ -238,3 +246,7 @@ func (table test_table) execute(t *testing.T) {
 		}
 	}
 }
+
+// helper
+func strptr(s string) *string   { return &s }
+func bytesptr(s string) *[]byte { b := []byte(s); return &b }
