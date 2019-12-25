@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"database/sql/driver"
 	"strconv"
 )
 
@@ -272,4 +273,31 @@ func (s IntArr2UintSlice) Scan(src interface{}) error {
 
 	*s.Ptr = uints
 	return nil
+}
+
+type IntSlice2IntArray struct {
+	S []int
+}
+
+func (s IntSlice2IntArray) Value() (driver.Value, error) {
+	if s.S == nil {
+		return nil, nil
+	}
+
+	if n := len(s.S); n > 0 {
+		// There will be at least two curly brackets, N bytes of values,
+		// and N-1 bytes of delimiters.
+		b := make([]byte, 1, 1+2*n)
+		b[0] = '{'
+
+		b = strconv.AppendInt(b, int64(s.S[0]), 10)
+		for i := 1; i < n; i++ {
+			b = append(b, ',')
+			b = strconv.AppendInt(b, int64(s.S[i]), 10)
+		}
+
+		return append(b, '}'), nil
+	}
+
+	return []byte{'{', '}'}, nil
 }

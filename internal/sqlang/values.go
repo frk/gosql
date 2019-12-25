@@ -92,6 +92,30 @@ func (r RoutineInvocation) Walk(w *writer.Writer) {
 	w.Write(")")
 }
 
+// QuantifiedExpr...
+type QuantifiedExpr struct {
+	Qua  QUANTIFIER
+	Expr ValueExpr
+}
+
+func (x QuantifiedExpr) Walk(w *writer.Writer) {
+	x.Qua.Walk(w)
+	w.Write("(")
+	x.Expr.Walk(w)
+	w.Write(")")
+}
+
+type CastExpr struct {
+	Expr ValueExpr
+	Type string
+}
+
+func (x CastExpr) Walk(w *writer.Writer) {
+	x.Expr.Walk(w)
+	w.Write("::")
+	w.Write(x.Type)
+}
+
 // HostValue produces non-SQL code that should produce an SQL value
 // when executed in the host environment.
 type HostValue struct {
@@ -112,5 +136,7 @@ func (DynamicParmeterSpec) valueExprNode()  {}
 func (OrdinalParameterSpec) valueExprNode() {}
 func (Literal) valueExprNode()              {}
 func (RoutineInvocation) valueExprNode()    {}
+func (QuantifiedExpr) valueExprNode()       {}
+func (CastExpr) valueExprNode()             {}
 func (HostValue) valueExprNode()            {}
 func (nooptype) valueExprNode()             {}

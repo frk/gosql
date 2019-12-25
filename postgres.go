@@ -106,7 +106,19 @@ const (
 		, c.castcontext
 	FROM pg_cast c `  //`
 
-	pgselectprocs = `SELECT
+	pgselectprocs_11plus = `SELECT
+		p.oid
+		, p.proname
+		, p.proargtypes[0]
+		, p.prorettype
+		, p.prokind = 'a'
+	FROM pg_proc p
+	WHERE p.pronargs = 1
+	AND p.proname NOT LIKE 'pg_%'
+	AND p.proname NOT LIKE '_pg_%'
+	`  //`
+
+	pgselectprocs_pre11 = `SELECT
 		p.oid
 		, p.proname
 		, p.proargtypes[0]
@@ -117,6 +129,8 @@ const (
 	AND p.proname NOT LIKE 'pg_%'
 	AND p.proname NOT LIKE '_pg_%'
 	`  //`
+
+	pgshowversionnum = `SHOW server_version_num` //`
 
 	pgselectexprtype = `SELECT id::oid FROM pg_typeof(%s) AS id` //`
 
@@ -564,18 +578,18 @@ func (c *pgchecker) checkonconflict(onconf *onconflictblock) error {
 
 func (c *pgchecker) checkwhere(where *whereblock) error {
 	type loopstate struct {
-		wb  *whereblock
-		idx int // keeps track of the field index
+		items []*predicateitem // the current iteration predicate items
+		idx   int              // keeps track of the field index
 	}
-	stack := []*loopstate{{wb: where}} // LIFO stack of states.
+	stack := []*loopstate{{items: where.items}} // LIFO stack of states.
 
 stackloop:
 	for len(stack) > 0 {
 		// Loop over the various items of a whereblock, including
 		// other nested whereblocks and check them against the db.
 		loop := stack[len(stack)-1]
-		for loop.idx < len(loop.wb.items) {
-			item := loop.wb.items[loop.idx]
+		for loop.idx < len(loop.items) {
+			item := loop.items[loop.idx]
 
 			// Instead of incrementing the index in the for-statement
 			// it is done here manually to ensure that it is not skipped
@@ -626,6 +640,8 @@ stackloop:
 						return errors.BadFieldToColumnTypeError
 					}
 				}
+
+				node.coltype = col.typ.namefmt
 			case *columnpredicate:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
@@ -707,8 +723,8 @@ stackloop:
 						return errors.BadColumnToColumnTypeComparisonError
 					}
 				}
-			case *whereblock:
-				stack = append(stack, &loopstate{wb: node})
+			case *nestedpredicate:
+				stack = append(stack, &loopstate{items: node.items})
 				continue stackloop
 			}
 		}
@@ -1378,6 +1394,16 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 	}
 
 	c.procs = make(map[funcname][]*pgproc)
+
+	var version int
+	var pgselectprocs string
+	if err := db.QueryRow(pgshowversionnum).Scan(&version); err != nil {
+		return err
+	} else if version >= 110000 {
+		pgselectprocs = pgselectprocs_11plus
+	} else {
+		pgselectprocs = pgselectprocs_pre11
+	}
 
 	// load procs
 	rows, err = db.Query(pgselectprocs)

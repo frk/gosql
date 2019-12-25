@@ -69,6 +69,9 @@ func TestGenerate(t *testing.T) {
 			"orderby_directive",
 			"record_nested_single",
 			"record_nested_slice",
+			"whereblock_array_comparison1",
+			"whereblock_array_comparison2",
+			"whereblock_array_comparison3",
 			"whereblock_between",
 			"whereblock_isin",
 			"whereblock_isin2",
@@ -77,7 +80,6 @@ func TestGenerate(t *testing.T) {
 			"whereblock_nested",
 			"whereblock_single",
 			"whereblock_slice",
-			// quantifier
 
 			// exists
 			// count

@@ -2,6 +2,7 @@ package gosql
 
 import (
 	"bytes"
+	"log"
 	"strconv"
 
 	gol "github.com/frk/gosql/internal/golang"
@@ -530,8 +531,21 @@ func (g *generator) queryargs(spec *typespec) {
 				switch node := item.node.(type) {
 				case *fieldpredicate:
 					if node.pred != isin && node.pred != notin {
-						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.field.name}}
-						g.qargs = append(g.qargs, sx)
+						var x gol.Expr
+
+						x = gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.field.name}}
+						if node.qua > 0 {
+							gotyp := node.field.typ.string(true)
+							coltyp := node.coltype + "[]"
+							sel, ok := gotyp2coltyp2converter[gotyp][coltyp]
+							if !ok {
+								// TODO should not happen here, this should be caught while scanning the db
+								log.Fatalf("unsupported type conversion: %s - %s", gotyp, coltyp)
+							}
+							x = gol.CallExpr{Fun: sel, Args: gol.ArgsList{List: []gol.Expr{x}}}
+						}
+
+						g.qargs = append(g.qargs, x)
 					}
 				case *betweenpredicate:
 					if x, ok := node.x.(*paramfield); ok {
@@ -934,16 +948,19 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 		// 2-arg predicates: prepare first, then build & return
 		case *fieldpredicate, *columnpredicate:
 			var (
-				lhs   sql.ValueExpr
-				rhs   sql.ValueExpr
-				pred  predicate
-				field string
+				lhs     sql.ValueExpr
+				rhs     sql.ValueExpr
+				pred    predicate
+				qua     quantifier
+				field   string
+				coltype string
 			)
 
 			// prepare
 			switch node := node.(type) {
 			case *fieldpredicate:
 				pred = node.pred
+				qua = node.qua
 				lhs = g.sqlcolref(node.colid)
 				rhs = g.sqlparam()
 				if len(node.modfunc) > 0 {
@@ -958,15 +975,34 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 					rhs = ri
 				}
 
+				if qua > 0 {
+					coltype = node.coltype
+				}
+
 				field = node.field.name // needed for isin/notin predicates
 			case *columnpredicate:
 				pred = node.pred
+				qua = node.qua
 				lhs = g.sqlcolref(node.colid)
 				if !node.colid2.isempty() {
 					rhs = g.sqlcolref(node.colid2)
 				} else if len(node.lit) > 0 {
 					rhs = sql.Literal{node.lit}
 				}
+			}
+
+			// quantifier?
+			if qua > 0 {
+				if len(coltype) > 0 {
+					cast := sql.CastExpr{}
+					cast.Expr = rhs
+					cast.Type = coltype + "[]"
+					rhs = cast
+				}
+				qx := sql.QuantifiedExpr{}
+				qx.Qua = quantifier2sqlquantifier[qua]
+				qx.Expr = rhs
+				rhs = qx
 			}
 
 			// build & return
@@ -1217,9 +1253,45 @@ var predicate2sqltruth = map[predicate]sql.TRUTH{
 	notfalse:   sql.FALSE,
 }
 
+var quantifier2sqlquantifier = map[quantifier]sql.QUANTIFIER{
+	quantany:  sql.ANY,
+	quantsome: sql.SOME,
+	quantall:  sql.ALL,
+}
+
 var jointype2sqljointype = map[jointype]sql.JoinType{
 	joinleft:  sql.JoinLeft,
 	joinright: sql.JoinRight,
 	joinfull:  sql.JoinFull,
 	joincross: sql.JoinCross,
+}
+
+var gotyp2coltyp2converter = map[string]map[string]gol.SelectorExpr{
+	gotypbools:   {"boolean[]": gol.SelectorExpr{ /*TODO*/ }},
+	gotypstrings: {"text[]": gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"StringSliceToTextArray"}}},
+	gotypints: {
+		"integer[]":  gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"IntSliceToIntArray"}},
+		"smallint[]": gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"IntSliceToIntArray"}},
+		"bigint[]":   gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"IntSliceToIntArray"}},
+	},
+	gotypint8s: {
+		"integer[]":  gol.SelectorExpr{ /*TODO*/ },
+		"smallint[]": gol.SelectorExpr{ /*TODO*/ },
+		"bigint[]":   gol.SelectorExpr{ /*TODO*/ },
+	},
+	gotypint16s: {
+		"integer[]":  gol.SelectorExpr{ /*TODO*/ },
+		"smallint[]": gol.SelectorExpr{ /*TODO*/ },
+		"bigint[]":   gol.SelectorExpr{ /*TODO*/ },
+	},
+	gotypint32s: {
+		"integer[]":  gol.SelectorExpr{ /*TODO*/ },
+		"smallint[]": gol.SelectorExpr{ /*TODO*/ },
+		"bigint[]":   gol.SelectorExpr{ /*TODO*/ },
+	},
+	gotypint64s: {
+		"integer[]":  gol.SelectorExpr{ /*TODO*/ },
+		"smallint[]": gol.SelectorExpr{ /*TODO*/ },
+		"bigint[]":   gol.SelectorExpr{ /*TODO*/ },
+	},
 }

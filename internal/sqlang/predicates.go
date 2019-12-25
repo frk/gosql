@@ -291,11 +291,11 @@ const (
 func (q QUANTIFIER) Walk(w *writer.Writer) {
 	switch q {
 	case ALL:
-		w.Write("ALL ")
+		w.Write("ALL")
 	case ANY:
-		w.Write("ANY ")
+		w.Write("ANY")
 	case SOME:
-		w.Write("SOME ")
+		w.Write("SOME")
 	}
 }
 

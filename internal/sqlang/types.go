@@ -230,17 +230,6 @@ func (x BinaryExpr) Walk(w *writer.Writer) {
 	x.Y.Walk(w)
 }
 
-type CastExpr struct {
-	X    Expr
-	Type Literal
-}
-
-func (x CastExpr) Walk(w *writer.Writer) {
-	x.X.Walk(w)
-	w.Write("::")
-	x.Type.Walk(w)
-}
-
 func (NoOp) exprNode()                {}
 func (Literal) exprNode()             {}
 func (ColumnIdent) exprNode()         {}
@@ -252,7 +241,6 @@ func (IsX) exprNode()                 {}
 func (IsNotX) exprNode()              {}
 func (Null) exprNode()                {}
 func (BinaryExpr) exprNode()          {}
-func (CastExpr) exprNode()            {}
 
 func (ColumnIdent) columnExprNode() {}
 func (Coalesce) columnExprNode()    {}

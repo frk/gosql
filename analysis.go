@@ -1865,6 +1865,9 @@ type fieldpredicate struct {
 	qua   quantifier
 	// The name of the function to be applied to the predicands.
 	modfunc funcname
+
+	// temp
+	coltype string
 }
 
 // columnpredicate is produced from a gosql.Column directive and its tag value.

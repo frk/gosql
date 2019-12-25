@@ -2,9 +2,11 @@ package gosql
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"strconv"
 	"strings"
 
+	"github.com/frk/gosql/internal/convert"
 	"github.com/frk/gosql/internal/filter"
 )
 
@@ -193,3 +195,11 @@ var ordinalparams = func() (a [65535]string) {
 	}
 	return a
 }()
+
+func IntSliceToIntArray(s []int) driver.Valuer {
+	return convert.IntSlice2IntArray{S: s}
+}
+
+func StringSliceToTextArray(s []string) driver.Valuer {
+	return nil // TODO
+}
