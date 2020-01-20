@@ -48,33 +48,33 @@ func TestValueSpec(t *testing.T) {
 		want string
 	}{{
 		spec: ValueSpec{
-			Names:  []Ident{{"a"}},
-			Values: []Expr{BasicLit{"123"}},
+			Names:  Ident{"a"},
+			Values: BasicLit{"123"},
 		},
 		want: `a = 123`,
 	}, {
 		spec: ValueSpec{
-			Names:  []Ident{{"a"}, {"b"}},
-			Values: []Expr{BasicLit{"123"}},
+			Names:  IdentList{{"a"}, {"b"}},
+			Values: BasicLit{"123"},
 		},
 		want: `a, b = 123`,
 	}, {
 		spec: ValueSpec{
-			Names:  []Ident{{"a"}, {"b"}},
-			Values: []Expr{BasicLit{"123"}, String("123")},
+			Names:  IdentList{{"a"}, {"b"}},
+			Values: ExprList{BasicLit{"123"}, String("123")},
 		},
 		want: `a, b = 123, "123"`,
 	}, {
 		spec: ValueSpec{
-			Names: []Ident{{"a"}, {"b"}},
+			Names: IdentList{{"a"}, {"b"}},
 			Type:  SelectorExpr{X: Ident{"time"}, Sel: Ident{"Time"}},
 		},
 		want: `a, b time.Time`,
 	}, {
 		spec: ValueSpec{
-			Names:  []Ident{{"a"}, {"b"}},
+			Names:  IdentList{{"a"}, {"b"}},
 			Type:   SelectorExpr{X: Ident{"time"}, Sel: Ident{"Time"}},
-			Values: []Expr{CallExpr{Fun: SelectorExpr{X: Ident{"time"}, Sel: Ident{"Now"}}}},
+			Values: CallExpr{Fun: SelectorExpr{X: Ident{"time"}, Sel: Ident{"Now"}}},
 		},
 		want: `a, b time.Time = time.Now()`,
 	}}

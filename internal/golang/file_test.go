@@ -44,7 +44,7 @@ func TestFile(t *testing.T) {
 				Body: BlockStmt{List: []Stmt{
 					ExprStmt{X: CallExpr{
 						Fun:  SelectorExpr{X: Ident{"fmt"}, Sel: Ident{"Println"}},
-						Args: ArgsList{List: []Expr{String("Hello, 世界")}},
+						Args: ArgsList{List: String("Hello, 世界")},
 					}},
 				}},
 			}},

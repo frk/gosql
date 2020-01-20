@@ -49,21 +49,6 @@ const (
 	BINARY_AND_NOT BINARY_OP = "&^"
 )
 
-type Expr interface {
-	Node
-	exprNode()
-}
-
-type ExprList []Expr
-
-func (list ExprList) Walk(w *writer.Writer) {
-	list[0].Walk(w)
-	for _, x := range list[1:] {
-		w.Write(", ")
-		x.Walk(w)
-	}
-}
-
 type FieldList []Field
 
 func (list FieldList) Walk(w *writer.Writer) {
@@ -81,21 +66,15 @@ func (list FieldList) Walk(w *writer.Writer) {
 // A Field represents a field declaration in a field list in a struct type.
 // Field.Names is nil for embedded struct fields.
 type Field struct {
-	Names []Ident
-	Type  Expr
+	Names IdentNode
+	Type  ExprNode
 	Tag   RawString
 	// Doc, Comment
 }
 
 func (f Field) Walk(w *writer.Writer) {
-	num := len(f.Names)
-	for i := 0; i < num; i++ {
-		f.Names[i].Walk(w)
-		if i < (num - 1) { // not last
-			w.Write(", ")
-		}
-	}
-	if num > 0 {
+	if f.Names != nil {
+		f.Names.Walk(w)
 		w.Write(" ")
 	}
 	f.Type.Walk(w)
@@ -147,7 +126,7 @@ func (list ParamList) Walk(w *writer.Writer) {
 }
 
 type ArgsList struct {
-	List     []Expr
+	List     ExprNodeList
 	Ellipsis bool
 	// If 0 the arguments will be listed all on one line, if > 0 then the
 	// arguments will be listed one per line starting from the argument whose
@@ -156,44 +135,54 @@ type ArgsList struct {
 }
 
 func (a ArgsList) Walk(w *writer.Writer) {
-	num := len(a.List)
-	for i := 0; i < num; i++ {
-		if a.OnePerLine > 0 && i >= a.OnePerLine-1 {
-			w.Write("\n")
-		}
-		a.List[i].Walk(w)
-		if i < (num - 1) { // not last
-			w.Write(", ")
-		} else { // last
-			if a.Ellipsis {
-				w.Write("...")
+	if a.List != nil {
+		list := a.List.exprNodeList()
+		length := len(list)
+
+		for i := 0; i < length; i++ {
+			if a.OnePerLine > 0 && i >= a.OnePerLine-1 {
+				w.Write("\n")
 			}
-			if a.OnePerLine > 0 {
-				w.Write(",\n")
+			list[i].Walk(w)
+			if i < (length - 1) { // not last
+				w.Write(", ")
+			} else { // last
+				if a.Ellipsis {
+					w.Write("...")
+				}
+				if a.OnePerLine > 0 {
+					w.Write(",\n")
+				}
 			}
 		}
 	}
 }
 
-func (a *ArgsList) AddExprs(xx ...Expr) {
-	a.List = append(a.List, xx...)
+func (a *ArgsList) AddExprs(xx ...ExprNode) {
+	if a.List != nil {
+		a.List = ExprList(append(a.List.exprNodeList(), xx...))
+	} else {
+		a.List = ExprList(xx)
+	}
+}
+
+func (a *ArgsList) Len() int {
+	if a.List != nil {
+		return len(a.List.exprNodeList())
+	}
+	return 0
 }
 
 // A Param represents a parameter/result declaration in a signature.
 type Param struct {
-	Names []Ident
-	Type  Expr
+	Names IdentNode
+	Type  ExprNode
 	// Doc, Comment
 }
 
 func (p Param) Walk(w *writer.Writer) {
-	num := len(p.Names)
-	if num > 0 {
-		p.Names[0].Walk(w)
-		for _, n := range p.Names[1:] {
-			w.Write(", ")
-			n.Walk(w)
-		}
+	if p.Names != nil {
+		p.Names.Walk(w)
 		w.Write(" ")
 	}
 	p.Type.Walk(w)
@@ -201,7 +190,7 @@ func (p Param) Walk(w *writer.Writer) {
 
 type RecvParam struct {
 	Name Ident
-	Type Expr
+	Type ExprNode
 }
 
 func (p RecvParam) Walk(w *writer.Writer) {
@@ -212,25 +201,10 @@ func (p RecvParam) Walk(w *writer.Writer) {
 	p.Type.Walk(w)
 }
 
-// An Ident node represents an identifier.
-type Ident struct {
-	Name string // identifier name
-}
-
-func (id Ident) Walk(w *writer.Writer) {
-	w.Write(id.Name)
-}
-
-type IdentString string
-
-func (id IdentString) Walk(w *writer.Writer) {
-	w.Write(string(id))
-}
-
 // A StarExpr node represents an expression of the form "*" Expression.
 // Semantically it could be a unary "*" expression, or a pointer type.
 type StarExpr struct {
-	X Expr
+	X ExprNode
 }
 
 func (x StarExpr) Walk(w *writer.Writer) {
@@ -242,7 +216,7 @@ func (x StarExpr) Walk(w *writer.Writer) {
 // are represented via StarExpr nodes.
 type UnaryExpr struct {
 	Op UNARY_OP
-	X  Expr
+	X  ExprNode
 }
 
 func (x UnaryExpr) Walk(w *writer.Writer) {
@@ -252,7 +226,7 @@ func (x UnaryExpr) Walk(w *writer.Writer) {
 
 // A SelectorExpr node represents an expression followed by a selector.
 type SelectorExpr struct {
-	X   Expr
+	X   ExprNode
 	Sel Ident
 }
 
@@ -265,9 +239,9 @@ func (x SelectorExpr) Walk(w *writer.Writer) {
 // A BinaryExpr node represents a unary expression. Unary "*" expressions
 // are represented via StarExpr nodes.
 type BinaryExpr struct {
-	X  Expr
+	X  ExprNode
 	Op BINARY_OP
-	Y  Expr
+	Y  ExprNode
 }
 
 func (x BinaryExpr) Walk(w *writer.Writer) {
@@ -280,7 +254,7 @@ func (x BinaryExpr) Walk(w *writer.Writer) {
 
 // A CallExpr node represents an expression followed by an argument list.
 type CallExpr struct {
-	Fun  Expr
+	Fun  ExprNode
 	Args ArgsList
 }
 
@@ -293,7 +267,7 @@ func (x CallExpr) Walk(w *writer.Writer) {
 
 // A ParenExpr node represents a parenthesized expression.
 type ParenExpr struct {
-	X Expr
+	X ExprNode
 }
 
 func (x ParenExpr) Walk(w *writer.Writer) {
@@ -306,8 +280,8 @@ func (x ParenExpr) Walk(w *writer.Writer) {
 
 // An IndexExpr node represents an expression followed by an index.
 type IndexExpr struct {
-	X     Expr
-	Index Expr
+	X     ExprNode
+	Index ExprNode
 }
 
 func (x IndexExpr) Walk(w *writer.Writer) {
@@ -319,8 +293,8 @@ func (x IndexExpr) Walk(w *writer.Writer) {
 
 // A KeyValueExpr node represents (key : value) pairs in composite literals.
 type KeyValueExpr struct {
-	Key   Expr
-	Value Expr
+	Key   ExprNode
+	Value ExprNode
 }
 
 func (x KeyValueExpr) Walk(w *writer.Writer) {
@@ -331,10 +305,10 @@ func (x KeyValueExpr) Walk(w *writer.Writer) {
 
 // An SliceExpr node represents an expression followed by slice indices.
 type SliceExpr struct {
-	X    Expr
-	Low  Expr
-	High Expr
-	Max  Expr
+	X    ExprNode
+	Low  ExprNode
+	High ExprNode
+	Max  ExprNode
 }
 
 func (x SliceExpr) Walk(w *writer.Writer) {
@@ -356,8 +330,8 @@ func (x SliceExpr) Walk(w *writer.Writer) {
 
 // A TypeAssertExpr node represents an expression followed by a type assertion.
 type TypeAssertExpr struct {
-	X    Expr
-	Type Expr
+	X    ExprNode
+	Type ExprNode
 }
 
 func (x TypeAssertExpr) Walk(w *writer.Writer) {
@@ -394,7 +368,7 @@ func (s RawString) Walk(w *writer.Writer) {
 }
 
 type RawStringImplant struct {
-	X Expr
+	X ExprNode
 }
 
 func (s RawStringImplant) Walk(w *writer.Writer) {
@@ -404,7 +378,7 @@ func (s RawStringImplant) Walk(w *writer.Writer) {
 }
 
 type Ellipsis struct {
-	Elt Expr
+	Elt ExprNode
 }
 
 func (e Ellipsis) Walk(w *writer.Writer) {
@@ -423,8 +397,8 @@ func (lit BasicLit) Walk(w *writer.Writer) {
 }
 
 type CompositeLit struct {
-	Type    Expr
-	Elts    []Expr
+	Type    ExprNode
+	Elts    ExprNodeList
 	Comma   bool
 	Compact bool
 }
@@ -432,21 +406,40 @@ type CompositeLit struct {
 func (lit CompositeLit) Walk(w *writer.Writer) {
 	lit.Type.Walk(w)
 	w.Write("{")
-	for _, x := range lit.Elts {
-		if !lit.Compact {
+
+	if lit.Elts != nil {
+		elts := lit.Elts.exprNodeList()
+		for _, x := range elts {
+			if !lit.Compact {
+				w.Write("\n")
+			}
+
+			x.Walk(w)
+
+			if lit.Comma {
+				w.Write(",")
+			}
+		}
+		if len(elts) > 0 && !lit.Compact {
 			w.Write("\n")
 		}
-
-		x.Walk(w)
-
-		if lit.Comma {
-			w.Write(",")
-		}
-	}
-	if len(lit.Elts) > 0 && !lit.Compact {
-		w.Write("\n")
 	}
 	w.Write("}")
+}
+
+func (lit *CompositeLit) AddElts(xx ...ExprNode) {
+	if lit.Elts != nil {
+		lit.Elts = ExprList(append(lit.Elts.exprNodeList(), xx...))
+	} else {
+		lit.Elts = ExprList(xx)
+	}
+}
+
+func (lit *CompositeLit) NumElts() int {
+	if lit.Elts != nil {
+		return len(lit.Elts.exprNodeList())
+	}
+	return 0
 }
 
 type FuncLit struct {
@@ -461,17 +454,19 @@ func (lit FuncLit) Walk(w *writer.Writer) {
 
 type MultiLineExpr struct {
 	Op    BINARY_OP
-	Exprs []Expr
+	Exprs ExprNodeList
 }
 
 func (m MultiLineExpr) Walk(w *writer.Writer) {
-	for i, e := range m.Exprs {
-		if i > 0 {
-			w.Write(" ")
-			w.Write(string(m.Op))
-			w.NewLine()
+	if m.Exprs != nil {
+		for i, x := range m.Exprs.exprNodeList() {
+			if i > 0 {
+				w.Write(" ")
+				w.Write(string(m.Op))
+				w.NewLine()
+			}
+			x.Walk(w)
 		}
-		e.Walk(w)
 	}
 }
 
@@ -507,9 +502,6 @@ func (s AffixStringNode) Walk(w *writer.Writer) {
 	w.Write(s.Suffix)
 }
 
-func (ExprList) exprNode()        {}
-func (Ident) exprNode()           {}
-func (IdentString) exprNode()     {}
 func (StarExpr) exprNode()        {}
 func (UnaryExpr) exprNode()       {}
 func (SelectorExpr) exprNode()    {}
@@ -531,3 +523,25 @@ func (MultiLineExpr) exprNode()   {}
 func (StringNode) exprNode()      {}
 func (RawStringNode) exprNode()   {}
 func (AffixStringNode) exprNode() {}
+
+func (x StarExpr) exprNodeList() []ExprNode        { return []ExprNode{x} }
+func (x UnaryExpr) exprNodeList() []ExprNode       { return []ExprNode{x} }
+func (x SelectorExpr) exprNodeList() []ExprNode    { return []ExprNode{x} }
+func (x BinaryExpr) exprNodeList() []ExprNode      { return []ExprNode{x} }
+func (x CallExpr) exprNodeList() []ExprNode        { return []ExprNode{x} }
+func (x ParenExpr) exprNodeList() []ExprNode       { return []ExprNode{x} }
+func (x IndexExpr) exprNodeList() []ExprNode       { return []ExprNode{x} }
+func (x KeyValueExpr) exprNodeList() []ExprNode    { return []ExprNode{x} }
+func (x SliceExpr) exprNodeList() []ExprNode       { return []ExprNode{x} }
+func (x TypeAssertExpr) exprNodeList() []ExprNode  { return []ExprNode{x} }
+func (x Int) exprNodeList() []ExprNode             { return []ExprNode{x} }
+func (x String) exprNodeList() []ExprNode          { return []ExprNode{x} }
+func (x RawString) exprNodeList() []ExprNode       { return []ExprNode{x} }
+func (x Ellipsis) exprNodeList() []ExprNode        { return []ExprNode{x} }
+func (x BasicLit) exprNodeList() []ExprNode        { return []ExprNode{x} }
+func (x CompositeLit) exprNodeList() []ExprNode    { return []ExprNode{x} }
+func (x FuncLit) exprNodeList() []ExprNode         { return []ExprNode{x} }
+func (x MultiLineExpr) exprNodeList() []ExprNode   { return []ExprNode{x} }
+func (x StringNode) exprNodeList() []ExprNode      { return []ExprNode{x} }
+func (x RawStringNode) exprNodeList() []ExprNode   { return []ExprNode{x} }
+func (x AffixStringNode) exprNodeList() []ExprNode { return []ExprNode{x} }

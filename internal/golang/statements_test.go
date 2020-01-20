@@ -130,13 +130,13 @@ func TestAssignStmt(t *testing.T) {
 		stmt AssignStmt
 		want string
 	}{{
-		stmt: AssignStmt{Lhs: []Expr{Ident{"a"}}, Rhs: []Expr{String("foo")}, Token: ASSIGN},
+		stmt: AssignStmt{Lhs: Ident{"a"}, Rhs: String("foo"), Token: ASSIGN},
 		want: `a = "foo"`,
 	}, {
-		stmt: AssignStmt{Lhs: []Expr{Ident{"a"}, Ident{"b"}}, Rhs: []Expr{String("foo"), BasicLit{"123"}}, Token: ASSIGN},
+		stmt: AssignStmt{Lhs: ExprList{Ident{"a"}, Ident{"b"}}, Rhs: ExprList{String("foo"), BasicLit{"123"}}, Token: ASSIGN},
 		want: `a, b = "foo", 123`,
 	}, {
-		stmt: AssignStmt{Lhs: []Expr{Ident{"a"}, Ident{"b"}}, Rhs: []Expr{String("foo"), BasicLit{"123"}}, Token: ASSIGN_DEFINE},
+		stmt: AssignStmt{Lhs: ExprList{Ident{"a"}, Ident{"b"}}, Rhs: ExprList{String("foo"), BasicLit{"123"}}, Token: ASSIGN_DEFINE},
 		want: `a, b := "foo", 123`,
 	}}
 
@@ -300,8 +300,8 @@ func TestIfStmt(t *testing.T) {
 	}, {
 		stmt: IfStmt{
 			Init: AssignStmt{
-				Lhs:   []Expr{Ident{"_"}, Ident{"err"}},
-				Rhs:   []Expr{CallExpr{Fun: Ident{"f"}}},
+				Lhs:   ExprList{Ident{"_"}, Ident{"err"}},
+				Rhs:   CallExpr{Fun: Ident{"f"}},
 				Token: ASSIGN_DEFINE,
 			},
 			Cond: BinaryExpr{X: Ident{"err"}, Op: BINARY_NEQ, Y: Ident{"nil"}}},
@@ -362,15 +362,15 @@ func TestSwitchStmt(t *testing.T) {
 		want: "switch tag {}",
 	}, {
 		stmt: SwitchStmt{Init: AssignStmt{
-			Lhs:   []Expr{Ident{"x"}},
-			Rhs:   []Expr{CallExpr{Fun: Ident{"f"}}},
+			Lhs:   Ident{"x"},
+			Rhs:   CallExpr{Fun: Ident{"f"}},
 			Token: ASSIGN_DEFINE,
 		}},
 		want: "switch x := f(); {}",
 	}, {
 		stmt: SwitchStmt{Init: AssignStmt{
-			Lhs:   []Expr{Ident{"x"}},
-			Rhs:   []Expr{CallExpr{Fun: Ident{"f"}}},
+			Lhs:   Ident{"x"},
+			Rhs:   CallExpr{Fun: Ident{"f"}},
 			Token: ASSIGN_DEFINE,
 		}, Tag: Ident{"x"}},
 		want: "switch x := f(); x {}",
@@ -381,10 +381,10 @@ func TestSwitchStmt(t *testing.T) {
 		want: "switch {\ndefault:\n}",
 	}, {
 		stmt: SwitchStmt{Body: []CaseClause{{
-			List: []Expr{BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}}},
+			List: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
 			Body: []Stmt{ReturnStmt{Ident{"a"}}},
 		}, {
-			List: []Expr{BinaryExpr{X: Ident{"a"}, Op: BINARY_GTR, Y: Ident{"b"}}},
+			List: BinaryExpr{X: Ident{"a"}, Op: BINARY_GTR, Y: Ident{"b"}},
 			Body: []Stmt{ReturnStmt{Ident{"b"}}},
 		}}},
 		want: "switch {\ncase a < b:\nreturn a\ncase a > b:\nreturn b\n}",
@@ -420,7 +420,7 @@ func TestTypeSwitchStmt(t *testing.T) {
 		want: "switch v := x.(type) {}",
 	}, {
 		stmt: TypeSwitchStmt{
-			Init:  AssignStmt{Lhs: []Expr{Ident{"x"}}, Rhs: []Expr{Ident{"y"}}, Token: ASSIGN_DEFINE},
+			Init:  AssignStmt{Lhs: Ident{"x"}, Rhs: Ident{"y"}, Token: ASSIGN_DEFINE},
 			Guard: TypeSwitchGuard{Name: Ident{"v"}, X: Ident{"x"}},
 		},
 		want: "switch x := y; v := x.(type) {}",
@@ -434,10 +434,10 @@ func TestTypeSwitchStmt(t *testing.T) {
 		stmt: TypeSwitchStmt{
 			Guard: TypeSwitchGuard{Name: Ident{"v"}, X: Ident{"x"}},
 			Body: []CaseClause{
-				{List: []Expr{Ident{"nil"}}},
-				{List: []Expr{Ident{"int64"}, Ident{"int32"}, Ident{"int"}}, Body: []Stmt{AssignStmt{
-					Lhs:   []Expr{Ident{"_"}},
-					Rhs:   []Expr{Ident{"v"}},
+				{List: Ident{"nil"}},
+				{List: ExprList{Ident{"int64"}, Ident{"int32"}, Ident{"int"}}, Body: []Stmt{AssignStmt{
+					Lhs:   Ident{"_"},
+					Rhs:   Ident{"v"},
 					Token: ASSIGN,
 				}}},
 				{},
@@ -486,12 +486,12 @@ func TestSelectStmt(t *testing.T) {
 	}, {
 		stmt: SelectStmt{Body: []CommClause{
 			{Comm: AssignStmt{
-				Lhs:   []Expr{Ident{"i"}},
-				Rhs:   []Expr{UnaryExpr{Op: UNARY_RECV, X: Ident{"c"}}},
+				Lhs:   Ident{"i"},
+				Rhs:   UnaryExpr{Op: UNARY_RECV, X: Ident{"c"}},
 				Token: ASSIGN_DEFINE,
 			}, Body: []Stmt{AssignStmt{
-				Lhs:   []Expr{Ident{"_"}},
-				Rhs:   []Expr{Ident{"i"}},
+				Lhs:   Ident{"_"},
+				Rhs:   Ident{"i"},
 				Token: ASSIGN,
 			}}},
 			{},
@@ -532,7 +532,7 @@ func TestForStmt(t *testing.T) {
 		want: "for a < b {}",
 	}, {
 		stmt: ForStmt{
-			Init: AssignStmt{Lhs: []Expr{Ident{"i"}}, Rhs: []Expr{BasicLit{"0"}}, Token: ASSIGN_DEFINE},
+			Init: AssignStmt{Lhs: Ident{"i"}, Rhs: BasicLit{"0"}, Token: ASSIGN_DEFINE},
 			Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
 			Post: IncDecStmt{X: Ident{"i"}, Token: INCDEC_INC},
 		},

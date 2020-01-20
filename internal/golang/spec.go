@@ -4,6 +4,32 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
+type SpecNode interface {
+	Node
+	specNode()
+}
+
+type SpecList []SpecNode
+
+func (ls SpecList) Walk(w *writer.Writer) {
+	withParens := len(ls) > 1
+	if withParens {
+		w.Write("(\n")
+	}
+
+	ls[0].Walk(w)
+	for _, n := range ls[1:] {
+		w.Write("\n")
+		n.Walk(w)
+	}
+
+	if withParens {
+		w.Write("\n)")
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 type Spec interface {
 	Node
 	specNode()
@@ -30,9 +56,9 @@ func (s ImportSpec) Walk(w *writer.Writer) {
 }
 
 type ValueSpec struct {
-	Names       []Ident
-	Type        Expr
-	Values      []Expr
+	Names       IdentNode
+	Type        ExprNode
+	Values      ExprNodeList
 	LineComment LineComment
 	Doc         Comment
 }
@@ -42,21 +68,20 @@ func (s ValueSpec) Walk(w *writer.Writer) {
 		s.Doc.Walk(w)
 	}
 
-	s.Names[0].Walk(w)
-	for _, name := range s.Names[1:] {
-		w.Write(", ")
-		name.Walk(w)
-	}
+	s.Names.Walk(w)
 	if s.Type != nil {
 		w.Write(" ")
 		s.Type.Walk(w)
 	}
-	if len(s.Values) > 0 {
+
+	if s.Values != nil {
 		w.Write(" = ")
-		s.Values[0].Walk(w)
-		for _, value := range s.Values[1:] {
+
+		vals := s.Values.exprNodeList()
+		vals[0].Walk(w)
+		for _, v := range vals[1:] {
 			w.Write(", ")
-			value.Walk(w)
+			v.Walk(w)
 		}
 	}
 	s.LineComment.Walk(w)
@@ -65,7 +90,7 @@ func (s ValueSpec) Walk(w *writer.Writer) {
 type TypeSpec struct {
 	Name  Ident
 	Alias bool
-	Type  Expr // Ident, ParenExpr, SelectorExpr, StarExpr, or any of the XxxTypes
+	Type  ExprNode // Ident, ParenExpr, SelectorExpr, StarExpr, or any of the XxxTypes
 	// Doc, Comment
 }
 
@@ -79,6 +104,7 @@ func (s TypeSpec) Walk(w *writer.Writer) {
 	s.Type.Walk(w)
 }
 
+func (SpecList) specNode()   {}
 func (ImportSpec) specNode() {}
 func (ValueSpec) specNode()  {}
 func (TypeSpec) specNode()   {}

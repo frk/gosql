@@ -6,8 +6,8 @@ import (
 
 // An ArrayType node represents an array or slice type.
 type ArrayType struct {
-	Len Expr
-	Elt Expr
+	Len ExprNode
+	Elt ExprNode
 }
 
 func (at ArrayType) Walk(w *writer.Writer) {
@@ -56,7 +56,7 @@ func (ft FuncType) Walk(w *writer.Writer) {
 	}
 	w.Write(" ")
 
-	withParens := len(ft.Results) > 1 || len(ft.Results[0].Names) > 0
+	withParens := len(ft.Results) > 1 || ft.Results[0].Names != nil
 
 	if withParens {
 		w.Write("(")
@@ -87,8 +87,8 @@ func (it InterfaceType) Walk(w *writer.Writer) {
 
 // A MapType node represents a map type.
 type MapType struct {
-	Key   Expr
-	Value Expr
+	Key   ExprNode
+	Value ExprNode
 }
 
 func (mt MapType) Walk(w *writer.Writer) {
@@ -109,7 +109,7 @@ const (
 // A ChanType node represents a channel type.
 type ChanType struct {
 	Dir   CHAN_DIR
-	Value Expr
+	Value ExprNode
 }
 
 func (ct ChanType) Walk(w *writer.Writer) {
@@ -124,9 +124,18 @@ func (ct ChanType) Walk(w *writer.Writer) {
 	ct.Value.Walk(w)
 }
 
+// implements ExprNode
 func (ArrayType) exprNode()     {}
 func (StructType) exprNode()    {}
 func (FuncType) exprNode()      {}
 func (InterfaceType) exprNode() {}
 func (MapType) exprNode()       {}
 func (ChanType) exprNode()      {}
+
+// implements ExprNodeList
+func (t ArrayType) exprNodeList() []ExprNode     { return []ExprNode{t} }
+func (t StructType) exprNodeList() []ExprNode    { return []ExprNode{t} }
+func (t FuncType) exprNodeList() []ExprNode      { return []ExprNode{t} }
+func (t InterfaceType) exprNodeList() []ExprNode { return []ExprNode{t} }
+func (t MapType) exprNodeList() []ExprNode       { return []ExprNode{t} }
+func (t ChanType) exprNodeList() []ExprNode      { return []ExprNode{t} }

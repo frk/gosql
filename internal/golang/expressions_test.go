@@ -149,25 +149,25 @@ func TestCallExpr(t *testing.T) {
 		want: "foo()",
 	}, {
 		call: CallExpr{Fun: Ident{"foo"}, Args: ArgsList{
-			List: []Expr{Ident{"arg1"}, Ident{"arg2"}},
+			List: ExprList{Ident{"arg1"}, Ident{"arg2"}},
 		}},
 		want: "foo(arg1, arg2)",
 	}, {
 		call: CallExpr{Fun: Ident{"foo"}, Args: ArgsList{
-			List:     []Expr{Ident{"arg1"}, Ident{"arg2"}},
+			List:     ExprList{Ident{"arg1"}, Ident{"arg2"}},
 			Ellipsis: true,
 		}},
 		want: "foo(arg1, arg2...)",
 	}, {
 		call: CallExpr{Fun: Ident{"foo"}, Args: ArgsList{
-			List:       []Expr{Ident{"arg1"}, Ident{"arg2"}},
+			List:       ExprList{Ident{"arg1"}, Ident{"arg2"}},
 			Ellipsis:   true,
 			OnePerLine: 1,
 		}},
 		want: "foo(\narg1, \narg2...,\n)",
 	}, {
 		call: CallExpr{Fun: Ident{"foo"}, Args: ArgsList{
-			List:       []Expr{Ident{"arg1"}, Ident{"arg2"}},
+			List:       ExprList{Ident{"arg1"}, Ident{"arg2"}},
 			Ellipsis:   true,
 			OnePerLine: 2,
 		}},
@@ -175,7 +175,7 @@ func TestCallExpr(t *testing.T) {
 	}, {
 		call: CallExpr{
 			Fun: SelectorExpr{Sel: Ident{"Sqrt"}, X: Ident{"math"}},
-			Args: ArgsList{List: []Expr{
+			Args: ArgsList{List: ExprList{
 				BinaryExpr{X: Ident{"0.34"}, Op: BINARY_MUL, Y: Ident{"25"}},
 				Ident{"arg2"},
 			}},
@@ -345,17 +345,17 @@ func TestField(t *testing.T) {
 		f:    Field{Type: Ident{"int"}},
 		want: "int",
 	}, {
-		f:    Field{Names: []Ident{{"a"}}, Type: Ident{"int"}},
+		f:    Field{Names: Ident{"a"}, Type: Ident{"int"}},
 		want: "a int",
 	}, {
 		f: Field{
-			Names: []Ident{{"foo"}, {"bar"}, {"baz"}},
+			Names: IdentList{{"foo"}, {"bar"}, {"baz"}},
 			Type:  StarExpr{X: Ident{"string"}},
 		},
 		want: "foo, bar, baz *string",
 	}, {
 		f: Field{
-			Names: []Ident{{"Foo"}},
+			Names: Ident{"Foo"},
 			Type:  Ident{"string"},
 			Tag:   RawString(`json:"foo"`),
 		},

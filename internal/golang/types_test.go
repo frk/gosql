@@ -42,14 +42,14 @@ func TestStructType(t *testing.T) {
 		want string
 	}{{
 		typ: StructType{Fields: FieldList{
-			{Names: []Ident{{"Foo"}}, Type: Ident{"string"}},
+			{Names: Ident{"Foo"}, Type: Ident{"string"}},
 		}},
 		want: "struct {\nFoo string\n}",
 	}, {
 		typ: StructType{Fields: FieldList{
-			{Names: []Ident{{"Foo"}}, Type: Ident{"string"}},
-			{Names: []Ident{{"Bar"}}, Type: Ident{"float64"}},
-			{Names: []Ident{{"Baz"}}, Type: Ident{"bool"}},
+			{Names: Ident{"Foo"}, Type: Ident{"string"}},
+			{Names: Ident{"Bar"}, Type: Ident{"float64"}},
+			{Names: Ident{"Baz"}, Type: Ident{"bool"}},
 		}},
 		want: "struct {\nFoo string\nBar float64\nBaz bool\n}",
 	}}
@@ -80,73 +80,73 @@ func TestFuncType(t *testing.T) {
 	}, {
 		typ: FuncType{
 			Params: ParamList{
-				{Names: []Ident{{"foo"}}, Type: Ident{"string"}},
+				{Names: Ident{"foo"}, Type: Ident{"string"}},
 			},
 		},
 		want: "(foo string)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
-				{Names: []Ident{{"foo"}, {"bar"}, {"baz"}}, Type: Ident{"string"}},
+				{Names: IdentList{{"foo"}, {"bar"}, {"baz"}}, Type: Ident{"string"}},
 			},
 		},
 		want: "(foo, bar, baz string)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
-				{Names: []Ident{{"foo"}}, Type: Ident{"string"}},
-				{Names: []Ident{{"bar"}}, Type: Ident{"int"}},
-				{Names: []Ident{{"baz"}}, Type: Ident{"bool"}},
+				{Names: Ident{"foo"}, Type: Ident{"string"}},
+				{Names: Ident{"bar"}, Type: Ident{"int"}},
+				{Names: Ident{"baz"}, Type: Ident{"bool"}},
 			},
 		},
 		want: "(foo string, bar int, baz bool)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
-				{Names: []Ident{{"foo"}}, Type: Ident{"string"}},
-				{Names: []Ident{{"bar"}}, Type: Ellipsis{Elt: Ident{"int"}}},
+				{Names: Ident{"foo"}, Type: Ident{"string"}},
+				{Names: Ident{"bar"}, Type: Ellipsis{Elt: Ident{"int"}}},
 			},
 		},
 		want: "(foo string, bar ...int)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
-				{Names: []Ident{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
 			},
 			Results: ParamList{
-				{Names: []Ident{}, Type: Ident{"error"}},
+				{Names: nil, Type: Ident{"error"}},
 			},
 		},
 		want: "(foo, bar string) error",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
-				{Names: []Ident{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
 			},
 			Results: ParamList{
-				{Names: []Ident{{"err"}}, Type: Ident{"error"}},
+				{Names: Ident{"err"}, Type: Ident{"error"}},
 			},
 		},
 		want: "(foo, bar string) (err error)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
-				{Names: []Ident{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
 			},
 			Results: ParamList{
-				{Names: []Ident{}, Type: Ident{"int"}},
-				{Names: []Ident{}, Type: Ident{"error"}},
+				{Names: nil, Type: Ident{"int"}},
+				{Names: nil, Type: Ident{"error"}},
 			},
 		},
 		want: "(foo, bar string) (int, error)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
-				{Names: []Ident{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
 			},
 			Results: ParamList{
-				{Names: []Ident{{"num"}}, Type: Ident{"int"}},
-				{Names: []Ident{{"err"}}, Type: Ident{"error"}},
+				{Names: Ident{"num"}, Type: Ident{"int"}},
+				{Names: Ident{"err"}, Type: Ident{"error"}},
 			},
 		},
 		want: "(foo, bar string) (num int, err error)",
@@ -183,12 +183,12 @@ func TestInterfaceType(t *testing.T) {
 			{Name: Ident{"Foo"}, Type: FuncType{}},
 			{Name: Ident{"Bar"}, Type: FuncType{
 				Params: ParamList{
-					{Names: []Ident{{"a"}}, Type: Ident{"string"}},
+					{Names: Ident{"a"}, Type: Ident{"string"}},
 				},
 			}},
 			{Name: Ident{"Baz"}, Type: FuncType{
 				Results: ParamList{
-					{Names: []Ident{}, Type: Ident{"error"}},
+					{Names: nil, Type: Ident{"error"}},
 				},
 			}},
 		}},

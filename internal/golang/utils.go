@@ -49,3 +49,5 @@ func (NoOp) stmtNode() {}
 func (NoOp) exprNode() {}
 func (NoOp) declNode() {}
 func (NoOp) specNode() {}
+
+func (n NoOp) exprNodeList() []ExprNode { return []ExprNode{n} }

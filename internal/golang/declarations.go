@@ -19,26 +19,14 @@ const (
 
 type GenDecl struct {
 	Token DECL_TOKEN
-	Specs []Spec
+	Specs SpecNode
 	// Doc
 }
 
 func (d GenDecl) Walk(w *writer.Writer) {
 	w.Write(string(d.Token))
 	w.Write(" ")
-
-	withParens := len(d.Specs) > 1
-	if withParens {
-		w.Write("(\n")
-	}
-	d.Specs[0].Walk(w)
-	for _, spec := range d.Specs[1:] {
-		w.Write("\n")
-		spec.Walk(w)
-	}
-	if withParens {
-		w.Write("\n)")
-	}
+	d.Specs.Walk(w)
 }
 
 type ImportDecl []ImportSpec

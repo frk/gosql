@@ -12,68 +12,68 @@ func TestGenDecl(t *testing.T) {
 		decl GenDecl
 		want string
 	}{{
-		decl: GenDecl{Token: DECL_CONST, Specs: []Spec{
-			ValueSpec{Names: []Ident{{"K"}}, Values: []Expr{String("foo")}},
+		decl: GenDecl{Token: DECL_CONST, Specs: ValueSpec{
+			Names: Ident{"K"}, Values: String("foo"),
 		}},
 		want: "const K = \"foo\"",
 	}, {
-		decl: GenDecl{Token: DECL_CONST, Specs: []Spec{
-			ValueSpec{Names: []Ident{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: []Expr{String("some_value")}},
+		decl: GenDecl{Token: DECL_CONST, Specs: ValueSpec{
+			Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: String("some_value"),
 		}},
 		want: "const K, L, M SomeType = \"some_value\"",
 	}, {
-		decl: GenDecl{Token: DECL_CONST, Specs: []Spec{
-			ValueSpec{Names: []Ident{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: []Expr{String("some_value")}},
-			ValueSpec{Names: []Ident{{"N"}}, Type: Ident{"int64"}, Values: []Expr{BasicLit{"123"}}},
+		decl: GenDecl{Token: DECL_CONST, Specs: SpecList{
+			ValueSpec{Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: String("some_value")},
+			ValueSpec{Names: Ident{"N"}, Type: Ident{"int64"}, Values: BasicLit{"123"}},
 		}},
 		want: "const (\nK, L, M SomeType = \"some_value\"\nN int64 = 123\n)",
 	}, {
-		decl: GenDecl{Token: DECL_VAR, Specs: []Spec{
-			ValueSpec{Names: []Ident{{"V"}}, Values: []Expr{String("foo")}},
+		decl: GenDecl{Token: DECL_VAR, Specs: ValueSpec{
+			Names: Ident{"V"}, Values: String("foo"),
 		}},
 		want: "var V = \"foo\"",
 	}, {
-		decl: GenDecl{Token: DECL_VAR, Specs: []Spec{
-			ValueSpec{Names: []Ident{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: []Expr{String("some_value")}},
+		decl: GenDecl{Token: DECL_VAR, Specs: ValueSpec{
+			Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: String("some_value"),
 		}},
 		want: "var V, W, X SomeType = \"some_value\"",
 	}, {
-		decl: GenDecl{Token: DECL_VAR, Specs: []Spec{
-			ValueSpec{Names: []Ident{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: []Expr{String("some_value")}},
-			ValueSpec{Names: []Ident{{"Y"}}, Type: Ident{"int64"}, Values: []Expr{BasicLit{"123"}}},
+		decl: GenDecl{Token: DECL_VAR, Specs: SpecList{
+			ValueSpec{Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: String("some_value")},
+			ValueSpec{Names: Ident{"Y"}, Type: Ident{"int64"}, Values: BasicLit{"123"}},
 		}},
 		want: "var (\nV, W, X SomeType = \"some_value\"\nY int64 = 123\n)",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: []Spec{
-			TypeSpec{Name: Ident{"T"}, Type: Ident{"int8"}},
+		decl: GenDecl{Token: DECL_TYPE, Specs: TypeSpec{
+			Name: Ident{"T"}, Type: Ident{"int8"},
 		}},
 		want: "type T int8",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: []Spec{
-			TypeSpec{Name: Ident{"T"}, Type: SelectorExpr{X: Ident{"time"}, Sel: Ident{"Time"}}},
+		decl: GenDecl{Token: DECL_TYPE, Specs: TypeSpec{
+			Name: Ident{"T"}, Type: SelectorExpr{X: Ident{"time"}, Sel: Ident{"Time"}},
 		}},
 		want: "type T time.Time",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: []Spec{
-			TypeSpec{Name: Ident{"T"}, Alias: true, Type: SelectorExpr{X: Ident{"time"}, Sel: Ident{"Time"}}},
+		decl: GenDecl{Token: DECL_TYPE, Specs: TypeSpec{
+			Name: Ident{"T"}, Alias: true, Type: SelectorExpr{X: Ident{"time"}, Sel: Ident{"Time"}},
 		}},
 		want: "type T = time.Time",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: []Spec{
-			TypeSpec{Name: Ident{"T"}, Type: StructType{Fields: FieldList{
-				{Names: []Ident{{"F1"}}, Type: Ident{"string"}},
-				{Names: []Ident{{"F2"}}, Type: Ident{"int"}},
-				{Names: []Ident{{"F3"}}, Type: Ident{"bool"}},
-			}}},
+		decl: GenDecl{Token: DECL_TYPE, Specs: TypeSpec{
+			Name: Ident{"T"}, Type: StructType{Fields: FieldList{
+				{Names: Ident{"F1"}, Type: Ident{"string"}},
+				{Names: Ident{"F2"}, Type: Ident{"int"}},
+				{Names: Ident{"F3"}, Type: Ident{"bool"}},
+			}},
 		}},
 		want: "type T struct {\nF1 string\nF2 int\nF3 bool\n}",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: []Spec{
+		decl: GenDecl{Token: DECL_TYPE, Specs: SpecList{
 			TypeSpec{Name: Ident{"S"}, Type: ArrayType{Elt: StructType{}}},
 			TypeSpec{Name: Ident{"T"}, Type: StructType{Fields: FieldList{
-				{Names: []Ident{{"F1"}}, Type: Ident{"string"}},
-				{Names: []Ident{{"F2"}}, Type: Ident{"int"}},
-				{Names: []Ident{{"F3"}}, Type: Ident{"bool"}},
+				{Names: Ident{"F1"}, Type: Ident{"string"}},
+				{Names: Ident{"F2"}, Type: Ident{"int"}},
+				{Names: Ident{"F3"}, Type: Ident{"bool"}},
 			}}},
 		}},
 		want: "type (\nS []struct{}\nT struct {\nF1 string\nF2 int\nF3 bool\n}\n)",
@@ -116,8 +116,8 @@ func TestFuncDecl(t *testing.T) {
 			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
 			Type: FuncType{
 				Params: ParamList{
-					{Names: []Ident{{"foo"}, {"bar"}}, Type: Ident{"string"}},
-					{Names: []Ident{{"baz"}}, Type: Ident{"bool"}},
+					{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+					{Names: Ident{"baz"}, Type: Ident{"bool"}},
 				},
 			},
 		},
@@ -128,12 +128,12 @@ func TestFuncDecl(t *testing.T) {
 			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
 			Type: FuncType{
 				Params: ParamList{
-					{Names: []Ident{{"foo"}, {"bar"}}, Type: Ident{"string"}},
-					{Names: []Ident{{"baz"}}, Type: Ident{"bool"}},
+					{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+					{Names: Ident{"baz"}, Type: Ident{"bool"}},
 				},
 				Results: ParamList{
-					{Names: []Ident{{"num"}}, Type: Ident{"int"}},
-					{Names: []Ident{{"err"}}, Type: Ident{"error"}},
+					{Names: Ident{"num"}, Type: Ident{"int"}},
+					{Names: Ident{"err"}, Type: Ident{"error"}},
 				},
 			},
 		},

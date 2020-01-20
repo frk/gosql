@@ -41,7 +41,7 @@ func (s LabeledStmt) Walk(w *writer.Writer) {
 
 // An ExprStmt node represents a (stand-alone) expression in a statement list.
 type ExprStmt struct {
-	X Expr
+	X ExprNode
 }
 
 func (s ExprStmt) Walk(w *writer.Writer) {
@@ -49,8 +49,8 @@ func (s ExprStmt) Walk(w *writer.Writer) {
 }
 
 type SendStmt struct {
-	Chan  Expr
-	Value Expr
+	Chan  ExprNode
+	Value ExprNode
 }
 
 func (s SendStmt) Walk(w *writer.Writer) {
@@ -67,7 +67,7 @@ const (
 )
 
 type IncDecStmt struct {
-	X     Expr
+	X     ExprNode
 	Token INCDEC_TOKEN
 }
 
@@ -95,35 +95,25 @@ const (
 )
 
 type AssignStmt struct {
-	Lhs   []Expr
-	Rhs   []Expr
+	Lhs   ExprNodeList // must be set, i.e. cannot be nil
+	Rhs   ExprNodeList // must be set, i.e. cannot be nil
 	Token ASSIGN_TOKEN
 }
 
 func (s AssignStmt) Walk(w *writer.Writer) {
-	s.Lhs[0].Walk(w)
-	for _, lhs := range s.Lhs[1:] {
-		w.Write(", ")
-		lhs.Walk(w)
-	}
-
+	s.Lhs.Walk(w)
 	w.Write(" ")
 	w.Write(string(s.Token))
 	w.Write(" ")
-
-	s.Rhs[0].Walk(w)
-	for _, rhs := range s.Rhs[1:] {
-		w.Write(", ")
-		rhs.Walk(w)
-	}
+	s.Rhs.Walk(w)
 }
 
-func (s *AssignStmt) SetLhs(xx ...Expr) {
-	s.Lhs = xx
+func (s *AssignStmt) SetLhs(xx ...ExprNode) {
+	s.Lhs = ExprList(xx)
 }
 
-func (s *AssignStmt) SetRhs(xx ...Expr) {
-	s.Rhs = xx
+func (s *AssignStmt) SetRhs(xx ...ExprNode) {
+	s.Rhs = ExprList(xx)
 }
 
 // A GoStmt node represents a go statement.
@@ -146,7 +136,7 @@ func (s DeferStmt) Walk(w *writer.Writer) {
 }
 
 type ReturnStmt struct {
-	Result Expr
+	Result ExprNodeList // can be nil
 }
 
 func (s ReturnStmt) Walk(w *writer.Writer) {
@@ -193,7 +183,7 @@ func (s *BlockStmt) Add(ss ...Stmt) {
 
 type IfStmt struct {
 	Init Stmt
-	Cond Expr
+	Cond ExprNode
 	Body BlockStmt
 	Else Stmt
 }
@@ -217,18 +207,14 @@ func (s IfStmt) Walk(w *writer.Writer) {
 
 // A CaseClause represents a case of an expression or type switch statement.
 type CaseClause struct {
-	List []Expr // list of expressions or types; nil means default case
+	List ExprNodeList // list of expressions or types; nil means default case
 	Body []Stmt
 }
 
 func (s CaseClause) Walk(w *writer.Writer) {
-	if len(s.List) > 0 {
+	if s.List != nil {
 		w.Write("case ")
-		s.List[0].Walk(w)
-		for _, x := range s.List[1:] {
-			w.Write(", ")
-			x.Walk(w)
-		}
+		s.List.Walk(w)
 		w.Write(":")
 	} else {
 		w.Write("default:")
@@ -242,7 +228,7 @@ func (s CaseClause) Walk(w *writer.Writer) {
 
 type SwitchStmt struct {
 	Init Stmt
-	Tag  Expr
+	Tag  ExprNode
 	Body []CaseClause
 }
 
@@ -270,7 +256,7 @@ func (s SwitchStmt) Walk(w *writer.Writer) {
 
 type TypeSwitchGuard struct {
 	Name Ident
-	X    Expr
+	X    ExprNode
 }
 
 func (g TypeSwitchGuard) Walk(w *writer.Writer) {
@@ -347,7 +333,7 @@ func (s SelectStmt) Walk(w *writer.Writer) {
 
 type ForStmt struct {
 	Init Stmt
-	Cond Expr
+	Cond ExprNode
 	Post Stmt
 	Body BlockStmt
 }
@@ -373,10 +359,10 @@ func (s ForStmt) Walk(w *writer.Writer) {
 }
 
 type RangeStmt struct {
-	Key    Expr
-	Value  Expr
+	Key    ExprNode
+	Value  ExprNode
 	Define bool
-	X      Expr
+	X      ExprNode
 	Body   BlockStmt
 }
 
@@ -409,7 +395,7 @@ func (s *RangeStmt) SetVariables(key, val string) {
 	s.Define = true
 }
 
-func (s *RangeStmt) SetExpression(x Expr) {
+func (s *RangeStmt) SetExpression(x ExprNode) {
 	s.X = x
 }
 
