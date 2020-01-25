@@ -4,63 +4,13 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
-type SpecNode interface {
-	Node
-	specNode()
-}
-
-type SpecList []SpecNode
-
-func (ls SpecList) Walk(w *writer.Writer) {
-	withParens := len(ls) > 1
-	if withParens {
-		w.Write("(\n")
-	}
-
-	ls[0].Walk(w)
-	for _, n := range ls[1:] {
-		w.Write("\n")
-		n.Walk(w)
-	}
-
-	if withParens {
-		w.Write("\n)")
-	}
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-type Spec interface {
-	Node
-	specNode()
-}
-
-type ImportSpec struct {
-	Name Ident
-	Path String
-	// Doc, Comment
-	NewLine bool
-}
-
-func (s ImportSpec) Walk(w *writer.Writer) {
-	if s.NewLine {
-		w.Write("\n")
-		return
-	}
-
-	if len(s.Name.Name) > 0 {
-		s.Name.Walk(w)
-		w.Write(" ")
-	}
-	s.Path.Walk(w)
-}
-
+// ValueSpec produces a value specification.
 type ValueSpec struct {
-	Names       IdentNode
-	Type        ExprNode
-	Values      ExprNodeList
-	LineComment LineComment
-	Doc         Comment
+	Doc     CommentNode  // associated documentation
+	Names   IdentNode    // one or more identifiers for the values
+	Type    ExprNode     // the type of the values; can be nil if the type is to be infered
+	Values  ExprNodeList // list of expressions that produce the values
+	Comment LineComment  // trailing line comment
 }
 
 func (s ValueSpec) Walk(w *writer.Writer) {
@@ -84,14 +34,36 @@ func (s ValueSpec) Walk(w *writer.Writer) {
 			v.Walk(w)
 		}
 	}
-	s.LineComment.Walk(w)
+	s.Comment.Walk(w)
 }
 
+// ValueSpecList produces a list of one or more value specification in parentheses.
+type ValueSpecList []ValueSpec
+
+func (ls ValueSpecList) Walk(w *writer.Writer) {
+	withParens := len(ls) > 1
+	if withParens {
+		w.Write("(\n")
+	}
+
+	ls[0].Walk(w)
+	for _, n := range ls[1:] {
+		w.Write("\n")
+		n.Walk(w)
+	}
+
+	if withParens {
+		w.Write("\n)")
+	}
+}
+
+// TypeSpec produces a type specification.
 type TypeSpec struct {
-	Name  Ident
-	Alias bool
-	Type  ExprNode // Ident, ParenExpr, SelectorExpr, StarExpr, or any of the XxxTypes
-	// Doc, Comment
+	Doc     CommentNode // associated documentation
+	Name    Ident       // the type's identifier
+	Alias   bool        // if set to true the TypeSpec will produce an alias declaration.
+	Type    TypeNode    // Ident, ParenExpr, SelectorExpr, StarExpr, or any of the XxxTypes
+	Comment CommentNode // trailing line comment
 }
 
 func (s TypeSpec) Walk(w *writer.Writer) {
@@ -104,7 +76,39 @@ func (s TypeSpec) Walk(w *writer.Writer) {
 	s.Type.Walk(w)
 }
 
-func (SpecList) specNode()   {}
-func (ImportSpec) specNode() {}
-func (ValueSpec) specNode()  {}
-func (TypeSpec) specNode()   {}
+// TypeSpecList produces a list of one or more type specification in parentheses.
+type TypeSpecList []TypeSpec
+
+func (ls TypeSpecList) Walk(w *writer.Writer) {
+	withParens := len(ls) > 1
+	if withParens {
+		w.Write("(\n")
+	}
+
+	ls[0].Walk(w)
+	for _, n := range ls[1:] {
+		w.Write("\n")
+		n.Walk(w)
+	}
+
+	if withParens {
+		w.Write("\n)")
+	}
+}
+
+// implements ValueSpecNode
+func (ValueSpec) valueSpecNode()     {}
+func (ValueSpecList) valueSpecNode() {}
+
+// implements TypeSpecNode
+func (TypeSpec) typeSpecNode()     {}
+func (TypeSpecList) typeSpecNode() {}
+
+// TypeDecl  = "type" ( TypeSpec | "(" { TypeSpec ";" } ")" ) .
+// TypeSpec  = AliasDecl | TypeDef .
+// AliasDecl = identifier "=" Type .
+// TypeDef   = identifier Type .
+// Type      = TypeName | TypeLit | "(" Type ")" .
+// TypeName  = identifier | QualifiedIdent .
+// TypeLit   = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
+//	    SliceType | MapType | ChannelType .

@@ -12,14 +12,37 @@ func TestArrayType(t *testing.T) {
 		typ  ArrayType
 		want string
 	}{{
-		typ:  ArrayType{Elt: Ident{"int"}},
-		want: "[]int",
-	}, {
 		typ:  ArrayType{Len: Ident{"num"}, Elt: Ident{"int"}},
 		want: "[num]int",
 	}, {
 		typ:  ArrayType{Len: Ellipsis{}, Elt: Ident{"float64"}},
 		want: "[...]float64",
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.typ, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestSliceType(t *testing.T) {
+	tests := []struct {
+		typ  SliceType
+		want string
+	}{{
+		typ:  SliceType{Elt: Ident{"int"}},
+		want: "[]int",
+	}, {
+		typ:  SliceType{Elt: QualifiedIdent{"time", "Time"}},
+		want: "[]time.Time",
 	}}
 
 	for _, tt := range tests {

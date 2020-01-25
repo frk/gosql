@@ -10,7 +10,8 @@ func (NL) Walk(w *writer.Writer) {
 	w.Write("\n")
 }
 
-func (NL) stmtNode() {}
+func (NL) stmtNode()    {}
+func (NL) commentNode() {}
 
 type StmtList []Stmt
 
@@ -45,9 +46,10 @@ type NoOp struct{}
 
 func (NoOp) Walk(w *writer.Writer) {}
 
-func (NoOp) stmtNode() {}
-func (NoOp) exprNode() {}
-func (NoOp) declNode() {}
-func (NoOp) specNode() {}
+func (NoOp) stmtNode()    {}
+func (NoOp) exprNode()    {}
+func (NoOp) declNode()    {}
+func (NoOp) specNode()    {}
+func (NoOp) commentNode() {}
 
 func (n NoOp) exprNodeList() []ExprNode { return []ExprNode{n} }

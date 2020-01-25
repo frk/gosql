@@ -20,7 +20,7 @@ type Stmt interface {
 
 // A DeclStmt node represents a declaration in a statement list.
 type DeclStmt struct {
-	Decl Decl
+	Decl DeclNode
 }
 
 func (s DeclStmt) Walk(w *writer.Writer) {

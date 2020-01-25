@@ -4,11 +4,6 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
-type IdentNode interface {
-	Node
-	identNode()
-}
-
 // An Ident node represents an identifier.
 type Ident struct {
 	Name string // identifier name
@@ -29,14 +24,33 @@ func (list IdentList) Walk(w *writer.Writer) {
 	}
 }
 
+// A QualifiedIdent node produces a qualified identifier.
+type QualifiedIdent struct {
+	Package string // package name
+	Name    string // identifier name
+}
+
+func (id QualifiedIdent) Walk(w *writer.Writer) {
+	w.Write(id.Package)
+	w.Write(".")
+	w.Write(id.Name)
+}
+
 // implement IdentNode
-func (Ident) identNode()     {}
-func (IdentList) identNode() {}
+func (Ident) identNode()          {}
+func (IdentList) identNode()      {}
+func (QualifiedIdent) identNode() {}
 
 // implements ExprNode
-func (Ident) exprNode()     {}
-func (IdentList) exprNode() {}
+func (Ident) exprNode()          {}
+func (IdentList) exprNode()      {}
+func (QualifiedIdent) exprNode() {}
 
 // implements ExprNodeList
-func (i Ident) exprNodeList() []ExprNode     { return []ExprNode{i} }
-func (i IdentList) exprNodeList() []ExprNode { return []ExprNode{i} }
+func (i Ident) exprNodeList() []ExprNode          { return []ExprNode{i} }
+func (i IdentList) exprNodeList() []ExprNode      { return []ExprNode{i} }
+func (i QualifiedIdent) exprNodeList() []ExprNode { return []ExprNode{i} }
+
+// implements TypeNode
+func (Ident) typeNode()          {}
+func (QualifiedIdent) typeNode() {}

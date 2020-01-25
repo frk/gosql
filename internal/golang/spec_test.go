@@ -100,7 +100,7 @@ func TestTypeSpec(t *testing.T) {
 	}{{
 		spec: TypeSpec{
 			Name: Ident{"ByteSlice"},
-			Type: ArrayType{Elt: Ident{"byte"}},
+			Type: SliceType{Elt: Ident{"byte"}},
 		},
 		want: `ByteSlice []byte`,
 	}, {

@@ -17,18 +17,18 @@ func TestFile(t *testing.T) {
 	}, {
 		file: File{
 			PkgName: "app",
-			Imports: ImportDecl{
-				{Path: "fmt"},
+			Imports: []ImportDeclNode{
+				ImportDecl{Specs: []ImportSpec{{Path: "fmt"}}},
 			},
 		},
 		want: "package app\n\nimport (\n\"fmt\"\n)",
 	}, {
 		file: File{
 			PkgName: "app",
-			Imports: ImportDecl{
-				{Path: "fmt"},
+			Imports: []ImportDeclNode{
+				ImportDecl{Specs: []ImportSpec{{Path: "fmt"}}},
 			},
-			Decls: []Decl{FuncDecl{
+			Decls: []TopLevelDeclNode{FuncDecl{
 				Name: Ident{"main"},
 			}},
 		},
@@ -36,10 +36,10 @@ func TestFile(t *testing.T) {
 	}, {
 		file: File{
 			PkgName: "app",
-			Imports: ImportDecl{
-				{Path: "fmt"},
+			Imports: []ImportDeclNode{
+				ImportDecl{Specs: []ImportSpec{{Path: "fmt"}}},
 			},
-			Decls: []Decl{FuncDecl{
+			Decls: []TopLevelDeclNode{FuncDecl{
 				Name: Ident{"main"},
 				Body: BlockStmt{List: []Stmt{
 					ExprStmt{X: CallExpr{

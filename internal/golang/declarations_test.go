@@ -7,59 +7,99 @@ import (
 	"github.com/frk/compare"
 )
 
-func TestGenDecl(t *testing.T) {
+func TestConstDecl(t *testing.T) {
 	tests := []struct {
-		decl GenDecl
+		decl ConstDecl
 		want string
 	}{{
-		decl: GenDecl{Token: DECL_CONST, Specs: ValueSpec{
+		decl: ConstDecl{Spec: ValueSpec{
 			Names: Ident{"K"}, Values: String("foo"),
 		}},
 		want: "const K = \"foo\"",
 	}, {
-		decl: GenDecl{Token: DECL_CONST, Specs: ValueSpec{
+		decl: ConstDecl{Spec: ValueSpec{
 			Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: String("some_value"),
 		}},
 		want: "const K, L, M SomeType = \"some_value\"",
 	}, {
-		decl: GenDecl{Token: DECL_CONST, Specs: SpecList{
-			ValueSpec{Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: String("some_value")},
-			ValueSpec{Names: Ident{"N"}, Type: Ident{"int64"}, Values: BasicLit{"123"}},
+		decl: ConstDecl{Spec: ValueSpecList{
+			{Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: String("some_value")},
+			{Names: Ident{"N"}, Type: Ident{"int64"}, Values: BasicLit{"123"}},
 		}},
 		want: "const (\nK, L, M SomeType = \"some_value\"\nN int64 = 123\n)",
-	}, {
-		decl: GenDecl{Token: DECL_VAR, Specs: ValueSpec{
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.decl, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestVarDecl(t *testing.T) {
+	tests := []struct {
+		decl VarDecl
+		want string
+	}{{
+		decl: VarDecl{Spec: ValueSpec{
 			Names: Ident{"V"}, Values: String("foo"),
 		}},
 		want: "var V = \"foo\"",
 	}, {
-		decl: GenDecl{Token: DECL_VAR, Specs: ValueSpec{
+		decl: VarDecl{Spec: ValueSpec{
 			Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: String("some_value"),
 		}},
 		want: "var V, W, X SomeType = \"some_value\"",
 	}, {
-		decl: GenDecl{Token: DECL_VAR, Specs: SpecList{
-			ValueSpec{Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: String("some_value")},
-			ValueSpec{Names: Ident{"Y"}, Type: Ident{"int64"}, Values: BasicLit{"123"}},
+		decl: VarDecl{Spec: ValueSpecList{
+			{Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: String("some_value")},
+			{Names: Ident{"Y"}, Type: Ident{"int64"}, Values: BasicLit{"123"}},
 		}},
 		want: "var (\nV, W, X SomeType = \"some_value\"\nY int64 = 123\n)",
-	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: TypeSpec{
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.decl, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestTypeDecl(t *testing.T) {
+	tests := []struct {
+		decl TypeDecl
+		want string
+	}{{
+		decl: TypeDecl{Spec: TypeSpec{
 			Name: Ident{"T"}, Type: Ident{"int8"},
 		}},
 		want: "type T int8",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: TypeSpec{
-			Name: Ident{"T"}, Type: SelectorExpr{X: Ident{"time"}, Sel: Ident{"Time"}},
+		decl: TypeDecl{Spec: TypeSpec{
+			Name: Ident{"T"}, Type: QualifiedIdent{"time", "Time"},
 		}},
 		want: "type T time.Time",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: TypeSpec{
-			Name: Ident{"T"}, Alias: true, Type: SelectorExpr{X: Ident{"time"}, Sel: Ident{"Time"}},
+		decl: TypeDecl{Spec: TypeSpec{
+			Name: Ident{"T"}, Alias: true, Type: QualifiedIdent{"time", "Time"},
 		}},
 		want: "type T = time.Time",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: TypeSpec{
+		decl: TypeDecl{Spec: TypeSpec{
 			Name: Ident{"T"}, Type: StructType{Fields: FieldList{
 				{Names: Ident{"F1"}, Type: Ident{"string"}},
 				{Names: Ident{"F2"}, Type: Ident{"int"}},
@@ -68,9 +108,9 @@ func TestGenDecl(t *testing.T) {
 		}},
 		want: "type T struct {\nF1 string\nF2 int\nF3 bool\n}",
 	}, {
-		decl: GenDecl{Token: DECL_TYPE, Specs: SpecList{
-			TypeSpec{Name: Ident{"S"}, Type: ArrayType{Elt: StructType{}}},
-			TypeSpec{Name: Ident{"T"}, Type: StructType{Fields: FieldList{
+		decl: TypeDecl{Spec: TypeSpecList{
+			{Name: Ident{"S"}, Type: SliceType{Elt: StructType{}}},
+			{Name: Ident{"T"}, Type: StructType{Fields: FieldList{
 				{Names: Ident{"F1"}, Type: Ident{"string"}},
 				{Names: Ident{"F2"}, Type: Ident{"int"}},
 				{Names: Ident{"F3"}, Type: Ident{"bool"}},
@@ -103,15 +143,35 @@ func TestFuncDecl(t *testing.T) {
 			Type: FuncType{},
 		},
 		want: "func Foo() {}",
-	}, {
-		decl: FuncDecl{
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.decl, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestMethodDecl(t *testing.T) {
+	tests := []struct {
+		decl MethodDecl
+		want string
+	}{{
+		decl: MethodDecl{
 			Name: Ident{"Foo"},
 			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
 			Type: FuncType{},
 		},
 		want: "func (t *Type) Foo() {}",
 	}, {
-		decl: FuncDecl{
+		decl: MethodDecl{
 			Name: Ident{"Foo"},
 			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
 			Type: FuncType{
@@ -123,7 +183,7 @@ func TestFuncDecl(t *testing.T) {
 		},
 		want: "func (t *Type) Foo(foo, bar string, baz bool) {}",
 	}, {
-		decl: FuncDecl{
+		decl: MethodDecl{
 			Name: Ident{"Foo"},
 			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
 			Type: FuncType{

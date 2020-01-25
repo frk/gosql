@@ -4,12 +4,6 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
-// All comment nodes implement the Comment interface.
-type Comment interface {
-	Stmt
-	commentNode()
-}
-
 // A LineComment node represents a list of //-style comments.
 type LineComment []string
 
@@ -52,8 +46,21 @@ func (gc GeneralComment) Walk(w *writer.Writer) {
 	w.Write("*/")
 }
 
-func (LineComment) commentNode()    {}
-func (GeneralComment) commentNode() {}
+type CommentNodeList []CommentNode
 
-func (LineComment) stmtNode()    {}
-func (GeneralComment) stmtNode() {}
+func (list CommentNodeList) Walk(w *writer.Writer) {
+	for _, n := range list {
+		n.Walk(w)
+		w.Write("\n")
+	}
+}
+
+// implements StmtNode
+func (LineComment) stmtNode()     {}
+func (GeneralComment) stmtNode()  {}
+func (CommentNodeList) stmtNode() {}
+
+// implements CommentNode
+func (LineComment) commentNode()     {}
+func (GeneralComment) commentNode()  {}
+func (CommentNodeList) commentNode() {}

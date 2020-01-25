@@ -4,22 +4,30 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
-// An ArrayType node represents an array or slice type.
+// ArrayType produces an array type literal.
 type ArrayType struct {
 	Len ExprNode
-	Elt ExprNode
+	Elt TypeNode
 }
 
 func (at ArrayType) Walk(w *writer.Writer) {
 	w.Write("[")
-	if at.Len != nil {
-		at.Len.Walk(w)
-	}
+	at.Len.Walk(w)
 	w.Write("]")
 	at.Elt.Walk(w)
 }
 
-// A StructType node represents a struct type.
+// SliceType produces a slice type literal.
+type SliceType struct {
+	Elt TypeNode
+}
+
+func (st SliceType) Walk(w *writer.Writer) {
+	w.Write("[]")
+	st.Elt.Walk(w)
+}
+
+// StructType produces a struct type literal.
 type StructType struct {
 	Fields FieldList
 }
@@ -36,7 +44,7 @@ func (st StructType) Walk(w *writer.Writer) {
 	w.Write("\n}")
 }
 
-// A FuncType node represents a function type.
+// FuncType produces a function type literal.
 type FuncType struct {
 	Params  ParamList
 	Results ParamList
@@ -68,7 +76,7 @@ func (ft FuncType) Walk(w *writer.Writer) {
 
 }
 
-// An InterfaceType node represents an interface type.
+// InterfaceType produces an interface type literal.
 type InterfaceType struct {
 	Methods MethodList
 }
@@ -85,7 +93,7 @@ func (it InterfaceType) Walk(w *writer.Writer) {
 	w.Write("\n}")
 }
 
-// A MapType node represents a map type.
+// MapType produces a map type literal.
 type MapType struct {
 	Key   ExprNode
 	Value ExprNode
@@ -106,7 +114,7 @@ const (
 	CHAN_SEND
 )
 
-// A ChanType node represents a channel type.
+// ChanType produces a channel type literal.
 type ChanType struct {
 	Dir   CHAN_DIR
 	Value ExprNode
@@ -124,18 +132,42 @@ func (ct ChanType) Walk(w *writer.Writer) {
 	ct.Value.Walk(w)
 }
 
+// PointerType produces a pointer type literal.
+type PointerType struct {
+	Elem TypeNode
+}
+
+func (pt PointerType) Walk(w *writer.Writer) {
+	w.Write("*")
+	pt.Elem.Walk(w)
+}
+
+// implements TypeNode
+func (ArrayType) typeNode()     {}
+func (SliceType) typeNode()     {}
+func (StructType) typeNode()    {}
+func (FuncType) typeNode()      {}
+func (InterfaceType) typeNode() {}
+func (MapType) typeNode()       {}
+func (ChanType) typeNode()      {}
+func (PointerType) typeNode()   {}
+
 // implements ExprNode
 func (ArrayType) exprNode()     {}
+func (SliceType) exprNode()     {}
 func (StructType) exprNode()    {}
 func (FuncType) exprNode()      {}
 func (InterfaceType) exprNode() {}
 func (MapType) exprNode()       {}
 func (ChanType) exprNode()      {}
+func (PointerType) exprNode()   {}
 
 // implements ExprNodeList
 func (t ArrayType) exprNodeList() []ExprNode     { return []ExprNode{t} }
+func (t SliceType) exprNodeList() []ExprNode     { return []ExprNode{t} }
 func (t StructType) exprNodeList() []ExprNode    { return []ExprNode{t} }
 func (t FuncType) exprNodeList() []ExprNode      { return []ExprNode{t} }
 func (t InterfaceType) exprNodeList() []ExprNode { return []ExprNode{t} }
 func (t MapType) exprNodeList() []ExprNode       { return []ExprNode{t} }
 func (t ChanType) exprNodeList() []ExprNode      { return []ExprNode{t} }
+func (t PointerType) exprNodeList() []ExprNode   { return []ExprNode{t} }

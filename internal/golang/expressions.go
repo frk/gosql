@@ -49,6 +49,37 @@ const (
 	BINARY_AND_NOT BINARY_OP = "&^"
 )
 
+// A Field produces a field declaration in a field list in a struct type.
+// Field.Names is nil for embedded struct fields.
+type Field struct {
+	Doc     CommentNode
+	Names   IdentNode
+	Type    ExprNode
+	Tag     RawString
+	Comment CommentNode
+}
+
+func (f Field) Walk(w *writer.Writer) {
+	if f.Doc != nil {
+		f.Doc.Walk(w)
+		w.Write("\n")
+	}
+	if f.Names != nil {
+		f.Names.Walk(w)
+		w.Write(" ")
+	}
+	f.Type.Walk(w)
+
+	if len(f.Tag) > 0 {
+		w.Write(" ")
+		f.Tag.Walk(w)
+	}
+	if f.Comment != nil {
+		w.Write(" ")
+		f.Comment.Walk(w)
+	}
+}
+
 type FieldList []Field
 
 func (list FieldList) Walk(w *writer.Writer) {
@@ -60,28 +91,6 @@ func (list FieldList) Walk(w *writer.Writer) {
 	for _, f := range list[1:] {
 		w.Write("\n")
 		f.Walk(w)
-	}
-}
-
-// A Field represents a field declaration in a field list in a struct type.
-// Field.Names is nil for embedded struct fields.
-type Field struct {
-	Names IdentNode
-	Type  ExprNode
-	Tag   RawString
-	// Doc, Comment
-}
-
-func (f Field) Walk(w *writer.Writer) {
-	if f.Names != nil {
-		f.Names.Walk(w)
-		w.Write(" ")
-	}
-	f.Type.Walk(w)
-
-	if len(f.Tag) > 0 {
-		w.Write(" ")
-		f.Tag.Walk(w)
 	}
 }
 

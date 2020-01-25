@@ -4,75 +4,77 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
-type Decl interface {
-	Node
-	declNode()
+// ConstDecl produces as constant declaration.
+//
+//	const number = 182
+type ConstDecl struct {
+	Doc  CommentNode
+	Spec ValueSpecNode
 }
 
-type DECL_TOKEN string
-
-const (
-	DECL_CONST DECL_TOKEN = "const"
-	DECL_TYPE  DECL_TOKEN = "type"
-	DECL_VAR   DECL_TOKEN = "var"
-)
-
-type GenDecl struct {
-	Token DECL_TOKEN
-	Specs SpecNode
-	// Doc
-}
-
-func (d GenDecl) Walk(w *writer.Writer) {
-	w.Write(string(d.Token))
-	w.Write(" ")
-	d.Specs.Walk(w)
-}
-
-type ImportDecl []ImportSpec
-
-func (d ImportDecl) Walk(w *writer.Writer) {
-	if len(d) == 0 {
-		return
-	}
-
-	w.Write("import (\n")
-	for _, spec := range d {
-		spec.Walk(w)
+func (d ConstDecl) Walk(w *writer.Writer) {
+	if d.Doc != nil {
+		d.Doc.Walk(w)
 		w.Write("\n")
 	}
-	w.Write(")")
+	w.Write("const ")
+	d.Spec.Walk(w)
 }
 
-func (d *ImportDecl) Add(path string) {
-	for _, spec := range *d {
-		if string(spec.Path) == path {
-			return
-		}
+// VarDecl produces as variable declaration.
+//
+//	var name = "Jack"
+type VarDecl struct {
+	Doc  CommentNode
+	Spec ValueSpecNode
+}
+
+func (d VarDecl) Walk(w *writer.Writer) {
+	if d.Doc != nil {
+		d.Doc.Walk(w)
+		w.Write("\n")
 	}
-
-	*d = append(*d, ImportSpec{Path: String(path)})
+	w.Write("var ")
+	d.Spec.Walk(w)
 }
 
-func (d *ImportDecl) NewLine() {
-	*d = append(*d, ImportSpec{NewLine: true})
+// TypeDecl produces as type declaration.
+//
+//	type T struct {
+//		// ...
+//	}
+type TypeDecl struct {
+	Doc  CommentNode
+	Spec TypeSpecNode
 }
 
+func (d TypeDecl) Walk(w *writer.Writer) {
+	if d.Doc != nil {
+		d.Doc.Walk(w)
+		w.Write("\n")
+	}
+	w.Write("type ")
+	d.Spec.Walk(w)
+}
+
+// FuncDecl produces a func declaration.
+//
+//	func F() {
+//		// ...
+//	}
 type FuncDecl struct {
-	Recv RecvParam // empty for functions
+	Doc  CommentNode
 	Name Ident
-	Type FuncType
+	Type FuncType // the function signature
 	Body BlockStmt
-	// Doc
 }
 
 func (d FuncDecl) Walk(w *writer.Writer) {
-	w.Write("func ")
-	if d.Recv != (RecvParam{}) { // if not empty
-		w.Write("(")
-		d.Recv.Walk(w)
-		w.Write(") ")
+	if d.Doc != nil {
+		d.Doc.Walk(w)
+		w.Write("\n")
 	}
+	w.Write("func ")
 
 	d.Name.Walk(w)
 	d.Type.Walk(w)
@@ -85,6 +87,45 @@ func (d *FuncDecl) AddStmt(ss ...Stmt) {
 	d.Body.List = append(d.Body.List, ss...)
 }
 
-func (GenDecl) declNode()    {}
-func (FuncDecl) declNode()   {}
-func (ImportDecl) declNode() {}
+// MethodDecl produces a method declaration.
+//
+//	func (t *T) M() {
+//		// ...
+//	}
+type MethodDecl struct {
+	Doc  CommentNode
+	Recv RecvParam
+	Name Ident
+	Type FuncType // the function signature
+	Body BlockStmt
+}
+
+func (d MethodDecl) Walk(w *writer.Writer) {
+	if d.Doc != nil {
+		d.Doc.Walk(w)
+		w.Write("\n")
+	}
+	w.Write("func ")
+
+	w.Write("(")
+	d.Recv.Walk(w)
+	w.Write(") ")
+
+	d.Name.Walk(w)
+	d.Type.Walk(w)
+
+	w.Write(" ")
+	d.Body.Walk(w)
+}
+
+// implements TopLevelDeclNode
+func (ConstDecl) topLevelDeclNode()  {}
+func (VarDecl) topLevelDeclNode()    {}
+func (TypeDecl) topLevelDeclNode()   {}
+func (FuncDecl) topLevelDeclNode()   {}
+func (MethodDecl) topLevelDeclNode() {}
+
+// implements DeclNode
+func (ConstDecl) declNode() {}
+func (VarDecl) declNode()   {}
+func (TypeDecl) declNode()  {}

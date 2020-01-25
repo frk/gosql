@@ -70,6 +70,9 @@ type generator struct {
 
 	file gol.File
 
+	// file specific state
+	imports gol.ImportDecl
+
 	// spec specific state, needs to be reset on each iteration
 	nparam int                // number of parameters
 	asvar  bool               // if true, the query string should be declared as a var, not const.
@@ -78,9 +81,7 @@ type generator struct {
 }
 
 func (g *generator) run(pkgname string) error {
-	g.file.PkgName = pkgname
-	g.file.Preamble = gol.LineComment{filepreamble}
-	g.file.Imports = gol.ImportDecl{{Path: gosqlimport}}
+	g.imports.Specs = []gol.ImportSpec{{Path: gosqlimport}}
 
 	for _, si := range g.infos {
 		g.nparam = 0
@@ -92,58 +93,65 @@ func (g *generator) run(pkgname string) error {
 		g.file.Decls = append(g.file.Decls, execdecl)
 	}
 
+	g.file.PkgName = pkgname
+	g.file.Preamble = gol.LineComment{filepreamble}
+	g.file.Imports = []gol.ImportDeclNode{g.imports}
+
 	return gol.Write(g.file, &g.buf)
 }
 
-func (g *generator) execdecl(si *specinfo) (fn gol.FuncDecl) {
-	fn.Name = idexec
-	fn.Recv.Name = idrecv
-	fn.Recv.Type = gol.StarExpr{X: gol.Ident{si.spec.name}}
-	fn.Type.Params = gol.ParamList{{Names: idconn, Type: sxconn}}
-	fn.Type.Results = gol.ParamList{{Type: iderror}}
+func (g *generator) execdecl(si *specinfo) (m gol.MethodDecl) {
+	m.Name = idexec
+	m.Recv.Name = idrecv
+	m.Recv.Type = gol.StarExpr{X: gol.Ident{si.spec.name}}
+	m.Type.Params = gol.ParamList{{Names: idconn, Type: sxconn}}
+	m.Type.Results = gol.ParamList{{Type: iderror}}
 
 	g.queryargs(si.spec)
 
-	fn.Body.Add(g.querybuild(si))
-	fn.Body.Add(gol.NL{})
-	fn.Body.Add(g.querydefaults(si))
-	fn.Body.Add(g.queryexec(si))
-	fn.Body.Add(g.returnstmt(si))
-	return fn
+	m.Body.Add(g.querybuild(si))
+	m.Body.Add(gol.NL{})
+	m.Body.Add(g.querydefaults(si))
+	m.Body.Add(g.queryexec(si))
+	m.Body.Add(g.returnstmt(si))
+	return m
 }
 
 func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 	sqlnode := g.sqlnode(si)
 
-	token := gol.DECL_CONST
+	var decl gol.DeclNode
 	if g.asvar || len(si.spec.filter) > 0 {
-		token = gol.DECL_VAR
-	}
-
-	decl := gol.GenDecl{Token: token}
-	decl.Specs = gol.ValueSpec{
-		Names:       idquery,
-		Values:      gol.RawStringNode{sqlnode},
-		LineComment: gol.LineComment{" `"},
+		decl = gol.VarDecl{Spec: gol.ValueSpec{
+			Names:   idquery,
+			Values:  gol.RawStringNode{sqlnode},
+			Comment: gol.LineComment{" `"},
+		}}
+	} else {
+		decl = gol.ConstDecl{Spec: gol.ValueSpec{
+			Names:   idquery,
+			Values:  gol.RawStringNode{sqlnode},
+			Comment: gol.LineComment{" `"},
+		}}
 	}
 
 	if len(g.insx) > 0 {
 		// prepare the var declarations
-		vardecl := gol.GenDecl{Token: gol.DECL_VAR}
+		vardecl := gol.VarDecl{}
 
 		nstatic := gol.ValueSpec{}
 		nstatic.Names = gol.Ident{"nstatic"}
 		nstatic.Values = gol.Int(g.nparam)
-		nstatic.LineComment = gol.LineComment{" number of static parameters"}
+		nstatic.Comment = gol.LineComment{" number of static parameters"}
 
-		specs := gol.SpecList{nstatic}
+		specs := gol.ValueSpecList{nstatic}
 		for i, sx := range g.insx {
 			num := strconv.Itoa(i + 1)
 
 			lenspec := gol.ValueSpec{}
 			lenspec.Names = gol.Ident{"len" + num}
 			lenspec.Values = gol.CallExpr{Fun: idlen, Args: gol.ArgsList{List: sx}}
-			lenspec.LineComment = gol.LineComment{" length of slice #" + num + " to be unnested"}
+			lenspec.Comment = gol.LineComment{" length of slice #" + num + " to be unnested"}
 
 			posspec := gol.ValueSpec{}
 			posspec.Names = gol.Ident{"pos" + num}
@@ -157,11 +165,11 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 				prevlen, prevpos := gol.Ident{"len" + prev}, gol.Ident{"pos" + prev}
 				posspec.Values = gol.BinaryExpr{X: prevpos, Op: gol.BINARY_ADD, Y: prevlen}
 			}
-			posspec.LineComment = gol.LineComment{" starting position of slice #" + num + " parameters"}
+			posspec.Comment = gol.LineComment{" starting position of slice #" + num + " parameters"}
 
 			specs = append(specs, lenspec, posspec)
 		}
-		vardecl.Specs = specs
+		vardecl.Spec = specs
 
 		// next is the query declaration
 		list := gol.StmtList{gol.DeclStmt{vardecl}, gol.NL{}, gol.DeclStmt{decl}, gol.NL{}}
@@ -395,8 +403,8 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 			init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.rectype(rec)}}
 			stmt.Body.List = append(stmt.Body.List, init)
 		} else {
-			init := gol.GenDecl{Token: gol.DECL_VAR}
-			init.Specs = gol.ValueSpec{Names: gol.Ident{"v"}, Type: g.rectype(rec)}
+			init := gol.VarDecl{}
+			init.Spec = gol.ValueSpec{Names: gol.Ident{"v"}, Type: g.rectype(rec)}
 			stmt.Body.List = append(stmt.Body.List, gol.DeclStmt{init})
 		}
 	}
@@ -834,7 +842,7 @@ func (g *generator) pathelemtype(pe *pathelem) gol.ExprNode {
 
 func (g *generator) addimport(path, name, local string) {
 	// first check that that package path hasn't yet been added to the imports
-	for _, spec := range g.file.Imports {
+	for _, spec := range g.imports.Specs {
 		if string(spec.Path) == path {
 			return
 		}
@@ -846,7 +854,7 @@ func (g *generator) addimport(path, name, local string) {
 	}
 
 	spec := gol.ImportSpec{Path: gol.String(path), Name: gol.Ident{local}}
-	g.file.Imports = append(g.file.Imports, spec)
+	g.imports.Specs = append(g.imports.Specs, spec)
 }
 
 func (g *generator) sqlnode(si *specinfo) (node gol.Node) {

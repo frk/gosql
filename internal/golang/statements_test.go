@@ -12,8 +12,10 @@ func TestDeclStmt(t *testing.T) {
 		stmt DeclStmt
 		want string
 	}{{
-		stmt: DeclStmt{Decl: ImportDecl{{Path: "foo/bar/baz"}}},
-		want: "import (\n\"foo/bar/baz\"\n)",
+		stmt: DeclStmt{Decl: ConstDecl{Spec: ValueSpec{
+			Names: Ident{"K"}, Values: String("foo"),
+		}}},
+		want: "const K = \"foo\"",
 	}}
 
 	for _, tt := range tests {
