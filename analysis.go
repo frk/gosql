@@ -1514,7 +1514,8 @@ type typespec struct {
 	kind speckind // the kind of the typespec
 	// If the typespec is a Select spec this field indicates the
 	// specific kind of the select.
-	selkind selectkind
+	selkind      selectkind
+	selkindfield string
 
 	rel        *relfield
 	join       *joinblock

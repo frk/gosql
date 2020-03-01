@@ -12,6 +12,5 @@ func (q *DeleteWithReturningSingleCollistQuery) Exec(c gosql.Conn) error {
 	RETURNING u."email", u."full_name"` // `
 
 	row := c.QueryRow(queryString, q.Where.Id)
-
 	return row.Scan(&q.User.Email, &q.User.FullName)
 }

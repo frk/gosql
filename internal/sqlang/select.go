@@ -41,11 +41,16 @@ type SelectExistsStatement struct {
 	Limit  LimitClause
 	Offset OffsetClause
 	Open   bool
+	Not    bool
 }
 
 func (s SelectExistsStatement) Walk(w *writer.Writer) {
 	w.NoIndent()
-	w.Write("SELECT EXISTS(SELECT 1 FROM ")
+	w.Write("SELECT ")
+	if s.Not {
+		w.Write("NOT ")
+	}
+	w.Write("EXISTS(SELECT 1 FROM ")
 	s.Table.Walk(w)
 	w.Indent()
 	s.Join.Walk(w)

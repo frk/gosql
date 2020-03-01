@@ -338,7 +338,8 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 			asn := gol.AssignStmt{Token: gol.AssignDefine}
 			asn.Lhs = idrow
 			asn.Rhs = gol.CallExpr{Fun: sxqueryrow, Args: args}
-			return gol.StmtList{asn, gol.NL{}}
+			//return gol.StmtList{asn, gol.NL{}}
+			return gol.StmtList{asn}
 		}
 	}
 
@@ -439,7 +440,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 					// initialize nested pointer field
 					init := gol.AssignStmt{Token: gol.Assign}
 					init.Lhs = fx
-					init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.pathelemtype(pe)}}
+					init.Rhs = gol.CallNewExpr{g.pathelemtype(pe)}
 					stmt.Body.List = append(stmt.Body.List, init)
 
 					pfieldhandled[fieldkey] = true
@@ -630,43 +631,48 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 				init := gol.AssignStmt{Token: gol.Assign}
 				init.Lhs = gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
 				init.Rhs = gol.CallNewExpr{g.rectype(rel.rec)}
-				list = append(list, init)
+				list = append(list, gol.NL{}, init)
 			}
 
 			var args gol.ArgsList
-			if len(si.info.output) > 2 {
-				args.OnePerLine = 1
-			}
-
-			// The pfieldhandled map is used to keep track of pointer fields
-			// that have already been initialized and their types imported.
-			var pfieldhandled = make(map[string]bool)
-
-			for _, item := range si.info.output {
+			if si.spec.selkind > selectfrom {
 				fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
-
-				var fieldkey string // key for the pfieldhandled map
-				for _, pe := range item.field.path {
-					fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
-
-					fieldkey += pe.name
-					if pe.ispointer && !pfieldhandled[fieldkey] {
-						if pe.isimported {
-							g.addimport(pe.typepkgpath, pe.typepkgname, pe.typepkglocal)
-						}
-
-						// initialize nested pointer field
-						init := gol.AssignStmt{Token: gol.Assign}
-						init.Lhs = fx
-						init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.pathelemtype(pe)}}
-						list = append(list, init)
-
-						pfieldhandled[fieldkey] = true
-					}
+				args.AddExprs(gol.UnaryExpr{Op: gol.UnaryAmp, X: fx})
+			} else {
+				if len(si.info.output) > 2 {
+					args.OnePerLine = 1
 				}
 
-				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
-				args.AddExprs(gol.UnaryExpr{Op: gol.UnaryAmp, X: fx})
+				// The pfieldhandled map is used to keep track of pointer fields
+				// that have already been initialized and their types imported.
+				var pfieldhandled = make(map[string]bool)
+
+				for _, item := range si.info.output {
+					fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
+
+					var fieldkey string // key for the pfieldhandled map
+					for _, pe := range item.field.path {
+						fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
+
+						fieldkey += pe.name
+						if pe.ispointer && !pfieldhandled[fieldkey] {
+							if pe.isimported {
+								g.addimport(pe.typepkgpath, pe.typepkgname, pe.typepkglocal)
+							}
+
+							// initialize nested pointer field
+							init := gol.AssignStmt{Token: gol.Assign}
+							init.Lhs = fx
+							init.Rhs = gol.CallNewExpr{g.pathelemtype(pe)}
+							list = append(list, init)
+
+							pfieldhandled[fieldkey] = true
+						}
+					}
+
+					fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
+					args.AddExprs(gol.UnaryExpr{Op: gol.UnaryAmp, X: fx})
+				}
 			}
 
 			if !rel.rec.isafterscanner {
@@ -685,7 +691,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 					list = append(list, g.returnerr(si, call))
 				}
 			} else {
-				// scan & assing error
+				// scan & assign error
 				asn := gol.AssignStmt{Token: gol.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = gol.CallExpr{Fun: sxrowscan, Args: args}
@@ -743,7 +749,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 				init := gol.AssignStmt{Token: gol.Assign}
 				init.Lhs = gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
 				init.Rhs = gol.CallNewExpr{g.rectype(rel.rec)}
-				list = append(list, init)
+				list = append(list, gol.NL{}, init)
 			}
 
 			var args gol.ArgsList
@@ -771,7 +777,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 						// initialize nested pointer field
 						init := gol.AssignStmt{Token: gol.Assign}
 						init.Lhs = fx
-						init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.pathelemtype(pe)}}
+						init.Rhs = gol.CallNewExpr{g.pathelemtype(pe)}
 						list = append(list, init)
 
 						pfieldhandled[fieldkey] = true
@@ -834,12 +840,11 @@ func (g *generator) rectype(rec recordtype) gol.TypeNode {
 	return gol.Ident{rec.base.name}
 }
 
-func (g *generator) pathelemtype(pe *pathelem) gol.ExprNode {
-	id := gol.Ident{pe.typename}
+func (g *generator) pathelemtype(pe *pathelem) gol.TypeNode {
 	if pe.isimported {
-		return gol.SelectorExpr{X: gol.Ident{pe.typepkgname}, Sel: id}
+		return gol.QualifiedIdent{pe.typepkgname, pe.typename}
 	}
-	return id
+	return gol.Ident{pe.typename}
 }
 
 func (g *generator) addimport(path, name, local string) {
@@ -866,6 +871,12 @@ func (g *generator) sqlnode(si *specinfo) (node gol.Node) {
 	case speckindUpdate:
 		return g.sqlupdate(si)
 	case speckindSelect:
+		switch si.spec.selkind {
+		case selectcount:
+			// TODO
+		case selectexists, selectnotexists:
+			return g.sqlselectexists(si)
+		}
 		return g.sqlselect(si)
 	case speckindDelete:
 		return g.sqldelete(si)
@@ -912,6 +923,18 @@ func (g *generator) sqldelete(si *specinfo) (delstmt sql.DeleteStatement) {
 	delstmt.Where = g.sqlwhere(si.spec.where)
 	delstmt.Returning = returning
 	return delstmt
+}
+
+// sqlselectexists builds and returns an sql.SelectExistsStatement.
+func (g *generator) sqlselectexists(si *specinfo) (selstmt sql.SelectExistsStatement) {
+	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
+	selstmt.Join = g.sqljoin(si.spec.join)
+	selstmt.Where = g.sqlwhere(si.spec.where)
+	selstmt.Order = g.sqlorderby(si.spec)
+	selstmt.Limit = g.sqllimit(si.spec)
+	selstmt.Offset = g.sqloffset(si.spec)
+	selstmt.Not = si.spec.selkind == selectnotexists
+	return selstmt
 }
 
 func (g *generator) sqlwhere(w *whereblock) (where sql.WhereClause) {
