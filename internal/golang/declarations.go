@@ -8,8 +8,8 @@ import (
 //
 //	const number = 182
 type ConstDecl struct {
-	Doc  CommentNode
-	Spec ValueSpecNode
+	Doc  CommentNode   // associated documentation
+	Spec ValueSpecNode // the value spec(s)
 }
 
 func (d ConstDecl) Walk(w *writer.Writer) {
@@ -25,8 +25,8 @@ func (d ConstDecl) Walk(w *writer.Writer) {
 //
 //	var name = "Jack"
 type VarDecl struct {
-	Doc  CommentNode
-	Spec ValueSpecNode
+	Doc  CommentNode   // associated documentation
+	Spec ValueSpecNode // the value spec(s)
 }
 
 func (d VarDecl) Walk(w *writer.Writer) {
@@ -44,8 +44,8 @@ func (d VarDecl) Walk(w *writer.Writer) {
 //		// ...
 //	}
 type TypeDecl struct {
-	Doc  CommentNode
-	Spec TypeSpecNode
+	Doc  CommentNode  // associated documentation
+	Spec TypeSpecNode // the type spec(s)
 }
 
 func (d TypeDecl) Walk(w *writer.Writer) {
@@ -63,10 +63,10 @@ func (d TypeDecl) Walk(w *writer.Writer) {
 //		// ...
 //	}
 type FuncDecl struct {
-	Doc  CommentNode
-	Name Ident
-	Type FuncType // the function signature
-	Body BlockStmt
+	Doc  CommentNode // associated documentation
+	Name Ident       // the function's name
+	Type FuncType    // the function signature
+	Body BlockStmt   // the body of the function
 }
 
 func (d FuncDecl) Walk(w *writer.Writer) {
@@ -83,7 +83,7 @@ func (d FuncDecl) Walk(w *writer.Writer) {
 	d.Body.Walk(w)
 }
 
-func (d *FuncDecl) AddStmt(ss ...Stmt) {
+func (d *FuncDecl) AddStmt(ss ...StmtNode) {
 	d.Body.List = append(d.Body.List, ss...)
 }
 
@@ -93,11 +93,11 @@ func (d *FuncDecl) AddStmt(ss ...Stmt) {
 //		// ...
 //	}
 type MethodDecl struct {
-	Doc  CommentNode
-	Recv RecvParam
-	Name Ident
-	Type FuncType // the function signature
-	Body BlockStmt
+	Doc  CommentNode // associated documentation
+	Recv RecvParam   // the receiver parameter
+	Name Ident       // method name
+	Type FuncType    // the function signature
+	Body BlockStmt   // the function body
 }
 
 func (d MethodDecl) Walk(w *writer.Writer) {
@@ -118,6 +118,31 @@ func (d MethodDecl) Walk(w *writer.Writer) {
 	d.Body.Walk(w)
 }
 
+// RecvParam produces the receiver parameter section of a method declaration.
+type RecvParam struct {
+	Name Ident        // name of the receiver
+	Type RecvTypeNode // type of the receiver
+}
+
+func (p RecvParam) Walk(w *writer.Writer) {
+	if len(p.Name.Name) > 0 {
+		p.Name.Walk(w)
+		w.Write(" ")
+	}
+	p.Type.Walk(w)
+}
+
+// PointerRecvType produces a pointer type in the receiver parameter
+// section of a method declaration.
+type PointerRecvType struct {
+	Type string // the base type
+}
+
+func (p PointerRecvType) Walk(w *writer.Writer) {
+	w.Write("*")
+	w.Write(p.Type)
+}
+
 // implements TopLevelDeclNode
 func (ConstDecl) topLevelDeclNode()  {}
 func (VarDecl) topLevelDeclNode()    {}
@@ -129,3 +154,6 @@ func (MethodDecl) topLevelDeclNode() {}
 func (ConstDecl) declNode() {}
 func (VarDecl) declNode()   {}
 func (TypeDecl) declNode()  {}
+
+// implements RecvTypeNode
+func (PointerRecvType) recvTypeNode() {}

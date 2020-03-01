@@ -4,10 +4,24 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
-// A LineComment node represents a list of //-style comments.
-type LineComment []string
+// LineComment produces a single //-style comment.
+type LineComment struct {
+	Text string
+}
 
-func (list LineComment) Walk(w *writer.Writer) {
+func (lc LineComment) Walk(w *writer.Writer) {
+	if len(lc.Text) == 0 {
+		return
+	}
+
+	w.Write("//")
+	w.Write(lc.Text)
+}
+
+// LineCommentList produces a list of //-style comments.
+type LineCommentList []string
+
+func (list LineCommentList) Walk(w *writer.Writer) {
 	if len(list) == 0 {
 		return
 	}
@@ -20,11 +34,11 @@ func (list LineComment) Walk(w *writer.Writer) {
 	}
 }
 
-// A GeneralComment node represents a /*-style comment where each item
+// BlockComment produces a /*-style comment where each item
 // in the slice represents an individual line of the comment.
-type GeneralComment []string
+type BlockComment []string
 
-func (gc GeneralComment) Walk(w *writer.Writer) {
+func (gc BlockComment) Walk(w *writer.Writer) {
 	if len(gc) == 0 {
 		return
 	}
@@ -46,21 +60,12 @@ func (gc GeneralComment) Walk(w *writer.Writer) {
 	w.Write("*/")
 }
 
-type CommentNodeList []CommentNode
-
-func (list CommentNodeList) Walk(w *writer.Writer) {
-	for _, n := range list {
-		n.Walk(w)
-		w.Write("\n")
-	}
-}
-
 // implements StmtNode
 func (LineComment) stmtNode()     {}
-func (GeneralComment) stmtNode()  {}
-func (CommentNodeList) stmtNode() {}
+func (LineCommentList) stmtNode() {}
+func (BlockComment) stmtNode()    {}
 
 // implements CommentNode
 func (LineComment) commentNode()     {}
-func (GeneralComment) commentNode()  {}
-func (CommentNodeList) commentNode() {}
+func (LineCommentList) commentNode() {}
+func (BlockComment) commentNode()    {}

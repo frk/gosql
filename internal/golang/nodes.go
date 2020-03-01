@@ -10,7 +10,7 @@ import (
 
 // CommentNode interface represents a comment.
 type CommentNode interface {
-	Stmt
+	StmtNode
 	commentNode()
 }
 
@@ -18,10 +18,16 @@ type CommentNode interface {
 // Identifiers
 ////////////////////////////////////////////////////////////////////////////////
 
-// IdentNode interface represents a identifier.
+// IdentNode interface represents a single identifier.
 type IdentNode interface {
 	Node
 	identNode()
+}
+
+// IdentListNode interface represents a list of 0 or more identifiers.
+type IdentListNode interface {
+	Node
+	identListNode()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -72,16 +78,16 @@ type TypeSpecNode interface {
 type ExprNode interface {
 	Node
 	exprNode()
-	exprNodeList() []ExprNode
+	exprListNode() []ExprNode
 }
 
-// ExprNodes interface represents one or more expression nodes.
-type ExprNodeList interface {
+// ExprListNode interface represents one or more expression nodes.
+type ExprListNode interface {
 	Node
-	exprNodeList() []ExprNode
+	exprListNode() []ExprNode
 }
 
-// ExprList implements the ExprNodeList interface.
+// ExprList implements the ExprListNode interface.
 type ExprList []ExprNode
 
 func (list ExprList) Walk(w *writer.Writer) {
@@ -92,7 +98,7 @@ func (list ExprList) Walk(w *writer.Writer) {
 	}
 }
 
-func (ls ExprList) exprNodeList() []ExprNode { return ls }
+func (list ExprList) exprListNode() []ExprNode { return list }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Types
@@ -106,3 +112,106 @@ type TypeNode interface {
 	Node
 	typeNode()
 }
+
+// TypeListNode interface represents one or more type nodes.
+type TypeListNode interface {
+	Node
+	typeListNode() []TypeNode
+}
+
+// TypeList implements the TypeListNode interface.
+type TypeList []TypeNode
+
+func (list TypeList) Walk(w *writer.Writer) {
+	list[0].Walk(w)
+	for _, x := range list[1:] {
+		w.Write(", ")
+		x.Walk(w)
+	}
+}
+
+func (list TypeList) typeListNode() []TypeNode { return list }
+
+// FieldNode interface represents a struct type's field node.
+type FieldNode interface {
+	Node
+	fieldNode()
+}
+
+// MethodNode interface represents a interface type's method node.
+type MethodNode interface {
+	Node
+	methodNode()
+}
+
+// RecvTypeNode interface represents a receiver's type node.
+type RecvTypeNode interface {
+	Node
+	recvTypeNode()
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Statements
+////////////////////////////////////////////////////////////////////////////////
+
+type StmtNode interface {
+	Node
+	stmtNode()
+}
+
+type ElseNode interface {
+	Node
+	elseNode()
+}
+
+type ForClauseNode interface {
+	Node
+	forClauseNode()
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// helpers
+////////////////////////////////////////////////////////////////////////////////
+
+// StringNode produces a string from the underlying Node.
+type StringNode struct {
+	Node Node
+}
+
+func (s StringNode) Walk(w *writer.Writer) {
+	w.Write(`"`)
+	s.Node.Walk(w)
+	w.Write(`"`)
+}
+
+// RawStringNode produces a raw string from the underlying Node.
+type RawStringNode struct {
+	Node Node
+}
+
+func (s RawStringNode) Walk(w *writer.Writer) {
+	w.Write("`")
+	s.Node.Walk(w)
+	w.Write("`")
+}
+
+// AffixStringNode
+type AffixStringNode struct {
+	Prefix string
+	Node   Node
+	Suffix string
+}
+
+func (s AffixStringNode) Walk(w *writer.Writer) {
+	w.Write(s.Prefix)
+	s.Node.Walk(w)
+	w.Write(s.Suffix)
+}
+
+func (StringNode) exprNode()      {}
+func (RawStringNode) exprNode()   {}
+func (AffixStringNode) exprNode() {}
+
+func (x StringNode) exprListNode() []ExprNode      { return []ExprNode{x} }
+func (x RawStringNode) exprListNode() []ExprNode   { return []ExprNode{x} }
+func (x AffixStringNode) exprListNode() []ExprNode { return []ExprNode{x} }

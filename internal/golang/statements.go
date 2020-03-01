@@ -4,33 +4,53 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
-type BRANCH_TOKEN string
+type BranchToken string
 
 const (
-	BRANCH_BREAK BRANCH_TOKEN = "break"
-	BRANCH_CONT  BRANCH_TOKEN = "continue"
-	BRANCH_GOTO  BRANCH_TOKEN = "goto"
-	BRANCH_FALL  BRANCH_TOKEN = "fallthrough"
+	BranchBreak BranchToken = "break"
+	BranchCont  BranchToken = "continue"
+	BranchGoto  BranchToken = "goto"
+	BranchFall  BranchToken = "fallthrough"
 )
 
-type Stmt interface {
-	Node
-	stmtNode()
-}
+type IncDecToken string
 
-// A DeclStmt node represents a declaration in a statement list.
+const (
+	IncDecIncrement IncDecToken = "++"
+	IncDecDecrement IncDecToken = "--"
+)
+
+type AssignToken string
+
+const (
+	Assign       AssignToken = "="
+	AssignAdd    AssignToken = "+="
+	AssignSub    AssignToken = "-="
+	AssignMul    AssignToken = "*="
+	AssignQuo    AssignToken = "%="
+	AssignRem    AssignToken = "%="
+	AssignAnd    AssignToken = "&="
+	AssignOr     AssignToken = "|="
+	AssignXOr    AssignToken = "^="
+	AssignShl    AssignToken = "<<="
+	AssignShr    AssignToken = ">>="
+	AssignAndNot AssignToken = "&^="
+	AssignDefine AssignToken = ":="
+)
+
+// DeclStmt node produces a declaration statement.
 type DeclStmt struct {
-	Decl DeclNode
+	Decl DeclNode // the declaration
 }
 
 func (s DeclStmt) Walk(w *writer.Writer) {
 	s.Decl.Walk(w)
 }
 
-// A LabeledStmt node represents a labeled statement.
+// LabeledStmt node produces a labeled statement.
 type LabeledStmt struct {
-	Label Ident
-	Stmt  Stmt
+	Label Ident    // the label
+	Stmt  StmtNode // the statement
 }
 
 func (s LabeledStmt) Walk(w *writer.Writer) {
@@ -39,18 +59,19 @@ func (s LabeledStmt) Walk(w *writer.Writer) {
 	s.Stmt.Walk(w)
 }
 
-// An ExprStmt node represents a (stand-alone) expression in a statement list.
+// ExprStmt node produces a (stand-alone) expression statement.
 type ExprStmt struct {
-	X ExprNode
+	X ExprNode // the expression
 }
 
 func (s ExprStmt) Walk(w *writer.Writer) {
 	s.X.Walk(w)
 }
 
+// SendStmt produces a channel send statement.
 type SendStmt struct {
-	Chan  ExprNode
-	Value ExprNode
+	Chan  ExprNode // the channel to which to send the value
+	Value ExprNode // the value to send to the channel
 }
 
 func (s SendStmt) Walk(w *writer.Writer) {
@@ -59,16 +80,10 @@ func (s SendStmt) Walk(w *writer.Writer) {
 	s.Value.Walk(w)
 }
 
-type INCDEC_TOKEN string
-
-const (
-	INCDEC_INC INCDEC_TOKEN = "++"
-	INCDEC_DEC INCDEC_TOKEN = "--"
-)
-
+// IncDecStmt produces an increment / decrement statement.
 type IncDecStmt struct {
 	X     ExprNode
-	Token INCDEC_TOKEN
+	Token IncDecToken
 }
 
 func (s IncDecStmt) Walk(w *writer.Writer) {
@@ -76,28 +91,11 @@ func (s IncDecStmt) Walk(w *writer.Writer) {
 	w.Write(string(s.Token))
 }
 
-type ASSIGN_TOKEN string
-
-const (
-	ASSIGN         ASSIGN_TOKEN = "="
-	ASSIGN_ADD     ASSIGN_TOKEN = "+="
-	ASSIGN_SUB     ASSIGN_TOKEN = "-="
-	ASSIGN_MUL     ASSIGN_TOKEN = "*="
-	ASSIGN_QUO     ASSIGN_TOKEN = "%="
-	ASSIGN_REM     ASSIGN_TOKEN = "%="
-	ASSIGN_AND     ASSIGN_TOKEN = "&="
-	ASSIGN_OR      ASSIGN_TOKEN = "|="
-	ASSIGN_XOR     ASSIGN_TOKEN = "^="
-	ASSIGN_SHL     ASSIGN_TOKEN = "<<="
-	ASSIGN_SHR     ASSIGN_TOKEN = ">>="
-	ASSIGN_AND_NOT ASSIGN_TOKEN = "&^="
-	ASSIGN_DEFINE  ASSIGN_TOKEN = ":="
-)
-
+// AssignStmt node produces an assignment statement.
 type AssignStmt struct {
-	Lhs   ExprNodeList // must be set, i.e. cannot be nil
-	Rhs   ExprNodeList // must be set, i.e. cannot be nil
-	Token ASSIGN_TOKEN
+	Lhs   ExprListNode // left hand side operand
+	Rhs   ExprListNode // right hand side operand
+	Token AssignToken  // assignment token
 }
 
 func (s AssignStmt) Walk(w *writer.Writer) {
@@ -116,9 +114,9 @@ func (s *AssignStmt) SetRhs(xx ...ExprNode) {
 	s.Rhs = ExprList(xx)
 }
 
-// A GoStmt node represents a go statement.
+// GoStmt node produces a go statement.
 type GoStmt struct {
-	Call CallExpr
+	Call CallExpr // the call
 }
 
 func (s GoStmt) Walk(w *writer.Writer) {
@@ -126,8 +124,9 @@ func (s GoStmt) Walk(w *writer.Writer) {
 	s.Call.Walk(w)
 }
 
+// DeferStmt produces a defer statement.
 type DeferStmt struct {
-	Call CallExpr
+	Call CallExpr // the call
 }
 
 func (s DeferStmt) Walk(w *writer.Writer) {
@@ -135,8 +134,9 @@ func (s DeferStmt) Walk(w *writer.Writer) {
 	s.Call.Walk(w)
 }
 
+// ReturnStmt node produces a return statement.
 type ReturnStmt struct {
-	Result ExprNodeList // can be nil
+	Result ExprListNode // the expression to return; or nil
 }
 
 func (s ReturnStmt) Walk(w *writer.Writer) {
@@ -147,10 +147,10 @@ func (s ReturnStmt) Walk(w *writer.Writer) {
 	}
 }
 
-// A BranchStmt node represents a break, continue, goto, or fallthrough statement.
+// BranchStmt node produces a break, continue, goto, or fallthrough statement.
 type BranchStmt struct {
-	Token BRANCH_TOKEN
-	Label Ident
+	Token BranchToken // the type of the branch
+	Label Ident       // optional label
 }
 
 func (s BranchStmt) Walk(w *writer.Writer) {
@@ -161,8 +161,9 @@ func (s BranchStmt) Walk(w *writer.Writer) {
 	}
 }
 
+// BlockStmt node produces a block statement.
 type BlockStmt struct {
-	List []Stmt
+	List []StmtNode // statements inside the block
 }
 
 func (s BlockStmt) Walk(w *writer.Writer) {
@@ -177,15 +178,16 @@ func (s BlockStmt) Walk(w *writer.Writer) {
 	w.Write("}")
 }
 
-func (s *BlockStmt) Add(ss ...Stmt) {
+func (s *BlockStmt) Add(ss ...StmtNode) {
 	s.List = append(s.List, ss...)
 }
 
+// IfStmt produces an if statement.
 type IfStmt struct {
-	Init Stmt
-	Cond ExprNode
-	Body BlockStmt
-	Else Stmt
+	Init StmtNode  // an optional simple statement
+	Cond ExprNode  // the condition of the if statement
+	Body BlockStmt // the statments to be executed when the condition is met
+	Else ElseNode  // the optional else, or else-if, node
 }
 
 func (s IfStmt) Walk(w *writer.Writer) {
@@ -205,10 +207,39 @@ func (s IfStmt) Walk(w *writer.Writer) {
 	}
 }
 
-// A CaseClause represents a case of an expression or type switch statement.
+// SwitchStmt produces a switch statment.
+type SwitchStmt struct {
+	Init  StmtNode     // an optional simple statement
+	X     ExprNode     // the switch expression (optional)
+	Cases []CaseClause // a list of the switch cases
+}
+
+func (s SwitchStmt) Walk(w *writer.Writer) {
+	w.Write("switch ")
+	if s.Init != nil {
+		s.Init.Walk(w)
+		w.Write("; ")
+	}
+	if s.X != nil {
+		s.X.Walk(w)
+		w.Write(" ")
+	}
+	w.Write("{")
+
+	if len(s.Cases) > 0 {
+		for _, cc := range s.Cases {
+			w.Write("\n")
+			cc.Walk(w)
+		}
+		w.Write("\n")
+	}
+	w.Write("}")
+}
+
+// CaseClause produces a case clause in an expression switch statement.
 type CaseClause struct {
-	List ExprNodeList // list of expressions or types; nil means default case
-	Body []Stmt
+	List ExprListNode // list of expressions; nil means default case
+	Body []StmtNode   // list of the case's statements to be executed
 }
 
 func (s CaseClause) Walk(w *writer.Writer) {
@@ -226,52 +257,11 @@ func (s CaseClause) Walk(w *writer.Writer) {
 	}
 }
 
-type SwitchStmt struct {
-	Init Stmt
-	Tag  ExprNode
-	Body []CaseClause
-}
-
-func (s SwitchStmt) Walk(w *writer.Writer) {
-	w.Write("switch ")
-	if s.Init != nil {
-		s.Init.Walk(w)
-		w.Write("; ")
-	}
-	if s.Tag != nil {
-		s.Tag.Walk(w)
-		w.Write(" ")
-	}
-	w.Write("{")
-
-	if len(s.Body) > 0 {
-		for _, cc := range s.Body {
-			w.Write("\n")
-			cc.Walk(w)
-		}
-		w.Write("\n")
-	}
-	w.Write("}")
-}
-
-type TypeSwitchGuard struct {
-	Name Ident
-	X    ExprNode
-}
-
-func (g TypeSwitchGuard) Walk(w *writer.Writer) {
-	if len(g.Name.Name) > 0 {
-		g.Name.Walk(w)
-		w.Write(" := ")
-	}
-	g.X.Walk(w)
-	w.Write(".(type)")
-}
-
+// TypeSwitchStmt produces a type swtich.
 type TypeSwitchStmt struct {
-	Init  Stmt
-	Guard TypeSwitchGuard
-	Body  []CaseClause
+	Init  StmtNode         // an optional simple statement
+	Guard TypeSwitchGuard  // the type switch guard
+	Cases []TypeCaseClause // list of the switch's cases
 }
 
 func (s TypeSwitchStmt) Walk(w *writer.Writer) {
@@ -283,8 +273,8 @@ func (s TypeSwitchStmt) Walk(w *writer.Writer) {
 	s.Guard.Walk(w)
 	w.Write(" {")
 
-	if len(s.Body) > 0 {
-		for _, cc := range s.Body {
+	if len(s.Cases) > 0 {
+		for _, cc := range s.Cases {
 			w.Write("\n")
 			cc.Walk(w)
 		}
@@ -293,9 +283,65 @@ func (s TypeSwitchStmt) Walk(w *writer.Writer) {
 	w.Write("}")
 }
 
+// TypeSwitchGuard produces the special swtich expression of a type swtich.
+type TypeSwitchGuard struct {
+	Name Ident    // optional identifier for short-variable-declaration
+	X    ExprNode // the primary expression
+}
+
+func (g TypeSwitchGuard) Walk(w *writer.Writer) {
+	if len(g.Name.Name) > 0 {
+		g.Name.Walk(w)
+		w.Write(" := ")
+	}
+	g.X.Walk(w)
+	w.Write(".(type)")
+}
+
+// TypeCaseClause produces a case clause in a type switch statement.
+type TypeCaseClause struct {
+	List TypeListNode // list of types; nil means default case
+	Body []StmtNode   // list of the case's statements to be executed
+}
+
+func (s TypeCaseClause) Walk(w *writer.Writer) {
+	if s.List != nil {
+		w.Write("case ")
+		s.List.Walk(w)
+		w.Write(":")
+	} else {
+		w.Write("default:")
+	}
+
+	for _, stmt := range s.Body {
+		w.Write("\n")
+		stmt.Walk(w)
+	}
+}
+
+// SelectStmt produces a select statement.
+type SelectStmt struct {
+	Cases []CommClause // list of the select's cases
+}
+
+func (s SelectStmt) Walk(w *writer.Writer) {
+	w.Write("select ")
+	if len(s.Cases) == 0 {
+		w.Write("{}")
+		return
+	}
+	w.Write("{")
+	for _, comm := range s.Cases {
+		w.Write("\n")
+		comm.Walk(w)
+	}
+	w.Write("\n}")
+}
+
+// CommClause produces a case clause in a select statement.
 type CommClause struct {
-	Comm Stmt // send or receive statement; nil means default case
-	Body []Stmt
+	Comm StmtNode   // the communication operation; nil means default case
+	Body []StmtNode // list of the case's statements to be executed
 }
 
 func (s CommClause) Walk(w *writer.Writer) {
@@ -313,70 +359,75 @@ func (s CommClause) Walk(w *writer.Writer) {
 	}
 }
 
-type SelectStmt struct {
-	Body []CommClause
-}
-
-func (s SelectStmt) Walk(w *writer.Writer) {
-	w.Write("select ")
-	if len(s.Body) == 0 {
-		w.Write("{}")
-		return
-	}
-	w.Write("{")
-	for _, comm := range s.Body {
-		w.Write("\n")
-		comm.Walk(w)
-	}
-	w.Write("\n}")
-}
-
+// ForStmt produces a for statement.
 type ForStmt struct {
-	Init Stmt
-	Cond ExprNode
-	Post Stmt
-	Body BlockStmt
+	Clause ForClauseNode // the clause of the for statement [condition | for-clause | range-clause]
+	Body   BlockStmt     // the code block to be executed by the for statement
 }
 
 func (s ForStmt) Walk(w *writer.Writer) {
 	w.Write("for ")
-	if s.Init == nil && s.Post == nil {
-		if s.Cond != nil {
-			s.Cond.Walk(w)
-			w.Write(" ")
-		}
-		s.Body.Walk(w)
-		return
+	if s.Clause != nil {
+		s.Clause.Walk(w)
+		w.Write(" ")
 	}
-
-	s.Init.Walk(w)
-	w.Write("; ")
-	s.Cond.Walk(w)
-	w.Write("; ")
-	s.Post.Walk(w)
-	w.Write(" ")
 	s.Body.Walk(w)
 }
 
-type RangeStmt struct {
-	Key    ExprNode
-	Value  ExprNode
-	Define bool
-	X      ExprNode
-	Body   BlockStmt
+// ForCondition produces the expression to be evaluated before each iteration in a for statement.
+type ForCondition struct {
+	X ExprNode // the boolean expression to be evaluated
 }
 
-func (s RangeStmt) Walk(w *writer.Writer) {
-	w.Write("for ")
-	if s.Key != nil {
-		s.Key.Walk(w)
+func (f ForCondition) Walk(w *writer.Writer) {
+	if f.X != nil {
+		f.X.Walk(w)
+	}
+}
 
-		if s.Value != nil {
-			w.Write(", ")
-			s.Value.Walk(w)
-		}
+// ForClause produces the init-cond-post clause in a for statement.
+type ForClause struct {
+	Init StmtNode // an optional simple initialization statement, e.g. assignment
+	Cond ExprNode // the boolean expression to be evaluated
+	Post StmtNode // an optional simple post statement, e.g. increment/decrement
+}
 
-		if s.Define {
+func (f ForClause) Walk(w *writer.Writer) {
+	if f.Init != nil {
+		f.Init.Walk(w)
+	}
+	w.Write("; ")
+	if f.Cond != nil {
+		f.Cond.Walk(w)
+	}
+	w.Write("; ")
+	if f.Post != nil {
+		f.Post.Walk(w)
+	}
+}
+
+// ForRangeClause produces a range clause in a for statement.
+type ForRangeClause struct {
+	Key    ExprNode // the optional iteration variable
+	Value  ExprNode // the 2nd optional iteration variable
+	X      ExprNode // the range expression
+	Define bool     // indicates whether the iteration variables should be defined or assigned
+}
+
+func (f ForRangeClause) Walk(w *writer.Writer) {
+	if f.Key != nil {
+		f.Key.Walk(w)
+	} else if f.Value != nil {
+		w.Write("_")
+	}
+
+	if f.Value != nil {
+		w.Write(", ")
+		f.Value.Walk(w)
+	}
+
+	if f.Key != nil || f.Value != nil {
+		if f.Define {
 			w.Write(" := ")
 		} else {
 			w.Write(" = ")
@@ -384,41 +435,31 @@ func (s RangeStmt) Walk(w *writer.Writer) {
 	}
 
 	w.Write("range ")
-	s.X.Walk(w)
-	w.Write(" ")
-	s.Body.Walk(w)
+	f.X.Walk(w)
 }
 
-func (s *RangeStmt) SetVariables(key, val string) {
-	s.Key = Ident{key}
-	s.Value = Ident{val}
-	s.Define = true
-}
-
-func (s *RangeStmt) SetExpression(x ExprNode) {
-	s.X = x
-}
-
-func (s *RangeStmt) AddStmt(ss ...Stmt) {
-	s.Body.List = append(s.Body.List, ss...)
-}
-
-func (DeclStmt) stmtNode()       {} // done
+func (DeclStmt) stmtNode()       {}
 func (LabeledStmt) stmtNode()    {}
 func (ExprStmt) stmtNode()       {}
 func (SendStmt) stmtNode()       {}
-func (IncDecStmt) stmtNode()     {} // done
-func (AssignStmt) stmtNode()     {} // done
-func (GoStmt) stmtNode()         {} // done
-func (DeferStmt) stmtNode()      {} // done
-func (ReturnStmt) stmtNode()     {} // done
-func (BranchStmt) stmtNode()     {} // done
-func (BlockStmt) stmtNode()      {} // done
-func (IfStmt) stmtNode()         {} // done
-func (CaseClause) stmtNode()     {} // done
-func (SwitchStmt) stmtNode()     {} // done
-func (TypeSwitchStmt) stmtNode() {} // done
-func (CommClause) stmtNode()     {} // done
-func (SelectStmt) stmtNode()     {} // done
-func (ForStmt) stmtNode()        {} // done
-func (RangeStmt) stmtNode()      {} // done
+func (IncDecStmt) stmtNode()     {}
+func (AssignStmt) stmtNode()     {}
+func (GoStmt) stmtNode()         {}
+func (DeferStmt) stmtNode()      {}
+func (ReturnStmt) stmtNode()     {}
+func (BranchStmt) stmtNode()     {}
+func (BlockStmt) stmtNode()      {}
+func (IfStmt) stmtNode()         {}
+func (CaseClause) stmtNode()     {}
+func (SwitchStmt) stmtNode()     {}
+func (TypeSwitchStmt) stmtNode() {}
+func (CommClause) stmtNode()     {}
+func (SelectStmt) stmtNode()     {}
+func (ForStmt) stmtNode()        {}
+
+func (IfStmt) elseNode()    {}
+func (BlockStmt) elseNode() {}
+
+func (ForCondition) forClauseNode()   {}
+func (ForClause) forClauseNode()      {}
+func (ForRangeClause) forClauseNode() {}

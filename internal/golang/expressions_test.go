@@ -7,51 +7,22 @@ import (
 	"github.com/frk/compare"
 )
 
-func TestIdent(t *testing.T) {
+func TestPointerIndirectionExpr(t *testing.T) {
 	tests := []struct {
-		id   Ident
+		pix  PointerIndirectionExpr
 		want string
 	}{{
-		id:   Ident{},
-		want: "",
-	}, {
-		id:   Ident{"Name"},
-		want: "Name",
-	}, {
-		id:   Ident{"value"},
-		want: "value",
-	}}
-
-	for _, tt := range tests {
-		w := new(bytes.Buffer)
-
-		if err := Write(tt.id, w); err != nil {
-			t.Error(err)
-		}
-
-		got := w.String()
-		if err := compare.Compare(got, tt.want); err != nil {
-			t.Error(err)
-		}
-	}
-}
-
-func TestStarExpr(t *testing.T) {
-	tests := []struct {
-		star StarExpr
-		want string
-	}{{
-		star: StarExpr{X: Ident{"a"}},
+		pix:  PointerIndirectionExpr{X: Ident{"a"}},
 		want: "*a",
 	}, {
-		star: StarExpr{X: StarExpr{X: Ident{"b"}}},
+		pix:  PointerIndirectionExpr{X: PointerIndirectionExpr{X: Ident{"b"}}},
 		want: "**b",
 	}}
 
 	for _, tt := range tests {
 		w := new(bytes.Buffer)
 
-		if err := Write(tt.star, w); err != nil {
+		if err := Write(tt.pix, w); err != nil {
 			t.Error(err)
 		}
 
@@ -67,10 +38,10 @@ func TestUnaryExpr(t *testing.T) {
 		unary UnaryExpr
 		want  string
 	}{{
-		unary: UnaryExpr{Op: UNARY_ADD, X: Ident{"a"}},
+		unary: UnaryExpr{Op: UnaryAdd, X: Ident{"a"}},
 		want:  "+a",
 	}, {
-		unary: UnaryExpr{Op: UNARY_SUB, X: UnaryExpr{Op: UNARY_SUB, X: Ident{"b"}}},
+		unary: UnaryExpr{Op: UnarySub, X: UnaryExpr{Op: UnarySub, X: Ident{"b"}}},
 		want:  "--b",
 	}}
 
@@ -119,10 +90,10 @@ func TestBinaryExpr(t *testing.T) {
 		binary BinaryExpr
 		want   string
 	}{{
-		binary: BinaryExpr{X: Ident{"a"}, Op: BINARY_ADD, Y: Ident{"b"}},
+		binary: BinaryExpr{X: Ident{"a"}, Op: BinaryAdd, Y: Ident{"b"}},
 		want:   "a + b",
 	}, {
-		binary: BinaryExpr{X: Ident{"a"}, Op: BINARY_LEQ, Y: Ident{"b"}},
+		binary: BinaryExpr{X: Ident{"a"}, Op: BinaryLeq, Y: Ident{"b"}},
 		want:   "a <= b",
 	}}
 
@@ -174,13 +145,80 @@ func TestCallExpr(t *testing.T) {
 		want: "foo(arg1, \narg2...,\n)",
 	}, {
 		call: CallExpr{
-			Fun: SelectorExpr{Sel: Ident{"Sqrt"}, X: Ident{"math"}},
+			Fun: QualifiedIdent{"math", "Sqrt"},
 			Args: ArgsList{List: ExprList{
-				BinaryExpr{X: Ident{"0.34"}, Op: BINARY_MUL, Y: Ident{"25"}},
+				BinaryExpr{X: Ident{"0.34"}, Op: BinaryMul, Y: Ident{"25"}},
 				Ident{"arg2"},
 			}},
 		},
 		want: "math.Sqrt(0.34 * 25, arg2)",
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.call, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestCallNewExpr(t *testing.T) {
+	tests := []struct {
+		call CallNewExpr
+		want string
+	}{{
+		call: CallNewExpr{Ident{"T"}},
+		want: "new(T)",
+	}, {
+		call: CallNewExpr{QualifiedIdent{"time", "Time"}},
+		want: "new(time.Time)",
+	}, {
+		call: CallNewExpr{StructType{Field{Names: Ident{"F"}, Type: Ident{"string"}}}},
+		want: "new(struct {\nF string\n})",
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.call, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestCallMakeExpr(t *testing.T) {
+	tests := []struct {
+		call CallMakeExpr
+		want string
+	}{{
+		call: CallMakeExpr{Ident{"S"}, nil},
+		want: "make(S)",
+	}, {
+		call: CallMakeExpr{Ident{"S"}, []int{32}},
+		want: "make(S, 32)",
+	}, {
+		call: CallMakeExpr{SliceType{Ident{"T"}}, []int{32, 128}},
+		want: "make([]T, 32, 128)",
+	}, {
+		call: CallMakeExpr{MapType{Ident{"string"}, Ident{"interface{}"}}, []int{1000}},
+		want: "make(map[string]interface{}, 1000)",
+	}, {
+		call: CallMakeExpr{ChanType{0, Ident{"struct{}"}}, []int{1000}},
+		want: "make(chan struct{}, 1000)",
+	}, {
+		call: CallMakeExpr{ChanType{0, Ident{"struct{}"}}, nil},
+		want: "make(chan struct{})",
 	}}
 
 	for _, tt := range tests {
@@ -209,8 +247,8 @@ func TestParenExpr(t *testing.T) {
 		want:  "(123)",
 	}, {
 		paren: ParenExpr{X: BinaryExpr{
-			X:  ParenExpr{X: BinaryExpr{X: Ident{"0.34"}, Op: BINARY_QUO, Y: Ident{"54"}}},
-			Op: BINARY_MUL,
+			X:  ParenExpr{X: BinaryExpr{X: Ident{"0.34"}, Op: BinaryQuo, Y: Ident{"54"}}},
+			Op: BinaryMul,
 			Y:  Ident{"25"},
 		}},
 		want: "((0.34 / 54) * 25)",
@@ -238,10 +276,10 @@ func TestIndexExpr(t *testing.T) {
 		index: IndexExpr{X: Ident{"array"}, Index: Ident{"index"}},
 		want:  "array[index]",
 	}, {
-		index: IndexExpr{X: Ident{"slice"}, Index: Ident{"0"}},
+		index: IndexExpr{X: Ident{"slice"}, Index: IntLit(0)},
 		want:  "slice[0]",
 	}, {
-		index: IndexExpr{X: Ident{"map"}, Index: String("key")},
+		index: IndexExpr{X: Ident{"map"}, Index: StringLit("key")},
 		want:  `map["key"]`,
 	}}
 
@@ -249,32 +287,6 @@ func TestIndexExpr(t *testing.T) {
 		w := new(bytes.Buffer)
 
 		if err := Write(tt.index, w); err != nil {
-			t.Error(err)
-		}
-
-		got := w.String()
-		if err := compare.Compare(got, tt.want); err != nil {
-			t.Error(err)
-		}
-	}
-}
-
-func TestKeyValueExpr(t *testing.T) {
-	tests := []struct {
-		kv   KeyValueExpr
-		want string
-	}{{
-		kv:   KeyValueExpr{Key: String("key"), Value: Ident{"value"}},
-		want: `"key": value`,
-	}, {
-		kv:   KeyValueExpr{Key: Ident{"key"}, Value: String("value")},
-		want: `key: "value"`,
-	}}
-
-	for _, tt := range tests {
-		w := new(bytes.Buffer)
-
-		if err := Write(tt.kv, w); err != nil {
 			t.Error(err)
 		}
 
@@ -327,45 +339,6 @@ func TestTypeAssertExpr(t *testing.T) {
 		w := new(bytes.Buffer)
 
 		if err := Write(tt.assert, w); err != nil {
-			t.Error(err)
-		}
-
-		got := w.String()
-		if err := compare.Compare(got, tt.want); err != nil {
-			t.Error(err)
-		}
-	}
-}
-
-func TestField(t *testing.T) {
-	tests := []struct {
-		f    Field
-		want string
-	}{{
-		f:    Field{Type: Ident{"int"}},
-		want: "int",
-	}, {
-		f:    Field{Names: Ident{"a"}, Type: Ident{"int"}},
-		want: "a int",
-	}, {
-		f: Field{
-			Names: IdentList{{"foo"}, {"bar"}, {"baz"}},
-			Type:  StarExpr{X: Ident{"string"}},
-		},
-		want: "foo, bar, baz *string",
-	}, {
-		f: Field{
-			Names: Ident{"Foo"},
-			Type:  Ident{"string"},
-			Tag:   RawString(`json:"foo"`),
-		},
-		want: "Foo string `json:\"foo\"`",
-	}}
-
-	for _, tt := range tests {
-		w := new(bytes.Buffer)
-
-		if err := Write(tt.f, w); err != nil {
 			t.Error(err)
 		}
 

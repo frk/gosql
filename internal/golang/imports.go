@@ -58,8 +58,8 @@ func (d SingleImportDecl) Walk(w *writer.Writer) {
 type ImportSpec struct {
 	Doc     CommentNode // associated documentation; or nil
 	Name    Ident       // local package name (including "." and "_"); or empty
-	Path    String      // import path
-	Comment CommentNode // one line //-style or /*-style comment; or nil
+	Path    StringLit   // import path
+	Comment LineComment // trailing comment
 }
 
 func (s ImportSpec) Walk(w *writer.Writer) {
@@ -72,10 +72,7 @@ func (s ImportSpec) Walk(w *writer.Writer) {
 		w.Write(" ")
 	}
 	s.Path.Walk(w)
-	if s.Comment != nil {
-		w.Write(" ")
-		s.Comment.Walk(w)
-	}
+	s.Comment.Walk(w)
 }
 
 // implements ImportDeclNode

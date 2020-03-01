@@ -4,11 +4,13 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
+// File node produces a go file.
 type File struct {
-	Doc     CommentNode // associated documentation
-	PkgName string
-	Imports []ImportDeclNode
-	Decls   []TopLevelDeclNode
+	Doc     CommentNode        // associated documentation
+	PkgName string             // name of the package for the package clause
+	Imports []ImportDeclNode   // import declarations
+	Decls   []TopLevelDeclNode // top level declarations
+
 	// Preamble produces a comment above the associated documentation and
 	// the package clause but separates it from them using a new line.
 	// Can be useful for adding comments to the top of the file that should

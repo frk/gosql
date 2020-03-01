@@ -35,14 +35,14 @@ var (
 	idquery             = gol.Ident{"queryString"}
 	idiface             = gol.Ident{"interface{}"}
 	idifaces            = gol.Ident{"[]interface{}"}
-	sxconn              = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"Conn"}}
-	sxerrorinfo         = gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"ErrorInfo"}}
-	sxexec              = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Exec"}}
-	sxquery             = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"Query"}}
-	sxqueryrow          = gol.SelectorExpr{X: gol.Ident{"c"}, Sel: gol.Ident{"QueryRow"}}
-	sxrowscan           = gol.SelectorExpr{X: gol.Ident{"row"}, Sel: gol.Ident{"Scan"}}
-	sxrowsscan          = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Scan"}}
-	sxrowsclose         = gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Close"}}
+	sxconn              = gol.QualifiedIdent{"gosql", "Conn"}
+	sxerrorinfo         = gol.QualifiedIdent{"gosql", "ErrorInfo"}
+	sxexec              = gol.QualifiedIdent{"c", "Exec"}
+	sxquery             = gol.QualifiedIdent{"c", "Query"}
+	sxqueryrow          = gol.QualifiedIdent{"c", "QueryRow"}
+	sxrowscan           = gol.QualifiedIdent{"row", "Scan"}
+	sxrowsscan          = gol.QualifiedIdent{"rows", "Scan"}
+	sxrowsclose         = gol.QualifiedIdent{"rows", "Close"}
 	callrowserr         = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Err"}}}
 	callrowsnext        = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"rows"}, Sel: gol.Ident{"Next"}}}
 	callresrowsaffected = gol.CallExpr{Fun: gol.SelectorExpr{X: gol.Ident{"res"}, Sel: gol.Ident{"RowsAffected"}}}
@@ -103,7 +103,7 @@ func (g *generator) run(pkgname string) error {
 func (g *generator) execdecl(si *specinfo) (m gol.MethodDecl) {
 	m.Name = idexec
 	m.Recv.Name = idrecv
-	m.Recv.Type = gol.StarExpr{X: gol.Ident{si.spec.name}}
+	m.Recv.Type = gol.PointerRecvType{si.spec.name}
 	m.Type.Params = gol.ParamList{{Names: idconn, Type: sxconn}}
 	m.Type.Results = gol.ParamList{{Type: iderror}}
 
@@ -117,7 +117,7 @@ func (g *generator) execdecl(si *specinfo) (m gol.MethodDecl) {
 	return m
 }
 
-func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
+func (g *generator) querybuild(si *specinfo) (stmt gol.StmtNode) {
 	sqlnode := g.sqlnode(si)
 
 	var decl gol.DeclNode
@@ -141,7 +141,7 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 
 		nstatic := gol.ValueSpec{}
 		nstatic.Names = gol.Ident{"nstatic"}
-		nstatic.Values = gol.Int(g.nparam)
+		nstatic.Values = gol.IntLit(g.nparam)
 		nstatic.Comment = gol.LineComment{" number of static parameters"}
 
 		specs := gol.ValueSpecList{nstatic}
@@ -163,7 +163,7 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 				// adding the previous length to the previous position
 				prev := strconv.Itoa(i)
 				prevlen, prevpos := gol.Ident{"len" + prev}, gol.Ident{"pos" + prev}
-				posspec.Values = gol.BinaryExpr{X: prevpos, Op: gol.BINARY_ADD, Y: prevlen}
+				posspec.Values = gol.BinaryExpr{X: prevpos, Op: gol.BinaryAdd, Y: prevlen}
 			}
 			posspec.Comment = gol.LineComment{" starting position of slice #" + num + " parameters"}
 
@@ -175,13 +175,13 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 		list := gol.StmtList{gol.DeclStmt{vardecl}, gol.NL{}, gol.DeclStmt{decl}, gol.NL{}}
 
 		// define the params variable
-		asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+		asn := gol.AssignStmt{Token: gol.AssignDefine}
 		asn.Lhs = idparams
 		callmake := callmakeparams
-		bin := gol.BinaryExpr{X: gol.Ident{"nstatic"}, Op: gol.BINARY_ADD, Y: gol.Ident{"len1"}}
+		bin := gol.BinaryExpr{X: gol.Ident{"nstatic"}, Op: gol.BinaryAdd, Y: gol.Ident{"len1"}}
 		for i := 1; i < len(g.insx); i++ {
 			y := gol.Ident{"len" + strconv.Itoa(i+1)}
-			bin = gol.BinaryExpr{X: bin, Op: gol.BINARY_ADD, Y: y}
+			bin = gol.BinaryExpr{X: bin, Op: gol.BinaryAdd, Y: y}
 		}
 		callmake.Args.AddExprs(bin)
 		asn.Rhs = callmake
@@ -189,8 +189,8 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 
 		// directly assign non-slice params
 		for i, arg := range g.qargs {
-			asn := gol.AssignStmt{Token: gol.ASSIGN}
-			asn.Lhs = gol.IndexExpr{X: idparams, Index: gol.Int(i)}
+			asn := gol.AssignStmt{Token: gol.Assign}
+			asn.Lhs = gol.IndexExpr{X: idparams, Index: gol.IntLit(i)}
 			asn.Rhs = arg
 			list = append(list, asn)
 		}
@@ -199,30 +199,31 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 			lenid := gol.Ident{"len" + strconv.Itoa(i+1)}
 			posid := gol.Ident{"pos" + strconv.Itoa(i+1)}
 
-			loop := gol.ForStmt{}
-			loop.Init = gol.AssignStmt{Token: gol.ASSIGN_DEFINE, Lhs: ididx, Rhs: gol.Int(0)}
-			loop.Cond = gol.BinaryExpr{X: ididx, Op: gol.BINARY_LSS, Y: lenid}
-			loop.Post = gol.IncDecStmt{X: ididx, Token: gol.INCDEC_INC}
+			forclause := gol.ForClause{}
+			forclause.Init = gol.AssignStmt{Token: gol.AssignDefine, Lhs: ididx, Rhs: gol.IntLit(0)}
+			forclause.Cond = gol.BinaryExpr{X: ididx, Op: gol.BinaryLss, Y: lenid}
+			forclause.Post = gol.IncDecStmt{X: ididx, Token: gol.IncDecIncrement}
+			loop := gol.ForStmt{Clause: forclause}
 
-			asn := gol.AssignStmt{Token: gol.ASSIGN}
-			asn.Lhs = gol.IndexExpr{X: idparams, Index: gol.BinaryExpr{X: posid, Op: gol.BINARY_ADD, Y: ididx}}
+			asn := gol.AssignStmt{Token: gol.Assign}
+			asn.Lhs = gol.IndexExpr{X: idparams, Index: gol.BinaryExpr{X: posid, Op: gol.BinaryAdd, Y: ididx}}
 			asn.Rhs = gol.IndexExpr{X: sx, Index: ididx}
 
-			loop.Body = gol.BlockStmt{List: []gol.Stmt{asn}}
+			loop.Body = gol.BlockStmt{List: []gol.StmtNode{asn}}
 
 			list = append(list, loop)
 		}
 
 		return append(list, gol.NL{})
 	} else if len(si.spec.filter) > 0 {
-		asn := gol.AssignStmt{Token: gol.ASSIGN_ADD}
+		asn := gol.AssignStmt{Token: gol.AssignAdd}
 		asn.Lhs = idquery
 		asn.Rhs = gol.CallExpr{Fun: gol.SelectorExpr{
 			X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.filter}},
 			Sel: gol.Ident{"ToSQL"},
 		}}
 
-		asn2 := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+		asn2 := gol.AssignStmt{Token: gol.AssignDefine}
 		asn2.Lhs = idparams
 		asn2.Rhs = gol.CallExpr{Fun: gol.SelectorExpr{
 			X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.filter}},
@@ -233,31 +234,31 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.Stmt) {
 	return gol.DeclStmt{decl}
 }
 
-func (g *generator) querydefaults(si *specinfo) (stmt gol.Stmt) {
+func (g *generator) querydefaults(si *specinfo) (stmt gol.StmtNode) {
 	var list gol.StmtList
 	if l := si.spec.limit; l != nil && l.value > 0 && len(l.field) > 0 {
 		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{l.field}}
 
-		asn := gol.AssignStmt{Token: gol.ASSIGN}
+		asn := gol.AssignStmt{Token: gol.Assign}
 		asn.Lhs = sx
-		asn.Rhs = gol.BasicLit{strconv.FormatUint(l.value, 10)}
+		asn.Rhs = gol.IntLit(l.value)
 
 		ifzero := gol.IfStmt{}
-		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BINARY_EQL, Y: gol.BasicLit{"0"}}
-		ifzero.Body = gol.BlockStmt{List: []gol.Stmt{asn}}
+		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BinaryEql, Y: gol.IntLit(0)}
+		ifzero.Body = gol.BlockStmt{List: []gol.StmtNode{asn}}
 		list = append(list, ifzero)
 	}
 
 	if o := si.spec.offset; o != nil && o.value > 0 && len(o.field) > 0 {
 		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{o.field}}
 
-		asn := gol.AssignStmt{Token: gol.ASSIGN}
+		asn := gol.AssignStmt{Token: gol.Assign}
 		asn.Lhs = sx
-		asn.Rhs = gol.BasicLit{strconv.FormatUint(o.value, 10)}
+		asn.Rhs = gol.IntLit(o.value)
 
 		ifzero := gol.IfStmt{}
-		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BINARY_EQL, Y: gol.BasicLit{"0"}}
-		ifzero.Body = gol.BlockStmt{List: []gol.Stmt{asn}}
+		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BinaryEql, Y: gol.IntLit(0)}
+		ifzero.Body = gol.BlockStmt{List: []gol.StmtNode{asn}}
 		list = append(list, ifzero)
 	}
 
@@ -269,7 +270,7 @@ func (g *generator) querydefaults(si *specinfo) (stmt gol.Stmt) {
 	return list
 }
 
-func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
+func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 	args := gol.ArgsList{List: idquery}
 	if len(g.insx) > 0 || len(si.spec.filter) > 0 {
 		args.AddExprs(idparams)
@@ -287,27 +288,27 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 
 			if rafield := si.spec.rowsaffected; rafield != nil {
 				// call exec & assign res, err
-				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn := gol.AssignStmt{Token: gol.AssignDefine}
 				asn.Lhs = gol.ExprList{idres, iderr}
 				asn.Rhs = gol.CallExpr{Fun: sxexec, Args: args}
 
 				// check err
 				iferr := gol.IfStmt{}
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 				// call RowsAffected & assing i64, err
-				asn2 := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn2 := gol.AssignStmt{Token: gol.AssignDefine}
 				asn2.Lhs = gol.ExprList{idi64, iderr}
 				asn2.Rhs = callresrowsaffected
 
 				// check err
 				iferr2 := gol.IfStmt{}
-				iferr2.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr2.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+				iferr2.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+				iferr2.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 				//
-				asn3 := gol.AssignStmt{Token: gol.ASSIGN}
+				asn3 := gol.AssignStmt{Token: gol.Assign}
 				asn3.Lhs = gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rafield.name}}
 				if rafield.kind == kindint64 {
 					asn3.Rhs = idi64
@@ -318,7 +319,7 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 
 				return gol.StmtList{asn, iferr, asn2, iferr2, gol.NL{}, asn3}
 			} else {
-				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn := gol.AssignStmt{Token: gol.AssignDefine}
 				asn.Lhs = gol.ExprList{idblank, iderr}
 				asn.Rhs = gol.CallExpr{Fun: sxexec, Args: args}
 				return asn
@@ -334,7 +335,7 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 		}
 
 		if !rec.isslice && !rec.isiter {
-			asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+			asn := gol.AssignStmt{Token: gol.AssignDefine}
 			asn.Lhs = idrow
 			asn.Rhs = gol.CallExpr{Fun: sxqueryrow, Args: args}
 			return gol.StmtList{asn, gol.NL{}}
@@ -344,13 +345,13 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.Stmt) {
 	// produce c.Query( ... ) call with if-err-check, defer-rows-close, and
 	// for-rows-next loop to scan the rows
 	{
-		asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+		asn := gol.AssignStmt{Token: gol.AssignDefine}
 		asn.Lhs = gol.ExprList{idrows, iderr}
 		asn.Rhs = gol.CallExpr{Fun: sxquery, Args: args}
 
 		iferr := gol.IfStmt{}
-		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-		iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+		iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 		defclose := gol.DeferStmt{}
 		defclose.Call = gol.CallExpr{Fun: sxrowsclose}
@@ -366,13 +367,15 @@ func (g *generator) returnerr(si *specinfo, errx gol.ExprNode) gol.ReturnStmt {
 		return gol.ReturnStmt{errx}
 	}
 	if si.spec.erh.isinfo {
-		lit := gol.CompositeLit{Type: sxerrorinfo, Comma: true, Compact: true}
-		lit.AddElts(gol.KeyValueExpr{Key: gol.Ident{"Error"}, Value: iderr})
-		lit.AddElts(gol.KeyValueExpr{Key: gol.Ident{"Query"}, Value: idquery})
-		lit.AddElts(gol.KeyValueExpr{Key: gol.Ident{"SpecKind"}, Value: gol.String(si.spec.kind.String())})
-		lit.AddElts(gol.KeyValueExpr{Key: gol.Ident{"SpecName"}, Value: gol.String(si.spec.name)})
-		lit.AddElts(gol.KeyValueExpr{Key: gol.Ident{"SpecValue"}, Value: idrecv})
-		litptr := gol.UnaryExpr{Op: gol.UNARY_AMP, X: lit}
+		lit := gol.StructLit{Type: sxerrorinfo, Compact: true}
+		lit.Elems = []gol.FieldElement{
+			{"Error", iderr},
+			{"Query", idquery},
+			{"SpecKind", gol.StringLit(si.spec.kind.String())},
+			{"SpecName", gol.StringLit(si.spec.name)},
+			{"SpecValue", idrecv},
+		}
+		litptr := gol.UnaryExpr{Op: gol.UnaryAmp, X: lit}
 
 		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.erh.name}}
 		fun := gol.SelectorExpr{X: sx, Sel: gol.Ident{"HandleErrorInfo"}}
@@ -389,7 +392,7 @@ func (g *generator) returnerr(si *specinfo, errx gol.ExprNode) gol.ReturnStmt {
 }
 
 func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
-	stmt.Cond = callrowsnext
+	stmt.Clause = gol.ForCondition{callrowsnext}
 	// initialize
 	{
 		rec := si.spec.rel.rec
@@ -398,9 +401,9 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 		}
 
 		if rec.ispointer {
-			init := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+			init := gol.AssignStmt{Token: gol.AssignDefine}
 			init.Lhs = gol.Ident{"v"}
-			init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.rectype(rec)}}
+			init.Rhs = gol.CallNewExpr{g.rectype(rec)}
 			stmt.Body.List = append(stmt.Body.List, init)
 		} else {
 			init := gol.VarDecl{}
@@ -434,7 +437,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 					}
 
 					// initialize nested pointer field
-					init := gol.AssignStmt{Token: gol.ASSIGN}
+					init := gol.AssignStmt{Token: gol.Assign}
 					init.Lhs = fx
 					init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.pathelemtype(pe)}}
 					stmt.Body.List = append(stmt.Body.List, init)
@@ -444,10 +447,10 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 			}
 
 			fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
-			args.AddExprs(gol.UnaryExpr{Op: gol.UNARY_AMP, X: fx})
+			args.AddExprs(gol.UnaryExpr{Op: gol.UnaryAmp, X: fx})
 		}
 
-		asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+		asn := gol.AssignStmt{Token: gol.AssignDefine}
 		asn.Lhs = iderr
 		asn.Rhs = gol.CallExpr{Fun: sxrowsscan, Args: args}
 		stmt.Body.List = append(stmt.Body.List, asn)
@@ -456,8 +459,8 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 	// check error & newline
 	{
 		iferr := gol.IfStmt{}
-		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-		iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+		iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 		stmt.Body.List = append(stmt.Body.List, iferr, gol.NL{})
 	}
 
@@ -493,14 +496,14 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 				}
 			}
 
-			asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+			asn := gol.AssignStmt{Token: gol.AssignDefine}
 			asn.Lhs = iderr
 			asn.Rhs = call
 
 			iferr := gol.IfStmt{}
 			iferr.Init = asn
-			iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-			iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+			iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+			iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 			stmt.Body.List = append(stmt.Body.List, iferr)
 		} else {
 			appnd := gol.CallExpr{Fun: gol.Ident{"append"}}
@@ -509,7 +512,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 				gol.Ident{"v"},
 			}}
 
-			asn := gol.AssignStmt{Token: gol.ASSIGN}
+			asn := gol.AssignStmt{Token: gol.Assign}
 			asn.Lhs = gol.SelectorExpr{X: idrecv, Sel: gol.Ident{fieldname}}
 			asn.Rhs = appnd
 			stmt.Body.List = append(stmt.Body.List, asn)
@@ -590,7 +593,7 @@ func (g *generator) queryargs(spec *typespec) {
 	}
 }
 
-func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
+func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 	if si.spec.rowsaffected != nil {
 		return gol.ReturnStmt{idnil}
 	}
@@ -605,14 +608,14 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 
 		if rel.rec.isslice || rel.rec.isarray || rel.rec.isiter {
 			if si.spec.erh != nil && si.spec.erh.isinfo {
-				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn := gol.AssignStmt{Token: gol.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = callrowserr
 
 				iferr := gol.IfStmt{}
 				iferr.Init = asn
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 				return gol.StmtList{iferr, gol.ReturnStmt{idnil}}
 			}
@@ -624,9 +627,9 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 			// field is properly initialized to avoid "nil pointer" panics.
 			if rel.rec.ispointer {
 				// initialize rel field
-				init := gol.AssignStmt{Token: gol.ASSIGN}
+				init := gol.AssignStmt{Token: gol.Assign}
 				init.Lhs = gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
-				init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.rectype(rel.rec)}}
+				init.Rhs = gol.CallNewExpr{g.rectype(rel.rec)}
 				list = append(list, init)
 			}
 
@@ -653,7 +656,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 						}
 
 						// initialize nested pointer field
-						init := gol.AssignStmt{Token: gol.ASSIGN}
+						init := gol.AssignStmt{Token: gol.Assign}
 						init.Lhs = fx
 						init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.pathelemtype(pe)}}
 						list = append(list, init)
@@ -663,19 +666,19 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 				}
 
 				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
-				args.AddExprs(gol.UnaryExpr{Op: gol.UNARY_AMP, X: fx})
+				args.AddExprs(gol.UnaryExpr{Op: gol.UnaryAmp, X: fx})
 			}
 
 			if !rel.rec.isafterscanner {
 				call := gol.CallExpr{Fun: sxrowscan, Args: args}
 				if si.spec.erh != nil && si.spec.erh.isinfo {
-					asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+					asn := gol.AssignStmt{Token: gol.AssignDefine}
 					asn.Lhs = iderr
 					asn.Rhs = call
 
 					iferr := gol.IfStmt{}
-					iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-					iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+					iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+					iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 					list = append(list, asn, iferr, gol.ReturnStmt{idnil})
 				} else {
@@ -683,14 +686,14 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 				}
 			} else {
 				// scan & assing error
-				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn := gol.AssignStmt{Token: gol.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = gol.CallExpr{Fun: sxrowscan, Args: args}
 
 				// check error
 				iferr := gol.IfStmt{}
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 				// call afterscan
 				sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
@@ -718,14 +721,14 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 
 		if rel.rec.isslice || rel.rec.isarray || rel.rec.isiter {
 			if si.spec.erh != nil && si.spec.erh.isinfo {
-				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn := gol.AssignStmt{Token: gol.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = callrowserr
 
 				iferr := gol.IfStmt{}
 				iferr.Init = asn
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 				return gol.StmtList{iferr, gol.ReturnStmt{idnil}}
 			}
@@ -737,9 +740,9 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 			// field is properly initialized to avoid "nil pointer" panics.
 			if rel.rec.ispointer {
 				// initialize rel field
-				init := gol.AssignStmt{Token: gol.ASSIGN}
+				init := gol.AssignStmt{Token: gol.Assign}
 				init.Lhs = gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
-				init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.rectype(rel.rec)}}
+				init.Rhs = gol.CallNewExpr{g.rectype(rel.rec)}
 				list = append(list, init)
 			}
 
@@ -766,7 +769,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 						}
 
 						// initialize nested pointer field
-						init := gol.AssignStmt{Token: gol.ASSIGN}
+						init := gol.AssignStmt{Token: gol.Assign}
 						init.Lhs = fx
 						init.Rhs = gol.CallExpr{Fun: idnew, Args: gol.ArgsList{List: g.pathelemtype(pe)}}
 						list = append(list, init)
@@ -776,19 +779,19 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 				}
 
 				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
-				args.AddExprs(gol.UnaryExpr{Op: gol.UNARY_AMP, X: fx})
+				args.AddExprs(gol.UnaryExpr{Op: gol.UnaryAmp, X: fx})
 			}
 
 			if !rel.rec.isafterscanner {
 				call := gol.CallExpr{Fun: sxrowscan, Args: args}
 				if si.spec.erh != nil && si.spec.erh.isinfo {
-					asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+					asn := gol.AssignStmt{Token: gol.AssignDefine}
 					asn.Lhs = iderr
 					asn.Rhs = call
 
 					iferr := gol.IfStmt{}
-					iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-					iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+					iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+					iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 					list = append(list, asn, iferr, gol.ReturnStmt{idnil})
 				} else {
@@ -796,14 +799,14 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 				}
 			} else {
 				// scan & assing error
-				asn := gol.AssignStmt{Token: gol.ASSIGN_DEFINE}
+				asn := gol.AssignStmt{Token: gol.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = gol.CallExpr{Fun: sxrowscan, Args: args}
 
 				// check error
 				iferr := gol.IfStmt{}
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BINARY_NEQ, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.Stmt{g.returnerr(si, iderr)}}
+				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
+				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 
 				// call afterscan
 				sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
@@ -824,12 +827,11 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.Stmt) {
 	return g.returnerr(si, iderr)
 }
 
-func (g *generator) rectype(rec recordtype) gol.ExprNode {
-	id := gol.Ident{rec.base.name}
+func (g *generator) rectype(rec recordtype) gol.TypeNode {
 	if rec.base.isimported {
-		return gol.SelectorExpr{X: gol.Ident{rec.base.pkgname}, Sel: id}
+		return gol.QualifiedIdent{rec.base.pkgname, rec.base.name}
 	}
-	return id
+	return gol.Ident{rec.base.name}
 }
 
 func (g *generator) pathelemtype(pe *pathelem) gol.ExprNode {
@@ -853,7 +855,7 @@ func (g *generator) addimport(path, name, local string) {
 		local = ""
 	}
 
-	spec := gol.ImportSpec{Path: gol.String(path), Name: gol.Ident{local}}
+	spec := gol.ImportSpec{Path: gol.StringLit(path), Name: gol.Ident{local}}
 	g.imports.Specs = append(g.imports.Specs, spec)
 }
 
@@ -1059,7 +1061,7 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 
 				num := strconv.Itoa(len(g.insx))
 				arg1 := gol.Ident{"len" + num}
-				arg2 := gol.BinaryExpr{X: gol.Ident{"pos" + num}, Op: gol.BINARY_ADD, Y: gol.Int(1)}
+				arg2 := gol.BinaryExpr{X: gol.Ident{"pos" + num}, Op: gol.BinaryAdd, Y: gol.IntLit(1)}
 
 				call := callinvaluelist
 				call.Args = gol.ArgsList{List: gol.ExprList{arg1, arg2}}
@@ -1067,7 +1069,7 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 				p := sql.InPredicate{}
 				p.Not = (pred == notin)
 				p.Predicand = lhs
-				p.ValueList = sql.HostValue{gol.RawStringImplant{call}}
+				p.ValueList = sql.HostValue{gol.RawStringInsertExpr{call}}
 				x = p
 			case istrue, nottrue, isfalse, notfalse, isunknown, notunknown:
 				p := sql.TruthPredicate{}

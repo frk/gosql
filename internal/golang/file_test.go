@@ -41,10 +41,10 @@ func TestFile(t *testing.T) {
 			},
 			Decls: []TopLevelDeclNode{FuncDecl{
 				Name: Ident{"main"},
-				Body: BlockStmt{List: []Stmt{
+				Body: BlockStmt{List: []StmtNode{
 					ExprStmt{X: CallExpr{
 						Fun:  SelectorExpr{X: Ident{"fmt"}, Sel: Ident{"Println"}},
-						Args: ArgsList{List: String("Hello, 世界")},
+						Args: ArgsList{List: StringLit("Hello, 世界")},
 					}},
 				}},
 			}},

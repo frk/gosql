@@ -12,10 +12,10 @@ func TestArrayType(t *testing.T) {
 		typ  ArrayType
 		want string
 	}{{
-		typ:  ArrayType{Len: Ident{"num"}, Elt: Ident{"int"}},
+		typ:  ArrayType{Len: Ident{"num"}, Elem: Ident{"int"}},
 		want: "[num]int",
 	}, {
-		typ:  ArrayType{Len: Ellipsis{}, Elt: Ident{"float64"}},
+		typ:  ArrayType{Len: Ellipsis, Elem: Ident{"float64"}},
 		want: "[...]float64",
 	}}
 
@@ -38,11 +38,16 @@ func TestSliceType(t *testing.T) {
 		typ  SliceType
 		want string
 	}{{
-		typ:  SliceType{Elt: Ident{"int"}},
+		typ:  SliceType{Elem: Ident{"int"}},
 		want: "[]int",
 	}, {
-		typ:  SliceType{Elt: QualifiedIdent{"time", "Time"}},
+		typ:  SliceType{Elem: QualifiedIdent{"time", "Time"}},
 		want: "[]time.Time",
+	}, {
+		typ: SliceType{Elem: PointerType{StructType{Fields: FieldList{
+			{Names: Ident{"Foo"}, Type: Ident{"string"}},
+		}}}},
+		want: "[]*struct {\nFoo string\n}",
 	}}
 
 	for _, tt := range tests {
@@ -127,7 +132,7 @@ func TestFuncType(t *testing.T) {
 		typ: FuncType{
 			Params: ParamList{
 				{Names: Ident{"foo"}, Type: Ident{"string"}},
-				{Names: Ident{"bar"}, Type: Ellipsis{Elt: Ident{"int"}}},
+				{Names: Ident{"bar"}, Type: Ident{"int"}, Variadic: true},
 			},
 		},
 		want: "(foo string, bar ...int)",
@@ -266,13 +271,13 @@ func TestChanType(t *testing.T) {
 		typ  ChanType
 		want string
 	}{{
-		typ:  ChanType{Value: Ident{"string"}},
+		typ:  ChanType{Elem: Ident{"string"}},
 		want: "chan string",
 	}, {
-		typ:  ChanType{Dir: CHAN_RECV, Value: StructType{}},
+		typ:  ChanType{Dir: ChanRecv, Elem: StructType{}},
 		want: "<-chan struct{}",
 	}, {
-		typ:  ChanType{Dir: CHAN_SEND, Value: StructType{}},
+		typ:  ChanType{Dir: ChanSend, Elem: StructType{}},
 		want: "chan<- struct{}",
 	}}
 
@@ -280,6 +285,45 @@ func TestChanType(t *testing.T) {
 		w := new(bytes.Buffer)
 
 		if err := Write(tt.typ, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestField(t *testing.T) {
+	tests := []struct {
+		f    Field
+		want string
+	}{{
+		f:    Field{Type: Ident{"int"}},
+		want: "int",
+	}, {
+		f:    Field{Names: Ident{"a"}, Type: Ident{"int"}},
+		want: "a int",
+	}, {
+		f: Field{
+			Names: IdentList{{"foo"}, {"bar"}, {"baz"}},
+			Type:  PointerType{Ident{"string"}},
+		},
+		want: "foo, bar, baz *string",
+	}, {
+		f: Field{
+			Names: Ident{"Foo"},
+			Type:  Ident{"string"},
+			Tag:   RawStringLit(`json:"foo"`),
+		},
+		want: "Foo string `json:\"foo\"`",
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.f, w); err != nil {
 			t.Error(err)
 		}
 

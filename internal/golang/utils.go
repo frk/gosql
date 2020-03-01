@@ -4,6 +4,17 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
+// RawStringInsertExpr produces an expression that inserts the node X into a raw string.
+type RawStringInsertExpr struct {
+	X ExprNode
+}
+
+func (s RawStringInsertExpr) Walk(w *writer.Writer) {
+	w.Write("` + ")
+	s.X.Walk(w)
+	w.Write(" + `")
+}
+
 type NL struct{}
 
 func (NL) Walk(w *writer.Writer) {
@@ -13,7 +24,7 @@ func (NL) Walk(w *writer.Writer) {
 func (NL) stmtNode()    {}
 func (NL) commentNode() {}
 
-type StmtList []Stmt
+type StmtList []StmtNode
 
 func (list StmtList) Walk(w *writer.Writer) {
 	for _, stmt := range list {
@@ -23,15 +34,15 @@ func (list StmtList) Walk(w *writer.Writer) {
 	w.NoNewLine()
 }
 
-func (list *StmtList) Add(ss ...Stmt) {
+func (list *StmtList) Add(ss ...StmtNode) {
 	*list = append(*list, ss...)
 }
 
 func (StmtList) stmtNode() {}
 
 var iferrreturn = IfStmt{
-	Cond: BinaryExpr{X: Ident{"err"}, Op: BINARY_NEQ, Y: Ident{"nil"}},
-	Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"err"}}}},
+	Cond: BinaryExpr{X: Ident{"err"}, Op: BinaryNeq, Y: Ident{"nil"}},
+	Body: BlockStmt{List: []StmtNode{ReturnStmt{Ident{"err"}}}},
 }
 
 type IfErrReturn struct{}
@@ -52,4 +63,4 @@ func (NoOp) declNode()    {}
 func (NoOp) specNode()    {}
 func (NoOp) commentNode() {}
 
-func (n NoOp) exprNodeList() []ExprNode { return []ExprNode{n} }
+func (n NoOp) exprListNode() []ExprNode { return []ExprNode{n} }

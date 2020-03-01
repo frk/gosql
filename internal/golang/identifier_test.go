@@ -7,22 +7,25 @@ import (
 	"github.com/frk/compare"
 )
 
-func TestLineComment(t *testing.T) {
+func TestIdent(t *testing.T) {
 	tests := []struct {
-		line LineComment
+		id   Ident
 		want string
 	}{{
-		line: LineComment{},
+		id:   Ident{},
 		want: "",
 	}, {
-		line: LineComment{" this is a comment"},
-		want: "// this is a comment",
+		id:   Ident{"Name"},
+		want: "Name",
+	}, {
+		id:   Ident{"value"},
+		want: "value",
 	}}
 
 	for _, tt := range tests {
 		w := new(bytes.Buffer)
 
-		if err := Write(tt.line, w); err != nil {
+		if err := Write(tt.id, w); err != nil {
 			t.Error(err)
 		}
 
@@ -33,19 +36,16 @@ func TestLineComment(t *testing.T) {
 	}
 }
 
-func TestLineCommentList(t *testing.T) {
+func TestIdentList(t *testing.T) {
 	tests := []struct {
-		list LineCommentList
+		list IdentList
 		want string
 	}{{
-		list: LineCommentList{},
+		list: IdentList{},
 		want: "",
 	}, {
-		list: LineCommentList{" this is a comment"},
-		want: "// this is a comment",
-	}, {
-		list: LineCommentList{" line 1", "", " line 2"},
-		want: "// line 1\n//\n// line 2",
+		list: IdentList{{"foo"}, {"bar"}},
+		want: "foo, bar",
 	}}
 
 	for _, tt := range tests {
@@ -62,25 +62,22 @@ func TestLineCommentList(t *testing.T) {
 	}
 }
 
-func TestBlockComment(t *testing.T) {
+func TestQualifiedIdent(t *testing.T) {
 	tests := []struct {
-		gc   BlockComment
+		id   QualifiedIdent
 		want string
 	}{{
-		gc:   BlockComment{},
-		want: "",
+		id:   QualifiedIdent{"abc", "Name"},
+		want: "abc.Name",
 	}, {
-		gc:   BlockComment{"this is a comment"},
-		want: "/*this is a comment*/",
-	}, {
-		gc:   BlockComment{"line 1", "line 2"},
-		want: "/*\n\tline 1\n\tline 2\n*/",
+		id:   QualifiedIdent{"packagename", "SomeType"},
+		want: "packagename.SomeType",
 	}}
 
 	for _, tt := range tests {
 		w := new(bytes.Buffer)
 
-		if err := Write(tt.gc, w); err != nil {
+		if err := Write(tt.id, w); err != nil {
 			t.Error(err)
 		}
 

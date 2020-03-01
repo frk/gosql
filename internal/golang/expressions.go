@@ -6,137 +6,109 @@ import (
 	"github.com/frk/gosql/internal/writer"
 )
 
-// From spec:
-// - unary_op = "+" | "-" | "!" | "^" | "*" | "&" | "<-" .
-type UNARY_OP string
+type UnaryOp string
 
 const (
-	UNARY_ADD  UNARY_OP = "+"
-	UNARY_SUB  UNARY_OP = "-"
-	UNARY_NOT  UNARY_OP = "!"
-	UNARY_XOR  UNARY_OP = "^"
-	UNARY_MUL  UNARY_OP = "*"
-	UNARY_AMP  UNARY_OP = "&"
-	UNARY_RECV UNARY_OP = "<-"
+	UnaryAdd  UnaryOp = "+"  // no-op
+	UnarySub  UnaryOp = "-"  // negate a numeric expression
+	UnaryNot  UnaryOp = "!"  // negate a boolean expression
+	UnaryXOr  UnaryOp = "^"  // bitwise complement
+	UnaryMul  UnaryOp = "*"  // pointer indirection
+	UnaryAmp  UnaryOp = "&"  // address operation
+	UnaryRecv UnaryOp = "<-" // channel receive
 )
 
-// From spec:
-// - binary_op = "||" | "&&" | rel_op | add_op | mul_op .
-// - rel_op    = "==" | "!=" | "<" | "<=" | ">" | ">=" .
-// - add_op    = "+" | "-" | "|" | "^" .
-// - mul_op    = "*" | "/" | "%" | "<<" | ">>" | "&" | "&^" .
-type BINARY_OP string
+type BinaryOp string
 
 const (
-	BINARY_LOR     BINARY_OP = "||"
-	BINARY_LAND    BINARY_OP = "&&"
-	BINARY_EQL     BINARY_OP = "=="
-	BINARY_NEQ     BINARY_OP = "!="
-	BINARY_LSS     BINARY_OP = "<"
-	BINARY_LEQ     BINARY_OP = "<="
-	BINARY_GTR     BINARY_OP = ">"
-	BINARY_GEQ     BINARY_OP = ">="
-	BINARY_ADD     BINARY_OP = "+"
-	BINARY_SUB     BINARY_OP = "-"
-	BINARY_OR      BINARY_OP = "|"
-	BINARY_XOR     BINARY_OP = "^"
-	BINARY_MUL     BINARY_OP = "*"
-	BINARY_QUO     BINARY_OP = "/"
-	BINARY_REM     BINARY_OP = "%"
-	BINARY_SHL     BINARY_OP = "<<"
-	BINARY_SHR     BINARY_OP = ">>"
-	BINARY_AND     BINARY_OP = "&"
-	BINARY_AND_NOT BINARY_OP = "&^"
+	BinaryLOr    BinaryOp = "||" // logical or
+	BinaryLAnd   BinaryOp = "&&" // logical and
+	BinaryEql    BinaryOp = "==" // is equal
+	BinaryNeq    BinaryOp = "!=" // not equal
+	BinaryLss    BinaryOp = "<"  // less than
+	BinaryLeq    BinaryOp = "<=" // less than or equal
+	BinaryGtr    BinaryOp = ">"  // greater than
+	BinaryGeq    BinaryOp = ">=" // greater than or equal
+	BinaryAdd    BinaryOp = "+"  // sum
+	BinarySub    BinaryOp = "-"  // difference
+	BinaryOr     BinaryOp = "|"  // bitwise or
+	BinaryXOr    BinaryOp = "^"  // bitwise xor
+	BinaryMul    BinaryOp = "*"  // product
+	BinaryQuo    BinaryOp = "/"  // quotient
+	BinaryRem    BinaryOp = "%"  // remainder
+	BinaryShl    BinaryOp = "<<" // left shift
+	BinaryShr    BinaryOp = ">>" // right shift
+	BinaryAnd    BinaryOp = "&"  // bitwise and
+	BinaryAndNot BinaryOp = "&^" // bit clear
 )
 
-// A Field produces a field declaration in a field list in a struct type.
-// Field.Names is nil for embedded struct fields.
-type Field struct {
-	Doc     CommentNode
-	Names   IdentNode
-	Type    ExprNode
-	Tag     RawString
-	Comment CommentNode
+// PointerIndirectionExpr produces a pointer indirection expression.
+type PointerIndirectionExpr struct {
+	X ExprNode // the operand
 }
 
-func (f Field) Walk(w *writer.Writer) {
-	if f.Doc != nil {
-		f.Doc.Walk(w)
-		w.Write("\n")
-	}
-	if f.Names != nil {
-		f.Names.Walk(w)
-		w.Write(" ")
-	}
-	f.Type.Walk(w)
-
-	if len(f.Tag) > 0 {
-		w.Write(" ")
-		f.Tag.Walk(w)
-	}
-	if f.Comment != nil {
-		w.Write(" ")
-		f.Comment.Walk(w)
-	}
+func (x PointerIndirectionExpr) Walk(w *writer.Writer) {
+	w.Write("*")
+	x.X.Walk(w)
 }
 
-type FieldList []Field
-
-func (list FieldList) Walk(w *writer.Writer) {
-	if len(list) < 1 {
-		return
-	}
-
-	list[0].Walk(w)
-	for _, f := range list[1:] {
-		w.Write("\n")
-		f.Walk(w)
-	}
+// UnaryExpr produces a unary expression.
+type UnaryExpr struct {
+	Op UnaryOp  // the operator
+	X  ExprNode // the operand
 }
 
-type MethodList []Method
-
-func (list MethodList) Walk(w *writer.Writer) {
-	if len(list) < 1 {
-		return
-	}
-
-	list[0].Walk(w)
-	for _, m := range list[1:] {
-		w.Write("\n")
-		m.Walk(w)
-	}
+func (x UnaryExpr) Walk(w *writer.Writer) {
+	w.Write(string(x.Op))
+	x.X.Walk(w)
 }
 
-// A Method represents a method declaration in a method list in an interface type.
-type Method struct {
-	Name Ident
-	Type FuncType
-	// Doc, Comment
+// SelectorExpr produces a selector expression, i.e. a primary expression followed
+// by a dot followed by a selector. The selector must be a field or a method identifier.
+type SelectorExpr struct {
+	X   ExprNode // the primary expression
+	Sel Ident    // the selector, i.e. field or method
 }
 
-func (m Method) Walk(w *writer.Writer) {
-	m.Name.Walk(w)
-	m.Type.Walk(w)
+func (x SelectorExpr) Walk(w *writer.Writer) {
+	x.X.Walk(w)
+	w.Write(".")
+	x.Sel.Walk(w)
 }
 
-type ParamList []Param
-
-func (list ParamList) Walk(w *writer.Writer) {
-	if len(list) < 1 {
-		return
-	}
-
-	list[0].Walk(w)
-	for _, m := range list[1:] {
-		w.Write(", ")
-		m.Walk(w)
-	}
+// BinaryExpr produces a binary expression.
+type BinaryExpr struct {
+	X  ExprNode // left operand
+	Op BinaryOp // operator
+	Y  ExprNode // right operand
 }
 
+func (x BinaryExpr) Walk(w *writer.Writer) {
+	x.X.Walk(w)
+	w.Write(" ")
+	w.Write(string(x.Op))
+	w.Write(" ")
+	x.Y.Walk(w)
+}
+
+// CallExpr node produces a function/method call expression.
+type CallExpr struct {
+	Fun  ExprNode // function expression
+	Args ArgsList // function arguments
+}
+
+func (x CallExpr) Walk(w *writer.Writer) {
+	x.Fun.Walk(w)
+	w.Write("(")
+	x.Args.Walk(w)
+	w.Write(")")
+}
+
+// ArgsList produces a list of arguments in a call expression.
 type ArgsList struct {
-	List     ExprNodeList
-	Ellipsis bool
+	List     ExprListNode // the list of arguments
+	Ellipsis bool         // if set, adds "..." to the last argument in the list
+
 	// If 0 the arguments will be listed all on one line, if > 0 then the
 	// arguments will be listed one per line starting from the argument whose
 	// ordinal number matches the OnePerLine value.
@@ -145,7 +117,7 @@ type ArgsList struct {
 
 func (a ArgsList) Walk(w *writer.Writer) {
 	if a.List != nil {
-		list := a.List.exprNodeList()
+		list := a.List.exprListNode()
 		length := len(list)
 
 		for i := 0; i < length; i++ {
@@ -167,116 +139,58 @@ func (a ArgsList) Walk(w *writer.Writer) {
 	}
 }
 
+// AddExprs appends the given ExprNodes to the argument list.
 func (a *ArgsList) AddExprs(xx ...ExprNode) {
 	if a.List != nil {
-		a.List = ExprList(append(a.List.exprNodeList(), xx...))
+		a.List = ExprList(append(a.List.exprListNode(), xx...))
 	} else {
 		a.List = ExprList(xx)
 	}
 }
 
+// Len returns the number of arguments in the list.
 func (a *ArgsList) Len() int {
 	if a.List != nil {
-		return len(a.List.exprNodeList())
+		return len(a.List.exprListNode())
 	}
 	return 0
 }
 
-// A Param represents a parameter/result declaration in a signature.
-type Param struct {
-	Names IdentNode
-	Type  ExprNode
-	// Doc, Comment
+// CallNewExpr produces a call expression to the "new" builtin function.
+type CallNewExpr struct {
+	Type TypeNode // the argument
 }
 
-func (p Param) Walk(w *writer.Writer) {
-	if p.Names != nil {
-		p.Names.Walk(w)
-		w.Write(" ")
-	}
-	p.Type.Walk(w)
-}
-
-type RecvParam struct {
-	Name Ident
-	Type ExprNode
-}
-
-func (p RecvParam) Walk(w *writer.Writer) {
-	if len(p.Name.Name) > 0 {
-		p.Name.Walk(w)
-		w.Write(" ")
-	}
-	p.Type.Walk(w)
-}
-
-// A StarExpr node represents an expression of the form "*" Expression.
-// Semantically it could be a unary "*" expression, or a pointer type.
-type StarExpr struct {
-	X ExprNode
-}
-
-func (x StarExpr) Walk(w *writer.Writer) {
-	w.Write("*")
-	x.X.Walk(w)
-}
-
-// A UnaryExpr node represents a unary expression. Unary "*" expressions
-// are represented via StarExpr nodes.
-type UnaryExpr struct {
-	Op UNARY_OP
-	X  ExprNode
-}
-
-func (x UnaryExpr) Walk(w *writer.Writer) {
-	w.Write(string(x.Op))
-	x.X.Walk(w)
-}
-
-// A SelectorExpr node represents an expression followed by a selector.
-type SelectorExpr struct {
-	X   ExprNode
-	Sel Ident
-}
-
-func (x SelectorExpr) Walk(w *writer.Writer) {
-	x.X.Walk(w)
-	w.Write(".")
-	x.Sel.Walk(w)
-}
-
-// A BinaryExpr node represents a unary expression. Unary "*" expressions
-// are represented via StarExpr nodes.
-type BinaryExpr struct {
-	X  ExprNode
-	Op BINARY_OP
-	Y  ExprNode
-}
-
-func (x BinaryExpr) Walk(w *writer.Writer) {
-	x.X.Walk(w)
-	w.Write(" ")
-	w.Write(string(x.Op))
-	w.Write(" ")
-	x.Y.Walk(w)
-}
-
-// A CallExpr node represents an expression followed by an argument list.
-type CallExpr struct {
-	Fun  ExprNode
-	Args ArgsList
-}
-
-func (x CallExpr) Walk(w *writer.Writer) {
-	x.Fun.Walk(w)
-	w.Write("(")
-	x.Args.Walk(w)
+func (x CallNewExpr) Walk(w *writer.Writer) {
+	w.Write("new(")
+	x.Type.Walk(w)
 	w.Write(")")
 }
 
-// A ParenExpr node represents a parenthesized expression.
+// CallMakeExpr produces a call expression to the "make" builtin function.
+type CallMakeExpr struct {
+	Type TypeNode // the argument
+	Size []int    // a slice's len and cap, or a map's size, or a chan's buffer cap
+}
+
+func (x CallMakeExpr) Walk(w *writer.Writer) {
+	w.Write("make(")
+	x.Type.Walk(w)
+	if len(x.Size) > 0 {
+		w.Write(", ")
+		w.Write(strconv.Itoa(x.Size[0]))
+		if len(x.Size) > 1 {
+			w.Write(", ")
+			w.Write(strconv.Itoa(x.Size[1]))
+		}
+	}
+	w.Write(")")
+}
+
+// ParenExpr produces a parenthesized expression. ParenExpr can be used
+// to enforce evaluation order.
 type ParenExpr struct {
-	X ExprNode
+	X ExprNode // the expression
 }
 
 func (x ParenExpr) Walk(w *writer.Writer) {
@@ -287,10 +201,10 @@ func (x ParenExpr) Walk(w *writer.Writer) {
 	w.Write(")")
 }
 
-// An IndexExpr node represents an expression followed by an index.
+// IndexExpr produces an index expression.
 type IndexExpr struct {
-	X     ExprNode
-	Index ExprNode
+	X     ExprNode // the primary expression
+	Index ExprNode // the index / map key
 }
 
 func (x IndexExpr) Walk(w *writer.Writer) {
@@ -300,24 +214,12 @@ func (x IndexExpr) Walk(w *writer.Writer) {
 	w.Write("]")
 }
 
-// A KeyValueExpr node represents (key : value) pairs in composite literals.
-type KeyValueExpr struct {
-	Key   ExprNode
-	Value ExprNode
-}
-
-func (x KeyValueExpr) Walk(w *writer.Writer) {
-	x.Key.Walk(w)
-	w.Write(": ")
-	x.Value.Walk(w)
-}
-
-// An SliceExpr node represents an expression followed by slice indices.
+// SliceExpr produces a slicing expression.
 type SliceExpr struct {
-	X    ExprNode
-	Low  ExprNode
-	High ExprNode
-	Max  ExprNode
+	X    ExprNode // the operand
+	Low  ExprNode // low bound
+	High ExprNode // high bound
+	Max  ExprNode // capacity bound
 }
 
 func (x SliceExpr) Walk(w *writer.Writer) {
@@ -337,10 +239,10 @@ func (x SliceExpr) Walk(w *writer.Writer) {
 	w.Write("]")
 }
 
-// A TypeAssertExpr node represents an expression followed by a type assertion.
+// TypeAssertExpr produces a type assertion expression.
 type TypeAssertExpr struct {
-	X    ExprNode
-	Type ExprNode
+	X    ExprNode // the primary expression
+	Type TypeNode // the type to assert to
 }
 
 func (x TypeAssertExpr) Walk(w *writer.Writer) {
@@ -354,203 +256,24 @@ func (x TypeAssertExpr) Walk(w *writer.Writer) {
 	w.Write(")")
 }
 
-type Int int
+func (PointerIndirectionExpr) exprNode() {}
+func (UnaryExpr) exprNode()              {}
+func (SelectorExpr) exprNode()           {}
+func (BinaryExpr) exprNode()             {}
+func (CallExpr) exprNode()               {}
+func (CallNewExpr) exprNode()            {}
+func (ParenExpr) exprNode()              {}
+func (IndexExpr) exprNode()              {}
+func (SliceExpr) exprNode()              {}
+func (TypeAssertExpr) exprNode()         {}
 
-func (i Int) Walk(w *writer.Writer) {
-	w.Write(strconv.Itoa(int(i)))
-}
-
-type String string
-
-func (s String) Walk(w *writer.Writer) {
-	w.Write(`"`)
-	w.Write(string(s))
-	w.Write(`"`)
-}
-
-type RawString string
-
-func (s RawString) Walk(w *writer.Writer) {
-	w.Write("`")
-	w.Write(string(s))
-	w.Write("`")
-}
-
-type RawStringImplant struct {
-	X ExprNode
-}
-
-func (s RawStringImplant) Walk(w *writer.Writer) {
-	w.Write("` + ")
-	s.X.Walk(w)
-	w.Write(" + `")
-}
-
-type Ellipsis struct {
-	Elt ExprNode
-}
-
-func (e Ellipsis) Walk(w *writer.Writer) {
-	w.Write("...")
-	if e.Elt != nil {
-		e.Elt.Walk(w)
-	}
-}
-
-type BasicLit struct {
-	Value string
-}
-
-func (lit BasicLit) Walk(w *writer.Writer) {
-	w.Write(lit.Value)
-}
-
-type CompositeLit struct {
-	Type    ExprNode
-	Elts    ExprNodeList
-	Comma   bool
-	Compact bool
-}
-
-func (lit CompositeLit) Walk(w *writer.Writer) {
-	lit.Type.Walk(w)
-	w.Write("{")
-
-	if lit.Elts != nil {
-		elts := lit.Elts.exprNodeList()
-		for _, x := range elts {
-			if !lit.Compact {
-				w.Write("\n")
-			}
-
-			x.Walk(w)
-
-			if lit.Comma {
-				w.Write(",")
-			}
-		}
-		if len(elts) > 0 && !lit.Compact {
-			w.Write("\n")
-		}
-	}
-	w.Write("}")
-}
-
-func (lit *CompositeLit) AddElts(xx ...ExprNode) {
-	if lit.Elts != nil {
-		lit.Elts = ExprList(append(lit.Elts.exprNodeList(), xx...))
-	} else {
-		lit.Elts = ExprList(xx)
-	}
-}
-
-func (lit *CompositeLit) NumElts() int {
-	if lit.Elts != nil {
-		return len(lit.Elts.exprNodeList())
-	}
-	return 0
-}
-
-type FuncLit struct {
-	Type FuncType
-	Body BlockStmt
-}
-
-func (lit FuncLit) Walk(w *writer.Writer) {
-	lit.Type.Walk(w)
-	lit.Body.Walk(w)
-}
-
-type MultiLineExpr struct {
-	Op    BINARY_OP
-	Exprs ExprNodeList
-}
-
-func (m MultiLineExpr) Walk(w *writer.Writer) {
-	if m.Exprs != nil {
-		for i, x := range m.Exprs.exprNodeList() {
-			if i > 0 {
-				w.Write(" ")
-				w.Write(string(m.Op))
-				w.NewLine()
-			}
-			x.Walk(w)
-		}
-	}
-}
-
-type StringNode struct {
-	Node Node
-}
-
-func (s StringNode) Walk(w *writer.Writer) {
-	w.Write(`"`)
-	s.Node.Walk(w)
-	w.Write(`"`)
-}
-
-type RawStringNode struct {
-	Node Node
-}
-
-func (s RawStringNode) Walk(w *writer.Writer) {
-	w.Write("`")
-	s.Node.Walk(w)
-	w.Write("`")
-}
-
-type AffixStringNode struct {
-	Prefix string
-	Node   Node
-	Suffix string
-}
-
-func (s AffixStringNode) Walk(w *writer.Writer) {
-	w.Write(s.Prefix)
-	s.Node.Walk(w)
-	w.Write(s.Suffix)
-}
-
-func (StarExpr) exprNode()        {}
-func (UnaryExpr) exprNode()       {}
-func (SelectorExpr) exprNode()    {}
-func (BinaryExpr) exprNode()      {}
-func (CallExpr) exprNode()        {}
-func (ParenExpr) exprNode()       {}
-func (IndexExpr) exprNode()       {}
-func (KeyValueExpr) exprNode()    {}
-func (SliceExpr) exprNode()       {}
-func (TypeAssertExpr) exprNode()  {}
-func (Int) exprNode()             {}
-func (String) exprNode()          {}
-func (RawString) exprNode()       {}
-func (Ellipsis) exprNode()        {}
-func (BasicLit) exprNode()        {}
-func (CompositeLit) exprNode()    {}
-func (FuncLit) exprNode()         {}
-func (MultiLineExpr) exprNode()   {}
-func (StringNode) exprNode()      {}
-func (RawStringNode) exprNode()   {}
-func (AffixStringNode) exprNode() {}
-
-func (x StarExpr) exprNodeList() []ExprNode        { return []ExprNode{x} }
-func (x UnaryExpr) exprNodeList() []ExprNode       { return []ExprNode{x} }
-func (x SelectorExpr) exprNodeList() []ExprNode    { return []ExprNode{x} }
-func (x BinaryExpr) exprNodeList() []ExprNode      { return []ExprNode{x} }
-func (x CallExpr) exprNodeList() []ExprNode        { return []ExprNode{x} }
-func (x ParenExpr) exprNodeList() []ExprNode       { return []ExprNode{x} }
-func (x IndexExpr) exprNodeList() []ExprNode       { return []ExprNode{x} }
-func (x KeyValueExpr) exprNodeList() []ExprNode    { return []ExprNode{x} }
-func (x SliceExpr) exprNodeList() []ExprNode       { return []ExprNode{x} }
-func (x TypeAssertExpr) exprNodeList() []ExprNode  { return []ExprNode{x} }
-func (x Int) exprNodeList() []ExprNode             { return []ExprNode{x} }
-func (x String) exprNodeList() []ExprNode          { return []ExprNode{x} }
-func (x RawString) exprNodeList() []ExprNode       { return []ExprNode{x} }
-func (x Ellipsis) exprNodeList() []ExprNode        { return []ExprNode{x} }
-func (x BasicLit) exprNodeList() []ExprNode        { return []ExprNode{x} }
-func (x CompositeLit) exprNodeList() []ExprNode    { return []ExprNode{x} }
-func (x FuncLit) exprNodeList() []ExprNode         { return []ExprNode{x} }
-func (x MultiLineExpr) exprNodeList() []ExprNode   { return []ExprNode{x} }
-func (x StringNode) exprNodeList() []ExprNode      { return []ExprNode{x} }
-func (x RawStringNode) exprNodeList() []ExprNode   { return []ExprNode{x} }
-func (x AffixStringNode) exprNodeList() []ExprNode { return []ExprNode{x} }
+func (x PointerIndirectionExpr) exprListNode() []ExprNode { return []ExprNode{x} }
+func (x UnaryExpr) exprListNode() []ExprNode              { return []ExprNode{x} }
+func (x SelectorExpr) exprListNode() []ExprNode           { return []ExprNode{x} }
+func (x BinaryExpr) exprListNode() []ExprNode             { return []ExprNode{x} }
+func (x CallExpr) exprListNode() []ExprNode               { return []ExprNode{x} }
+func (x CallNewExpr) exprListNode() []ExprNode            { return []ExprNode{x} }
+func (x ParenExpr) exprListNode() []ExprNode              { return []ExprNode{x} }
+func (x IndexExpr) exprListNode() []ExprNode              { return []ExprNode{x} }
+func (x SliceExpr) exprListNode() []ExprNode              { return []ExprNode{x} }
+func (x TypeAssertExpr) exprListNode() []ExprNode         { return []ExprNode{x} }

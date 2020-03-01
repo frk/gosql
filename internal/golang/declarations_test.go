@@ -13,18 +13,18 @@ func TestConstDecl(t *testing.T) {
 		want string
 	}{{
 		decl: ConstDecl{Spec: ValueSpec{
-			Names: Ident{"K"}, Values: String("foo"),
+			Names: Ident{"K"}, Values: StringLit("foo"),
 		}},
 		want: "const K = \"foo\"",
 	}, {
 		decl: ConstDecl{Spec: ValueSpec{
-			Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: String("some_value"),
+			Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: StringLit("some_value"),
 		}},
 		want: "const K, L, M SomeType = \"some_value\"",
 	}, {
 		decl: ConstDecl{Spec: ValueSpecList{
-			{Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: String("some_value")},
-			{Names: Ident{"N"}, Type: Ident{"int64"}, Values: BasicLit{"123"}},
+			{Names: IdentList{{"K"}, {"L"}, {"M"}}, Type: Ident{"SomeType"}, Values: StringLit("some_value")},
+			{Names: Ident{"N"}, Type: Ident{"int64"}, Values: IntLit(123)},
 		}},
 		want: "const (\nK, L, M SomeType = \"some_value\"\nN int64 = 123\n)",
 	}}
@@ -49,18 +49,18 @@ func TestVarDecl(t *testing.T) {
 		want string
 	}{{
 		decl: VarDecl{Spec: ValueSpec{
-			Names: Ident{"V"}, Values: String("foo"),
+			Names: Ident{"V"}, Values: StringLit("foo"),
 		}},
 		want: "var V = \"foo\"",
 	}, {
 		decl: VarDecl{Spec: ValueSpec{
-			Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: String("some_value"),
+			Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: StringLit("some_value"),
 		}},
 		want: "var V, W, X SomeType = \"some_value\"",
 	}, {
 		decl: VarDecl{Spec: ValueSpecList{
-			{Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: String("some_value")},
-			{Names: Ident{"Y"}, Type: Ident{"int64"}, Values: BasicLit{"123"}},
+			{Names: IdentList{{"V"}, {"W"}, {"X"}}, Type: Ident{"SomeType"}, Values: StringLit("some_value")},
+			{Names: Ident{"Y"}, Type: Ident{"int64"}, Values: IntLit(123)},
 		}},
 		want: "var (\nV, W, X SomeType = \"some_value\"\nY int64 = 123\n)",
 	}}
@@ -109,7 +109,7 @@ func TestTypeDecl(t *testing.T) {
 		want: "type T struct {\nF1 string\nF2 int\nF3 bool\n}",
 	}, {
 		decl: TypeDecl{Spec: TypeSpecList{
-			{Name: Ident{"S"}, Type: SliceType{Elt: StructType{}}},
+			{Name: Ident{"S"}, Type: SliceType{Elem: StructType{}}},
 			{Name: Ident{"T"}, Type: StructType{Fields: FieldList{
 				{Names: Ident{"F1"}, Type: Ident{"string"}},
 				{Names: Ident{"F2"}, Type: Ident{"int"}},
@@ -166,14 +166,14 @@ func TestMethodDecl(t *testing.T) {
 	}{{
 		decl: MethodDecl{
 			Name: Ident{"Foo"},
-			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
+			Recv: RecvParam{Name: Ident{"t"}, Type: PointerRecvType{"Type"}},
 			Type: FuncType{},
 		},
 		want: "func (t *Type) Foo() {}",
 	}, {
 		decl: MethodDecl{
 			Name: Ident{"Foo"},
-			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
+			Recv: RecvParam{Name: Ident{"t"}, Type: PointerRecvType{"Type"}},
 			Type: FuncType{
 				Params: ParamList{
 					{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
@@ -185,7 +185,7 @@ func TestMethodDecl(t *testing.T) {
 	}, {
 		decl: MethodDecl{
 			Name: Ident{"Foo"},
-			Recv: RecvParam{Name: Ident{"t"}, Type: StarExpr{X: Ident{"Type"}}},
+			Recv: RecvParam{Name: Ident{"t"}, Type: PointerRecvType{"Type"}},
 			Type: FuncType{
 				Params: ParamList{
 					{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},

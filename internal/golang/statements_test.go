@@ -13,7 +13,7 @@ func TestDeclStmt(t *testing.T) {
 		want string
 	}{{
 		stmt: DeclStmt{Decl: ConstDecl{Spec: ValueSpec{
-			Names: Ident{"K"}, Values: String("foo"),
+			Names: Ident{"K"}, Values: StringLit("foo"),
 		}}},
 		want: "const K = \"foo\"",
 	}}
@@ -106,10 +106,10 @@ func TestIncDecStmt(t *testing.T) {
 		stmt IncDecStmt
 		want string
 	}{{
-		stmt: IncDecStmt{X: Ident{"i"}, Token: INCDEC_INC},
+		stmt: IncDecStmt{X: Ident{"i"}, Token: IncDecIncrement},
 		want: "i++",
 	}, {
-		stmt: IncDecStmt{X: Ident{"j"}, Token: INCDEC_DEC},
+		stmt: IncDecStmt{X: Ident{"j"}, Token: IncDecDecrement},
 		want: "j--",
 	}}
 
@@ -132,13 +132,13 @@ func TestAssignStmt(t *testing.T) {
 		stmt AssignStmt
 		want string
 	}{{
-		stmt: AssignStmt{Lhs: Ident{"a"}, Rhs: String("foo"), Token: ASSIGN},
+		stmt: AssignStmt{Lhs: Ident{"a"}, Rhs: StringLit("foo"), Token: Assign},
 		want: `a = "foo"`,
 	}, {
-		stmt: AssignStmt{Lhs: ExprList{Ident{"a"}, Ident{"b"}}, Rhs: ExprList{String("foo"), BasicLit{"123"}}, Token: ASSIGN},
+		stmt: AssignStmt{Lhs: ExprList{Ident{"a"}, Ident{"b"}}, Rhs: ExprList{StringLit("foo"), IntLit(123)}, Token: Assign},
 		want: `a, b = "foo", 123`,
 	}, {
-		stmt: AssignStmt{Lhs: ExprList{Ident{"a"}, Ident{"b"}}, Rhs: ExprList{String("foo"), BasicLit{"123"}}, Token: ASSIGN_DEFINE},
+		stmt: AssignStmt{Lhs: ExprList{Ident{"a"}, Ident{"b"}}, Rhs: ExprList{StringLit("foo"), IntLit(123)}, Token: AssignDefine},
 		want: `a, b := "foo", 123`,
 	}}
 
@@ -236,13 +236,13 @@ func TestBranchStmt(t *testing.T) {
 		stmt BranchStmt
 		want string
 	}{{
-		stmt: BranchStmt{Token: BRANCH_BREAK, Label: Ident{"Loop"}},
+		stmt: BranchStmt{Token: BranchBreak, Label: Ident{"Loop"}},
 		want: "break Loop",
 	}, {
-		stmt: BranchStmt{Token: BRANCH_CONT, Label: Ident{"Loop"}},
+		stmt: BranchStmt{Token: BranchCont, Label: Ident{"Loop"}},
 		want: "continue Loop",
 	}, {
-		stmt: BranchStmt{Token: BRANCH_CONT},
+		stmt: BranchStmt{Token: BranchCont},
 		want: "continue",
 	}}
 
@@ -268,7 +268,7 @@ func TestBlockStmt(t *testing.T) {
 		stmt: BlockStmt{},
 		want: "{}",
 	}, {
-		stmt: BlockStmt{List: []Stmt{
+		stmt: BlockStmt{List: []StmtNode{
 			ExprStmt{CallExpr{Fun: Ident{"foo"}}},
 			ExprStmt{CallExpr{Fun: Ident{"bar"}}},
 		}},
@@ -297,41 +297,41 @@ func TestIfStmt(t *testing.T) {
 		stmt: IfStmt{Cond: Ident{"true"}},
 		want: "if true {}",
 	}, {
-		stmt: IfStmt{Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}}},
+		stmt: IfStmt{Cond: BinaryExpr{X: Ident{"a"}, Op: BinaryLss, Y: Ident{"b"}}},
 		want: "if a < b {}",
 	}, {
 		stmt: IfStmt{
 			Init: AssignStmt{
 				Lhs:   ExprList{Ident{"_"}, Ident{"err"}},
 				Rhs:   CallExpr{Fun: Ident{"f"}},
-				Token: ASSIGN_DEFINE,
+				Token: AssignDefine,
 			},
-			Cond: BinaryExpr{X: Ident{"err"}, Op: BINARY_NEQ, Y: Ident{"nil"}}},
+			Cond: BinaryExpr{X: Ident{"err"}, Op: BinaryNeq, Y: Ident{"nil"}}},
 		want: "if _, err := f(); err != nil {}",
 	}, {
 		stmt: IfStmt{
-			Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
-			Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"a"}}}},
+			Cond: BinaryExpr{X: Ident{"a"}, Op: BinaryLss, Y: Ident{"b"}},
+			Body: BlockStmt{List: []StmtNode{ReturnStmt{Ident{"a"}}}},
 		},
 		want: "if a < b {\nreturn a\n}",
 	}, {
 		stmt: IfStmt{
-			Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
-			Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"a"}}}},
-			Else: BlockStmt{List: []Stmt{ReturnStmt{Ident{"b"}}}},
+			Cond: BinaryExpr{X: Ident{"a"}, Op: BinaryLss, Y: Ident{"b"}},
+			Body: BlockStmt{List: []StmtNode{ReturnStmt{Ident{"a"}}}},
+			Else: BlockStmt{List: []StmtNode{ReturnStmt{Ident{"b"}}}},
 		},
 		want: "if a < b {\nreturn a\n} else {\nreturn b\n}",
 	}, {
 		stmt: IfStmt{
-			Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
-			Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"b"}}}},
+			Cond: BinaryExpr{X: Ident{"a"}, Op: BinaryLss, Y: Ident{"b"}},
+			Body: BlockStmt{List: []StmtNode{ReturnStmt{Ident{"b"}}}},
 			Else: IfStmt{
-				Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"c"}},
-				Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"c"}}}},
+				Cond: BinaryExpr{X: Ident{"a"}, Op: BinaryLss, Y: Ident{"c"}},
+				Body: BlockStmt{List: []StmtNode{ReturnStmt{Ident{"c"}}}},
 				Else: IfStmt{
-					Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"d"}},
-					Body: BlockStmt{List: []Stmt{ReturnStmt{Ident{"d"}}}},
-					Else: BlockStmt{List: []Stmt{ReturnStmt{Ident{"a"}}}},
+					Cond: BinaryExpr{X: Ident{"a"}, Op: BinaryLss, Y: Ident{"d"}},
+					Body: BlockStmt{List: []StmtNode{ReturnStmt{Ident{"d"}}}},
+					Else: BlockStmt{List: []StmtNode{ReturnStmt{Ident{"a"}}}},
 				},
 			},
 		},
@@ -360,34 +360,34 @@ func TestSwitchStmt(t *testing.T) {
 		stmt: SwitchStmt{},
 		want: "switch {}",
 	}, {
-		stmt: SwitchStmt{Tag: Ident{"tag"}},
+		stmt: SwitchStmt{X: Ident{"tag"}},
 		want: "switch tag {}",
 	}, {
 		stmt: SwitchStmt{Init: AssignStmt{
 			Lhs:   Ident{"x"},
 			Rhs:   CallExpr{Fun: Ident{"f"}},
-			Token: ASSIGN_DEFINE,
+			Token: AssignDefine,
 		}},
 		want: "switch x := f(); {}",
 	}, {
 		stmt: SwitchStmt{Init: AssignStmt{
 			Lhs:   Ident{"x"},
 			Rhs:   CallExpr{Fun: Ident{"f"}},
-			Token: ASSIGN_DEFINE,
-		}, Tag: Ident{"x"}},
+			Token: AssignDefine,
+		}, X: Ident{"x"}},
 		want: "switch x := f(); x {}",
 	}, {
-		stmt: SwitchStmt{Body: []CaseClause{
+		stmt: SwitchStmt{Cases: []CaseClause{
 			{},
 		}},
 		want: "switch {\ndefault:\n}",
 	}, {
-		stmt: SwitchStmt{Body: []CaseClause{{
-			List: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
-			Body: []Stmt{ReturnStmt{Ident{"a"}}},
+		stmt: SwitchStmt{Cases: []CaseClause{{
+			List: BinaryExpr{X: Ident{"a"}, Op: BinaryLss, Y: Ident{"b"}},
+			Body: []StmtNode{ReturnStmt{Ident{"a"}}},
 		}, {
-			List: BinaryExpr{X: Ident{"a"}, Op: BINARY_GTR, Y: Ident{"b"}},
-			Body: []Stmt{ReturnStmt{Ident{"b"}}},
+			List: BinaryExpr{X: Ident{"a"}, Op: BinaryGtr, Y: Ident{"b"}},
+			Body: []StmtNode{ReturnStmt{Ident{"b"}}},
 		}}},
 		want: "switch {\ncase a < b:\nreturn a\ncase a > b:\nreturn b\n}",
 	}}
@@ -422,25 +422,25 @@ func TestTypeSwitchStmt(t *testing.T) {
 		want: "switch v := x.(type) {}",
 	}, {
 		stmt: TypeSwitchStmt{
-			Init:  AssignStmt{Lhs: Ident{"x"}, Rhs: Ident{"y"}, Token: ASSIGN_DEFINE},
+			Init:  AssignStmt{Lhs: Ident{"x"}, Rhs: Ident{"y"}, Token: AssignDefine},
 			Guard: TypeSwitchGuard{Name: Ident{"v"}, X: Ident{"x"}},
 		},
 		want: "switch x := y; v := x.(type) {}",
 	}, {
 		stmt: TypeSwitchStmt{
 			Guard: TypeSwitchGuard{Name: Ident{"v"}, X: Ident{"x"}},
-			Body:  []CaseClause{{}},
+			Cases: []TypeCaseClause{{}},
 		},
 		want: "switch v := x.(type) {\ndefault:\n}",
 	}, {
 		stmt: TypeSwitchStmt{
 			Guard: TypeSwitchGuard{Name: Ident{"v"}, X: Ident{"x"}},
-			Body: []CaseClause{
+			Cases: []TypeCaseClause{
 				{List: Ident{"nil"}},
-				{List: ExprList{Ident{"int64"}, Ident{"int32"}, Ident{"int"}}, Body: []Stmt{AssignStmt{
+				{List: TypeList{Ident{"int64"}, Ident{"int32"}, Ident{"int"}}, Body: []StmtNode{AssignStmt{
 					Lhs:   Ident{"_"},
 					Rhs:   Ident{"v"},
-					Token: ASSIGN,
+					Token: Assign,
 				}}},
 				{},
 			},
@@ -470,31 +470,31 @@ func TestSelectStmt(t *testing.T) {
 		stmt: SelectStmt{},
 		want: "select {}",
 	}, {
-		stmt: SelectStmt{Body: []CommClause{
+		stmt: SelectStmt{Cases: []CommClause{
 			{},
 		}},
 		want: "select {\ndefault:\n}",
 	}, {
-		stmt: SelectStmt{Body: []CommClause{
-			{Comm: SendStmt{Chan: Ident{"c"}, Value: BasicLit{"0"}}},
+		stmt: SelectStmt{Cases: []CommClause{
+			{Comm: SendStmt{Chan: Ident{"c"}, Value: IntLit(0)}},
 		}},
 		want: "select {\ncase c <- 0:\n}",
 	}, {
-		stmt: SelectStmt{Body: []CommClause{
-			{Comm: SendStmt{Chan: Ident{"c"}, Value: BasicLit{"0"}}},
-			{Comm: SendStmt{Chan: Ident{"c"}, Value: BasicLit{"1"}}},
+		stmt: SelectStmt{Cases: []CommClause{
+			{Comm: SendStmt{Chan: Ident{"c"}, Value: IntLit(0)}},
+			{Comm: SendStmt{Chan: Ident{"c"}, Value: IntLit(1)}},
 		}},
 		want: "select {\ncase c <- 0:\ncase c <- 1:\n}",
 	}, {
-		stmt: SelectStmt{Body: []CommClause{
+		stmt: SelectStmt{Cases: []CommClause{
 			{Comm: AssignStmt{
 				Lhs:   Ident{"i"},
-				Rhs:   UnaryExpr{Op: UNARY_RECV, X: Ident{"c"}},
-				Token: ASSIGN_DEFINE,
-			}, Body: []Stmt{AssignStmt{
+				Rhs:   UnaryExpr{Op: UnaryRecv, X: Ident{"c"}},
+				Token: AssignDefine,
+			}, Body: []StmtNode{AssignStmt{
 				Lhs:   Ident{"_"},
 				Rhs:   Ident{"i"},
-				Token: ASSIGN,
+				Token: Assign,
 			}}},
 			{},
 		}},
@@ -523,76 +523,62 @@ func TestForStmt(t *testing.T) {
 		stmt: ForStmt{},
 		want: "for {}",
 	}, {
-		stmt: ForStmt{Cond: Ident{"false"}},
+		stmt: ForStmt{Clause: ForCondition{Ident{"false"}}},
 		want: "for false {}",
 	}, {
-		stmt: ForStmt{Cond: BinaryExpr{
+		stmt: ForStmt{Clause: ForCondition{BinaryExpr{
 			X:  Ident{"a"},
-			Op: BINARY_LSS,
+			Op: BinaryLss,
 			Y:  Ident{"b"},
-		}},
+		}}},
 		want: "for a < b {}",
 	}, {
-		stmt: ForStmt{
-			Init: AssignStmt{Lhs: Ident{"i"}, Rhs: BasicLit{"0"}, Token: ASSIGN_DEFINE},
-			Cond: BinaryExpr{X: Ident{"a"}, Op: BINARY_LSS, Y: Ident{"b"}},
-			Post: IncDecStmt{X: Ident{"i"}, Token: INCDEC_INC},
-		},
+		stmt: ForStmt{Clause: ForClause{
+			Init: AssignStmt{Lhs: Ident{"i"}, Rhs: IntLit(0), Token: AssignDefine},
+			Cond: BinaryExpr{X: Ident{"a"}, Op: BinaryLss, Y: Ident{"b"}},
+			Post: IncDecStmt{X: Ident{"i"}, Token: IncDecIncrement},
+		}},
 		want: "for i := 0; a < b; i++ {}",
-	}}
-
-	for _, tt := range tests {
-		w := new(bytes.Buffer)
-
-		if err := Write(tt.stmt, w); err != nil {
-			t.Error(err)
-		}
-
-		got := w.String()
-		if err := compare.Compare(got, tt.want); err != nil {
-			t.Error(err)
-		}
-	}
-}
-
-func TestRangeStmt(t *testing.T) {
-	tests := []struct {
-		stmt RangeStmt
-		want string
-	}{{
-		stmt: RangeStmt{
+	}, {
+		stmt: ForStmt{Clause: ForRangeClause{
 			X: Ident{"ch"},
-		},
+		}},
 		want: "for range ch {}",
 	}, {
-		stmt: RangeStmt{
+		stmt: ForStmt{Clause: ForRangeClause{
 			Key:    Ident{"w"},
 			Define: true,
 			X:      Ident{"ch"},
-		},
+		}},
 		want: "for w := range ch {}",
 	}, {
-		stmt: RangeStmt{
+		stmt: ForStmt{Clause: ForRangeClause{
 			Key:   Ident{"key"},
 			Value: Ident{"val"},
 			X:     Ident{"m"},
-		},
+		}},
 		want: "for key, val = range m {}",
 	}, {
-		stmt: RangeStmt{
+		stmt: ForStmt{Clause: ForRangeClause{
+			Value: Ident{"val"},
+			X:     Ident{"m"},
+		}},
+		want: "for _, val = range m {}",
+	}, {
+		stmt: ForStmt{Clause: ForRangeClause{
 			Key:    Ident{"i"},
 			Value:  Ident{"s"},
 			Define: true,
 			X:      Ident{"a"},
-		},
+		}},
 		want: "for i, s := range a {}",
 	}, {
-		stmt: RangeStmt{
+		stmt: ForStmt{Clause: ForRangeClause{
 			Key:    Ident{"i"},
 			Value:  Ident{"_"},
 			Define: true,
 			X:      SelectorExpr{X: Ident{"testdata"}, Sel: Ident{"a"}},
-		},
+		}},
 		want: "for i, _ := range testdata.a {}",
 	}}
 
