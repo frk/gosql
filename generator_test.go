@@ -54,11 +54,11 @@ func TestGenerate(t *testing.T) {
 		filenames: []string{
 			"afterscan_single",
 			"afterscan_slice",
-			// count
-			// count-with-where
-			// count-with-filter
+			"count_basic",
+			"count_filter",
+			"count_where",
+			"exists_filter",
 			"exists_where",
-			// exists-with-filter
 			"iterator_func",
 			"iterator_func_errorhandler",
 			"iterator_iface",
@@ -69,7 +69,7 @@ func TestGenerate(t *testing.T) {
 			"limit_field_default",
 			"limit_field",
 			"notexists_where",
-			// not-exists-with-filter
+			"notexists_filter",
 			"offset_directive",
 			"offset_field_default",
 			"offset_field",
@@ -90,10 +90,9 @@ func TestGenerate(t *testing.T) {
 		},
 	}}
 
-	// filter
-	// - textsearch
-	// insert
-	// update
+	// TODO insert
+	// TODO update
+	// TODO filter (with textsearch)
 
 	for _, tt := range tests {
 		cmd := new(command)

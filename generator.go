@@ -76,6 +76,7 @@ type generator struct {
 	// spec specific state, needs to be reset on each iteration
 	nparam int                // number of parameters
 	asvar  bool               // if true, the query string should be declared as a var, not const.
+	fclose bool               // if true, the sql query needs to be closed (with right parentheses) after the filter's been added.
 	qargs  []gol.ExprNode     // query arguments
 	insx   []gol.SelectorExpr // slice fields for IN clauses
 }
@@ -86,6 +87,7 @@ func (g *generator) run(pkgname string) error {
 	for _, si := range g.infos {
 		g.nparam = 0
 		g.asvar = false
+		g.fclose = false
 		g.qargs = nil
 		g.insx = nil
 
@@ -223,13 +225,21 @@ func (g *generator) querybuild(si *specinfo) (stmt gol.StmtNode) {
 			Sel: gol.Ident{"ToSQL"},
 		}}
 
+		var asn1 gol.StmtNode = gol.NoOp{}
+		if g.fclose {
+			asn := gol.AssignStmt{Token: gol.AssignAdd}
+			asn.Lhs = idquery
+			asn.Rhs = gol.RawStringLit(`)`)
+			asn1 = asn
+		}
+
 		asn2 := gol.AssignStmt{Token: gol.AssignDefine}
 		asn2.Lhs = idparams
 		asn2.Rhs = gol.CallExpr{Fun: gol.SelectorExpr{
 			X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.filter}},
 			Sel: gol.Ident{"Params"},
 		}}
-		return gol.StmtList{gol.DeclStmt{decl}, gol.NL{}, asn, asn2, gol.NL{}}
+		return gol.StmtList{gol.DeclStmt{decl}, gol.NL{}, asn, asn1, asn2, gol.NL{}}
 	}
 	return gol.DeclStmt{decl}
 }
@@ -873,7 +883,7 @@ func (g *generator) sqlnode(si *specinfo) (node gol.Node) {
 	case speckindSelect:
 		switch si.spec.selkind {
 		case selectcount:
-			// TODO
+			return g.sqlselectcount(si)
 		case selectexists, selectnotexists:
 			return g.sqlselectexists(si)
 		}
@@ -929,11 +939,28 @@ func (g *generator) sqldelete(si *specinfo) (delstmt sql.DeleteStatement) {
 func (g *generator) sqlselectexists(si *specinfo) (selstmt sql.SelectExistsStatement) {
 	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	selstmt.Join = g.sqljoin(si.spec.join)
-	selstmt.Where = g.sqlwhere(si.spec.where)
-	selstmt.Order = g.sqlorderby(si.spec)
-	selstmt.Limit = g.sqllimit(si.spec)
-	selstmt.Offset = g.sqloffset(si.spec)
 	selstmt.Not = si.spec.selkind == selectnotexists
+	if si.spec.filter == "" {
+		selstmt.Where = g.sqlwhere(si.spec.where)
+		selstmt.Order = g.sqlorderby(si.spec)
+		selstmt.Limit = g.sqllimit(si.spec)
+		selstmt.Offset = g.sqloffset(si.spec)
+	} else {
+		selstmt.Open = true
+		g.fclose = true
+	}
+	return selstmt
+}
+
+// sqlselectcount builds and returns an sql.SelectCountStatement.
+func (g *generator) sqlselectcount(si *specinfo) (selstmt sql.SelectCountStatement) {
+	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
+	selstmt.Join = g.sqljoin(si.spec.join)
+	if si.spec.filter == "" {
+		selstmt.Where = g.sqlwhere(si.spec.where)
+		selstmt.Order = g.sqlorderby(si.spec)
+		selstmt.Offset = g.sqloffset(si.spec)
+	}
 	return selstmt
 }
 
