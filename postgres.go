@@ -185,6 +185,7 @@ type fieldcolumn struct {
 }
 
 type pginfo struct {
+	input  []*fieldcolumn
 	output []*fieldcolumn
 }
 
@@ -391,6 +392,13 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 				return errors.NoDBColumnError
 			}
 			atyp = assignwrite
+
+		}
+
+		if c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate {
+			if fld.usedefault && !col.hasdefault {
+				// TODO error
+			}
 		}
 
 		if fld.usejson && !col.typ.is(pgtyp_json, pgtyp_jsonb) {
@@ -410,6 +418,12 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 			cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
 			pair := &fieldcolumn{field: fld, column: col, colid: cid}
 			c.info.output = append(c.info.output, pair)
+		}
+
+		if c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate {
+			cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
+			pair := &fieldcolumn{field: fld, column: col, colid: cid}
+			c.info.input = append(c.info.input, pair)
 		}
 	}
 	return nil
@@ -1291,7 +1305,7 @@ func (c *pgcatalogue) typebyoid(oid pgoid) *pgtype {
 	return c.types[oid]
 }
 
-// cancasti reports whether s can be cast to t implicitly or in assignment.
+// cancasti reports whether s can be cast to t *implicitly* or in assignment.
 func (c *pgcatalogue) cancasti(t, s pgoid) bool {
 	key := pgcastkey{target: t, source: s}
 	if cast := c.casts[key]; cast != nil {

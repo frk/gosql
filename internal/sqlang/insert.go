@@ -5,30 +5,28 @@ import (
 )
 
 type InsertStatement struct {
-	Header InsertHeader
-	Tail   InsertTail
+	Head InsertHead
+	Tail InsertTail
 }
 
 func (s InsertStatement) Walk(w *writer.Writer) {
 	w.NoIndent()
-	s.Header.Walk(w)
-	w.NewLine()
-	s.Tail.Walk(w)
+	s.Head.Walk(w)
+	if s.Tail.OnConflict != nil || len(s.Tail.Returning) > 0 {
+		w.NewLine()
+		s.Tail.Walk(w)
+	}
 	w.NoNewLine()
 }
 
-func (s *InsertStatement) SetSourceValues(xs []Expr) {
-	s.Header.Source.Values = &ValuesClause{xs}
-}
-
-type InsertHeader struct {
+type InsertHead struct {
 	Table      Ident
 	Columns    NameGroup
 	Overriding OverridingClause
 	Source     InsertSource
 }
 
-func (h InsertHeader) Walk(w *writer.Writer) {
+func (h InsertHead) Walk(w *writer.Writer) {
 	w.Write("INSERT INTO ")
 	h.Table.Walk(w)
 	w.Write(" ")
@@ -90,7 +88,7 @@ func (s InsertSource) Walk(w *writer.Writer) {
 }
 
 type ValuesClause struct {
-	Exprs []Expr
+	Exprs ValueExprList
 }
 
 func (vc ValuesClause) Walk(w *writer.Writer) {
@@ -102,15 +100,7 @@ func (vc ValuesClause) Walk(w *writer.Writer) {
 	w.Write("(")
 	w.NewLine()
 	w.Indent()
-
-	for i, x := range vc.Exprs {
-		if i > 0 {
-			w.NewLine()
-			w.Write(", ")
-		}
-		x.Walk(w)
-	}
-
+	vc.Exprs.Walk(w)
 	w.NewLine()
 	w.Unindent()
 	w.Write(")")

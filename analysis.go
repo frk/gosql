@@ -1766,7 +1766,7 @@ type paramfield struct {
 	typ  typeinfo
 }
 
-// recfield holds information about a recordtype's field and the corresponding db column.
+// recfield holds information about a recordtype's field.
 type recfield struct {
 	typ  typeinfo // info about the field's type
 	name string   // name of the struct field

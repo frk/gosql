@@ -77,8 +77,9 @@ type generator struct {
 	nparam int                // number of parameters
 	asvar  bool               // if true, the query string should be declared as a var, not const.
 	fclose bool               // if true, the sql query needs to be closed (with right parentheses) after the filter's been added.
-	qargs  []gol.ExprNode     // query arguments
 	insx   []gol.SelectorExpr // slice fields for IN clauses
+	qargs  []gol.ExprNode     // query arguments
+	sargs  []gol.ExprNode     // scan arguments
 }
 
 func (g *generator) run(pkgname string) error {
@@ -88,8 +89,9 @@ func (g *generator) run(pkgname string) error {
 		g.nparam = 0
 		g.asvar = false
 		g.fclose = false
-		g.qargs = nil
 		g.insx = nil
+		g.qargs = nil
+		g.sargs = nil
 
 		execdecl := g.execdecl(si)
 		g.file.Decls = append(g.file.Decls, execdecl)
@@ -280,12 +282,33 @@ func (g *generator) querydefaults(si *specinfo) (stmt gol.StmtNode) {
 	return list
 }
 
+func (g *generator) queryinput(si *specinfo) (input []gol.ExprNode) {
+	for _, item := range si.info.input {
+		fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.rel.name}}
+		for _, pe := range item.field.path {
+			fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
+		}
+		fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
+		input = append(input, fx)
+	}
+	return input
+}
+
 func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 	args := gol.ArgsList{List: idquery}
 	if len(g.insx) > 0 || len(si.spec.filter) > 0 {
 		args.AddExprs(idparams)
 		args.Ellipsis = true
 	} else {
+		for _, item := range si.info.input {
+			fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.rel.name}}
+			for _, pe := range item.field.path {
+				fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
+			}
+			fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
+			args.AddExprs(fx)
+		}
+
 		args.AddExprs(g.qargs...)
 		if args.Len() > 3 {
 			args.OnePerLine = 2
@@ -894,8 +917,22 @@ func (g *generator) sqlnode(si *specinfo) (node gol.Node) {
 	return node
 }
 
+// sqlinsert builds and returns an sql.InsertStatement.
 func (g *generator) sqlinsert(si *specinfo) (insstmt sql.InsertStatement) {
-	// TODO
+	var names sql.NameGroup
+	var values sql.ValueExprList
+	for _, in := range si.info.input {
+		names = append(names, sql.Name(in.column.name))
+		values = append(values, g.sqlparam())
+	}
+
+	insstmt.Head.Table = g.sqlrelid(si.spec.rel.relid)
+	insstmt.Head.Columns = names
+	insstmt.Head.Overriding = overridingkind2sqlclause[si.spec.override]
+	insstmt.Head.Source.Values = &sql.ValuesClause{values}
+	//insstmt.Head.Source.Select = nil
+	//insstmt.Tail.OnConflict = nil
+	//insstmt.Tail.Returning = nil
 	return insstmt
 }
 
@@ -1285,6 +1322,11 @@ func (g *generator) sqlcolref(id colid) sql.ColumnReference {
 func (g *generator) sqlparam() sql.OrdinalParameterSpec {
 	g.nparam += 1
 	return sql.OrdinalParameterSpec{g.nparam}
+}
+
+var overridingkind2sqlclause = map[overridingkind]sql.OverridingClause{
+	overridingsystem: "SYSTEM",
+	overridinguser:   "USER",
 }
 
 var predicate2sqlcmpop = map[predicate]sql.CMPOP{

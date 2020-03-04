@@ -88,9 +88,14 @@ func TestGenerate(t *testing.T) {
 			"whereblock_single",
 			"whereblock_slice",
 		},
+	}, {
+		dirname: "insert",
+		filenames: []string{
+			// TODO insert
+			"basic_single",
+		},
 	}}
 
-	// TODO insert
 	// TODO update
 	// TODO filter (with textsearch)
 
