@@ -21,7 +21,7 @@ func (q *SelectWithWhereBlockInPredicate2Query) Exec(c gosql.Conn) error {
 	, u."created_at"
 	FROM "test_user" AS u
 	WHERE u."created_at" BETWEEN $1 AND $2
-	OR (u."id" IN (` + gosql.InValueList(len1, pos1+1) + `) AND u."created_at" < $3)` // `
+	OR (u."id" IN (` + gosql.InValueList(len1, pos1) + `) AND u."created_at" < $3)` // `
 
 	params := make([]interface{}, nstatic+len1)
 	params[0] = q.Where.CreatedAt.After

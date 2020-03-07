@@ -139,7 +139,7 @@ func (cmd *command) parsedir(path string) (*directory, error) {
 		// have test files declare an additional xxx_test package, but since the
 		// filternotestfiles was passed to ParseDir those test files and by virtue
 		// that package ought to be omitted by the parser.
-		return nil, fmt.Errorf("unexpected number parsed packages, want 1 got %d", len(pkgs))
+		return nil, fmt.Errorf("unexpected number of parsed packages, want 1 got %d", len(pkgs))
 	}
 
 	// Turn the package's map of files into a slice of files for type checking.

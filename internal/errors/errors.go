@@ -105,4 +105,5 @@ const (
 	NoColumnDefaultSetError                    errnum = 87
 	ReturnDirectiveWithNoRelfieldError         errnum = 88
 	NoFieldColumnError                         errnum = 89
+	MultipleRelfieldsError                     errnum = 90
 )

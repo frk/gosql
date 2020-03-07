@@ -26,11 +26,11 @@ func (q *SelectWithWhereBlockInPredicate3Query) Exec(c gosql.Conn) error {
 	, u."full_name"
 	, u."created_at"
 	FROM "test_user" AS u
-	WHERE u."id" IN (` + gosql.InValueList(len1, pos1+1) + `)
+	WHERE u."id" IN (` + gosql.InValueList(len1, pos1) + `)
 	AND u."created_at" BETWEEN $1 AND $2
-	OR (u."id" IN (` + gosql.InValueList(len2, pos2+1) + `) AND u."created_at" < $3)
-	OR u."email" IN (` + gosql.InValueList(len3, pos3+1) + `)
-	AND u."full_name" IN (` + gosql.InValueList(len4, pos4+1) + `)
+	OR (u."id" IN (` + gosql.InValueList(len2, pos2) + `) AND u."created_at" < $3)
+	OR u."email" IN (` + gosql.InValueList(len3, pos3) + `)
+	AND u."full_name" IN (` + gosql.InValueList(len4, pos4) + `)
 	AND u."is_active" = $4` // `
 
 	params := make([]interface{}, nstatic+len1+len2+len3+len4)

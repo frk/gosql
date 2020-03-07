@@ -62,7 +62,7 @@ type SelectAnalysisTestOK6 struct {
 //OK: tag options with boolean operators
 type SelectAnalysisTestOK7 struct {
 	Rel struct {
-		a int `sql:"a,pk,auto"`
+		a int `sql:"a,pk"`
 		b int `sql:"b,nullempty"`
 		c int `sql:"c,ro,json"`
 		d int `sql:"d,wo"`

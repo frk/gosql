@@ -75,7 +75,7 @@ type (
 	//
 	// For example if a table has an "id" column whose value is auto-generated
 	// by the database, the corresponding Go struct field's column can be
-	// flagged as "auto" which will exclude the column from INSERT/UPDATE
+	// flagged as "ro" (read-only) which will exclude the column from INSERT/UPDATE
 	// queries. However, there may be scenarios in an app where the "id"
 	// value is already pre-generated and it needs to be INSERTed together
 	// with the record, this is where the Force directive can be used to
@@ -177,21 +177,21 @@ func InValueList(num, pos int) string {
 
 	// write the first parameter
 	if num > 0 {
-		b.WriteString(ordinalparams[pos])
+		b.WriteString(OrdinalParameters[pos])
 	}
 
-	// write the rest
+	// write the rest with a comma
 	for i := 1; i < num; i++ {
 		b.WriteByte(',')
-		b.WriteString(ordinalparams[pos+i])
+		b.WriteString(OrdinalParameters[pos+i])
 	}
 
 	return b.String()
 }
 
-var ordinalparams = func() (a [65535]string) {
-	for i := 1; i < len(a); i++ {
-		a[i] = "$" + strconv.Itoa(i)
+var OrdinalParameters = func() (a [65535]string) {
+	for i := 0; i < len(a); i++ {
+		a[i] = "$" + strconv.Itoa(i+1)
 	}
 	return a
 }()

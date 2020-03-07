@@ -1,8 +1,6 @@
 package golang
 
 import (
-	"strconv"
-
 	"github.com/frk/gosql/internal/writer"
 )
 
@@ -170,20 +168,32 @@ func (x CallNewExpr) Walk(w *writer.Writer) {
 // CallMakeExpr produces a call expression to the "make" builtin function.
 type CallMakeExpr struct {
 	Type TypeNode // the argument
-	Size []int    // a slice's len and cap, or a map's size, or a chan's buffer cap
+	Size ExprNode // a slice's len, or a map's size, or a chan's buffer cap
+	Cap  ExprNode // a slice's cap
 }
 
 func (x CallMakeExpr) Walk(w *writer.Writer) {
 	w.Write("make(")
 	x.Type.Walk(w)
-	if len(x.Size) > 0 {
+	if x.Size != nil {
 		w.Write(", ")
-		w.Write(strconv.Itoa(x.Size[0]))
-		if len(x.Size) > 1 {
+		x.Size.Walk(w)
+		if x.Cap != nil {
 			w.Write(", ")
-			w.Write(strconv.Itoa(x.Size[1]))
+			x.Cap.Walk(w)
 		}
 	}
+	w.Write(")")
+}
+
+// CallLenExpr produces a call expression to the "len" builtin function.
+type CallLenExpr struct {
+	X ExprNode // the argument
+}
+
+func (x CallLenExpr) Walk(w *writer.Writer) {
+	w.Write("len(")
+	x.X.Walk(w)
 	w.Write(")")
 }
 
@@ -256,16 +266,35 @@ func (x TypeAssertExpr) Walk(w *writer.Writer) {
 	w.Write(")")
 }
 
+type MultiLineExpr struct {
+	Op    BinaryOp
+	Exprs []ExprNode
+}
+
+func (xx MultiLineExpr) Walk(w *writer.Writer) {
+	for i, x := range xx.Exprs {
+		if i > 0 {
+			w.Write(" ")
+			w.Write(string(xx.Op))
+			w.NewLine()
+		}
+		x.Walk(w)
+	}
+}
+
 func (PointerIndirectionExpr) exprNode() {}
 func (UnaryExpr) exprNode()              {}
 func (SelectorExpr) exprNode()           {}
 func (BinaryExpr) exprNode()             {}
 func (CallExpr) exprNode()               {}
 func (CallNewExpr) exprNode()            {}
+func (CallMakeExpr) exprNode()           {}
+func (CallLenExpr) exprNode()            {}
 func (ParenExpr) exprNode()              {}
 func (IndexExpr) exprNode()              {}
 func (SliceExpr) exprNode()              {}
 func (TypeAssertExpr) exprNode()         {}
+func (MultiLineExpr) exprNode()          {}
 
 func (x PointerIndirectionExpr) exprListNode() []ExprNode { return []ExprNode{x} }
 func (x UnaryExpr) exprListNode() []ExprNode              { return []ExprNode{x} }
@@ -273,7 +302,10 @@ func (x SelectorExpr) exprListNode() []ExprNode           { return []ExprNode{x}
 func (x BinaryExpr) exprListNode() []ExprNode             { return []ExprNode{x} }
 func (x CallExpr) exprListNode() []ExprNode               { return []ExprNode{x} }
 func (x CallNewExpr) exprListNode() []ExprNode            { return []ExprNode{x} }
+func (x CallMakeExpr) exprListNode() []ExprNode           { return []ExprNode{x} }
+func (x CallLenExpr) exprListNode() []ExprNode            { return []ExprNode{x} }
 func (x ParenExpr) exprListNode() []ExprNode              { return []ExprNode{x} }
 func (x IndexExpr) exprListNode() []ExprNode              { return []ExprNode{x} }
 func (x SliceExpr) exprListNode() []ExprNode              { return []ExprNode{x} }
 func (x TypeAssertExpr) exprListNode() []ExprNode         { return []ExprNode{x} }
+func (x MultiLineExpr) exprListNode() []ExprNode          { return []ExprNode{x} }

@@ -92,9 +92,20 @@ type analyzer struct {
 }
 
 func (a *analyzer) run() (err error) {
+	var hasrel bool
+
 	for i := 0; i < a.spectyp.NumFields(); i++ {
 		fld := a.spectyp.Field(i)
 		tag := tagutil.New(a.spectyp.Tag(i))
+
+		// Make sure that there isn't more than one field with the
+		// "rel" tag, regarless of whether the tag is empty or not.
+		if _, ok := tag["rel"]; ok {
+			if hasrel {
+				return errors.MultipleRelfieldsError
+			}
+			hasrel = true
+		}
 
 		if reltag := tag.First("rel"); len(reltag) > 0 {
 			rid, err := a.relid(reltag, fld)
@@ -157,6 +168,14 @@ func (a *analyzer) run() (err error) {
 				if a.spec.defaults, err = a.collist(tag["sql"], fld); err != nil {
 					return err
 				}
+				// TODO DEFAULTS ALL is INSERT-only, so if a.spec.defaults.all==true:
+				// - either check if this an update and if so return an error
+				// - or set a.spec.defaults.all to false and instead
+				//   fill the items slice with all columns in the target...
+				// - or leave it as is, and have the generator check
+				//   whether this is update or not and if it is, instead
+				//   of generating DEFAULTS ALL, it would generate the DEAULT
+				//   marker for each column in the SET (<column_list>).
 			case "force":
 				if a.spec.kind != speckindInsert && a.spec.kind != speckindUpdate {
 					return errors.IllegalForceDirectiveError
@@ -431,7 +450,6 @@ stackloop:
 			// such the analysis of leaf-specific information
 			// needs to be carried out.
 			f.path = loop.path
-			f.auto = tag.HasOption("sql", "auto")
 			f.ispkey = tag.HasOption("sql", "pk")
 			f.nullempty = tag.HasOption("sql", "nullempty")
 			f.readonly = tag.HasOption("sql", "ro")
@@ -1543,6 +1561,36 @@ type typespec struct {
 	filter string
 }
 
+func (s *typespec) shouldforce(cid colid) bool {
+	if s.force != nil {
+		if s.force.all {
+			return true
+		}
+
+		for _, cid2 := range s.force.items {
+			if cid == cid2 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *typespec) shoulddefault(cid colid) bool {
+	if s.defaults != nil {
+		if s.defaults.all {
+			return true
+		}
+
+		for _, cid2 := range s.defaults.items {
+			if cid == cid2 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 type relid struct {
 	qual  string
 	name  string
@@ -1786,10 +1834,6 @@ type recfield struct {
 	// a WHERE clause, if multiple fields are tagged as pkeys then we should
 	// assume a composite primary key
 	ispkey bool
-	// indicates that the corresponding column's value is set automatically
-	// by the database and therefore the column should be omitted
-	// from the generated INSERT/UPDATE statements
-	auto bool
 	// indicates that the DEFAULT marker should be used during INSERT/UPDATE
 	usedefault bool
 	// indicates that if the field's value is EMPTY then NULL should

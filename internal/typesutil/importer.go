@@ -23,9 +23,11 @@ func NewImporter() types.Importer {
 // another attempt is made to import the package using a "source" importer,
 // but if that fails as well an error will be returned.
 func (i pkgimporter) Import(path string) (*types.Package, error) {
-	pkg, err := i.def.Import(path)
-	if err != nil {
-		return i.src.Import(path)
-	}
-	return pkg, nil
+	//pkg, err := i.def.Import(path)
+	//if err != nil {
+	//	return i.src.Import(path)
+	//}
+	//return pkg, nil
+
+	return i.src.Import(path)
 }

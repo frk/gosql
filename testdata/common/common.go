@@ -34,6 +34,15 @@ func (u *User2) AfterScan() {
 	// ...
 }
 
+// for testing ro and wo tags
+type User3 struct {
+	Id        int       `sql:"id,ro"`
+	Email     string    `sql:"email"`
+	Password  []byte    `sql:"password,wo"`
+	CreatedAt time.Time `sql:"created_at"`
+	UpdatedAt time.Time `sql:"updated_at"`
+}
+
 // for testing nested struct fields
 
 type Nested struct {

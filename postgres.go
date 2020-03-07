@@ -243,8 +243,7 @@ func (c *pgchecker) run() (err error) {
 				return errors.BadTargetTableForDefaultError
 			}
 
-			col := c.rel.column(item.name)
-			if col == nil {
+			if col := c.rel.column(item.name); col == nil {
 				return errors.NoDBColumnError
 			} else if !col.hasdefault {
 				return errors.NoColumnDefaultSetError

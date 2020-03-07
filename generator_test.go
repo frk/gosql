@@ -93,6 +93,47 @@ func TestGenerate(t *testing.T) {
 		filenames: []string{
 			// TODO insert
 			"basic_single",
+			"basic_slice",
+			"basic_with_tags",
+			////////////////////////////////////////////////////////
+			// "defaults_single",
+			// "defaults_slice",
+			// "defaults_returning_single",
+			// "defaults_returning_slice",
+			// "json_field_single",
+			// "json_field_slice",
+			// "onconflict_single",
+			// "onconflict_slice",
+			// "errorhandler_single",
+			// "errorhandler_slice",
+			// "errorinfohandler_single",
+			// "errorinfohandler_slice",
+			////////////////////////////////////////////////////////
+			// "result_iterator_afterscan",
+			// "result_iterator_errorhandler",
+			// "result_iterator_errorinfohandler",
+			// "result_iterator",
+			// "result_single_afterscan",
+			// "result_single_errorhandler",
+			// "result_single_errorinfohandler",
+			// "result_single",
+			// "result_slice_afterscan",
+			// "result_slice",
+			////////////////////////////////////////////////////////
+			// "returning_iterator_afterscan",
+			// "returning_iterator",
+			// "returning_single_afterscan",
+			// "returning_single_all",
+			// "returning_single_collist",
+			// "returning_slice_afterscan",
+			// "returning_slice_errorhandler",
+			// "returning_slice_errorinfohandler",
+			// "returning_slice_all",
+			// "returning_slice_collist",
+			////////////////////////////////////////////////////////
+			// "rowsaffected",
+			// "rowsaffected_errorhandler",
+			// "rowsaffected_errorinfohandler",
 		},
 	}}
 

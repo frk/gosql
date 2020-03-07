@@ -20,6 +20,12 @@ type DeleteAnalysisTestBAD_BadRelId struct {
 	Rel T `rel:"foo.123:bar"`
 }
 
+//BAD: Select with multiple rel tags
+type SelectAnalysisTestBAD_MultipleRelTags struct {
+	Rel1 T `rel:"relation_a:a"`
+	Rel2 T `rel:""`
+}
+
 //BAD: Delete with illegal count field
 type DeleteAnalysisTestBAD_IllegalCountField struct {
 	Count int `rel:"relation_a:a"`

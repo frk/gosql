@@ -20,7 +20,7 @@ func (q *SelectWithWhereBlockInPredicateQuery) Exec(c gosql.Conn) error {
 	, u."full_name"
 	, u."created_at"
 	FROM "test_user" AS u
-	WHERE u."id" IN (` + gosql.InValueList(len1, pos1+1) + `)` // `
+	WHERE u."id" IN (` + gosql.InValueList(len1, pos1) + `)` // `
 
 	params := make([]interface{}, nstatic+len1)
 	for i := 0; i < len1; i++ {

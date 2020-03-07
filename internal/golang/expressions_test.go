@@ -202,23 +202,49 @@ func TestCallMakeExpr(t *testing.T) {
 		call CallMakeExpr
 		want string
 	}{{
-		call: CallMakeExpr{Ident{"S"}, nil},
+		call: CallMakeExpr{Ident{"S"}, nil, nil},
 		want: "make(S)",
 	}, {
-		call: CallMakeExpr{Ident{"S"}, []int{32}},
+		call: CallMakeExpr{Ident{"S"}, IntLit(32), nil},
 		want: "make(S, 32)",
 	}, {
-		call: CallMakeExpr{SliceType{Ident{"T"}}, []int{32, 128}},
+		call: CallMakeExpr{SliceType{Ident{"T"}}, IntLit(32), IntLit(128)},
 		want: "make([]T, 32, 128)",
 	}, {
-		call: CallMakeExpr{MapType{Ident{"string"}, Ident{"interface{}"}}, []int{1000}},
+		call: CallMakeExpr{MapType{Ident{"string"}, Ident{"interface{}"}}, IntLit(1000), nil},
 		want: "make(map[string]interface{}, 1000)",
 	}, {
-		call: CallMakeExpr{ChanType{0, Ident{"struct{}"}}, []int{1000}},
+		call: CallMakeExpr{ChanType{0, Ident{"struct{}"}}, IntLit(1000), nil},
 		want: "make(chan struct{}, 1000)",
 	}, {
-		call: CallMakeExpr{ChanType{0, Ident{"struct{}"}}, nil},
+		call: CallMakeExpr{ChanType{0, Ident{"struct{}"}}, nil, nil},
 		want: "make(chan struct{})",
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.call, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestCallLenExpr(t *testing.T) {
+	tests := []struct {
+		call CallLenExpr
+		want string
+	}{{
+		call: CallLenExpr{Ident{"someSliceValue"}},
+		want: "len(someSliceValue)",
+	}, {
+		call: CallLenExpr{QualifiedIdent{"list", "Items"}},
+		want: "len(list.Items)",
 	}}
 
 	for _, tt := range tests {

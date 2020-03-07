@@ -122,6 +122,9 @@ func TestAnalysis(t *testing.T) {
 		name: "DeleteAnalysisTestBAD_BadRelId",
 		err:  errors.BadRelIdError,
 	}, {
+		name: "SelectAnalysisTestBAD_MultipleRelTags",
+		err:  errors.MultipleRelfieldsError,
+	}, {
 		name: "DeleteAnalysisTestBAD_IllegalCountField",
 		err:  errors.IllegalCountFieldError,
 	}, {
@@ -501,9 +504,8 @@ func TestAnalysis(t *testing.T) {
 					name:   "a",
 					typ:    typeinfo{kind: kindint},
 					colid:  colid{name: "a"},
-					tag:    tagutil.Tag{"sql": {"a", "pk", "auto"}},
+					tag:    tagutil.Tag{"sql": {"a", "pk"}},
 					ispkey: true,
-					auto:   true,
 				}, {
 					name:      "b",
 					typ:       typeinfo{kind: kindint},

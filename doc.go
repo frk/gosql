@@ -1,34 +1,48 @@
-// Package gosql implements the generation of SQL queries and the Go code that
-// executes those queries. The code is generated from struct types that are
-// predeclared by the user of the package, these struct types act as specifictions
-// for the code to be generated.
+// WIP
 //
-// Specs
+// Package gosql implements a generator for SQL queries and the Go code that
+// executes those queries.
 //
-// specifications are a thing blah blah blah
+// The generator works off of user-declared struct types that conform, in name
+// and in structure, to a specific format.
+//
+// -----------------------------------------------------------------------------
+//
+// To generate the query code the user has to first declare a struct type
+//
+// The generator produces a method on the target type that
+//
+// Query types
 //
 //	InsertXxx
 //	UpdateXxx
 //	SelectXxx
 //	DeleteXxx
+//
+// Filter type
 //	FilterXxx
 //
 // Tags
 //
-// This is a test blah blah blahs
+// There are two types of tags recognized by the package: "rel" and "sql".
+//
+// The "rel" tag is used in the spec types to identify the target relation
+// and to link that relation to the tagged field.
+//
+// The "sql" tag:
 //
 // Options:
 //
-//	pk	indicates the field's corresponding column to be the primary key
-//	ro	specifies the field to be read only
-//	wo	specifies the field to be write only
-//	auto
-//	nullempty
-//	json
-//	xml
-//	+
-//	cast
-//	coalesce
+//	pk	  - indicates the field's corresponding column to be the primary key
+//	ro	  - specifies the field to be read only
+//	wo	  - specifies the field to be write only
+//	default   - blah blah
+//	nullempty - blah blah
+//	json      - blah blah
+//	xml       - blah blah
+//	+         - blah blah
+//	cast      - blah blah
+//	coalesce  - blah blah
 //
 // Blocks
 //
