@@ -5,7 +5,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type InsertWithReturningSliceAllQuery struct {
+type InsertWithReturningSliceCollistQuery struct {
 	Users []*common.User `rel:"test_user:u"`
-	_     gosql.Return   `sql:"*"`
+	_     gosql.Return   `sql:"u.id"`
 }

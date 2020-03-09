@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertWithReturningSliceAllQuery) Exec(c gosql.Conn) error {
+func (q *InsertWithReturningSliceAfterScanQuery) Exec(c gosql.Conn) error {
 	var queryString = `INSERT INTO "test_user" AS u (
 		"id"
 		, "email"
@@ -55,6 +55,7 @@ func (q *InsertWithReturningSliceAllQuery) Exec(c gosql.Conn) error {
 			return err
 		}
 
+		q.Users[i].AfterScan()
 		i += 1
 	}
 	return rows.Err()

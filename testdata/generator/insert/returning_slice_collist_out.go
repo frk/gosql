@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertWithReturningSliceAllQuery) Exec(c gosql.Conn) error {
+func (q *InsertWithReturningSliceCollistQuery) Exec(c gosql.Conn) error {
 	var queryString = `INSERT INTO "test_user" AS u (
 		"id"
 		, "email"
@@ -31,11 +31,7 @@ func (q *InsertWithReturningSliceAllQuery) Exec(c gosql.Conn) error {
 	}
 
 	queryString = queryString[:len(queryString)-1]
-	queryString += ` RETURNING
-	u."id"
-	, u."email"
-	, u."full_name"
-	, u."created_at"` // `
+	queryString += ` RETURNING u."id"` // `
 
 	rows, err := c.Query(queryString, params...)
 	if err != nil {
@@ -45,12 +41,7 @@ func (q *InsertWithReturningSliceAllQuery) Exec(c gosql.Conn) error {
 
 	i := 0
 	for rows.Next() {
-		err := rows.Scan(
-			&q.Users[i].Id,
-			&q.Users[i].Email,
-			&q.Users[i].FullName,
-			&q.Users[i].CreatedAt,
-		)
+		err := rows.Scan(&q.Users[i].Id)
 		if err != nil {
 			return err
 		}

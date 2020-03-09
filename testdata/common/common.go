@@ -43,6 +43,10 @@ type User3 struct {
 	UpdatedAt time.Time `sql:"updated_at"`
 }
 
+type User3Iterator interface {
+	NextUser(*User3) error
+}
+
 // for testing nested struct fields
 
 type Nested struct {
