@@ -175,43 +175,46 @@ type ForClauseNode interface {
 
 // StringNode produces a string from the underlying Node.
 type StringNode struct {
-	Node Node
+	Prefix  string
+	N       Node
+	Suffix  string
+	Comment *LineComment
 }
 
-func (s StringNode) Walk(w *writer.Writer) {
+func (n StringNode) Walk(w *writer.Writer) {
 	w.Write(`"`)
-	s.Node.Walk(w)
+	w.Write(n.Prefix)
+	n.N.Walk(w)
+	w.Write(n.Suffix)
 	w.Write(`"`)
+	if n.Comment != nil {
+		w.Write(" ")
+		n.Comment.Walk(w)
+	}
 }
 
 // RawStringNode produces a raw string from the underlying Node.
 type RawStringNode struct {
-	Node Node
+	Prefix  string
+	N       Node
+	Suffix  string
+	Comment *LineComment
 }
 
-func (s RawStringNode) Walk(w *writer.Writer) {
+func (n RawStringNode) Walk(w *writer.Writer) {
 	w.Write("`")
-	s.Node.Walk(w)
+	w.Write(n.Prefix)
+	n.N.Walk(w)
+	w.Write(n.Suffix)
 	w.Write("`")
+	if n.Comment != nil {
+		w.Write(" ")
+		n.Comment.Walk(w)
+	}
 }
 
-// AffixStringNode
-type AffixStringNode struct {
-	Prefix string
-	Node   Node
-	Suffix string
-}
+func (StringNode) exprNode()    {}
+func (RawStringNode) exprNode() {}
 
-func (s AffixStringNode) Walk(w *writer.Writer) {
-	w.Write(s.Prefix)
-	s.Node.Walk(w)
-	w.Write(s.Suffix)
-}
-
-func (StringNode) exprNode()      {}
-func (RawStringNode) exprNode()   {}
-func (AffixStringNode) exprNode() {}
-
-func (x StringNode) exprListNode() []ExprNode      { return []ExprNode{x} }
-func (x RawStringNode) exprListNode() []ExprNode   { return []ExprNode{x} }
-func (x AffixStringNode) exprListNode() []ExprNode { return []ExprNode{x} }
+func (x StringNode) exprListNode() []ExprNode    { return []ExprNode{x} }
+func (x RawStringNode) exprListNode() []ExprNode { return []ExprNode{x} }

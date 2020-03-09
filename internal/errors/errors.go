@@ -106,4 +106,5 @@ const (
 	ReturnDirectiveWithNoRelfieldError         errnum = 88
 	NoFieldColumnError                         errnum = 89
 	MultipleRelfieldsError                     errnum = 90
+	IllegalIteratorRecordError                 errnum = 91
 )

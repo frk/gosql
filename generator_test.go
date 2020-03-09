@@ -91,7 +91,6 @@ func TestGenerate(t *testing.T) {
 	}, {
 		dirname: "insert",
 		filenames: []string{
-			// TODO insert
 			"basic_single",
 			"basic_slice",
 			"basic_with_tags",
@@ -120,20 +119,18 @@ func TestGenerate(t *testing.T) {
 			// "result_slice_afterscan",
 			// "result_slice",
 			////////////////////////////////////////////////////////
-			// "returning_iterator_afterscan",
-			// "returning_iterator",
-			// "returning_single_afterscan",
-			// "returning_single_all",
-			// "returning_single_collist",
+			"returning_single_afterscan",
+			"returning_single_all",
+			"returning_single_collist",
 			// "returning_slice_afterscan",
 			// "returning_slice_errorhandler",
 			// "returning_slice_errorinfohandler",
-			// "returning_slice_all",
+			"returning_slice_all",
 			// "returning_slice_collist",
 			////////////////////////////////////////////////////////
-			// "rowsaffected",
-			// "rowsaffected_errorhandler",
-			// "rowsaffected_errorinfohandler",
+			"rowsaffected",
+			"rowsaffected_errorhandler",
+			"rowsaffected_errorinfohandler",
 		},
 	}}
 

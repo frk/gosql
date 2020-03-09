@@ -75,17 +75,22 @@ type generator struct {
 	imports gol.ImportDecl
 
 	// spec specific state, needs to be reset on each iteration
-	nparam int                // number of parameters
-	asvar  bool               // if true, the query string should be declared as a var, not const.
-	fclose bool               // if true, the sql query needs to be closed (with right parentheses) after the filter's been added.
-	insx   []gol.SelectorExpr // slice fields for IN clauses
-
-	queryargs     []gol.ExprNode    // list of arguments to be passed to the query (Exec|Query|QueryRow)
-	scanargs      []gol.ExprNode    // list of arguments to be passed to the Scan method
-	scaninits     gol.StmtList      // list of pointer initializations for scanning nested fields
-	inputcolumns  sql.NameGroup     //
-	outputcolumns sql.ValueExprList //
-	inputparams   sql.ValueExprList //
+	nparam        int                // number of parameters
+	asvar         bool               // if true, the query string should be declared as a var, not const.
+	fclose        bool               // if true, the sql query needs to be closed (with right parentheses) after the filter's been added.
+	insx          []gol.SelectorExpr // slice fields for IN clauses
+	queryargs     []gol.ExprNode     // list of arguments to be passed to the query (Exec|Query|QueryRow)
+	scanargs      []gol.ExprNode     // list of arguments to be passed to the Scan method
+	scanroot      gol.ExprNode       // the root node for the fields to be scanned
+	scaninits     gol.StmtList       // list of pointer initializations for scanning nested fields
+	inputcolumns  sql.NameGroup      //
+	outputcolumns sql.ValueExprList  //
+	inputparams   sql.ValueExprList  //
+	sqltailnode   sql.Node           //
+	// scantoinput indicates that the output of the query should be scanned
+	// into the input of the query, which in an insert or update is already
+	// allocated and therefore needs no initialization.
+	scantoinput bool
 }
 
 func (g *generator) run(pkgname string) error {
@@ -98,10 +103,13 @@ func (g *generator) run(pkgname string) error {
 		g.insx = nil
 		g.queryargs = nil
 		g.scanargs = nil
+		g.scanroot = nil
 		g.scaninits = nil
 		g.inputcolumns = nil
 		g.outputcolumns = nil
 		g.inputparams = nil
+		g.sqltailnode = nil
+		g.scantoinput = false
 
 		execdecl := g.buildexecdecl(si)
 		g.file.Decls = append(g.file.Decls, execdecl)
@@ -120,6 +128,8 @@ func (g *generator) buildexecdecl(si *specinfo) (m gol.MethodDecl) {
 	m.Recv.Type = gol.PointerRecvType{si.spec.name}
 	m.Type.Params = gol.ParamList{{Names: idconn, Type: sxconn}}
 	m.Type.Results = gol.ParamList{{Type: iderror}}
+
+	g.scantoinput = ((si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) && si.spec.rel.rec.isslice)
 
 	g.buildinput(si)
 	g.buildoutput(si)
@@ -242,6 +252,11 @@ func (g *generator) buildoutput(si *specinfo) {
 		return // nothing to output
 	}
 
+	shouldinit := true
+	if (si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) && (si.spec.returning != nil && si.spec.result == nil) {
+		shouldinit = false
+	}
+
 	rec := si.spec.rel.rec
 	name := si.spec.rel.name
 	if si.spec.result != nil {
@@ -249,31 +264,34 @@ func (g *generator) buildoutput(si *specinfo) {
 		name = si.spec.result.name
 	}
 
-	// the root node for the fields to be scanned
-	root := gol.ExprNode(gol.SelectorExpr{X: idrecv, Sel: gol.Ident{name}})
-	if rec.isslice || rec.isiter {
-		root = gol.Ident{"v"}
+	g.scanroot = gol.ExprNode(gol.SelectorExpr{X: idrecv, Sel: gol.Ident{name}})
+	if rec.isslice && !shouldinit {
+		g.scanroot = gol.IndexExpr{X: g.scanroot, Index: gol.Ident{"i"}}
+	} else if rec.isslice || rec.isiter {
+		g.scanroot = gol.Ident{"v"}
 	}
 
-	// build the initialization statement for the root node
-	var rootinit gol.StmtNode
-	if !rec.isslice && !rec.isiter && rec.ispointer {
-		g.scaninits = append(g.scaninits, gol.NL{})
+	if shouldinit {
+		// build the initialization statement for the g.scanroot node
+		var rootinit gol.StmtNode
+		if !rec.isslice && !rec.isiter && rec.ispointer {
+			g.scaninits = append(g.scaninits, gol.NL{})
 
-		init := gol.AssignStmt{Token: gol.Assign}
-		init.Lhs, init.Rhs = root, gol.CallNewExpr{g.rectype(rec)}
-		rootinit = init
-	} else if (rec.isslice || rec.isiter) && rec.ispointer {
-		init := gol.AssignStmt{Token: gol.AssignDefine}
-		init.Lhs, init.Rhs = root, gol.CallNewExpr{g.rectype(rec)}
-		rootinit = init
-	} else if (rec.isslice || rec.isiter) && !rec.ispointer {
-		init := gol.VarDecl{}
-		init.Spec = gol.ValueSpec{Names: gol.Ident{"v"}, Type: g.rectype(rec)}
-		rootinit = gol.DeclStmt{init}
-	}
-	if rootinit != nil {
-		g.scaninits = append(g.scaninits, rootinit)
+			init := gol.AssignStmt{Token: gol.Assign}
+			init.Lhs, init.Rhs = g.scanroot, gol.CallNewExpr{g.rectype(rec)}
+			rootinit = init
+		} else if (rec.isslice || rec.isiter) && rec.ispointer {
+			init := gol.AssignStmt{Token: gol.AssignDefine}
+			init.Lhs, init.Rhs = g.scanroot, gol.CallNewExpr{g.rectype(rec)}
+			rootinit = init
+		} else if (rec.isslice || rec.isiter) && !rec.ispointer {
+			init := gol.VarDecl{}
+			init.Spec = gol.ValueSpec{Names: gol.Ident{"v"}, Type: g.rectype(rec)}
+			rootinit = gol.DeclStmt{init}
+		}
+		if rootinit != nil {
+			g.scaninits = append(g.scaninits, rootinit)
+		}
 	}
 
 	// The initdone map is used to keep track of pointer fields whose
@@ -287,9 +305,13 @@ func (g *generator) buildoutput(si *specinfo) {
 
 		fieldkey := "" // key for the initdone map
 
-		fx := root
+		fx := g.scanroot
 		for _, pe := range item.field.path {
 			fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
+
+			if !shouldinit {
+				continue
+			}
 
 			fieldkey += pe.name
 			if pe.ispointer && !initdone[fieldkey] {
@@ -319,13 +341,13 @@ func (g *generator) buildquerystring(si *specinfo) (stmt gol.StmtNode) {
 	if g.declarevar(si) {
 		decl = gol.VarDecl{Spec: gol.ValueSpec{
 			Names:   idquery,
-			Values:  gol.RawStringNode{sqlnode},
+			Values:  gol.RawStringNode{N: sqlnode},
 			Comment: gol.LineComment{" `"},
 		}}
 	} else {
 		decl = gol.ConstDecl{Spec: gol.ValueSpec{
 			Names:   idquery,
-			Values:  gol.RawStringNode{sqlnode},
+			Values:  gol.RawStringNode{N: sqlnode},
 			Comment: gol.LineComment{" `"},
 		}}
 	}
@@ -399,6 +421,13 @@ func (g *generator) buildquerystring(si *specinfo) (stmt gol.StmtNode) {
 		asn5.Lhs = idquery
 		asn5.Rhs = gol.SliceExpr{X: idquery,
 			High: gol.BinaryExpr{Op: gol.BinarySub, X: gol.CallLenExpr{idquery}, Y: gol.IntLit(1)},
+		}
+
+		if g.sqltailnode != nil {
+			asn6 := gol.AssignStmt{Token: gol.AssignAdd}
+			asn6.Lhs = idquery
+			asn6.Rhs = gol.RawStringNode{Prefix: " ", N: g.sqltailnode, Comment: &gol.LineComment{" `"}}
+			return gol.StmtList{gol.DeclStmt{decl}, gol.NL{}, asn, loop, gol.NL{}, asn5, asn6}
 		}
 		return gol.StmtList{gol.DeclStmt{decl}, gol.NL{}, asn, loop, gol.NL{}, asn5}
 
@@ -621,6 +650,7 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 	// produce c.Query( ... ) call with if-err-check, defer-rows-close, and
 	// for-rows-next loop to scan the rows
 	{
+
 		asn := gol.AssignStmt{Token: gol.AssignDefine}
 		asn.Lhs = gol.ExprList{idrows, iderr}
 		asn.Rhs = gol.CallExpr{Fun: sxquery, Args: args}
@@ -632,7 +662,13 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 		defclose := gol.DeferStmt{}
 		defclose.Call = gol.CallExpr{Fun: sxrowsclose}
 
-		fornext := g.fornext(si)
+		fornext := g.fornext(si, g.scantoinput)
+		if g.scantoinput {
+			asni := gol.AssignStmt{Token: gol.AssignDefine}
+			asni.Lhs = gol.Ident{"i"}
+			asni.Rhs = gol.IntLit(0)
+			return gol.StmtList{asn, iferr, defclose, gol.NL{}, asni, fornext}
+		}
 		return gol.StmtList{asn, iferr, defclose, gol.NL{}, fornext}
 	}
 	return stmt
@@ -667,7 +703,7 @@ func (g *generator) returnerr(si *specinfo, errx gol.ExprNode) gol.ReturnStmt {
 	return gol.ReturnStmt{call}
 }
 
-func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
+func (g *generator) fornext(si *specinfo, inputscan bool) (stmt gol.ForStmt) {
 	stmt.Clause = gol.ForCondition{callrowsnext}
 	// scan & assign error
 	{
@@ -703,7 +739,7 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 
 		if rec.isafterscanner {
 			// call afterscan
-			sx := gol.SelectorExpr{X: gol.Ident{"v"}, Sel: idafterscan}
+			sx := gol.SelectorExpr{X: g.scanroot, Sel: idafterscan}
 			afterscan := gol.ExprStmt{gol.CallExpr{Fun: sx}}
 			stmt.Body.List = append(stmt.Body.List, afterscan)
 		}
@@ -733,6 +769,11 @@ func (g *generator) fornext(si *specinfo) (stmt gol.ForStmt) {
 			iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
 			iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
 			stmt.Body.List = append(stmt.Body.List, iferr)
+		} else if g.scantoinput {
+			asn := gol.AssignStmt{Token: gol.AssignAdd}
+			asn.Lhs = gol.Ident{"i"}
+			asn.Rhs = gol.IntLit(1)
+			stmt.Body.List = append(stmt.Body.List, asn)
 		} else {
 			appnd := gol.CallExpr{Fun: gol.Ident{"append"}}
 			appnd.Args = gol.ArgsList{List: gol.ExprList{
@@ -758,7 +799,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 		rel := si.spec.rel
 
 		// does the record type need pre-allocation? and is it imported?
-		if rel.rec.base.isimported && (rel.rec.isslice || rel.rec.ispointer) {
+		if rel.rec.base.isimported && (rel.rec.isslice || rel.rec.ispointer) && (si.spec.kind != speckindInsert && si.spec.kind != speckindUpdate) {
 			g.addimport(rel.rec.base.pkgpath, rel.rec.base.pkgname, rel.rec.base.pkglocal)
 		}
 
@@ -975,8 +1016,16 @@ func (g *generator) sqlinsert(si *specinfo) (stmt sql.InsertStatement) {
 	stmt.Head.Overriding = overridingkind2sqlclause[si.spec.override]
 	stmt.Head.Source = src
 	//stmt.Head.Source.Select = nil
-	//stmt.Tail.OnConflict = nil
-	//stmt.Tail.Returning = nil
+
+	if si.spec.kind == speckindInsert && si.spec.rel.rec.isslice && len(g.outputcolumns) > 0 {
+		var tail sql.InsertTail
+		//tail.OnConflict = nil
+		tail.Returning = sql.ReturningClause(g.outputcolumns) //returning
+		g.sqltailnode = tail
+	} else {
+		//stmt.Tail.OnConflict = nil
+		stmt.Tail.Returning = sql.ReturningClause(g.outputcolumns) //returning
+	}
 	return stmt
 }
 

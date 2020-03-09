@@ -143,6 +143,9 @@ func (a *analyzer) run() (err error) {
 				if err := a.relrecordtype(a.spec.rel, fld); err != nil {
 					return err
 				}
+				if (a.spec.kind == speckindInsert || a.spec.kind == speckindUpdate) && a.spec.rel.rec.isiter {
+					return errors.IllegalIteratorRecordError
+				}
 			}
 			continue
 		}
@@ -287,6 +290,16 @@ func (a *analyzer) run() (err error) {
 	if a.spec.rel == nil {
 		return errors.NoRelfieldError
 	}
+	// TODO if speckind is Update, and relfield.record.isslice == true
+	// then a whereblock of filter should be disallowed!
+
+	// TODO if speckind is Update and the record (single or slice) does not
+	// have a primary key AND there's no whereblock, no filter, no all directive
+	// return an error. That case suggests that all records should be updated
+	// however the all directive must be provided explicitly, as a way to
+	// ensure the programmer does not, by mistake, declare a query that
+	// updates all records in a table.
+
 	return nil
 }
 

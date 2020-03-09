@@ -49,8 +49,10 @@ type InsertTail struct {
 }
 
 func (t InsertTail) Walk(w *writer.Writer) {
-	t.OnConflict.Walk(w)
-	w.NewLine()
+	if t.OnConflict != nil {
+		t.OnConflict.Walk(w)
+		w.NewLine()
+	}
 	t.Returning.Walk(w)
 }
 
