@@ -4,9 +4,10 @@ package testdata
 
 import (
 	"github.com/frk/gosql"
+	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *InsertBasicSliceQuery) Exec(c gosql.Conn) error {
+func (q *InsertWithResultIteratorBasicQuery) Exec(c gosql.Conn) error {
 	var queryString = `INSERT INTO "test_user" AS u (
 		"id"
 		, "email"
@@ -31,7 +32,33 @@ func (q *InsertBasicSliceQuery) Exec(c gosql.Conn) error {
 	}
 
 	queryString = queryString[:len(queryString)-1]
+	queryString += ` RETURNING
+	u."id"
+	, u."email"
+	, u."full_name"
+	, u."created_at"` // `
 
-	_, err := c.Exec(queryString, params...)
-	return err
+	rows, err := c.Query(queryString, params...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		v := new(common.User)
+		err := rows.Scan(
+			&v.Id,
+			&v.Email,
+			&v.FullName,
+			&v.CreatedAt,
+		)
+		if err != nil {
+			return err
+		}
+
+		if err := q.Result.NextUser(v); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }

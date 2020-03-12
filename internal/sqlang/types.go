@@ -244,3 +244,5 @@ func (BinaryExpr) exprNode()          {}
 
 func (ColumnIdent) columnExprNode() {}
 func (Coalesce) columnExprNode()    {}
+
+func (DefaultMarker) valueExprNode() {}

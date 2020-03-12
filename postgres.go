@@ -419,7 +419,7 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 			c.info.output = append(c.info.output, pair)
 		}
 
-		if c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate {
+		if !isresult && c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate {
 			cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
 			pair := &fieldcolumn{field: fld, column: col, colid: cid}
 			c.info.input = append(c.info.input, pair)

@@ -56,6 +56,25 @@ type specinfo struct {
 	info *pginfo
 }
 
+// skipwrite is a helper method that reports whether or not the field's column should be written to.
+func (si *specinfo) skipwrite(fc *fieldcolumn) bool {
+	return fc.field.readonly && (si.spec.force == nil ||
+		(si.spec.force.all == false && !si.spec.force.contains(fc.colid)))
+}
+
+// skipread is a helper method that reports whether or not the field's column should be read from.
+func (si *specinfo) skipread(fc *fieldcolumn) bool {
+	return fc.field.writeonly && (si.spec.force == nil ||
+		(si.spec.force.all == false && !si.spec.force.contains(fc.colid)))
+}
+
+// usedefault is a helper method that reports whether or not the SQL's DEFAULT
+// marker should be used to write a column.
+func (si *specinfo) usedefault(fc *fieldcolumn) bool {
+	return fc.field.usedefault || (si.spec.defaults != nil &&
+		(si.spec.defaults.all || si.spec.defaults.contains(fc.colid)))
+}
+
 func generate(pkgname string, infos []*specinfo) (*bytes.Buffer, error) {
 	g := &generator{infos: infos}
 	if err := g.run(pkgname); err != nil {
@@ -129,7 +148,8 @@ func (g *generator) buildexecdecl(si *specinfo) (m gol.MethodDecl) {
 	m.Type.Params = gol.ParamList{{Names: idconn, Type: sxconn}}
 	m.Type.Results = gol.ParamList{{Type: iderror}}
 
-	g.scantoinput = ((si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) && si.spec.rel.rec.isslice)
+	g.scantoinput = ((si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) &&
+		si.spec.rel.rec.isslice && si.spec.result == nil)
 
 	g.buildinput(si)
 	g.buildoutput(si)
@@ -143,10 +163,6 @@ func (g *generator) buildexecdecl(si *specinfo) (m gol.MethodDecl) {
 }
 
 func (g *generator) buildinput(si *specinfo) {
-	if si.spec.defaults != nil && si.spec.defaults.all {
-		// use DEFAULTS ALL
-	}
-
 	rec := si.spec.rel.rec
 	name := si.spec.rel.name
 
@@ -158,7 +174,12 @@ func (g *generator) buildinput(si *specinfo) {
 
 	// pginfo.input is empty if this is a select, or a delete
 	for _, item := range si.info.input {
-		if item.field.readonly && !si.spec.shouldforce(item.colid) {
+		if si.skipwrite(item) {
+			continue
+		}
+		if si.usedefault(item) {
+			g.inputcolumns = append(g.inputcolumns, sql.Name(item.column.name))
+			g.inputparams = append(g.inputparams, sql.DEFAULT)
 			continue
 		}
 
@@ -173,6 +194,7 @@ func (g *generator) buildinput(si *specinfo) {
 		// sql input
 		g.inputcolumns = append(g.inputcolumns, sql.Name(item.column.name))
 		g.inputparams = append(g.inputparams, g.sqlparam())
+
 	}
 
 	spec := si.spec
@@ -299,7 +321,7 @@ func (g *generator) buildoutput(si *specinfo) {
 	var initdone = make(map[string]bool)
 
 	for _, item := range si.info.output {
-		if item.field.writeonly && !si.spec.shouldforce(item.colid) {
+		if si.skipread(item) {
 			continue
 		}
 
@@ -335,6 +357,7 @@ func (g *generator) buildoutput(si *specinfo) {
 }
 
 func (g *generator) buildquerystring(si *specinfo) (stmt gol.StmtNode) {
+
 	sqlnode := g.sqlnode(si)
 
 	var decl gol.DeclNode
@@ -353,83 +376,112 @@ func (g *generator) buildquerystring(si *specinfo) (stmt gol.StmtNode) {
 	}
 
 	if si.spec.kind == speckindInsert && si.spec.rel.rec.isslice {
+		result := gol.StmtList{gol.DeclStmt{decl}, gol.NL{}}
+
 		idrel := gol.QualifiedIdent{idrecv.Name, si.spec.rel.name}
 		numfields := gol.IntLit(len(g.queryargs))
 
-		// params := make([]interface{}, len(q.T)*numoffields)
-		asn := gol.AssignStmt{Token: gol.AssignDefine}
-		asn.Lhs = idparams
-		asn.Rhs = gol.CallMakeExpr{
-			Type: idifaces,
-			Size: gol.BinaryExpr{
-				Op: gol.BinaryMul,
-				X:  gol.CallLenExpr{idrel},
-				Y:  numfields,
-			},
+		if len(g.queryargs) > 0 {
+			// params := make([]interface{}, len(q.T)*numoffields)
+			asn := gol.AssignStmt{Token: gol.AssignDefine}
+			asn.Lhs = idparams
+			asn.Rhs = gol.CallMakeExpr{
+				Type: idifaces,
+				Size: gol.BinaryExpr{
+					Op: gol.BinaryMul,
+					X:  gol.CallLenExpr{idrel},
+					Y:  numfields,
+				},
+			}
+			result = append(result, asn)
 		}
 
-		// for i, v := range q.Users {
+		// for i, v := range q.DataSlice {
 		loop := gol.ForStmt{}
 		{
-			rangeclause := gol.ForRangeClause{}
-			rangeclause.Key = gol.Ident{"i"}
-			rangeclause.Value = gol.Ident{"v"}
-			rangeclause.X = idrel
-			rangeclause.Define = true
-			loop.Clause = rangeclause
+			if len(g.queryargs) > 0 {
+				// for i, v := range q.DataSlice {
+				rangeclause := gol.ForRangeClause{}
+				rangeclause.Key = gol.Ident{"i"}
+				rangeclause.Value = gol.Ident{"v"}
+				rangeclause.X = idrel
+				rangeclause.Define = true
+				loop.Clause = rangeclause
 
-			// pos := i * 4
-			asn2 := gol.AssignStmt{Token: gol.AssignDefine}
-			asn2.Lhs = gol.Ident{"pos"}
-			asn2.Rhs = gol.BinaryExpr{Op: gol.BinaryMul, X: gol.Ident{"i"}, Y: numfields}
-			loop.Body = gol.BlockStmt{List: []gol.StmtNode{asn2, gol.NL{}}}
-
-			assigns := make([]gol.StmtNode, len(g.queryargs))
-			concats := make([]gol.ExprNode, len(g.queryargs)+1)
-
-			for i, item := range g.queryargs {
-				// pos+123
-				idxexpr := gol.BinaryExpr{Op: gol.BinaryAdd, X: gol.Ident{"pos"}, Y: gol.IntLit(i)}
+				// pos := i * 4
+				asn2 := gol.AssignStmt{Token: gol.AssignDefine}
+				asn2.Lhs = gol.Ident{"pos"}
+				asn2.Rhs = gol.BinaryExpr{Op: gol.BinaryMul, X: gol.Ident{"i"}, Y: numfields}
+				loop.Body = gol.BlockStmt{List: []gol.StmtNode{asn2, gol.NL{}}}
 
 				// params[pos+123] = v.SomeField
-				asn3 := gol.AssignStmt{Token: gol.Assign}
-				asn3.Lhs = gol.IndexExpr{X: idparams, Index: idxexpr}
-				asn3.Rhs = item
-				assigns[i] = asn3
+				assigns := make([]gol.StmtNode, len(g.queryargs))
+				for i, item := range g.queryargs {
+					indx := gol.BinaryExpr{Op: gol.BinaryAdd, X: gol.Ident{"pos"}, Y: gol.IntLit(i)}
+					asn3 := gol.AssignStmt{Token: gol.Assign}
+					asn3.Lhs = gol.IndexExpr{X: idparams, Index: indx}
+					asn3.Rhs = item
+					assigns[i] = asn3
+				}
+				loop.Body.List = append(loop.Body.List, assigns...)
+				loop.Body.List = append(loop.Body.List, gol.NL{})
+			} else {
+				// for _, _ := range q.DataSlice {
+				rangeclause := gol.ForRangeClause{}
+				rangeclause.Key = gol.Ident{"_"}
+				rangeclause.Value = gol.Ident{"_"}
+				rangeclause.X = idrel
+				loop.Clause = rangeclause
+			}
 
-				// `, ` + gosql.OrdinalParameters[pos+2] +
+			numdefs := 0
+			concats := make([]gol.ExprNode, len(g.inputparams)+1)
+			for i, item := range g.inputparams {
 				sep := `, `
 				if i == 0 {
 					sep = `(`
 				}
-				concat := gol.BinaryExpr{Op: gol.BinaryAdd}
-				concat.X = gol.RawStringLit(sep)
-				concat.Y = gol.IndexExpr{X: idordinals, Index: idxexpr}
-				concats[i] = concat
+
+				if item == sql.DEFAULT {
+					concats[i] = gol.RawStringLit(sep + `DEFAULT`)
+					numdefs += 1
+				} else {
+					idxexpr := gol.BinaryExpr{Op: gol.BinaryAdd,
+						X: gol.Ident{"pos"}, Y: gol.IntLit(i - numdefs),
+					}
+
+					// `, ` + gosql.OrdinalParameters[pos+2] +
+					concat := gol.BinaryExpr{Op: gol.BinaryAdd}
+					concat.X = gol.RawStringLit(sep)
+					concat.Y = gol.IndexExpr{X: idordinals, Index: idxexpr}
+					concats[i] = concat
+				}
 			}
+
 			concats[len(concats)-1] = gol.RawStringLit(`),`)
 
 			asn4 := gol.AssignStmt{Token: gol.AssignAdd}
 			asn4.Lhs = idquery
 			asn4.Rhs = gol.MultiLineExpr{Op: gol.BinaryAdd, Exprs: concats}
 
-			loop.Body.List = append(loop.Body.List, assigns...)
-			loop.Body.List = append(loop.Body.List, gol.NL{}, asn4)
+			loop.Body.List = append(loop.Body.List, asn4)
 		}
+		result = append(result, loop)
 
 		asn5 := gol.AssignStmt{Token: gol.Assign}
 		asn5.Lhs = idquery
 		asn5.Rhs = gol.SliceExpr{X: idquery,
 			High: gol.BinaryExpr{Op: gol.BinarySub, X: gol.CallLenExpr{idquery}, Y: gol.IntLit(1)},
 		}
+		result = append(result, gol.NL{}, asn5)
 
 		if g.sqltailnode != nil {
 			asn6 := gol.AssignStmt{Token: gol.AssignAdd}
 			asn6.Lhs = idquery
 			asn6.Rhs = gol.RawStringNode{Prefix: " ", N: g.sqltailnode, Comment: &gol.LineComment{" `"}}
-			return gol.StmtList{gol.DeclStmt{decl}, gol.NL{}, asn, loop, gol.NL{}, asn5, asn6}
+			result = append(result, asn6)
 		}
-		return gol.StmtList{gol.DeclStmt{decl}, gol.NL{}, asn, loop, gol.NL{}, asn5}
+		return result
 
 	} else if len(g.insx) > 0 {
 		// prepare the var declarations
@@ -576,7 +628,7 @@ func (g *generator) querydefaults(si *specinfo) (stmt gol.StmtNode) {
 
 func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 	args := gol.ArgsList{List: idquery}
-	if len(g.insx) > 0 || len(si.spec.filter) > 0 || (si.spec.kind == speckindInsert && si.spec.rel.rec.isslice) {
+	if len(g.insx) > 0 || len(si.spec.filter) > 0 || (si.spec.kind == speckindInsert && si.spec.rel.rec.isslice && len(g.queryargs) > 0) {
 		args.AddExprs(idparams)
 		args.Ellipsis = true
 	} else {

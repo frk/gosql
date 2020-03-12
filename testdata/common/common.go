@@ -47,6 +47,20 @@ type User3Iterator interface {
 	NextUser(*User3) error
 }
 
+// for testing defaults
+type User4 struct {
+	Id        int       `sql:"id,ro"`
+	Email     string    `sql:"email"`
+	FullName  string    `sql:"full_name"`
+	IsActive  bool      `sql:"is_active"`
+	CreatedAt time.Time `sql:"created_at"`
+	UpdatedAt time.Time `sql:"updated_at"`
+}
+
+type User4Iterator interface {
+	NextUser(*User4) error
+}
+
 // for testing nested struct fields
 
 type Nested struct {

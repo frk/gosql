@@ -66,7 +66,7 @@ type SelectAnalysisTestOK7 struct {
 		b int `sql:"b,nullempty"`
 		c int `sql:"c,ro,json"`
 		d int `sql:"d,wo"`
-		e int `sql:"e,+"`
+		e int `sql:"e,add"`
 		f int `sql:"f,coalesce"`
 		g int `sql:"g,coalesce(-1)"`
 	} `rel:"relation_a"`

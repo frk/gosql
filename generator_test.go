@@ -91,12 +91,11 @@ func TestGenerate(t *testing.T) {
 	}, {
 		dirname: "insert",
 		filenames: []string{
-			"basic_single",
-			"basic_slice",
-			"basic_with_tags",
 			////////////////////////////////////////////////////////
-			// "defaults_single",
-			// "defaults_slice",
+			"default_all_single",
+			"default_all_slice",
+			"default_single",
+			"default_slice",
 			// "defaults_returning_single",
 			// "defaults_returning_slice",
 			// "json_field_single",
@@ -108,16 +107,16 @@ func TestGenerate(t *testing.T) {
 			// "errorinfohandler_single",
 			// "errorinfohandler_slice",
 			////////////////////////////////////////////////////////
-			// "result_iterator_afterscan",
-			// "result_iterator_errorhandler",
-			// "result_iterator_errorinfohandler",
-			// "result_iterator",
-			// "result_single_afterscan",
-			// "result_single_errorhandler",
-			// "result_single_errorinfohandler",
-			// "result_single",
-			// "result_slice_afterscan",
-			// "result_slice",
+			"result_iterator_afterscan",
+			"result_iterator_basic",
+			"result_iterator_errorhandler",
+			"result_iterator_errorinfohandler",
+			"result_single_afterscan",
+			"result_single_basic",
+			"result_single_errorhandler",
+			"result_single_errorinfohandler",
+			"result_slice_afterscan",
+			"result_slice_basic",
 			////////////////////////////////////////////////////////
 			"returning_single_afterscan",
 			"returning_single_all",
@@ -131,6 +130,10 @@ func TestGenerate(t *testing.T) {
 			"rowsaffected",
 			"rowsaffected_errorhandler",
 			"rowsaffected_errorinfohandler",
+			////////////////////////////////////////////////////////
+			"single_basic",
+			"single_tags",
+			"slice_basic",
 		},
 	}}
 

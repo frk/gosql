@@ -111,6 +111,15 @@ CREATE TABLE test_user (
 	, password bytea not null default ''
 );
 
+CREATE TABLE test_user_with_defaults (
+	id serial primary key
+	, email text not null default 'joe@example.com'
+	, full_name text not null default 'john doe'
+	, is_active boolean not null default true
+	, created_at timestamptz not null default now()
+	, updated_at timestamptz not null default now()
+);
+
 CREATE TABLE test_post (
 	id serial primary key
 	, user_id integer not null REFERENCES test_user (id)

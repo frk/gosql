@@ -4,6 +4,6 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type InsertBasicWithTagsQuery struct {
+type InsertSingleWithTagsQuery struct {
 	User *common.User3 `rel:"test_user:u"`
 }

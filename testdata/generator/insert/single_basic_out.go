@@ -6,12 +6,12 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertBasicWithTagsQuery) Exec(c gosql.Conn) error {
+func (q *InsertSingleBasicQuery) Exec(c gosql.Conn) error {
 	const queryString = `INSERT INTO "test_user" AS u (
-		"email"
-		, "password"
+		"id"
+		, "email"
+		, "full_name"
 		, "created_at"
-		, "updated_at"
 	) VALUES (
 		$1
 		, $2
@@ -20,10 +20,10 @@ func (q *InsertBasicWithTagsQuery) Exec(c gosql.Conn) error {
 	)` // `
 
 	_, err := c.Exec(queryString,
+		q.User.Id,
 		q.User.Email,
-		q.User.Password,
+		q.User.FullName,
 		q.User.CreatedAt,
-		q.User.UpdatedAt,
 	)
 	return err
 }

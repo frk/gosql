@@ -469,8 +469,9 @@ stackloop:
 			f.writeonly = tag.HasOption("sql", "wo")
 			f.usejson = tag.HasOption("sql", "json")
 			f.usexml = tag.HasOption("sql", "xml")
-			f.binadd = tag.HasOption("sql", "+")
+			f.useadd = tag.HasOption("sql", "add")
 			f.cancast = tag.HasOption("sql", "cast")
+			f.usedefault = tag.HasOption("sql", "default")
 			f.usecoalesce, f.coalesceval = a.coalesceinfo(tag)
 
 			// Resolve the column id.
@@ -1574,36 +1575,6 @@ type typespec struct {
 	filter string
 }
 
-func (s *typespec) shouldforce(cid colid) bool {
-	if s.force != nil {
-		if s.force.all {
-			return true
-		}
-
-		for _, cid2 := range s.force.items {
-			if cid == cid2 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (s *typespec) shoulddefault(cid colid) bool {
-	if s.defaults != nil {
-		if s.defaults.all {
-			return true
-		}
-
-		for _, cid2 := range s.defaults.items {
-			if cid == cid2 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 type relid struct {
 	qual  string
 	name  string
@@ -1622,6 +1593,15 @@ func (id colid) isempty() bool {
 type collist struct {
 	all   bool
 	items []colid
+}
+
+func (cl *collist) contains(cid colid) bool {
+	for i := 0; i < len(cl.items); i++ {
+		if cl.items[i] == cid {
+			return true
+		}
+	}
+	return false
 }
 
 // relfield holds the information on a go struct type and on the
@@ -1847,8 +1827,6 @@ type recfield struct {
 	// a WHERE clause, if multiple fields are tagged as pkeys then we should
 	// assume a composite primary key
 	ispkey bool
-	// indicates that the DEFAULT marker should be used during INSERT/UPDATE
-	usedefault bool
 	// indicates that if the field's value is EMPTY then NULL should
 	// be stored in the column during INSERT/UPDATE
 	nullempty bool
@@ -1856,21 +1834,23 @@ type recfield struct {
 	readonly bool
 	// indicates that field should only be written into the database and never read
 	writeonly bool
+	// indicates that the DEFAULT marker should be used during INSERT/UPDATE
+	usedefault bool
 	// indicates that the column value should be marshaled/unmarshaled
 	// to/from json before/after being stored/retrieved.
 	usejson bool
 	// indicates that the column value should be marshaled/unmarshaled
 	// to/from xml before/after being stored/retrieved.
 	usexml bool
+	// for UPDATEs, if set to true, it indicates that the provided field
+	// value should be added to the already existing column value.
+	useadd bool
+	// indicates whether or not an implicit CAST should be allowed.
+	cancast bool
 	// if set to true it indicates that the column value should be wrapped
 	// in a COALESCE call when read from the db.
 	usecoalesce bool
 	coalesceval string
-	// for UPDATEs, if set to true, it indicates that the provided field
-	// value should be added to the already existing column value.
-	binadd bool
-	// indicates whether or not an implicit CAST should be allowed.
-	cancast bool
 }
 
 type pathelem struct {

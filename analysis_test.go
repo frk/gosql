@@ -529,8 +529,8 @@ func TestAnalysis(t *testing.T) {
 					name:   "e",
 					typ:    typeinfo{kind: kindint},
 					colid:  colid{name: "e"},
-					tag:    tagutil.Tag{"sql": {"e", "+"}},
-					binadd: true,
+					tag:    tagutil.Tag{"sql": {"e", "add"}},
+					useadd: true,
 				}, {
 					name:        "f",
 					typ:         typeinfo{kind: kindint},
