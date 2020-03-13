@@ -84,6 +84,11 @@ CREATE TABLE column_tests_2 (
 	, col_conkey2 integer
 );
 
+CREATE UNIQUE INDEX column_tests_2_unique_index ON column_tests_2 (col_indkey2, col_indkey1);
+CREATE INDEX column_tests_2_nonunique_index ON column_tests_2 (col_indkey2, col_indkey1);
+ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_unique_constraint UNIQUE (col_conkey1, col_conkey2);
+ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_nonunique_constraint FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
+
 CREATE TABLE column_type_tests (
 	col_bool bool
 	, col_boola boolean[]
@@ -105,10 +110,12 @@ CREATE TABLE test_user (
 	id serial primary key
 	, email text not null
 	, full_name text not null
+	, password bytea not null default ''
+	, is_active boolean not null default true
+	, metadata1 json not null default '{}'
+	, metadata2 jsonb
 	, created_at timestamptz not null
 	, updated_at timestamptz not null default now()
-	, is_active boolean not null default true
-	, password bytea not null default ''
 );
 
 CREATE TABLE test_user_with_defaults (
@@ -164,20 +171,29 @@ CREATE VIEW view_test AS SELECT
 	, (length(col_b) > 0) AS col_z
 FROM column_tests_1;
 
-CREATE UNIQUE INDEX column_tests_2_unique_index ON column_tests_2 (col_indkey2, col_indkey1);
-CREATE INDEX column_tests_2_nonunique_index ON column_tests_2 (col_indkey2, col_indkey1);
 
-ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_unique_constraint
-UNIQUE (col_conkey1, col_conkey2);
+CREATE TABLE test_onconflict (
+	id serial primary key
+	, key int4
+	, name text
+	, fruit text
+	, value float8
+);
 
-ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_nonunique_constraint
-FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
+CREATE UNIQUE INDEX test_onconflict_key_idx ON test_onconflict (key);
+CREATE UNIQUE INDEX test_onconflict_key_name_idx ON test_onconflict (key, name);
+CREATE UNIQUE INDEX test_onconflict_name_fruit_idx ON test_onconflict (lower(name), upper(fruit) collate "C" text_pattern_ops);
+CREATE UNIQUE INDEX test_onconflict_fruit_key_name_idx ON test_onconflict (lower(fruit), key, upper(name)) where key < 5;
+
+ALTER TABLE test_onconflict ADD CONSTRAINT test_onconflict_key_value_key UNIQUE (key, value);
 
 CREATE FUNCTION increment(i integer) RETURNS integer AS $$
 BEGIN
 	RETURN i + 1;
 END;
 $$ LANGUAGE plpgsql;
+
+
 ` //`
 
 	if _, err = t.pg.db.Exec(populatedbquery); err != nil {

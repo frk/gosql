@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type InsertSliceDefaultQuery struct {
+type InsertDefaultSliceQuery struct {
 	Users []*common.User4 `rel:"test_user_with_defaults:u"`
 	_     gosql.Default   `sql:"u.full_name,u.created_at"`
 }

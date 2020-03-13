@@ -61,6 +61,36 @@ type User4Iterator interface {
 	NextUser(*User4) error
 }
 
+// for testing json
+type User5 struct {
+	Id        int                    `sql:"id,ro"`
+	Email     string                 `sql:"email"`
+	FullName  string                 `sql:"full_name"`
+	IsActive  bool                   `sql:"is_active"`
+	Metadata1 map[string]interface{} `sql:"metadata1,json"`
+	Metadata2 ArbitraryStruct        `sql:"metadata2,json"`
+	CreatedAt time.Time              `sql:"created_at"`
+	UpdatedAt time.Time              `sql:"updated_at"`
+}
+
+type User5Iterator interface {
+	NextUser(*User5) error
+}
+
+type ArbitraryStruct struct {
+	// ...
+}
+
+// for testing conflict
+
+type ConflictData struct {
+	Id    int     `sql:"id,ro"`
+	Key   int     `sql:"key"`
+	Name  string  `sql:"name"`
+	Fruit string  `sql:"fruit"`
+	Value float64 `sql:"value"`
+}
+
 // for testing nested struct fields
 
 type Nested struct {

@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertSliceDefaultAllQuery) Exec(c gosql.Conn) error {
+func (q *InsertDefaultAllSliceQuery) Exec(c gosql.Conn) error {
 	var queryString = `INSERT INTO "test_user_with_defaults" AS u (
 		"email"
 		, "full_name"

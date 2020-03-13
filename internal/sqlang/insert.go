@@ -133,9 +133,10 @@ func (oc *OnConflictClause) Walk(w *writer.Writer) {
 		return
 	}
 
-	w.Write("ON CONFLICT")
+	w.Write("ON CONFLICT ")
 	if oc.Target != nil {
 		oc.Target.Walk(w)
+		w.NewLine()
 	}
 	oc.Action.Walk(w)
 }
@@ -148,29 +149,34 @@ type ConflictTarget interface {
 type ConflictColumns []Name
 
 func (cc ConflictColumns) Walk(w *writer.Writer) {
-	w.Write(" ")
+	w.Write("(")
 	for i, c := range cc {
 		if i > 0 {
 			w.Write(", ")
 		}
 		c.Walk(w)
 	}
-}
-
-type ConflictIndexes []Name
-
-func (ci ConflictIndexes) Walk(w *writer.Writer) {
-	w.Write(" (")
-	for i, idx := range ci {
-		if i > 0 {
-			w.Write(", ")
-		}
-		idx.Walk(w)
-	}
 	w.Write(")")
 }
 
+type ConflictIndex struct {
+	Expr string
+	Pred string
+}
+
+func (ind ConflictIndex) Walk(w *writer.Writer) {
+	w.Write("(" + ind.Expr + ")")
+	if len(ind.Pred) > 0 {
+		w.Write(" WHERE " + ind.Pred)
+	}
+}
+
 type ConflictConstraint string
+
+func (cc ConflictConstraint) Walk(w *writer.Writer) {
+	w.Write("ON CONSTRAINT ")
+	w.Write(`"` + string(cc) + `"`)
+}
 
 type ConflictAction struct {
 	Update UpdateExcluded
@@ -178,10 +184,10 @@ type ConflictAction struct {
 
 func (a *ConflictAction) Walk(w *writer.Writer) {
 	if a == nil {
-		w.Write(" DO NOTHING")
+		w.Write("DO NOTHING")
 		return
 	}
-	w.Write(" DO UPDATE SET ")
+	w.Write("DO UPDATE SET ")
 	a.Update.Walk(w)
 }
 
@@ -231,5 +237,5 @@ func (rc ReturningClause) Walk(w *writer.Writer) {
 }
 
 func (ConflictColumns) conflictTargetNode()    {}
-func (ConflictIndexes) conflictTargetNode()    {}
+func (ConflictIndex) conflictTargetNode()      {}
 func (ConflictConstraint) conflictTargetNode() {}

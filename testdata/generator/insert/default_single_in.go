@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type InsertSingleDefaultQuery struct {
+type InsertDefaultSingleQuery struct {
 	User *common.User3 `rel:"test_user:u"`
 	_    gosql.Default `sql:"u.password"`
 }

@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertSingleDefaultQuery) Exec(c gosql.Conn) error {
+func (q *InsertDefaultSingleQuery) Exec(c gosql.Conn) error {
 	const queryString = `INSERT INTO "test_user" AS u (
 		"email"
 		, "password"

@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type InsertSingleDefaultAllQuery struct {
+type InsertDefaultAllSingleQuery struct {
 	User *common.User4 `rel:"test_user_with_defaults:u"`
 	_    gosql.Default `sql:"*"`
 }

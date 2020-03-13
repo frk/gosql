@@ -5,8 +5,8 @@ import (
 	"log"
 	"strconv"
 
-	gol "github.com/frk/gosql/internal/golang"
-	sql "github.com/frk/gosql/internal/sqlang"
+	GO "github.com/frk/gosql/internal/golang"
+	SQL "github.com/frk/gosql/internal/sqlang"
 )
 
 const (
@@ -15,40 +15,41 @@ const (
 )
 
 var (
-	idblank             = gol.Ident{"_"}
-	idrecv              = gol.Ident{"q"}
-	idconn              = gol.Ident{"c"}
-	ididx               = gol.Ident{"i"}
-	iderr               = gol.Ident{"err"}
-	idnew               = gol.Ident{"new"}
-	idnil               = gol.Ident{"nil"}
-	idlen               = gol.Ident{"len"}
-	idi64               = gol.Ident{"i64"}
-	idres               = gol.Ident{"res"}
-	idrow               = gol.Ident{"row"}
-	idmake              = gol.Ident{"make"}
-	idrows              = gol.Ident{"rows"}
-	idexec              = gol.Ident{"Exec"}
-	iderror             = gol.Ident{"error"}
-	idparams            = gol.Ident{"params"}
-	idafterscan         = gol.Ident{"AfterScan"}
-	idquery             = gol.Ident{"queryString"}
-	idiface             = gol.Ident{"interface{}"}
-	idifaces            = gol.Ident{"[]interface{}"}
-	idordinals          = gol.QualifiedIdent{"gosql", "OrdinalParameters"}
-	sxconn              = gol.QualifiedIdent{"gosql", "Conn"}
-	sxerrorinfo         = gol.QualifiedIdent{"gosql", "ErrorInfo"}
-	sxexec              = gol.QualifiedIdent{"c", "Exec"}
-	sxquery             = gol.QualifiedIdent{"c", "Query"}
-	sxqueryrow          = gol.QualifiedIdent{"c", "QueryRow"}
-	sxrowscan           = gol.QualifiedIdent{"row", "Scan"}
-	sxrowsscan          = gol.QualifiedIdent{"rows", "Scan"}
-	sxrowsclose         = gol.QualifiedIdent{"rows", "Close"}
-	callrowserr         = gol.CallExpr{Fun: gol.QualifiedIdent{"rows", "Err"}}
-	callrowsnext        = gol.CallExpr{Fun: gol.QualifiedIdent{"rows", "Next"}}
-	callresrowsaffected = gol.CallExpr{Fun: gol.QualifiedIdent{"res", "RowsAffected"}}
-	callinvaluelist     = gol.CallExpr{Fun: gol.QualifiedIdent{"gosql", "InValueList"}}
-	callmakeparams      = gol.CallExpr{Fun: gol.Ident{"make"}, Args: gol.ArgsList{List: idifaces}}
+	idblank             = GO.Ident{"_"}
+	idrecv              = GO.Ident{"q"}
+	idconn              = GO.Ident{"c"}
+	ididx               = GO.Ident{"i"}
+	iderr               = GO.Ident{"err"}
+	idnew               = GO.Ident{"new"}
+	idnil               = GO.Ident{"nil"}
+	idlen               = GO.Ident{"len"}
+	idi64               = GO.Ident{"i64"}
+	idres               = GO.Ident{"res"}
+	idrow               = GO.Ident{"row"}
+	idmake              = GO.Ident{"make"}
+	idrows              = GO.Ident{"rows"}
+	idexec              = GO.Ident{"Exec"}
+	iderror             = GO.Ident{"error"}
+	idparams            = GO.Ident{"params"}
+	idafterscan         = GO.Ident{"AfterScan"}
+	idquery             = GO.Ident{"queryString"}
+	idiface             = GO.Ident{"interface{}"}
+	idifaces            = GO.Ident{"[]interface{}"}
+	idordinals          = GO.QualifiedIdent{"gosql", "OrdinalParameters"}
+	sxconn              = GO.QualifiedIdent{"gosql", "Conn"}
+	sxerrorinfo         = GO.QualifiedIdent{"gosql", "ErrorInfo"}
+	sxexec              = GO.QualifiedIdent{"c", "Exec"}
+	sxquery             = GO.QualifiedIdent{"c", "Query"}
+	sxqueryrow          = GO.QualifiedIdent{"c", "QueryRow"}
+	sxrowscan           = GO.QualifiedIdent{"row", "Scan"}
+	sxrowsscan          = GO.QualifiedIdent{"rows", "Scan"}
+	sxrowsclose         = GO.QualifiedIdent{"rows", "Close"}
+	callrowserr         = GO.CallExpr{Fun: GO.QualifiedIdent{"rows", "Err"}}
+	callrowsnext        = GO.CallExpr{Fun: GO.QualifiedIdent{"rows", "Next"}}
+	callresrowsaffected = GO.CallExpr{Fun: GO.QualifiedIdent{"res", "RowsAffected"}}
+	callinvaluelist     = GO.CallExpr{Fun: GO.QualifiedIdent{"gosql", "InValueList"}}
+	calljson            = GO.CallExpr{Fun: GO.QualifiedIdent{"gosql", "JSON"}}
+	callmakeparams      = GO.CallExpr{Fun: GO.Ident{"make"}, Args: GO.ArgsList{List: idifaces}}
 )
 
 type specinfo struct {
@@ -75,6 +76,13 @@ func (si *specinfo) usedefault(fc *fieldcolumn) bool {
 		(si.spec.defaults.all || si.spec.defaults.contains(fc.colid)))
 }
 
+// skipinit is a helper method that reports whether or not the GO output
+// fields should be, if they are pointers, initialized.
+func (si *specinfo) skipinit() bool {
+	return (si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) && // has input fields?
+		(si.spec.result == nil) // scan output into input fields?
+}
+
 func generate(pkgname string, infos []*specinfo) (*bytes.Buffer, error) {
 	g := &generator{infos: infos}
 	if err := g.run(pkgname); err != nil {
@@ -88,24 +96,24 @@ type generator struct {
 	pkgname string
 	buf     bytes.Buffer
 
-	file gol.File
+	file GO.File
 
 	// file specific state
-	imports gol.ImportDecl
+	imports GO.ImportDecl
 
 	// spec specific state, needs to be reset on each iteration
-	nparam        int                // number of parameters
-	asvar         bool               // if true, the query string should be declared as a var, not const.
-	fclose        bool               // if true, the sql query needs to be closed (with right parentheses) after the filter's been added.
-	insx          []gol.SelectorExpr // slice fields for IN clauses
-	queryargs     []gol.ExprNode     // list of arguments to be passed to the query (Exec|Query|QueryRow)
-	scanargs      []gol.ExprNode     // list of arguments to be passed to the Scan method
-	scanroot      gol.ExprNode       // the root node for the fields to be scanned
-	scaninits     gol.StmtList       // list of pointer initializations for scanning nested fields
-	inputcolumns  sql.NameGroup      //
-	outputcolumns sql.ValueExprList  //
-	inputparams   sql.ValueExprList  //
-	sqltailnode   sql.Node           //
+	nparam        int               // number of parameters
+	asvar         bool              // if true, the query string should be declared as a var, not const.
+	fclose        bool              // if true, the SQL query needs to be closed (with right parentheses) after the filter's been added.
+	insx          []GO.SelectorExpr // slice fields for IN clauses
+	queryargs     []GO.ExprNode     // list of arguments to be passed to the query (Exec|Query|QueryRow)
+	scanargs      []GO.ExprNode     // list of arguments to be passed to the Scan method
+	scanroot      GO.ExprNode       // the root node for the fields to be scanned
+	scaninits     GO.StmtList       // list of pointer initializations for scanning nested fields
+	inputcolumns  SQL.NameGroup     //
+	outputcolumns SQL.ValueExprList //
+	inputparams   SQL.ValueExprList //
+	sqltailnode   SQL.Node          //
 	// scantoinput indicates that the output of the query should be scanned
 	// into the input of the query, which in an insert or update is already
 	// allocated and therefore needs no initialization.
@@ -113,7 +121,7 @@ type generator struct {
 }
 
 func (g *generator) run(pkgname string) error {
-	g.imports.Specs = []gol.ImportSpec{{Path: gosqlimport}}
+	g.imports.Specs = []GO.ImportSpec{{Path: gosqlimport}}
 
 	for _, si := range g.infos {
 		g.nparam = 0
@@ -135,150 +143,179 @@ func (g *generator) run(pkgname string) error {
 	}
 
 	g.file.PkgName = pkgname
-	g.file.Preamble = gol.LineComment{filepreamble}
-	g.file.Imports = []gol.ImportDeclNode{g.imports}
+	g.file.Preamble = GO.LineComment{filepreamble}
+	g.file.Imports = []GO.ImportDeclNode{g.imports}
 
-	return gol.Write(g.file, &g.buf)
+	return GO.Write(g.file, &g.buf)
 }
 
-func (g *generator) buildexecdecl(si *specinfo) (m gol.MethodDecl) {
+func (g *generator) buildexecdecl(si *specinfo) (m GO.MethodDecl) {
 	m.Name = idexec
 	m.Recv.Name = idrecv
-	m.Recv.Type = gol.PointerRecvType{si.spec.name}
-	m.Type.Params = gol.ParamList{{Names: idconn, Type: sxconn}}
-	m.Type.Results = gol.ParamList{{Type: iderror}}
+	m.Recv.Type = GO.PointerRecvType{si.spec.name}
+	m.Type.Params = GO.ParamList{{Names: idconn, Type: sxconn}}
+	m.Type.Results = GO.ParamList{{Type: iderror}}
 
 	g.scantoinput = ((si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) &&
 		si.spec.rel.rec.isslice && si.spec.result == nil)
 
-	g.buildinput(si)
-	g.buildoutput(si)
+	g.prepareInput(si)
+	g.prepareOutput(si)
 
 	m.Body.Add(g.buildquerystring(si))
-	m.Body.Add(gol.NL{})
+	m.Body.Add(GO.NL{})
 	m.Body.Add(g.querydefaults(si))
 	m.Body.Add(g.queryexec(si))
 	m.Body.Add(g.returnstmt(si))
 	return m
 }
 
-func (g *generator) buildinput(si *specinfo) {
-	rec := si.spec.rel.rec
-	name := si.spec.rel.name
-
-	// the root node for the fields to be stored
-	root := gol.ExprNode(gol.SelectorExpr{X: idrecv, Sel: gol.Ident{name}})
-	if rec.isslice {
-		root = gol.Ident{"v"}
+// prepareInput
+func (g *generator) prepareInput(si *specinfo) {
+	// prepare input for the INSERT / UPDATE query
+	if len(si.info.input) > 0 {
+		g.prepareInputGOFields(si)
+		g.prepareInputSQLColumns(si)
 	}
 
-	// pginfo.input is empty if this is a select, or a delete
-	for _, item := range si.info.input {
-		if si.skipwrite(item) {
-			continue
-		}
-		if si.usedefault(item) {
-			g.inputcolumns = append(g.inputcolumns, sql.Name(item.column.name))
-			g.inputparams = append(g.inputparams, sql.DEFAULT)
-			continue
-		}
-
-		// go input
-		fx := root
-		for _, pe := range item.field.path {
-			fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
-		}
-		fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
-		g.queryargs = append(g.queryargs, fx)
-
-		// sql input
-		g.inputcolumns = append(g.inputcolumns, sql.Name(item.column.name))
-		g.inputparams = append(g.inputparams, g.sqlparam())
-
+	// prepare input for the WHERE clause
+	if si.spec.where != nil && len(si.spec.where.items) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.where.name}}
+		g.prepareInputGOWhereblock(si.spec.where.items, sx)
 	}
 
-	spec := si.spec
-	if spec.where != nil && len(spec.where.items) > 0 {
-		type loopstate struct {
-			items []*predicateitem // the current iteration predicate items
-			idx   int              // keeps track of the item index
-			sx    gol.SelectorExpr // the selector expression for the current predicate field
-		}
-
-		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.where.name}}
-		stack := []*loopstate{{items: spec.where.items, sx: sx}}
-
-	stackloop:
-		for len(stack) > 0 {
-			loop := stack[len(stack)-1]
-			for loop.idx < len(loop.items) {
-				item := loop.items[loop.idx]
-				loop.idx++
-
-				switch node := item.node.(type) {
-				case *nestedpredicate:
-					loop2 := new(loopstate)
-					loop2.items = node.items
-					loop2.sx = gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
-					stack = append(stack, loop2)
-					continue stackloop
-				case *betweenpredicate:
-					if x, ok := node.x.(*paramfield); ok {
-						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
-						sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{x.name}}
-						g.queryargs = append(g.queryargs, sx)
-					}
-					if y, ok := node.y.(*paramfield); ok {
-						sx := gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.name}}
-						sx = gol.SelectorExpr{X: sx, Sel: gol.Ident{y.name}}
-						g.queryargs = append(g.queryargs, sx)
-					}
-				case *fieldpredicate:
-					if node.pred != isin && node.pred != notin {
-						var x gol.ExprNode
-
-						x = gol.SelectorExpr{X: loop.sx, Sel: gol.Ident{node.field.name}}
-						if node.qua > 0 {
-							gotyp := node.field.typ.string(true)
-							coltyp := node.coltype + "[]"
-							sel, ok := gotyp2coltyp2converter[gotyp][coltyp]
-							if !ok {
-								// TODO should not happen here, this should be caught while scanning the db
-								log.Fatalf("unsupported type conversion: %s - %s", gotyp, coltyp)
-							}
-							x = gol.CallExpr{Fun: sel, Args: gol.ArgsList{List: x}}
-						}
-
-						g.queryargs = append(g.queryargs, x)
-					}
-				case *columnpredicate:
-					// nothing to do
-				}
-			}
-			stack = stack[:len(stack)-1]
-		}
-	}
-
-	if spec.limit != nil && len(spec.limit.field) > 0 {
-		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.limit.field}}
+	// prepare input for the LIMIT clause
+	if si.spec.limit != nil && len(si.spec.limit.field) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.limit.field}}
 		g.queryargs = append(g.queryargs, sx)
 	}
-	if spec.offset != nil && len(spec.offset.field) > 0 {
-		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{spec.offset.field}}
+
+	// prepare input for the OFFSET clause
+	if si.spec.offset != nil && len(si.spec.offset.field) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.offset.field}}
 		g.queryargs = append(g.queryargs, sx)
 	}
 }
 
-func (g *generator) buildoutput(si *specinfo) {
-	if si.spec.kind != speckindSelect && si.spec.returning == nil && si.spec.result == nil {
-		return // nothing to output
+// prepareInputGOFields prepares a list of GO field selector expressions
+// that will be passed as arguments to the query executing function.
+func (g *generator) prepareInputGOFields(si *specinfo) {
+	rec := si.spec.rel.rec
+	name := si.spec.rel.name
+
+	// the root node for the fields to be stored
+	root := GO.ExprNode(GO.SelectorExpr{X: idrecv, Sel: GO.Ident{name}})
+	if rec.isslice {
+		root = GO.Ident{"v"}
 	}
 
-	shouldinit := true
-	if (si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) && (si.spec.returning != nil && si.spec.result == nil) {
-		shouldinit = false
-	}
+	for _, item := range si.info.input {
+		if si.skipwrite(item) { // readonly?
+			continue
+		}
+		if si.usedefault(item) { // DEFAULT?
+			continue
+		}
 
+		// the GO field to be passed as argument
+		fx := root
+		for _, pe := range item.field.path {
+			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{pe.name}}
+		}
+		fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{item.field.name}}
+		fx = g.transformInputGOFieldExpr(fx, item)
+		g.queryargs = append(g.queryargs, fx)
+	}
+}
+
+// transformInputGOFieldExpr ...
+func (g *generator) transformInputGOFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO.ExprNode {
+	if fc.field.usejson {
+		call := calljson
+		call.Args = GO.ArgsList{List: x}
+		return call
+	}
+	return x
+}
+
+// prepareInputSQLColumns prepares the target columns for an INSERT or UPDATE
+// query, including a list of the SQL parameter placeholders or values.
+func (g *generator) prepareInputSQLColumns(si *specinfo) {
+	for _, item := range si.info.input {
+		if si.skipwrite(item) { // readonly?
+			continue
+		}
+
+		// the target column
+		g.inputcolumns = append(g.inputcolumns, SQL.Name(item.column.name))
+
+		if si.usedefault(item) {
+			// the DEFAULT marker
+			g.inputparams = append(g.inputparams, SQL.DEFAULT)
+		} else {
+			// the parameter placeholder
+			g.inputparams = append(g.inputparams, g.sqlparam())
+		}
+	}
+}
+
+// prepareInputGOWhereblock prepares the input for a WHERE clause which is a list of
+// the GO "where block" fields that will be passed to the query executing function.
+func (g *generator) prepareInputGOWhereblock(items []*predicateitem, sx GO.SelectorExpr) {
+	for _, item := range items {
+		switch node := item.node.(type) {
+		case *nestedpredicate:
+			g.prepareInputGOWhereblock(node.items, GO.SelectorExpr{X: sx, Sel: GO.Ident{node.name}})
+			continue
+		case *betweenpredicate:
+			if x, ok := node.x.(*paramfield); ok {
+				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{node.name}}
+				sx = GO.SelectorExpr{X: sx, Sel: GO.Ident{x.name}}
+				g.queryargs = append(g.queryargs, sx)
+			}
+			if y, ok := node.y.(*paramfield); ok {
+				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{node.name}}
+				sx = GO.SelectorExpr{X: sx, Sel: GO.Ident{y.name}}
+				g.queryargs = append(g.queryargs, sx)
+			}
+		case *fieldpredicate:
+			if node.pred != isin && node.pred != notin {
+				var x GO.ExprNode
+
+				x = GO.SelectorExpr{X: sx, Sel: GO.Ident{node.field.name}}
+				if node.qua > 0 {
+					gotyp := node.field.typ.string(true)
+					coltyp := node.coltype + "[]"
+					sel, ok := gotyp2coltyp2converter[gotyp][coltyp]
+					if !ok {
+						// TODO should not happen here, this should be caught while scanning the db
+						log.Fatalf("unsupported type conversion: %s - %s", gotyp, coltyp)
+					}
+					x = GO.CallExpr{Fun: sel, Args: GO.ArgsList{List: x}}
+				}
+
+				g.queryargs = append(g.queryargs, x)
+			}
+		case *columnpredicate:
+			// nothing to do
+		}
+	}
+}
+
+// prepareOutput .................
+func (g *generator) prepareOutput(si *specinfo) {
+	if len(si.info.output) > 0 {
+		skipinit := si.skipinit()
+		g.prepareOutputGORoot(si, skipinit)
+		g.prepareOutputGORootFields(si, skipinit)
+		g.prepareOutputSQLColumns(si)
+	}
+}
+
+// prepareOutputGORoot resolves the GO root expression of the fields into which
+// the output will be scanned, additionally if the root needs to be initialized
+// before scanning, an initialization statement will be prepared as well.
+func (g *generator) prepareOutputGORoot(si *specinfo, skipinit bool) {
 	rec := si.spec.rel.rec
 	name := si.spec.rel.name
 	if si.spec.result != nil {
@@ -286,110 +323,139 @@ func (g *generator) buildoutput(si *specinfo) {
 		name = si.spec.result.name
 	}
 
-	g.scanroot = gol.ExprNode(gol.SelectorExpr{X: idrecv, Sel: gol.Ident{name}})
-	if rec.isslice && !shouldinit {
-		g.scanroot = gol.IndexExpr{X: g.scanroot, Index: gol.Ident{"i"}}
+	g.scanroot = GO.ExprNode(GO.SelectorExpr{X: idrecv, Sel: GO.Ident{name}})
+	if rec.isslice && skipinit {
+		g.scanroot = GO.IndexExpr{X: g.scanroot, Index: GO.Ident{"i"}}
 	} else if rec.isslice || rec.isiter {
-		g.scanroot = gol.Ident{"v"}
+		g.scanroot = GO.Ident{"v"}
 	}
 
-	if shouldinit {
+	if !skipinit {
 		// build the initialization statement for the g.scanroot node
-		var rootinit gol.StmtNode
+		var rootinit GO.StmtNode
 		if !rec.isslice && !rec.isiter && rec.ispointer {
-			g.scaninits = append(g.scaninits, gol.NL{})
+			g.scaninits = append(g.scaninits, GO.NL{})
 
-			init := gol.AssignStmt{Token: gol.Assign}
-			init.Lhs, init.Rhs = g.scanroot, gol.CallNewExpr{g.rectype(rec)}
+			init := GO.AssignStmt{Token: GO.Assign}
+			init.Lhs, init.Rhs = g.scanroot, GO.CallNewExpr{g.rectype(rec)}
 			rootinit = init
 		} else if (rec.isslice || rec.isiter) && rec.ispointer {
-			init := gol.AssignStmt{Token: gol.AssignDefine}
-			init.Lhs, init.Rhs = g.scanroot, gol.CallNewExpr{g.rectype(rec)}
+			init := GO.AssignStmt{Token: GO.AssignDefine}
+			init.Lhs, init.Rhs = g.scanroot, GO.CallNewExpr{g.rectype(rec)}
 			rootinit = init
 		} else if (rec.isslice || rec.isiter) && !rec.ispointer {
-			init := gol.VarDecl{}
-			init.Spec = gol.ValueSpec{Names: gol.Ident{"v"}, Type: g.rectype(rec)}
-			rootinit = gol.DeclStmt{init}
+			init := GO.VarDecl{}
+			init.Spec = GO.ValueSpec{Names: GO.Ident{"v"}, Type: g.rectype(rec)}
+			rootinit = GO.DeclStmt{init}
 		}
 		if rootinit != nil {
 			g.scaninits = append(g.scaninits, rootinit)
 		}
 	}
+}
 
-	// The initdone map is used to keep track of pointer fields whose
-	// initialization statement has already been created and stored in the map.
-	var initdone = make(map[string]bool)
+// prepareOutputGORootFields ....
+func (g *generator) prepareOutputGORootFields(si *specinfo, skipinit bool) {
+	// done is used to keep track of pointer fields whose
+	// initialization statements have already been created
+	var done = make(map[string]bool)
 
 	for _, item := range si.info.output {
-		if si.skipread(item) {
+		if si.skipread(item) { // writeonly?
 			continue
 		}
 
-		fieldkey := "" // key for the initdone map
+		key := "" // key for the done map
 
 		fx := g.scanroot
 		for _, pe := range item.field.path {
-			fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{pe.name}}
+			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{pe.name}}
 
-			if !shouldinit {
+			if skipinit {
 				continue
 			}
 
-			fieldkey += pe.name
-			if pe.ispointer && !initdone[fieldkey] {
+			key += pe.name
+			if pe.ispointer && !done[key] {
 				if pe.isimported {
 					g.addimport(pe.typepkgpath, pe.typepkgname, pe.typepkglocal)
 				}
 
 				// nested pointer field initialization statement
-				init := gol.AssignStmt{Token: gol.Assign}
-				init.Lhs, init.Rhs = fx, gol.CallNewExpr{g.pathelemtype(pe)}
+				init := GO.AssignStmt{Token: GO.Assign}
+				init.Lhs, init.Rhs = fx, GO.CallNewExpr{g.pathelemtype(pe)}
 				g.scaninits = append(g.scaninits, init)
 
-				initdone[fieldkey] = true
+				done[key] = true
 			}
 		}
 
-		fx = gol.SelectorExpr{X: fx, Sel: gol.Ident{item.field.name}}
-		g.scanargs = append(g.scanargs, gol.UnaryExpr{Op: gol.UnaryAmp, X: fx})
-		g.outputcolumns = append(g.outputcolumns, g.sqlcolexpr(item))
+		fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{item.field.name}}
+		fx = GO.UnaryExpr{Op: GO.UnaryAmp, X: fx}
+		fx = g.transformOutputGOFieldExpr(fx, item)
+		g.scanargs = append(g.scanargs, fx)
 	}
 }
 
-func (g *generator) buildquerystring(si *specinfo) (stmt gol.StmtNode) {
+// transformOutputGOFieldExpr ...
+func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO.ExprNode {
+	if fc.field.usejson {
+		call := calljson
+		call.Args = GO.ArgsList{List: x}
+		return call
+	}
+	return x
+}
+
+// prepareOutputSQLColumns prepares the list of SQL columns to be returned by the query.
+func (g *generator) prepareOutputSQLColumns(si *specinfo) {
+	for _, item := range si.info.output {
+		if si.skipread(item) { // writeonly?
+			continue
+		}
+
+		// TODO(mkopriva):
+		// - check whether or not the column can be NULL and if so add a COALESCE
+		// - check whether or not the field has the "usecoalesce" flag set to true and if so add a COALESCE
+		// - ... anything else?
+		g.outputcolumns = append(g.outputcolumns, g.sqlcolref(item.colid))
+	}
+}
+
+func (g *generator) buildquerystring(si *specinfo) (stmt GO.StmtNode) {
 
 	sqlnode := g.sqlnode(si)
 
-	var decl gol.DeclNode
+	var decl GO.DeclNode
 	if g.declarevar(si) {
-		decl = gol.VarDecl{Spec: gol.ValueSpec{
+		decl = GO.VarDecl{Spec: GO.ValueSpec{
 			Names:   idquery,
-			Values:  gol.RawStringNode{N: sqlnode},
-			Comment: gol.LineComment{" `"},
+			Values:  GO.RawStringNode{N: sqlnode},
+			Comment: GO.LineComment{" `"},
 		}}
 	} else {
-		decl = gol.ConstDecl{Spec: gol.ValueSpec{
+		decl = GO.ConstDecl{Spec: GO.ValueSpec{
 			Names:   idquery,
-			Values:  gol.RawStringNode{N: sqlnode},
-			Comment: gol.LineComment{" `"},
+			Values:  GO.RawStringNode{N: sqlnode},
+			Comment: GO.LineComment{" `"},
 		}}
 	}
 
 	if si.spec.kind == speckindInsert && si.spec.rel.rec.isslice {
-		result := gol.StmtList{gol.DeclStmt{decl}, gol.NL{}}
+		result := GO.StmtList{GO.DeclStmt{decl}, GO.NL{}}
 
-		idrel := gol.QualifiedIdent{idrecv.Name, si.spec.rel.name}
-		numfields := gol.IntLit(len(g.queryargs))
+		idrel := GO.QualifiedIdent{idrecv.Name, si.spec.rel.name}
+		numfields := GO.IntLit(len(g.queryargs))
 
 		if len(g.queryargs) > 0 {
 			// params := make([]interface{}, len(q.T)*numoffields)
-			asn := gol.AssignStmt{Token: gol.AssignDefine}
+			asn := GO.AssignStmt{Token: GO.AssignDefine}
 			asn.Lhs = idparams
-			asn.Rhs = gol.CallMakeExpr{
+			asn.Rhs = GO.CallMakeExpr{
 				Type: idifaces,
-				Size: gol.BinaryExpr{
-					Op: gol.BinaryMul,
-					X:  gol.CallLenExpr{idrel},
+				Size: GO.BinaryExpr{
+					Op: GO.BinaryMul,
+					X:  GO.CallLenExpr{idrel},
 					Y:  numfields,
 				},
 			}
@@ -397,139 +463,139 @@ func (g *generator) buildquerystring(si *specinfo) (stmt gol.StmtNode) {
 		}
 
 		// for i, v := range q.DataSlice {
-		loop := gol.ForStmt{}
+		loop := GO.ForStmt{}
 		{
 			if len(g.queryargs) > 0 {
 				// for i, v := range q.DataSlice {
-				rangeclause := gol.ForRangeClause{}
-				rangeclause.Key = gol.Ident{"i"}
-				rangeclause.Value = gol.Ident{"v"}
+				rangeclause := GO.ForRangeClause{}
+				rangeclause.Key = GO.Ident{"i"}
+				rangeclause.Value = GO.Ident{"v"}
 				rangeclause.X = idrel
 				rangeclause.Define = true
 				loop.Clause = rangeclause
 
 				// pos := i * 4
-				asn2 := gol.AssignStmt{Token: gol.AssignDefine}
-				asn2.Lhs = gol.Ident{"pos"}
-				asn2.Rhs = gol.BinaryExpr{Op: gol.BinaryMul, X: gol.Ident{"i"}, Y: numfields}
-				loop.Body = gol.BlockStmt{List: []gol.StmtNode{asn2, gol.NL{}}}
+				asn2 := GO.AssignStmt{Token: GO.AssignDefine}
+				asn2.Lhs = GO.Ident{"pos"}
+				asn2.Rhs = GO.BinaryExpr{Op: GO.BinaryMul, X: GO.Ident{"i"}, Y: numfields}
+				loop.Body = GO.BlockStmt{List: []GO.StmtNode{asn2, GO.NL{}}}
 
 				// params[pos+123] = v.SomeField
-				assigns := make([]gol.StmtNode, len(g.queryargs))
+				assigns := make([]GO.StmtNode, len(g.queryargs))
 				for i, item := range g.queryargs {
-					indx := gol.BinaryExpr{Op: gol.BinaryAdd, X: gol.Ident{"pos"}, Y: gol.IntLit(i)}
-					asn3 := gol.AssignStmt{Token: gol.Assign}
-					asn3.Lhs = gol.IndexExpr{X: idparams, Index: indx}
+					indx := GO.BinaryExpr{Op: GO.BinaryAdd, X: GO.Ident{"pos"}, Y: GO.IntLit(i)}
+					asn3 := GO.AssignStmt{Token: GO.Assign}
+					asn3.Lhs = GO.IndexExpr{X: idparams, Index: indx}
 					asn3.Rhs = item
 					assigns[i] = asn3
 				}
 				loop.Body.List = append(loop.Body.List, assigns...)
-				loop.Body.List = append(loop.Body.List, gol.NL{})
+				loop.Body.List = append(loop.Body.List, GO.NL{})
 			} else {
 				// for _, _ := range q.DataSlice {
-				rangeclause := gol.ForRangeClause{}
-				rangeclause.Key = gol.Ident{"_"}
-				rangeclause.Value = gol.Ident{"_"}
+				rangeclause := GO.ForRangeClause{}
+				rangeclause.Key = GO.Ident{"_"}
+				rangeclause.Value = GO.Ident{"_"}
 				rangeclause.X = idrel
 				loop.Clause = rangeclause
 			}
 
 			numdefs := 0
-			concats := make([]gol.ExprNode, len(g.inputparams)+1)
+			concats := make([]GO.ExprNode, len(g.inputparams)+1)
 			for i, item := range g.inputparams {
 				sep := `, `
 				if i == 0 {
 					sep = `(`
 				}
 
-				if item == sql.DEFAULT {
-					concats[i] = gol.RawStringLit(sep + `DEFAULT`)
+				if item == SQL.DEFAULT {
+					concats[i] = GO.RawStringLit(sep + `DEFAULT`)
 					numdefs += 1
 				} else {
-					idxexpr := gol.BinaryExpr{Op: gol.BinaryAdd,
-						X: gol.Ident{"pos"}, Y: gol.IntLit(i - numdefs),
+					idxexpr := GO.BinaryExpr{Op: GO.BinaryAdd,
+						X: GO.Ident{"pos"}, Y: GO.IntLit(i - numdefs),
 					}
 
 					// `, ` + gosql.OrdinalParameters[pos+2] +
-					concat := gol.BinaryExpr{Op: gol.BinaryAdd}
-					concat.X = gol.RawStringLit(sep)
-					concat.Y = gol.IndexExpr{X: idordinals, Index: idxexpr}
+					concat := GO.BinaryExpr{Op: GO.BinaryAdd}
+					concat.X = GO.RawStringLit(sep)
+					concat.Y = GO.IndexExpr{X: idordinals, Index: idxexpr}
 					concats[i] = concat
 				}
 			}
 
-			concats[len(concats)-1] = gol.RawStringLit(`),`)
+			concats[len(concats)-1] = GO.RawStringLit(`),`)
 
-			asn4 := gol.AssignStmt{Token: gol.AssignAdd}
+			asn4 := GO.AssignStmt{Token: GO.AssignAdd}
 			asn4.Lhs = idquery
-			asn4.Rhs = gol.MultiLineExpr{Op: gol.BinaryAdd, Exprs: concats}
+			asn4.Rhs = GO.MultiLineExpr{Op: GO.BinaryAdd, Exprs: concats}
 
 			loop.Body.List = append(loop.Body.List, asn4)
 		}
 		result = append(result, loop)
 
-		asn5 := gol.AssignStmt{Token: gol.Assign}
+		asn5 := GO.AssignStmt{Token: GO.Assign}
 		asn5.Lhs = idquery
-		asn5.Rhs = gol.SliceExpr{X: idquery,
-			High: gol.BinaryExpr{Op: gol.BinarySub, X: gol.CallLenExpr{idquery}, Y: gol.IntLit(1)},
+		asn5.Rhs = GO.SliceExpr{X: idquery,
+			High: GO.BinaryExpr{Op: GO.BinarySub, X: GO.CallLenExpr{idquery}, Y: GO.IntLit(1)},
 		}
-		result = append(result, gol.NL{}, asn5)
+		result = append(result, GO.NL{}, asn5)
 
 		if g.sqltailnode != nil {
-			asn6 := gol.AssignStmt{Token: gol.AssignAdd}
+			asn6 := GO.AssignStmt{Token: GO.AssignAdd}
 			asn6.Lhs = idquery
-			asn6.Rhs = gol.RawStringNode{Prefix: " ", N: g.sqltailnode, Comment: &gol.LineComment{" `"}}
+			asn6.Rhs = GO.RawStringNode{Prefix: " ", N: g.sqltailnode, Comment: &GO.LineComment{" `"}}
 			result = append(result, asn6)
 		}
 		return result
 
 	} else if len(g.insx) > 0 {
 		// prepare the var declarations
-		vardecl := gol.VarDecl{}
+		vardecl := GO.VarDecl{}
 
-		nstatic := gol.ValueSpec{}
-		nstatic.Names = gol.Ident{"nstatic"}
-		nstatic.Values = gol.IntLit(g.nparam)
-		nstatic.Comment = gol.LineComment{" number of static parameters"}
+		nstatic := GO.ValueSpec{}
+		nstatic.Names = GO.Ident{"nstatic"}
+		nstatic.Values = GO.IntLit(g.nparam)
+		nstatic.Comment = GO.LineComment{" number of static parameters"}
 
-		specs := gol.ValueSpecList{nstatic}
+		specs := GO.ValueSpecList{nstatic}
 		for i, sx := range g.insx {
 			num := strconv.Itoa(i + 1)
 
-			lenspec := gol.ValueSpec{}
-			lenspec.Names = gol.Ident{"len" + num}
-			lenspec.Values = gol.CallExpr{Fun: idlen, Args: gol.ArgsList{List: sx}}
-			lenspec.Comment = gol.LineComment{" length of slice #" + num + " to be unnested"}
+			lenspec := GO.ValueSpec{}
+			lenspec.Names = GO.Ident{"len" + num}
+			lenspec.Values = GO.CallExpr{Fun: idlen, Args: GO.ArgsList{List: sx}}
+			lenspec.Comment = GO.LineComment{" length of slice #" + num + " to be unnested"}
 
-			posspec := gol.ValueSpec{}
-			posspec.Names = gol.Ident{"pos" + num}
+			posspec := GO.ValueSpec{}
+			posspec.Names = GO.Ident{"pos" + num}
 			if i == 0 {
 				// the first position is set to the value of nstatic
-				posspec.Values = gol.Ident{"nstatic"}
+				posspec.Values = GO.Ident{"nstatic"}
 			} else {
 				// the rest of the positions are calculated from
 				// adding the previous length to the previous position
 				prev := strconv.Itoa(i)
-				prevlen, prevpos := gol.Ident{"len" + prev}, gol.Ident{"pos" + prev}
-				posspec.Values = gol.BinaryExpr{X: prevpos, Op: gol.BinaryAdd, Y: prevlen}
+				prevlen, prevpos := GO.Ident{"len" + prev}, GO.Ident{"pos" + prev}
+				posspec.Values = GO.BinaryExpr{X: prevpos, Op: GO.BinaryAdd, Y: prevlen}
 			}
-			posspec.Comment = gol.LineComment{" starting position of slice #" + num + " parameters"}
+			posspec.Comment = GO.LineComment{" starting position of slice #" + num + " parameters"}
 
 			specs = append(specs, lenspec, posspec)
 		}
 		vardecl.Spec = specs
 
 		// next is the query declaration
-		list := gol.StmtList{gol.DeclStmt{vardecl}, gol.NL{}, gol.DeclStmt{decl}, gol.NL{}}
+		list := GO.StmtList{GO.DeclStmt{vardecl}, GO.NL{}, GO.DeclStmt{decl}, GO.NL{}}
 
 		// define the params variable
-		asn := gol.AssignStmt{Token: gol.AssignDefine}
+		asn := GO.AssignStmt{Token: GO.AssignDefine}
 		asn.Lhs = idparams
 		callmake := callmakeparams
-		bin := gol.BinaryExpr{X: gol.Ident{"nstatic"}, Op: gol.BinaryAdd, Y: gol.Ident{"len1"}}
+		bin := GO.BinaryExpr{X: GO.Ident{"nstatic"}, Op: GO.BinaryAdd, Y: GO.Ident{"len1"}}
 		for i := 1; i < len(g.insx); i++ {
-			y := gol.Ident{"len" + strconv.Itoa(i+1)}
-			bin = gol.BinaryExpr{X: bin, Op: gol.BinaryAdd, Y: y}
+			y := GO.Ident{"len" + strconv.Itoa(i+1)}
+			bin = GO.BinaryExpr{X: bin, Op: GO.BinaryAdd, Y: y}
 		}
 		callmake.Args.AddExprs(bin)
 		asn.Rhs = callmake
@@ -537,97 +603,97 @@ func (g *generator) buildquerystring(si *specinfo) (stmt gol.StmtNode) {
 
 		// directly assign non-slice params
 		for i, arg := range g.queryargs {
-			asn := gol.AssignStmt{Token: gol.Assign}
-			asn.Lhs = gol.IndexExpr{X: idparams, Index: gol.IntLit(i)}
+			asn := GO.AssignStmt{Token: GO.Assign}
+			asn.Lhs = GO.IndexExpr{X: idparams, Index: GO.IntLit(i)}
 			asn.Rhs = arg
 			list = append(list, asn)
 		}
 
 		for i, sx := range g.insx {
-			lenid := gol.Ident{"len" + strconv.Itoa(i+1)}
-			posid := gol.Ident{"pos" + strconv.Itoa(i+1)}
+			lenid := GO.Ident{"len" + strconv.Itoa(i+1)}
+			posid := GO.Ident{"pos" + strconv.Itoa(i+1)}
 
-			forclause := gol.ForClause{}
-			forclause.Init = gol.AssignStmt{Token: gol.AssignDefine, Lhs: ididx, Rhs: gol.IntLit(0)}
-			forclause.Cond = gol.BinaryExpr{X: ididx, Op: gol.BinaryLss, Y: lenid}
-			forclause.Post = gol.IncDecStmt{X: ididx, Token: gol.IncDecIncrement}
-			loop := gol.ForStmt{Clause: forclause}
+			forclause := GO.ForClause{}
+			forclause.Init = GO.AssignStmt{Token: GO.AssignDefine, Lhs: ididx, Rhs: GO.IntLit(0)}
+			forclause.Cond = GO.BinaryExpr{X: ididx, Op: GO.BinaryLss, Y: lenid}
+			forclause.Post = GO.IncDecStmt{X: ididx, Token: GO.IncDecIncrement}
+			loop := GO.ForStmt{Clause: forclause}
 
-			asn := gol.AssignStmt{Token: gol.Assign}
-			asn.Lhs = gol.IndexExpr{X: idparams, Index: gol.BinaryExpr{X: posid, Op: gol.BinaryAdd, Y: ididx}}
-			asn.Rhs = gol.IndexExpr{X: sx, Index: ididx}
+			asn := GO.AssignStmt{Token: GO.Assign}
+			asn.Lhs = GO.IndexExpr{X: idparams, Index: GO.BinaryExpr{X: posid, Op: GO.BinaryAdd, Y: ididx}}
+			asn.Rhs = GO.IndexExpr{X: sx, Index: ididx}
 
-			loop.Body = gol.BlockStmt{List: []gol.StmtNode{asn}}
+			loop.Body = GO.BlockStmt{List: []GO.StmtNode{asn}}
 
 			list = append(list, loop)
 		}
 
-		return append(list, gol.NL{})
+		return append(list, GO.NL{})
 	} else if len(si.spec.filter) > 0 {
-		asn := gol.AssignStmt{Token: gol.AssignAdd}
+		asn := GO.AssignStmt{Token: GO.AssignAdd}
 		asn.Lhs = idquery
-		asn.Rhs = gol.CallExpr{Fun: gol.SelectorExpr{
-			X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.filter}},
-			Sel: gol.Ident{"ToSQL"},
+		asn.Rhs = GO.CallExpr{Fun: GO.SelectorExpr{
+			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.filter}},
+			Sel: GO.Ident{"ToSQL"},
 		}}
 
-		var asn1 gol.StmtNode = gol.NoOp{}
+		var asn1 GO.StmtNode = GO.NoOp{}
 		if g.fclose {
-			asn := gol.AssignStmt{Token: gol.AssignAdd}
+			asn := GO.AssignStmt{Token: GO.AssignAdd}
 			asn.Lhs = idquery
-			asn.Rhs = gol.RawStringLit(`)`)
+			asn.Rhs = GO.RawStringLit(`)`)
 			asn1 = asn
 		}
 
-		asn2 := gol.AssignStmt{Token: gol.AssignDefine}
+		asn2 := GO.AssignStmt{Token: GO.AssignDefine}
 		asn2.Lhs = idparams
-		asn2.Rhs = gol.CallExpr{Fun: gol.SelectorExpr{
-			X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.filter}},
-			Sel: gol.Ident{"Params"},
+		asn2.Rhs = GO.CallExpr{Fun: GO.SelectorExpr{
+			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.filter}},
+			Sel: GO.Ident{"Params"},
 		}}
-		return gol.StmtList{gol.DeclStmt{decl}, gol.NL{}, asn, asn1, asn2, gol.NL{}}
+		return GO.StmtList{GO.DeclStmt{decl}, GO.NL{}, asn, asn1, asn2, GO.NL{}}
 	}
-	return gol.DeclStmt{decl}
+	return GO.DeclStmt{decl}
 }
 
-func (g *generator) querydefaults(si *specinfo) (stmt gol.StmtNode) {
-	var list gol.StmtList
+func (g *generator) querydefaults(si *specinfo) (stmt GO.StmtNode) {
+	var list GO.StmtList
 	if l := si.spec.limit; l != nil && l.value > 0 && len(l.field) > 0 {
-		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{l.field}}
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{l.field}}
 
-		asn := gol.AssignStmt{Token: gol.Assign}
+		asn := GO.AssignStmt{Token: GO.Assign}
 		asn.Lhs = sx
-		asn.Rhs = gol.IntLit(l.value)
+		asn.Rhs = GO.IntLit(l.value)
 
-		ifzero := gol.IfStmt{}
-		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BinaryEql, Y: gol.IntLit(0)}
-		ifzero.Body = gol.BlockStmt{List: []gol.StmtNode{asn}}
+		ifzero := GO.IfStmt{}
+		ifzero.Cond = GO.BinaryExpr{X: sx, Op: GO.BinaryEql, Y: GO.IntLit(0)}
+		ifzero.Body = GO.BlockStmt{List: []GO.StmtNode{asn}}
 		list = append(list, ifzero)
 	}
 
 	if o := si.spec.offset; o != nil && o.value > 0 && len(o.field) > 0 {
-		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{o.field}}
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{o.field}}
 
-		asn := gol.AssignStmt{Token: gol.Assign}
+		asn := GO.AssignStmt{Token: GO.Assign}
 		asn.Lhs = sx
-		asn.Rhs = gol.IntLit(o.value)
+		asn.Rhs = GO.IntLit(o.value)
 
-		ifzero := gol.IfStmt{}
-		ifzero.Cond = gol.BinaryExpr{X: sx, Op: gol.BinaryEql, Y: gol.IntLit(0)}
-		ifzero.Body = gol.BlockStmt{List: []gol.StmtNode{asn}}
+		ifzero := GO.IfStmt{}
+		ifzero.Cond = GO.BinaryExpr{X: sx, Op: GO.BinaryEql, Y: GO.IntLit(0)}
+		ifzero.Body = GO.BlockStmt{List: []GO.StmtNode{asn}}
 		list = append(list, ifzero)
 	}
 
 	if len(list) == 0 {
-		return gol.NoOp{}
+		return GO.NoOp{}
 	}
 
-	list = append(list, gol.NL{})
+	list = append(list, GO.NL{})
 	return list
 }
 
-func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
-	args := gol.ArgsList{List: idquery}
+func (g *generator) queryexec(si *specinfo) (stmt GO.StmtNode) {
+	args := GO.ArgsList{List: idquery}
 	if len(g.insx) > 0 || len(si.spec.filter) > 0 || (si.spec.kind == speckindInsert && si.spec.rel.rec.isslice && len(g.queryargs) > 0) {
 		args.AddExprs(idparams)
 		args.Ellipsis = true
@@ -644,40 +710,40 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 
 			if rafield := si.spec.rowsaffected; rafield != nil {
 				// call exec & assign res, err
-				asn := gol.AssignStmt{Token: gol.AssignDefine}
-				asn.Lhs = gol.ExprList{idres, iderr}
-				asn.Rhs = gol.CallExpr{Fun: sxexec, Args: args}
+				asn := GO.AssignStmt{Token: GO.AssignDefine}
+				asn.Lhs = GO.ExprList{idres, iderr}
+				asn.Rhs = GO.CallExpr{Fun: sxexec, Args: args}
 
 				// check err
-				iferr := gol.IfStmt{}
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+				iferr := GO.IfStmt{}
+				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
 				// call RowsAffected & assing i64, err
-				asn2 := gol.AssignStmt{Token: gol.AssignDefine}
-				asn2.Lhs = gol.ExprList{idi64, iderr}
+				asn2 := GO.AssignStmt{Token: GO.AssignDefine}
+				asn2.Lhs = GO.ExprList{idi64, iderr}
 				asn2.Rhs = callresrowsaffected
 
 				// check err
-				iferr2 := gol.IfStmt{}
-				iferr2.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-				iferr2.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+				iferr2 := GO.IfStmt{}
+				iferr2.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+				iferr2.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
 				//
-				asn3 := gol.AssignStmt{Token: gol.Assign}
-				asn3.Lhs = gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rafield.name}}
+				asn3 := GO.AssignStmt{Token: GO.Assign}
+				asn3.Lhs = GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rafield.name}}
 				if rafield.kind == kindint64 {
 					asn3.Rhs = idi64
 				} else {
-					args := gol.ArgsList{List: idi64}
-					asn3.Rhs = gol.CallExpr{Fun: gol.Ident{typekind2string[rafield.kind]}, Args: args}
+					args := GO.ArgsList{List: idi64}
+					asn3.Rhs = GO.CallExpr{Fun: GO.Ident{typekind2string[rafield.kind]}, Args: args}
 				}
 
-				return gol.StmtList{asn, iferr, asn2, iferr2, gol.NL{}, asn3}
+				return GO.StmtList{asn, iferr, asn2, iferr2, GO.NL{}, asn3}
 			} else {
-				asn := gol.AssignStmt{Token: gol.AssignDefine}
-				asn.Lhs = gol.ExprList{idblank, iderr}
-				asn.Rhs = gol.CallExpr{Fun: sxexec, Args: args}
+				asn := GO.AssignStmt{Token: GO.AssignDefine}
+				asn.Lhs = GO.ExprList{idblank, iderr}
+				asn.Rhs = GO.CallExpr{Fun: sxexec, Args: args}
 				return asn
 			}
 		}
@@ -691,11 +757,11 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 		}
 
 		if !rec.isslice && !rec.isiter {
-			asn := gol.AssignStmt{Token: gol.AssignDefine}
+			asn := GO.AssignStmt{Token: GO.AssignDefine}
 			asn.Lhs = idrow
-			asn.Rhs = gol.CallExpr{Fun: sxqueryrow, Args: args}
-			//return gol.StmtList{asn, gol.NL{}}
-			return gol.StmtList{asn}
+			asn.Rhs = GO.CallExpr{Fun: sxqueryrow, Args: args}
+			//return GO.StmtList{asn, GO.NL{}}
+			return GO.StmtList{asn}
 		}
 	}
 
@@ -703,81 +769,81 @@ func (g *generator) queryexec(si *specinfo) (stmt gol.StmtNode) {
 	// for-rows-next loop to scan the rows
 	{
 
-		asn := gol.AssignStmt{Token: gol.AssignDefine}
-		asn.Lhs = gol.ExprList{idrows, iderr}
-		asn.Rhs = gol.CallExpr{Fun: sxquery, Args: args}
+		asn := GO.AssignStmt{Token: GO.AssignDefine}
+		asn.Lhs = GO.ExprList{idrows, iderr}
+		asn.Rhs = GO.CallExpr{Fun: sxquery, Args: args}
 
-		iferr := gol.IfStmt{}
-		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-		iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+		iferr := GO.IfStmt{}
+		iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+		iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
-		defclose := gol.DeferStmt{}
-		defclose.Call = gol.CallExpr{Fun: sxrowsclose}
+		defclose := GO.DeferStmt{}
+		defclose.Call = GO.CallExpr{Fun: sxrowsclose}
 
 		fornext := g.fornext(si, g.scantoinput)
 		if g.scantoinput {
-			asni := gol.AssignStmt{Token: gol.AssignDefine}
-			asni.Lhs = gol.Ident{"i"}
-			asni.Rhs = gol.IntLit(0)
-			return gol.StmtList{asn, iferr, defclose, gol.NL{}, asni, fornext}
+			asni := GO.AssignStmt{Token: GO.AssignDefine}
+			asni.Lhs = GO.Ident{"i"}
+			asni.Rhs = GO.IntLit(0)
+			return GO.StmtList{asn, iferr, defclose, GO.NL{}, asni, fornext}
 		}
-		return gol.StmtList{asn, iferr, defclose, gol.NL{}, fornext}
+		return GO.StmtList{asn, iferr, defclose, GO.NL{}, fornext}
 	}
 	return stmt
 }
 
-func (g *generator) returnerr(si *specinfo, errx gol.ExprNode) gol.ReturnStmt {
+func (g *generator) returnerr(si *specinfo, errx GO.ExprNode) GO.ReturnStmt {
 	if si.spec.erh == nil {
-		return gol.ReturnStmt{errx}
+		return GO.ReturnStmt{errx}
 	}
 	if si.spec.erh.isinfo {
-		lit := gol.StructLit{Type: sxerrorinfo, Compact: true}
-		lit.Elems = []gol.FieldElement{
+		lit := GO.StructLit{Type: sxerrorinfo, Compact: true}
+		lit.Elems = []GO.FieldElement{
 			{"Error", iderr},
 			{"Query", idquery},
-			{"SpecKind", gol.StringLit(si.spec.kind.String())},
-			{"SpecName", gol.StringLit(si.spec.name)},
+			{"SpecKind", GO.StringLit(si.spec.kind.String())},
+			{"SpecName", GO.StringLit(si.spec.name)},
 			{"SpecValue", idrecv},
 		}
-		litptr := gol.UnaryExpr{Op: gol.UnaryAmp, X: lit}
+		litptr := GO.UnaryExpr{Op: GO.UnaryAmp, X: lit}
 
-		sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.erh.name}}
-		fun := gol.SelectorExpr{X: sx, Sel: gol.Ident{"HandleErrorInfo"}}
-		call := gol.CallExpr{Fun: fun, Args: gol.ArgsList{List: litptr}}
-		return gol.ReturnStmt{call}
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.erh.name}}
+		fun := GO.SelectorExpr{X: sx, Sel: GO.Ident{"HandleErrorInfo"}}
+		call := GO.CallExpr{Fun: fun, Args: GO.ArgsList{List: litptr}}
+		return GO.ReturnStmt{call}
 
 		// TODO if errx is not iderr, then errx is probably a CallFunc and
 		// should first be executed and it's result passed into HandleErrorInfo..
 	}
-	sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{si.spec.erh.name}}
-	fun := gol.SelectorExpr{X: sx, Sel: gol.Ident{"HandleError"}}
-	call := gol.CallExpr{Fun: fun, Args: gol.ArgsList{List: errx}}
-	return gol.ReturnStmt{call}
+	sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.erh.name}}
+	fun := GO.SelectorExpr{X: sx, Sel: GO.Ident{"HandleError"}}
+	call := GO.CallExpr{Fun: fun, Args: GO.ArgsList{List: errx}}
+	return GO.ReturnStmt{call}
 }
 
-func (g *generator) fornext(si *specinfo, inputscan bool) (stmt gol.ForStmt) {
-	stmt.Clause = gol.ForCondition{callrowsnext}
+func (g *generator) fornext(si *specinfo, inputscan bool) (stmt GO.ForStmt) {
+	stmt.Clause = GO.ForCondition{callrowsnext}
 	// scan & assign error
 	{
-		var args gol.ArgsList
+		var args GO.ArgsList
 		if len(g.scanargs) > 2 {
 			args.OnePerLine = 1
 		}
 		args.AddExprs(g.scanargs...)
 		stmt.Body.List = append(stmt.Body.List, g.scaninits...)
 
-		asn := gol.AssignStmt{Token: gol.AssignDefine}
+		asn := GO.AssignStmt{Token: GO.AssignDefine}
 		asn.Lhs = iderr
-		asn.Rhs = gol.CallExpr{Fun: sxrowsscan, Args: args}
+		asn.Rhs = GO.CallExpr{Fun: sxrowsscan, Args: args}
 		stmt.Body.List = append(stmt.Body.List, asn)
 	}
 
 	// check error & newline
 	{
-		iferr := gol.IfStmt{}
-		iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-		iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
-		stmt.Body.List = append(stmt.Body.List, iferr, gol.NL{})
+		iferr := GO.IfStmt{}
+		iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+		iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+		stmt.Body.List = append(stmt.Body.List, iferr, GO.NL{})
 	}
 
 	// append OR iterate
@@ -791,50 +857,50 @@ func (g *generator) fornext(si *specinfo, inputscan bool) (stmt gol.ForStmt) {
 
 		if rec.isafterscanner {
 			// call afterscan
-			sx := gol.SelectorExpr{X: g.scanroot, Sel: idafterscan}
-			afterscan := gol.ExprStmt{gol.CallExpr{Fun: sx}}
+			sx := GO.SelectorExpr{X: g.scanroot, Sel: idafterscan}
+			afterscan := GO.ExprStmt{GO.CallExpr{Fun: sx}}
 			stmt.Body.List = append(stmt.Body.List, afterscan)
 		}
 
 		if rec.isiter {
-			var call gol.CallExpr
+			var call GO.CallExpr
 			if len(rec.itermethod) > 0 {
-				call = gol.CallExpr{Fun: gol.SelectorExpr{
-					X:   gol.SelectorExpr{X: idrecv, Sel: gol.Ident{fieldname}},
-					Sel: gol.Ident{rec.itermethod}},
-					Args: gol.ArgsList{List: gol.Ident{"v"}},
+				call = GO.CallExpr{Fun: GO.SelectorExpr{
+					X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{fieldname}},
+					Sel: GO.Ident{rec.itermethod}},
+					Args: GO.ArgsList{List: GO.Ident{"v"}},
 				}
 			} else {
-				call = gol.CallExpr{Fun: gol.SelectorExpr{
+				call = GO.CallExpr{Fun: GO.SelectorExpr{
 					X:   idrecv,
-					Sel: gol.Ident{fieldname}},
-					Args: gol.ArgsList{List: gol.Ident{"v"}},
+					Sel: GO.Ident{fieldname}},
+					Args: GO.ArgsList{List: GO.Ident{"v"}},
 				}
 			}
 
-			asn := gol.AssignStmt{Token: gol.AssignDefine}
+			asn := GO.AssignStmt{Token: GO.AssignDefine}
 			asn.Lhs = iderr
 			asn.Rhs = call
 
-			iferr := gol.IfStmt{}
+			iferr := GO.IfStmt{}
 			iferr.Init = asn
-			iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-			iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+			iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+			iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 			stmt.Body.List = append(stmt.Body.List, iferr)
 		} else if g.scantoinput {
-			asn := gol.AssignStmt{Token: gol.AssignAdd}
-			asn.Lhs = gol.Ident{"i"}
-			asn.Rhs = gol.IntLit(1)
+			asn := GO.AssignStmt{Token: GO.AssignAdd}
+			asn.Lhs = GO.Ident{"i"}
+			asn.Rhs = GO.IntLit(1)
 			stmt.Body.List = append(stmt.Body.List, asn)
 		} else {
-			appnd := gol.CallExpr{Fun: gol.Ident{"append"}}
-			appnd.Args = gol.ArgsList{List: gol.ExprList{
-				gol.SelectorExpr{X: idrecv, Sel: gol.Ident{fieldname}},
-				gol.Ident{"v"},
+			appnd := GO.CallExpr{Fun: GO.Ident{"append"}}
+			appnd.Args = GO.ArgsList{List: GO.ExprList{
+				GO.SelectorExpr{X: idrecv, Sel: GO.Ident{fieldname}},
+				GO.Ident{"v"},
 			}}
 
-			asn := gol.AssignStmt{Token: gol.Assign}
-			asn.Lhs = gol.SelectorExpr{X: idrecv, Sel: gol.Ident{fieldname}}
+			asn := GO.AssignStmt{Token: GO.Assign}
+			asn.Lhs = GO.SelectorExpr{X: idrecv, Sel: GO.Ident{fieldname}}
 			asn.Rhs = appnd
 			stmt.Body.List = append(stmt.Body.List, asn)
 		}
@@ -842,9 +908,9 @@ func (g *generator) fornext(si *specinfo, inputscan bool) (stmt gol.ForStmt) {
 	return stmt
 }
 
-func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
+func (g *generator) returnstmt(si *specinfo) (stmt GO.StmtNode) {
 	if si.spec.rowsaffected != nil {
-		return gol.ReturnStmt{idnil}
+		return GO.ReturnStmt{idnil}
 	}
 
 	if si.spec.kind == speckindSelect || si.spec.returning != nil {
@@ -857,25 +923,25 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 
 		if rel.rec.isslice || rel.rec.isarray || rel.rec.isiter {
 			if si.spec.erh != nil && si.spec.erh.isinfo {
-				asn := gol.AssignStmt{Token: gol.AssignDefine}
+				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = callrowserr
 
-				iferr := gol.IfStmt{}
+				iferr := GO.IfStmt{}
 				iferr.Init = asn
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
-				return gol.StmtList{iferr, gol.ReturnStmt{idnil}}
+				return GO.StmtList{iferr, GO.ReturnStmt{idnil}}
 			}
 			return g.returnerr(si, callrowserr)
 		} else {
-			var args gol.ArgsList
-			var list gol.StmtList // result
+			var args GO.ArgsList
+			var list GO.StmtList // result
 
 			if si.spec.selkind > selectfrom {
-				fx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
-				args.AddExprs(gol.UnaryExpr{Op: gol.UnaryAmp, X: fx})
+				fx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rel.name}}
+				args.AddExprs(GO.UnaryExpr{Op: GO.UnaryAmp, X: fx})
 			} else {
 				if len(g.scanargs) > 2 {
 					args.OnePerLine = 1
@@ -885,41 +951,41 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 			}
 
 			if !rel.rec.isafterscanner {
-				call := gol.CallExpr{Fun: sxrowscan, Args: args}
+				call := GO.CallExpr{Fun: sxrowscan, Args: args}
 				if si.spec.erh != nil && si.spec.erh.isinfo {
-					asn := gol.AssignStmt{Token: gol.AssignDefine}
+					asn := GO.AssignStmt{Token: GO.AssignDefine}
 					asn.Lhs = iderr
 					asn.Rhs = call
 
-					iferr := gol.IfStmt{}
-					iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-					iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+					iferr := GO.IfStmt{}
+					iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+					iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
-					list = append(list, asn, iferr, gol.ReturnStmt{idnil})
+					list = append(list, asn, iferr, GO.ReturnStmt{idnil})
 				} else {
 					list = append(list, g.returnerr(si, call))
 				}
 			} else {
 				// scan & assign error
-				asn := gol.AssignStmt{Token: gol.AssignDefine}
+				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = iderr
-				asn.Rhs = gol.CallExpr{Fun: sxrowscan, Args: args}
+				asn.Rhs = GO.CallExpr{Fun: sxrowscan, Args: args}
 
 				// check error
-				iferr := gol.IfStmt{}
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+				iferr := GO.IfStmt{}
+				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
 				// call afterscan
-				sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
-				sx = gol.SelectorExpr{X: sx, Sel: idafterscan}
-				afterscan := gol.ExprStmt{gol.CallExpr{Fun: sx}}
+				sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rel.name}}
+				sx = GO.SelectorExpr{X: sx, Sel: idafterscan}
+				afterscan := GO.ExprStmt{GO.CallExpr{Fun: sx}}
 
 				// call afterscan
-				ret := gol.ReturnStmt{idnil}
+				ret := GO.ReturnStmt{idnil}
 
 				// done
-				list = append(list, asn, iferr, gol.NL{}, afterscan, ret)
+				list = append(list, asn, iferr, GO.NL{}, afterscan, ret)
 			}
 
 			return list
@@ -936,64 +1002,64 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 
 		if rel.rec.isslice || rel.rec.isarray || rel.rec.isiter {
 			if si.spec.erh != nil && si.spec.erh.isinfo {
-				asn := gol.AssignStmt{Token: gol.AssignDefine}
+				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = callrowserr
 
-				iferr := gol.IfStmt{}
+				iferr := GO.IfStmt{}
 				iferr.Init = asn
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
-				return gol.StmtList{iferr, gol.ReturnStmt{idnil}}
+				return GO.StmtList{iferr, GO.ReturnStmt{idnil}}
 			}
 			return g.returnerr(si, callrowserr)
 		} else {
-			var args gol.ArgsList
+			var args GO.ArgsList
 			if len(g.scanargs) > 2 {
 				args.OnePerLine = 1
 			}
 			args.AddExprs(g.scanargs...)
 
-			var list gol.StmtList // result
+			var list GO.StmtList // result
 			list = append(list, g.scaninits...)
 
 			if !rel.rec.isafterscanner {
-				call := gol.CallExpr{Fun: sxrowscan, Args: args}
+				call := GO.CallExpr{Fun: sxrowscan, Args: args}
 				if si.spec.erh != nil && si.spec.erh.isinfo {
-					asn := gol.AssignStmt{Token: gol.AssignDefine}
+					asn := GO.AssignStmt{Token: GO.AssignDefine}
 					asn.Lhs = iderr
 					asn.Rhs = call
 
-					iferr := gol.IfStmt{}
-					iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-					iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+					iferr := GO.IfStmt{}
+					iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+					iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
-					list = append(list, asn, iferr, gol.ReturnStmt{idnil})
+					list = append(list, asn, iferr, GO.ReturnStmt{idnil})
 				} else {
 					list = append(list, g.returnerr(si, call))
 				}
 			} else {
 				// scan & assing error
-				asn := gol.AssignStmt{Token: gol.AssignDefine}
+				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = iderr
-				asn.Rhs = gol.CallExpr{Fun: sxrowscan, Args: args}
+				asn.Rhs = GO.CallExpr{Fun: sxrowscan, Args: args}
 
 				// check error
-				iferr := gol.IfStmt{}
-				iferr.Cond = gol.BinaryExpr{X: iderr, Op: gol.BinaryNeq, Y: idnil}
-				iferr.Body = gol.BlockStmt{List: []gol.StmtNode{g.returnerr(si, iderr)}}
+				iferr := GO.IfStmt{}
+				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
 				// call afterscan
-				sx := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{rel.name}}
-				sx = gol.SelectorExpr{X: sx, Sel: idafterscan}
-				afterscan := gol.ExprStmt{gol.CallExpr{Fun: sx}}
+				sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rel.name}}
+				sx = GO.SelectorExpr{X: sx, Sel: idafterscan}
+				afterscan := GO.ExprStmt{GO.CallExpr{Fun: sx}}
 
 				// call afterscan
-				ret := gol.ReturnStmt{idnil}
+				ret := GO.ReturnStmt{idnil}
 
 				// done
-				list = append(list, asn, iferr, gol.NL{}, afterscan, ret)
+				list = append(list, asn, iferr, GO.NL{}, afterscan, ret)
 			}
 
 			return list
@@ -1003,18 +1069,18 @@ func (g *generator) returnstmt(si *specinfo) (stmt gol.StmtNode) {
 	return g.returnerr(si, iderr)
 }
 
-func (g *generator) rectype(rec recordtype) gol.TypeNode {
+func (g *generator) rectype(rec recordtype) GO.TypeNode {
 	if rec.base.isimported {
-		return gol.QualifiedIdent{rec.base.pkgname, rec.base.name}
+		return GO.QualifiedIdent{rec.base.pkgname, rec.base.name}
 	}
-	return gol.Ident{rec.base.name}
+	return GO.Ident{rec.base.name}
 }
 
-func (g *generator) pathelemtype(pe *pathelem) gol.TypeNode {
+func (g *generator) pathelemtype(pe *pathelem) GO.TypeNode {
 	if pe.isimported {
-		return gol.QualifiedIdent{pe.typepkgname, pe.typename}
+		return GO.QualifiedIdent{pe.typepkgname, pe.typename}
 	}
-	return gol.Ident{pe.typename}
+	return GO.Ident{pe.typename}
 }
 
 func (g *generator) addimport(path, name, local string) {
@@ -1030,11 +1096,11 @@ func (g *generator) addimport(path, name, local string) {
 		local = ""
 	}
 
-	spec := gol.ImportSpec{Path: gol.StringLit(path), Name: gol.Ident{local}}
+	spec := GO.ImportSpec{Path: GO.StringLit(path), Name: GO.Ident{local}}
 	g.imports.Specs = append(g.imports.Specs, spec)
 }
 
-func (g *generator) sqlnode(si *specinfo) (node gol.Node) {
+func (g *generator) sqlnode(si *specinfo) (node GO.Node) {
 	switch si.spec.kind {
 	case speckindInsert:
 		return g.sqlinsert(si)
@@ -1054,13 +1120,13 @@ func (g *generator) sqlnode(si *specinfo) (node gol.Node) {
 	return node
 }
 
-// sqlinsert builds and returns an sql.InsertStatement.
-func (g *generator) sqlinsert(si *specinfo) (stmt sql.InsertStatement) {
-	var src sql.InsertSource
+// sqlinsert builds and returns an SQL.InsertStatement.
+func (g *generator) sqlinsert(si *specinfo) (stmt SQL.InsertStatement) {
+	var src SQL.InsertSource
 	if si.spec.rel.rec.isslice {
-		src.Values = &sql.ValuesClause{}
+		src.Values = &SQL.ValuesClause{}
 	} else {
-		src.Values = &sql.ValuesClause{g.inputparams}
+		src.Values = &SQL.ValuesClause{g.inputparams}
 	}
 
 	stmt.Head.Table = g.sqlrelid(si.spec.rel.relid)
@@ -1070,24 +1136,24 @@ func (g *generator) sqlinsert(si *specinfo) (stmt sql.InsertStatement) {
 	//stmt.Head.Source.Select = nil
 
 	if si.spec.kind == speckindInsert && si.spec.rel.rec.isslice && len(g.outputcolumns) > 0 {
-		var tail sql.InsertTail
-		//tail.OnConflict = nil
-		tail.Returning = sql.ReturningClause(g.outputcolumns) //returning
+		var tail SQL.InsertTail
+		tail.OnConflict = g.sqlonconflict(si)
+		tail.Returning = SQL.ReturningClause(g.outputcolumns)
 		g.sqltailnode = tail
 	} else {
-		//stmt.Tail.OnConflict = nil
-		stmt.Tail.Returning = sql.ReturningClause(g.outputcolumns) //returning
+		stmt.Tail.OnConflict = g.sqlonconflict(si)
+		stmt.Tail.Returning = SQL.ReturningClause(g.outputcolumns)
 	}
 	return stmt
 }
 
-func (g *generator) sqlupdate(si *specinfo) (updstmt sql.UpdateStatement) {
+func (g *generator) sqlupdate(si *specinfo) (updstmt SQL.UpdateStatement) {
 	// TODO
 	return updstmt
 }
 
-// sqlselect builds and returns an sql.SelectStatement.
-func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
+// sqlselect builds and returns an SQL.SelectStatement.
+func (g *generator) sqlselect(si *specinfo) (selstmt SQL.SelectStatement) {
 	selstmt.Columns = g.outputcolumns // columns
 	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	selstmt.Join = g.sqljoin(si.spec.join)
@@ -1098,17 +1164,17 @@ func (g *generator) sqlselect(si *specinfo) (selstmt sql.SelectStatement) {
 	return selstmt
 }
 
-// sqldelete builds and returns an sql.DeleteStatement.
-func (g *generator) sqldelete(si *specinfo) (delstmt sql.DeleteStatement) {
+// sqldelete builds and returns an SQL.DeleteStatement.
+func (g *generator) sqldelete(si *specinfo) (delstmt SQL.DeleteStatement) {
 	delstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	delstmt.Using = g.sqlusing(si.spec.join)
 	delstmt.Where = g.sqlwhere(si.spec.where)
-	delstmt.Returning = sql.ReturningClause(g.outputcolumns) //returning
+	delstmt.Returning = SQL.ReturningClause(g.outputcolumns) //returning
 	return delstmt
 }
 
-// sqlselectexists builds and returns an sql.SelectExistsStatement.
-func (g *generator) sqlselectexists(si *specinfo) (selstmt sql.SelectExistsStatement) {
+// sqlselectexists builds and returns an SQL.SelectExistsStatement.
+func (g *generator) sqlselectexists(si *specinfo) (selstmt SQL.SelectExistsStatement) {
 	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	selstmt.Join = g.sqljoin(si.spec.join)
 	selstmt.Not = si.spec.selkind == selectnotexists
@@ -1124,8 +1190,8 @@ func (g *generator) sqlselectexists(si *specinfo) (selstmt sql.SelectExistsState
 	return selstmt
 }
 
-// sqlselectcount builds and returns an sql.SelectCountStatement.
-func (g *generator) sqlselectcount(si *specinfo) (selstmt sql.SelectCountStatement) {
+// sqlselectcount builds and returns an SQL.SelectCountStatement.
+func (g *generator) sqlselectcount(si *specinfo) (selstmt SQL.SelectCountStatement) {
 	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
 	selstmt.Join = g.sqljoin(si.spec.join)
 	if si.spec.filter == "" {
@@ -1136,32 +1202,32 @@ func (g *generator) sqlselectcount(si *specinfo) (selstmt sql.SelectCountStateme
 	return selstmt
 }
 
-func (g *generator) sqlwhere(w *whereblock) (where sql.WhereClause) {
+func (g *generator) sqlwhere(w *whereblock) (where SQL.WhereClause) {
 	if w != nil {
-		sel := gol.SelectorExpr{X: idrecv, Sel: gol.Ident{w.name}}
+		sel := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{w.name}}
 		where.SearchCondition, _ = g.sqlsearchcond(w.items, sel, false)
 	}
 	return where
 }
 
-func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, parenthesized bool) (list sql.BoolValueExprList, count int) {
+func (g *generator) sqlsearchcond(items []*predicateitem, sel GO.SelectorExpr, parenthesized bool) (list SQL.BoolValueExprList, count int) {
 	for _, item := range items {
 		count += 1
 
-		var x sql.BoolValueExpr
+		var x SQL.BoolValueExpr
 		switch node := item.node.(type) {
 		// nested: recurse
 		case *nestedpredicate:
 			var ncount int
 
-			sel := gol.SelectorExpr{X: sel, Sel: gol.Ident{node.name}}
+			sel := GO.SelectorExpr{X: sel, Sel: GO.Ident{node.name}}
 			x, ncount = g.sqlsearchcond(node.items, sel, true)
 
 			count += ncount - 1
 
 		// 3-arg predicate: build & return
 		case *betweenpredicate:
-			p := sql.BetweenPredicate{}
+			p := SQL.BetweenPredicate{}
 			p.Predicand = g.sqlcolref(node.colid)
 			if x, ok := node.x.(colid); ok {
 				p.LowEnd = g.sqlcolref(x)
@@ -1180,8 +1246,8 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 		// 2-arg predicates: prepare first, then build & return
 		case *fieldpredicate, *columnpredicate:
 			var (
-				lhs     sql.ValueExpr
-				rhs     sql.ValueExpr
+				lhs     SQL.ValueExpr
+				rhs     SQL.ValueExpr
 				pred    predicate
 				qua     quantifier
 				field   string
@@ -1196,14 +1262,14 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 				lhs = g.sqlcolref(node.colid)
 				rhs = g.sqlparam()
 				if len(node.modfunc) > 0 {
-					li := sql.RoutineInvocation{}
+					li := SQL.RoutineInvocation{}
 					li.Name = string(node.modfunc)
-					li.Args = []sql.ValueExpr{lhs}
+					li.Args = []SQL.ValueExpr{lhs}
 					lhs = li
 
-					ri := sql.RoutineInvocation{}
+					ri := SQL.RoutineInvocation{}
 					ri.Name = string(node.modfunc)
-					ri.Args = []sql.ValueExpr{rhs}
+					ri.Args = []SQL.ValueExpr{rhs}
 					rhs = ri
 				}
 
@@ -1219,19 +1285,19 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 				if !node.colid2.isempty() {
 					rhs = g.sqlcolref(node.colid2)
 				} else if len(node.lit) > 0 {
-					rhs = sql.Literal{node.lit}
+					rhs = SQL.Literal{node.lit}
 				}
 			}
 
 			// quantifier?
 			if qua > 0 {
 				if len(coltype) > 0 {
-					cast := sql.CastExpr{}
+					cast := SQL.CastExpr{}
 					cast.Expr = rhs
 					cast.Type = coltype + "[]"
 					rhs = cast
 				}
-				qx := sql.QuantifiedExpr{}
+				qx := SQL.QuantifiedExpr{}
 				qx.Qua = quantifier2sqlquantifier[qua]
 				qx.Expr = rhs
 				rhs = qx
@@ -1240,74 +1306,74 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 			// build & return
 			switch pred {
 			case iseq, noteq, noteq2, islt, isgt, islte, isgte:
-				p := sql.ComparisonPredicate{}
+				p := SQL.ComparisonPredicate{}
 				p.Cmp = predicate2sqlcmpop[pred]
 				p.LPredicand = lhs
 				p.RPredicand = rhs
 				x = p
 			case islike, notlike:
-				p := sql.LikePredicate{}
+				p := SQL.LikePredicate{}
 				p.Not = (pred == notlike)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
 			case isilike, notilike:
-				p := sql.ILikePredicate{}
+				p := SQL.ILikePredicate{}
 				p.Not = (pred == notilike)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
 			case issimilar, notsimilar:
-				p := sql.SimilarPredicate{}
+				p := SQL.SimilarPredicate{}
 				p.Not = (pred == notsimilar)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
 			case isdistinct, notdistinct:
-				p := sql.DistinctPredicate{}
+				p := SQL.DistinctPredicate{}
 				p.Not = (pred == notdistinct)
 				p.LPredicand = lhs
 				p.RPredicand = rhs
 				x = p
 			case ismatch, ismatchi, notmatch, notmatchi:
-				p := sql.RegexPredicate{}
+				p := SQL.RegexPredicate{}
 				p.Op = predicate2sqlregexop[pred]
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
 			case isin, notin:
-				sx := gol.SelectorExpr{X: sel, Sel: gol.Ident{field}}
+				sx := GO.SelectorExpr{X: sel, Sel: GO.Ident{field}}
 				g.insx = append(g.insx, sx)
 				g.nparam -= 1  // ordinal param won't be used directly
 				g.asvar = true // queryString should be var not const
 
 				num := strconv.Itoa(len(g.insx))
-				arg1 := gol.Ident{"len" + num}
-				//arg2 := gol.BinaryExpr{X: gol.Ident{"pos" + num}, Op: gol.BinaryAdd, Y: gol.IntLit(1)}
-				arg2 := gol.Ident{"pos" + num}
+				arg1 := GO.Ident{"len" + num}
+				//arg2 := GO.BinaryExpr{X: GO.Ident{"pos" + num}, Op: GO.BinaryAdd, Y: GO.IntLit(1)}
+				arg2 := GO.Ident{"pos" + num}
 
 				call := callinvaluelist
-				call.Args = gol.ArgsList{List: gol.ExprList{arg1, arg2}}
+				call.Args = GO.ArgsList{List: GO.ExprList{arg1, arg2}}
 
-				p := sql.InPredicate{}
+				p := SQL.InPredicate{}
 				p.Not = (pred == notin)
 				p.Predicand = lhs
-				p.ValueList = sql.HostValue{gol.RawStringInsertExpr{call}}
+				p.ValueList = SQL.HostValue{GO.RawStringInsertExpr{call}}
 				x = p
 			case istrue, nottrue, isfalse, notfalse, isunknown, notunknown:
-				p := sql.TruthPredicate{}
+				p := SQL.TruthPredicate{}
 				p.Not = (pred == nottrue || pred == notfalse || pred == notunknown)
 				p.Truth = predicate2sqltruth[pred]
 				p.Predicand = lhs
 				x = p
 			case isnull, notnull:
-				p := sql.NullPredicate{}
+				p := SQL.NullPredicate{}
 				p.Not = (pred == notnull)
 				p.Predicand = lhs
 				x = p
 			default:
 				// no predicate, assume lhs is by itself a boolean value expression
-				if p, ok := lhs.(sql.BoolValueExpr); ok {
+				if p, ok := lhs.(SQL.BoolValueExpr); ok {
 					x = p
 				}
 			}
@@ -1317,9 +1383,9 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 		default: // initial
 			list.Initial = x
 		case booland:
-			list.Items = append(list.Items, sql.AND{Operand: x})
+			list.Items = append(list.Items, SQL.AND{Operand: x})
 		case boolor:
-			list.Items = append(list.Items, sql.OR{Operand: x})
+			list.Items = append(list.Items, SQL.OR{Operand: x})
 		}
 
 	}
@@ -1332,13 +1398,47 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel gol.SelectorExpr, 
 	return list, count
 }
 
-func (g *generator) sqlorderby(spec *typespec) (order sql.OrderClause) {
+func (g *generator) sqlonconflict(si *specinfo) (clause *SQL.OnConflictClause) {
+	if si.spec.onconflict == nil {
+		return nil
+	}
+
+	clause = new(SQL.OnConflictClause)
+
+	// conflict target
+	if len(si.spec.onconflict.column) > 0 {
+		target := make(SQL.ConflictColumns, len(si.spec.onconflict.column))
+		for i := 0; i < len(target); i++ {
+			target[i] = SQL.Name(si.spec.onconflict.column[i].name)
+		}
+		clause.Target = target
+	} else if len(si.spec.onconflict.index) > 0 {
+		target := SQL.ConflictIndex{}
+		target.Expr = si.info.conflictindex.indexpr
+		target.Pred = si.info.conflictindex.indpred
+		clause.Target = target
+	} else if len(si.spec.onconflict.constraint) > 0 {
+		clause.Target = SQL.ConflictConstraint(si.spec.onconflict.constraint)
+	}
+
+	if si.spec.onconflict.ignore {
+		return clause
+	}
+
+	// TODO
+	// spec.onconflict.update.all
+	// spec.onconflict.update.items
+
+	return clause
+}
+
+func (g *generator) sqlorderby(spec *typespec) (order SQL.OrderClause) {
 	if spec.orderby == nil {
 		return order
 	}
 
 	for _, item := range spec.orderby.items {
-		by := sql.OrderBy{}
+		by := SQL.OrderBy{}
 		by.Column = g.sqlcolref(item.col)
 		by.Desc = (item.dir == orderdesc)
 		order.List = append(order.List, by)
@@ -1346,14 +1446,14 @@ func (g *generator) sqlorderby(spec *typespec) (order sql.OrderClause) {
 	return order
 }
 
-func (g *generator) sqlusing(jb *joinblock) (using sql.UsingClause) {
+func (g *generator) sqlusing(jb *joinblock) (using SQL.UsingClause) {
 	if jb == nil {
 		return using
 	}
 
-	using.List = []sql.TableExpr{g.sqlrelid(jb.rel)}
+	using.List = []SQL.TableExpr{g.sqlrelid(jb.rel)}
 	for _, item := range jb.items {
-		var join sql.TableJoin
+		var join SQL.TableJoin
 		join.Type = jointype2sqljointype[item.typ]
 		join.Rel = g.sqlrelid(item.rel)
 		join.Cond = g.sqljoincond(item.conds)
@@ -1362,13 +1462,13 @@ func (g *generator) sqlusing(jb *joinblock) (using sql.UsingClause) {
 	return using
 }
 
-func (g *generator) sqljoin(jb *joinblock) (jc sql.JoinClause) {
+func (g *generator) sqljoin(jb *joinblock) (jc SQL.JoinClause) {
 	if jb == nil {
 		return jc
 	}
 
 	for _, item := range jb.items {
-		var join sql.TableJoin
+		var join SQL.TableJoin
 		join.Type = jointype2sqljointype[item.typ]
 		join.Rel = g.sqlrelid(item.rel)
 		join.Cond = g.sqljoincond(item.conds)
@@ -1377,9 +1477,9 @@ func (g *generator) sqljoin(jb *joinblock) (jc sql.JoinClause) {
 	return jc
 }
 
-func (g *generator) sqljoincond(items []*predicateitem) (cond sql.JoinCondition) {
+func (g *generator) sqljoincond(items []*predicateitem) (cond SQL.JoinCondition) {
 	if len(items) > 0 {
-		list, _ := g.sqlsearchcond(items, gol.SelectorExpr{}, false)
+		list, _ := g.sqlsearchcond(items, GO.SelectorExpr{}, false)
 		list.ListStyle = false
 
 		cond.SearchCondition = list
@@ -1387,13 +1487,13 @@ func (g *generator) sqljoincond(items []*predicateitem) (cond sql.JoinCondition)
 	return cond
 }
 
-// sqllimit generates and returns an sql.LimitClause based on the given spec's "limit" field.
-func (g *generator) sqllimit(spec *typespec) (limit sql.LimitClause) {
+// sqllimit generates and returns an SQL.LimitClause based on the given spec's "limit" field.
+func (g *generator) sqllimit(spec *typespec) (limit SQL.LimitClause) {
 	if spec.limit != nil {
 		if len(spec.limit.field) > 0 {
 			limit.Value = g.sqlparam()
 		} else if spec.limit.value > 0 {
-			limit.Value = sql.LimitUint(spec.limit.value)
+			limit.Value = SQL.LimitUint(spec.limit.value)
 		}
 		return limit
 	}
@@ -1402,62 +1502,43 @@ func (g *generator) sqllimit(spec *typespec) (limit sql.LimitClause) {
 	// field handles only a single record (i.e. it's not a slice, etc.)
 	// then, by default, generate a `LIMIT 1` clause.
 	if r := spec.rel.rec; !r.isarray && !r.isslice && !r.isiter {
-		limit.Value = sql.LimitInt(1)
+		limit.Value = SQL.LimitInt(1)
 		return limit
 	}
 	return limit
 }
 
-// sqloffset generates and returns an sql.OffsetClause based on the given spec's "offset" field.
-func (g *generator) sqloffset(spec *typespec) (offset sql.OffsetClause) {
+// sqloffset generates and returns an SQL.OffsetClause based on the given spec's "offset" field.
+func (g *generator) sqloffset(spec *typespec) (offset SQL.OffsetClause) {
 	if spec.offset != nil {
 		if len(spec.offset.field) > 0 {
 			offset.Value = g.sqlparam()
 		} else if spec.offset.value > 0 {
-			offset.Value = sql.OffsetUint(spec.offset.value)
+			offset.Value = SQL.OffsetUint(spec.offset.value)
 		}
 		return offset
 	}
 	return offset
 }
 
-func (g *generator) sqlrelid(id relid) sql.Ident {
-	return sql.Ident{
-		Name:  sql.Name(id.name),
+func (g *generator) sqlrelid(id relid) SQL.Ident {
+	return SQL.Ident{
+		Name:  SQL.Name(id.name),
 		Qual:  id.qual,
 		Alias: id.alias,
 	}
 }
 
-func (g *generator) sqlcolexpr(fc *fieldcolumn) sql.ValueExpr {
-	id := g.sqlcolref(fc.colid)
-	// TODO
-	//if f.UseCOALESCE || (f.IsNULLable && canCoalesce && !f.Type.IsPointer) {
-	//	coalesce := sqlang.Coalesce{}
-	//	coalesce.A = col
-	//	coalesce.B = _sql_empty_literal(f)
-
-	//	if (f.ColTypeIsEnum || f.ColTypeName == "uuid") && len(f.COALESCEValue) == 0 {
-	//		coalesce.A = sqlang.CastExpr{
-	//			X:    coalesce.A,
-	//			Type: sqlang.Literal("text"),
-	//		}
-	//	}
-	//	return coalesce
-	//}
-	return id
-}
-
-func (g *generator) sqlcolref(id colid) sql.ColumnReference {
-	return sql.ColumnReference{
+func (g *generator) sqlcolref(id colid) SQL.ColumnReference {
+	return SQL.ColumnReference{
 		Qual: id.qual,
-		Name: sql.Name(id.name),
+		Name: SQL.Name(id.name),
 	}
 }
 
-func (g *generator) sqlparam() sql.OrdinalParameterSpec {
+func (g *generator) sqlparam() SQL.OrdinalParameterSpec {
 	g.nparam += 1
-	return sql.OrdinalParameterSpec{g.nparam}
+	return SQL.OrdinalParameterSpec{g.nparam}
 }
 
 // declarevar reports whether the queryString value should be declared as a var or as a const.
@@ -1467,76 +1548,76 @@ func (g *generator) declarevar(si *specinfo) bool {
 			si.spec.rel.rec.isslice)
 }
 
-var overridingkind2sqlclause = map[overridingkind]sql.OverridingClause{
+var overridingkind2sqlclause = map[overridingkind]SQL.OverridingClause{
 	overridingsystem: "SYSTEM",
 	overridinguser:   "USER",
 }
 
-var predicate2sqlcmpop = map[predicate]sql.CMPOP{
-	iseq:   sql.EQUAL,
-	noteq:  sql.NOT_EQUAL,
-	noteq2: sql.NOT_EQUAL2,
-	islt:   sql.LESS_THAN,
-	isgt:   sql.GREATER_THAN,
-	islte:  sql.LESS_THAN_EQUAL,
-	isgte:  sql.GREATER_THAN_EQUAL,
+var predicate2sqlcmpop = map[predicate]SQL.CMPOP{
+	iseq:   SQL.EQUAL,
+	noteq:  SQL.NOT_EQUAL,
+	noteq2: SQL.NOT_EQUAL2,
+	islt:   SQL.LESS_THAN,
+	isgt:   SQL.GREATER_THAN,
+	islte:  SQL.LESS_THAN_EQUAL,
+	isgte:  SQL.GREATER_THAN_EQUAL,
 }
 
-var predicate2sqlregexop = map[predicate]sql.REGEXOP{
-	ismatch:   sql.MATCH,
-	ismatchi:  sql.MATCH_CI,
-	notmatch:  sql.NOT_MATCH,
-	notmatchi: sql.NOT_MATCH_CI,
+var predicate2sqlregexop = map[predicate]SQL.REGEXOP{
+	ismatch:   SQL.MATCH,
+	ismatchi:  SQL.MATCH_CI,
+	notmatch:  SQL.NOT_MATCH,
+	notmatchi: SQL.NOT_MATCH_CI,
 }
 
-var predicate2sqltruth = map[predicate]sql.TRUTH{
-	isunknown:  sql.UNKNOWN,
-	notunknown: sql.UNKNOWN,
-	istrue:     sql.TRUE,
-	nottrue:    sql.TRUE,
-	isfalse:    sql.FALSE,
-	notfalse:   sql.FALSE,
+var predicate2sqltruth = map[predicate]SQL.TRUTH{
+	isunknown:  SQL.UNKNOWN,
+	notunknown: SQL.UNKNOWN,
+	istrue:     SQL.TRUE,
+	nottrue:    SQL.TRUE,
+	isfalse:    SQL.FALSE,
+	notfalse:   SQL.FALSE,
 }
 
-var quantifier2sqlquantifier = map[quantifier]sql.QUANTIFIER{
-	quantany:  sql.ANY,
-	quantsome: sql.SOME,
-	quantall:  sql.ALL,
+var quantifier2sqlquantifier = map[quantifier]SQL.QUANTIFIER{
+	quantany:  SQL.ANY,
+	quantsome: SQL.SOME,
+	quantall:  SQL.ALL,
 }
 
-var jointype2sqljointype = map[jointype]sql.JoinType{
-	joinleft:  sql.JoinLeft,
-	joinright: sql.JoinRight,
-	joinfull:  sql.JoinFull,
-	joincross: sql.JoinCross,
+var jointype2sqljointype = map[jointype]SQL.JoinType{
+	joinleft:  SQL.JoinLeft,
+	joinright: SQL.JoinRight,
+	joinfull:  SQL.JoinFull,
+	joincross: SQL.JoinCross,
 }
 
-var gotyp2coltyp2converter = map[string]map[string]gol.SelectorExpr{
-	gotypbools:   {"boolean[]": gol.SelectorExpr{ /*TODO*/ }},
-	gotypstrings: {"text[]": gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"StringSliceToTextArray"}}},
+var gotyp2coltyp2converter = map[string]map[string]GO.SelectorExpr{
+	gotypbools:   {"boolean[]": GO.SelectorExpr{ /*TODO*/ }},
+	gotypstrings: {"text[]": GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"StringSliceToTextArray"}}},
 	gotypints: {
-		"integer[]":  gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"IntSliceToIntArray"}},
-		"smallint[]": gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"IntSliceToIntArray"}},
-		"bigint[]":   gol.SelectorExpr{X: gol.Ident{"gosql"}, Sel: gol.Ident{"IntSliceToIntArray"}},
+		"integer[]":  GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
+		"smallint[]": GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
+		"bigint[]":   GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
 	},
 	gotypint8s: {
-		"integer[]":  gol.SelectorExpr{ /*TODO*/ },
-		"smallint[]": gol.SelectorExpr{ /*TODO*/ },
-		"bigint[]":   gol.SelectorExpr{ /*TODO*/ },
+		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
+		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
+		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
 	gotypint16s: {
-		"integer[]":  gol.SelectorExpr{ /*TODO*/ },
-		"smallint[]": gol.SelectorExpr{ /*TODO*/ },
-		"bigint[]":   gol.SelectorExpr{ /*TODO*/ },
+		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
+		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
+		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
 	gotypint32s: {
-		"integer[]":  gol.SelectorExpr{ /*TODO*/ },
-		"smallint[]": gol.SelectorExpr{ /*TODO*/ },
-		"bigint[]":   gol.SelectorExpr{ /*TODO*/ },
+		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
+		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
+		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
 	gotypint64s: {
-		"integer[]":  gol.SelectorExpr{ /*TODO*/ },
-		"smallint[]": gol.SelectorExpr{ /*TODO*/ },
-		"bigint[]":   gol.SelectorExpr{ /*TODO*/ },
+		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
+		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
+		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
 }

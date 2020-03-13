@@ -11,6 +11,7 @@ package gosql
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,6 +72,7 @@ const (
 		, i.indisready
 		, i.indkey
 		, pg_catalog.pg_get_indexdef(i.indexrelid)
+		, COALESCE(pg_catalog.pg_get_expr(i.indpred, i.indrelid, true), '')
 	FROM pg_index i
 	LEFT JOIN pg_class c ON c.oid = i.indexrelid
 	WHERE i.indrelid = $1
@@ -187,6 +189,9 @@ type fieldcolumn struct {
 type pginfo struct {
 	input  []*fieldcolumn
 	output []*fieldcolumn
+
+	// info on the index to be used for an ON CONFLICT clause
+	conflictindex *pgindex
 }
 
 func pgcheck(pg *postgres, spec *typespec) (info *pginfo, err error) {
@@ -517,7 +522,7 @@ func (c *pgchecker) checkjoin(jb *joinblock) error {
 func (c *pgchecker) checkonconflict(onconf *onconflictblock) error {
 	rel := c.rel
 
-	// If a Column directive was provided in an OnConflict block make
+	// If a Column directive was provided in an OnConflict block, make
 	// sure that the listed columns are present in the target table.
 	// Make also msure that the list of columns matches the full list
 	// of columns of a unique index that's present on the target table.
@@ -541,6 +546,7 @@ func (c *pgchecker) checkonconflict(onconf *onconflictblock) error {
 			}
 
 			match = true
+			c.info.conflictindex = ind
 			break
 		}
 		if !match {
@@ -560,8 +566,7 @@ func (c *pgchecker) checkonconflict(onconf *onconflictblock) error {
 			return errors.NoDBIndexError
 		}
 
-		// TODO(mkopriva): retain the index expression so that it can
-		// be used later during code generation.
+		c.info.conflictindex = ind
 	}
 
 	// If a Constraint directive was provided make sure that the
@@ -1062,10 +1067,13 @@ func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
 			&ind.isready,
 			(*int2vec)(&ind.key),
 			&ind.indexdef,
+			&ind.indpred,
 		)
 		if err != nil {
 			return nil, err
 		}
+
+		ind.indexpr = parseindexpr(ind.indexdef)
 		rel.indexes = append(rel.indexes, ind)
 	}
 	if err := rows.Err(); err != nil {
@@ -1200,6 +1208,8 @@ type pgindex struct {
 	key []int16
 	// The index definition.
 	indexdef string
+	indpred  string
+	indexpr  string
 }
 
 type pgtype struct {
@@ -1904,3 +1914,69 @@ aloop:
 	}
 	return true
 }
+
+var reusingmethod = regexp.MustCompile(`(?i:\susing\s)`)
+
+func parseindexpr(s string) (expr string) {
+	loc := reusingmethod.FindStringIndex(s)
+	if len(loc) > 1 {
+		s = s[loc[1]:]
+	}
+	if i := strings.Index(s, "("); i < 0 {
+		return
+	} else {
+		s = s[i+1:]
+	}
+
+	var (
+		r   rune
+		n   int // nested
+		end int
+	)
+	for end, r = range s {
+		// TODO(mkopriva): This needs more work. Currently this is very
+		// much a naive way of extracting the (column_name | expression)
+		// section of the definition, for example if the section contains
+		// a string that has a ')' inside the result will be incorrect.
+		if r == '(' {
+			n += 1 // nest
+		} else if r == ')' {
+			if n == 0 {
+				break // done
+			}
+			n -= 1 // unnest
+		}
+	}
+	return s[:end]
+}
+
+/*
+
+NOTE alternative way to retrive the index's (column / expression) list although
+without the collation and opclass...
+
+SELECT
+	c.relname
+	, i.indnatts
+	, i.indisunique
+	, i.indisprimary
+	, i.indisexclusion
+	, i.indimmediate
+	, i.indisready
+	, i.indkey
+	, pg_catalog.pg_get_indexdef(i.indexrelid)
+	, COALESCE(z.index_expr, '')
+	, COALESCE(pg_catalog.pg_get_expr(i.indpred, i.indrelid, true), '')
+FROM pg_index i
+LEFT JOIN pg_class c ON c.oid = i.indexrelid
+LEFT JOIN LATERAL (
+	SELECT string_agg(idx, ', ') index_expr FROM (
+		SELECT pg_catalog.pg_get_indexdef(c.oid, s.i, false) AS idx
+		FROM pg_index x
+		LEFT JOIN generate_series(1, i.indnatts) s(i) ON true
+		WHERE x.indexrelid = i.indexrelid
+	) z
+) z ON true
+WHERE i.indrelid = $1
+ORDER BY i.indexrelid
+*/

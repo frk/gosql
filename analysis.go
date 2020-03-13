@@ -1935,8 +1935,14 @@ type betweenpredicate struct {
 }
 
 type onconflictblock struct {
-	column     []colid
-	index      string
+	// A list of column names that constitute a unique index.
+	column []colid
+	// Indicates the name of the index to be used for the on conflict target.
+	// The index name will be used by the db check to retrive the index expression
+	// and the generator will use that to generate the conflict target.
+	index string
+	// The name of a unique constraint. The generator will use this value
+	// to generate the ON CONFLICT ON CONSTRAINT <constraint_name> clause.
 	constraint string
 	ignore     bool
 	update     *collist
