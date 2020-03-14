@@ -1,10 +1,5 @@
 package gosql
 
-// TODO(mkopriva):
-// - given the gosql.Index directive inside an OnConflict block use pg_get_indexdef(index_oid)
-//   to retrieve the index's definition, parse that to extract the index expression and then
-//   use that expression when generating the ON CONFLICT clause.
-//   (https://www.postgresql.org/message-id/204ADCAA-853B-4B5A-A080-4DFA0470B790%40justatheory.com)
 // TODO the postgres types circle(arr) and interval(arr) need a corresponding go type
 // TODO "cancast" per-field tag option, as well as a global option, as well as a list-of-castable-types option
 
@@ -189,6 +184,7 @@ type fieldcolumn struct {
 type pginfo struct {
 	input  []*fieldcolumn
 	output []*fieldcolumn
+	pkeys  []*fieldcolumn
 
 	// info on the index to be used for an ON CONFLICT clause
 	conflictindex *pgindex
@@ -418,16 +414,16 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 			return errors.BadFieldToColumnTypeError
 		}
 
+		cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
+		pair := &fieldcolumn{field: fld, column: col, colid: cid}
 		if c.spec.kind == speckindSelect || isresult {
-			cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
-			pair := &fieldcolumn{field: fld, column: col, colid: cid}
 			c.info.output = append(c.info.output, pair)
 		}
-
 		if !isresult && c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate {
-			cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
-			pair := &fieldcolumn{field: fld, column: col, colid: cid}
 			c.info.input = append(c.info.input, pair)
+		}
+		if col.isprimary || fld.ispkey {
+			c.info.pkeys = append(c.info.pkeys, pair)
 		}
 	}
 	return nil

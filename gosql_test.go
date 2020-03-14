@@ -186,6 +186,15 @@ CREATE UNIQUE INDEX test_onconflict_fruit_key_name_idx ON test_onconflict (lower
 
 ALTER TABLE test_onconflict ADD CONSTRAINT test_onconflict_key_value_key UNIQUE (key, value);
 
+CREATE TABLE test_composite_pkey (
+	id serial
+	, key int4
+	, name text
+	, fruit text
+	, value float8
+	, PRIMARY KEY (id, key, name)
+);
+
 CREATE FUNCTION increment(i integer) RETURNS integer AS $$
 BEGIN
 	RETURN i + 1;

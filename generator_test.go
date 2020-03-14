@@ -138,6 +138,18 @@ func TestGenerate(t *testing.T) {
 			"rowsaffected_errorinfohandler_single",
 			"rowsaffected_single",
 		},
+	}, {
+		dirname: "update",
+		filenames: []string{
+			"all_single",
+			"filter_single",
+			// "from_basic_single",
+			// "from_join_single",
+			"pkey_composite_single",
+			"pkey_single",
+			// "returning_all_single",
+			// "whereblock_single",
+		},
 	}}
 
 	// TODO update

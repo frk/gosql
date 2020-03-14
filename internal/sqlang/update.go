@@ -33,7 +33,7 @@ func (s UpdateHead) Walk(w *writer.Writer) {
 }
 
 type UpdateTail struct {
-	Where     *WhereClause
+	Where     WhereClause
 	Returning ReturningClause
 }
 
@@ -54,7 +54,7 @@ func (c SetClause) Walk(w *writer.Writer) {
 	if len(c.Targets) == 1 {
 		c.Targets[0].Walk(w)
 		w.Write(" = ")
-		c.Values[0].Walk(w)
+		c.Values.Exprs[0].Walk(w)
 		return
 	}
 
@@ -83,21 +83,15 @@ func (g NameGroup) Walk(w *writer.Writer) {
 	w.Write(")")
 }
 
-type ExprGroup []Expr
+type ExprGroup struct {
+	Exprs ValueExprList
+}
 
 func (g ExprGroup) Walk(w *writer.Writer) {
 	w.Write("(")
 	w.NewLine()
 	w.Indent()
-
-	for i, v := range g {
-		if i > 0 {
-			w.NewLine()
-			w.Write(", ")
-		}
-		v.Walk(w)
-	}
-
+	g.Exprs.Walk(w)
 	w.Unindent()
 	w.NewLine()
 	w.Write(")")
