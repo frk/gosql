@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertOnConflictIndexIgnore2SingleQuery) Exec(c gosql.Conn) error {
+func (q *InsertOnConflictColumnUpdateSingle1Query) Exec(c gosql.Conn) error {
 	const queryString = `INSERT INTO "test_onconflict" AS k (
 		"key"
 		, "name"
@@ -18,8 +18,8 @@ func (q *InsertOnConflictIndexIgnore2SingleQuery) Exec(c gosql.Conn) error {
 		, $3
 		, $4
 	)
-	ON CONFLICT (lower(fruit), key, upper(name)) WHERE key < 5
-	DO NOTHING` // `
+	ON CONFLICT ("key")
+	DO UPDATE SET "fruit" = EXCLUDED."fruit"` // `
 
 	_, err := c.Exec(queryString,
 		q.Data.Key,

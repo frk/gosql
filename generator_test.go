@@ -93,24 +93,25 @@ func TestGenerate(t *testing.T) {
 		filenames: []string{
 			"basic_single",
 			"basic_slice",
-			////////////////////////////////////////////////////////
 			"default_all_returning_single",
 			"default_all_returning_slice",
 			"default_all_single",
 			"default_all_slice",
 			"default_single",
 			"default_slice",
-			////////////////////////////////////////////////////////
 			"json_single",
 			"json_slice",
-			////////////////////////////////////////////////////////
-			"onconflict_column_ignore_1_single",
-			"onconflict_column_ignore_2_single",
-			"onconflict_constraint_ignore_1_single",
-			"onconflict_index_ignore_1_single",
-			"onconflict_index_ignore_2_single",
+			"onconflict_column_ignore_single_1",
+			"onconflict_column_ignore_single_2",
+			"onconflict_column_update_single_1",
+			"onconflict_column_update_returning_slice",
+			"onconflict_constraint_ignore_single_1",
 			"onconflict_ignore_single",
-			////////////////////////////////////////////////////////
+			"onconflict_ignore_slice",
+			"onconflict_index_ignore_single_1",
+			"onconflict_index_ignore_single_2",
+			"onconflict_index_update_single_1",
+			"onconflict_index_update_returning_slice",
 			"result_afterscan_iterator",
 			"result_afterscan_single",
 			"result_afterscan_slice",
@@ -123,7 +124,6 @@ func TestGenerate(t *testing.T) {
 			"result_errorinfohandler_single",
 			"result_json_single",
 			"result_json_slice",
-			////////////////////////////////////////////////////////
 			"returning_afterscan_single",
 			"returning_afterscan_slice",
 			"returning_all_json_single",
@@ -134,16 +134,17 @@ func TestGenerate(t *testing.T) {
 			"returning_collist_slice",
 			"returning_errorhandler_slice",
 			"returning_errorinfohandler_slice",
-			////////////////////////////////////////////////////////
 			"rowsaffected_errorhandler_single",
 			"rowsaffected_errorinfohandler_single",
 			"rowsaffected_single",
-			////////////////////////////////////////////////////////
 		},
 	}}
 
 	// TODO update
 	// TODO filter (with textsearch)
+	//
+	// TODO test conversions
+	// TODO test casts
 
 	for _, tt := range tests {
 		cmd := new(command)

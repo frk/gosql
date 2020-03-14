@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertOnConflictColumnIgnore2SingleQuery) Exec(c gosql.Conn) error {
+func (q *InsertOnConflictColumnIgnoreSingle2Query) Exec(c gosql.Conn) error {
 	const queryString = `INSERT INTO "test_onconflict" AS k (
 		"key"
 		, "name"

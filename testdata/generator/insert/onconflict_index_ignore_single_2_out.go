@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertOnConflictIndexIgnore1SingleQuery) Exec(c gosql.Conn) error {
+func (q *InsertOnConflictIndexIgnoreSingle2Query) Exec(c gosql.Conn) error {
 	const queryString = `INSERT INTO "test_onconflict" AS k (
 		"key"
 		, "name"
@@ -18,7 +18,7 @@ func (q *InsertOnConflictIndexIgnore1SingleQuery) Exec(c gosql.Conn) error {
 		, $3
 		, $4
 	)
-	ON CONFLICT (lower(name), upper(fruit) COLLATE "C" text_pattern_ops)
+	ON CONFLICT (lower(fruit), key, upper(name)) WHERE key < 5
 	DO NOTHING` // `
 
 	_, err := c.Exec(queryString,

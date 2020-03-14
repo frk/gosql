@@ -5,10 +5,10 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type InsertOnConflictIndexIgnore2SingleQuery struct {
+type InsertOnConflictColumnUpdateSingle1Query struct {
 	Data       *common.ConflictData `rel:"test_onconflict:k"`
 	OnConflict struct {
-		_ gosql.Index `sql:"test_onconflict_fruit_key_name_idx"`
-		_ gosql.Ignore
+		_ gosql.Column `sql:"key"`
+		_ gosql.Update `sql:"fruit"`
 	}
 }

@@ -1929,54 +1929,35 @@ func parseindexpr(s string) (expr string) {
 	}
 
 	var (
-		r   rune
-		n   int // nested
-		end int
+		r        rune
+		nested   int  // number nested parentheses
+		position int  // position in the input
+		quoted   bool // quoted text in the input
+		escaped  bool // escaped quote `''` in quoted text
 	)
-	for end, r = range s {
-		// TODO(mkopriva): This needs more work. Currently this is very
-		// much a naive way of extracting the (column_name | expression)
-		// section of the definition, for example if the section contains
-		// a string that has a ')' inside the result will be incorrect.
-		if r == '(' {
-			n += 1 // nest
-		} else if r == ')' {
-			if n == 0 {
-				break // done
+	for position, r = range s {
+		if !quoted {
+			if r == '(' {
+				nested += 1 // nest
+			} else if r == ')' {
+				if nested == 0 {
+					break // done
+				}
+				nested -= 1 // unnest
+			} else if r == '\'' {
+				quoted = true
 			}
-			n -= 1 // unnest
+		} else {
+			if r == '\'' && len(s) > position {
+				if s[position+1] == '\'' {
+					escaped = true
+				} else if escaped {
+					escaped = false
+				} else {
+					quoted = false
+				}
+			}
 		}
 	}
-	return s[:end]
+	return s[:position]
 }
-
-/*
-
-NOTE alternative way to retrive the index's (column / expression) list although
-without the collation and opclass...
-
-SELECT
-	c.relname
-	, i.indnatts
-	, i.indisunique
-	, i.indisprimary
-	, i.indisexclusion
-	, i.indimmediate
-	, i.indisready
-	, i.indkey
-	, pg_catalog.pg_get_indexdef(i.indexrelid)
-	, COALESCE(z.index_expr, '')
-	, COALESCE(pg_catalog.pg_get_expr(i.indpred, i.indrelid, true), '')
-FROM pg_index i
-LEFT JOIN pg_class c ON c.oid = i.indexrelid
-LEFT JOIN LATERAL (
-	SELECT string_agg(idx, ', ') index_expr FROM (
-		SELECT pg_catalog.pg_get_indexdef(c.oid, s.i, false) AS idx
-		FROM pg_index x
-		LEFT JOIN generate_series(1, i.indnatts) s(i) ON true
-		WHERE x.indexrelid = i.indexrelid
-	) z
-) z ON true
-WHERE i.indrelid = $1
-ORDER BY i.indexrelid
-*/

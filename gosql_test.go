@@ -171,7 +171,6 @@ CREATE VIEW view_test AS SELECT
 	, (length(col_b) > 0) AS col_z
 FROM column_tests_1;
 
-
 CREATE TABLE test_onconflict (
 	id serial primary key
 	, key int4

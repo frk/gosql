@@ -51,7 +51,9 @@ type InsertTail struct {
 func (t InsertTail) Walk(w *writer.Writer) {
 	if t.OnConflict != nil {
 		t.OnConflict.Walk(w)
-		w.NewLine()
+		if len(t.Returning) > 0 {
+			w.NewLine()
+		}
 	}
 	t.Returning.Walk(w)
 }
@@ -187,17 +189,34 @@ func (a *ConflictAction) Walk(w *writer.Writer) {
 		w.Write("DO NOTHING")
 		return
 	}
-	w.Write("DO UPDATE SET ")
+	w.Write("DO UPDATE SET")
 	a.Update.Walk(w)
 }
 
-type UpdateExcluded []Name
+type UpdateExcluded struct {
+	Columns []Name
+	Compact bool
+}
 
-func (ex UpdateExcluded) Walk(w *writer.Writer) {
-	for i, c := range ex {
-		if i > 0 {
-			w.Write(", ")
+func (x UpdateExcluded) Walk(w *writer.Writer) {
+	if len(x.Columns) > 0 {
+		if !x.Compact {
+			w.NewLine()
+		} else {
+			w.Write(" ")
 		}
+		x.Columns[0].Walk(w)
+		w.Write(" = EXCLUDED.")
+		x.Columns[0].Walk(w)
+	}
+
+	for _, c := range x.Columns[1:] {
+		if !x.Compact {
+			w.NewLine()
+		} else {
+			w.Write(" ")
+		}
+		w.Write(", ")
 		c.Walk(w)
 		w.Write(" = EXCLUDED.")
 		c.Walk(w)

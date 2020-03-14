@@ -1135,7 +1135,7 @@ func (g *generator) sqlinsert(si *specinfo) (stmt SQL.InsertStatement) {
 	stmt.Head.Source = src
 	//stmt.Head.Source.Select = nil
 
-	if si.spec.kind == speckindInsert && si.spec.rel.rec.isslice && len(g.outputcolumns) > 0 {
+	if si.spec.kind == speckindInsert && si.spec.rel.rec.isslice && (len(g.outputcolumns) > 0 || si.spec.onconflict != nil) {
 		var tail SQL.InsertTail
 		tail.OnConflict = g.sqlonconflict(si)
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
@@ -1421,14 +1421,28 @@ func (g *generator) sqlonconflict(si *specinfo) (clause *SQL.OnConflictClause) {
 		clause.Target = SQL.ConflictConstraint(si.spec.onconflict.constraint)
 	}
 
+	// conflict action
 	if si.spec.onconflict.ignore {
 		return clause
+	} else if si.spec.onconflict.update != nil {
+		ux := SQL.UpdateExcluded{}
+		if si.spec.onconflict.update.all {
+			for _, item := range si.info.input {
+				if si.skipwrite(item) {
+					continue
+				}
+				ux.Columns = append(ux.Columns, SQL.Name(item.colid.name))
+			}
+		} else {
+			for _, cid := range si.spec.onconflict.update.items {
+				ux.Columns = append(ux.Columns, SQL.Name(cid.name))
+			}
+		}
+
+		clause.Action = new(SQL.ConflictAction)
+		clause.Action.Update = ux
+		clause.Action.Update.Compact = len(ux.Columns) == 1
 	}
-
-	// TODO
-	// spec.onconflict.update.all
-	// spec.onconflict.update.items
-
 	return clause
 }
 

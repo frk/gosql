@@ -5,10 +5,10 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type InsertOnConflictColumnIgnore2SingleQuery struct {
+type InsertOnConflictConstraintIgnoreSingle1Query struct {
 	Data       *common.ConflictData `rel:"test_onconflict:k"`
 	OnConflict struct {
-		_ gosql.Column `sql:"key,name"`
+		_ gosql.Constraint `sql:"test_onconflict_key_value_key"`
 		_ gosql.Ignore
 	}
 }

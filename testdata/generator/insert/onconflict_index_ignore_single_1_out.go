@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *InsertOnConflictConstraintIgnore1SingleQuery) Exec(c gosql.Conn) error {
+func (q *InsertOnConflictIndexIgnoreSingle1Query) Exec(c gosql.Conn) error {
 	const queryString = `INSERT INTO "test_onconflict" AS k (
 		"key"
 		, "name"
@@ -18,7 +18,7 @@ func (q *InsertOnConflictConstraintIgnore1SingleQuery) Exec(c gosql.Conn) error 
 		, $3
 		, $4
 	)
-	ON CONFLICT ON CONSTRAINT "test_onconflict_key_value_key"
+	ON CONFLICT (lower(name), upper(fruit) COLLATE "C" text_pattern_ops)
 	DO NOTHING` // `
 
 	_, err := c.Exec(queryString,
