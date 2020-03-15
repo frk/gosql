@@ -12,6 +12,7 @@ import (
 
 func TestGenerate(t *testing.T) {
 	tests := []struct {
+		skip      bool
 		dirname   string
 		filenames []string
 	}{{
@@ -148,7 +149,9 @@ func TestGenerate(t *testing.T) {
 			"pkey_composite_single",
 			"pkey_single",
 			// "returning_all_single",
-			// "whereblock_single",
+			"whereblock_basic_single_1",
+			"whereblock_basic_single_2",
+			"whereblock_result",
 		},
 	}}
 
@@ -159,6 +162,10 @@ func TestGenerate(t *testing.T) {
 	// TODO test casts
 
 	for _, tt := range tests {
+		if tt.skip {
+			continue
+		}
+
 		cmd := new(command)
 		cmd.pg = testdb.pg
 

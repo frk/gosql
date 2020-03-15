@@ -290,8 +290,10 @@ func (a *analyzer) run() (err error) {
 	if a.spec.rel == nil {
 		return errors.NoRelfieldError
 	}
-	// TODO if speckind is Update, and relfield.record.isslice == true
-	// then a whereblock of filter should be disallowed!
+
+	// TODO if speckind is Update, and relfield.record.isslice == true THEN only
+	// matching the items by PKEY makes sense, therefore a whereblock, or filter,
+	// or the all directive, should be disallowed!
 
 	// TODO if speckind is Update and the record (single or slice) does not
 	// have a primary key AND there's no whereblock, no filter, no all directive

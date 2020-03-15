@@ -35,7 +35,7 @@ import (
 
 var (
 	// Matches names of types that are valid targets for the generator.
-	retargetname = regexp.MustCompile(`^(Select|Insert|Update|Delete|Filter)`)
+	retargetname = regexp.MustCompile(`^(?i:Select|Insert|Update|Delete|Filter)`)
 )
 
 type file struct {

@@ -419,7 +419,7 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 		if c.spec.kind == speckindSelect || isresult {
 			c.info.output = append(c.info.output, pair)
 		}
-		if !isresult && c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate {
+		if !isresult && (c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate) {
 			c.info.input = append(c.info.input, pair)
 		}
 		if col.isprimary || fld.ispkey {
