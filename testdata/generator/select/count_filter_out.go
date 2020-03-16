@@ -11,8 +11,8 @@ func (q *SelectCountWithFilterQuery) Exec(c gosql.Conn) error {
 	` // `
 
 	queryString += q.Filter.ToSQL()
-	params := q.Filter.Params()
 
+	params := q.Filter.Params()
 	row := c.QueryRow(queryString, params...)
 	return row.Scan(&q.Count)
 }

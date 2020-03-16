@@ -12,8 +12,8 @@ func (q *SelectNotExistsWithFilterQuery) Exec(c gosql.Conn) error {
 
 	queryString += q.Filter.ToSQL()
 	queryString += `)`
-	params := q.Filter.Params()
 
+	params := q.Filter.Params()
 	row := c.QueryRow(queryString, params...)
 	return row.Scan(&q.NotExists)
 }

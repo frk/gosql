@@ -17,8 +17,8 @@ func (q *SelectWithFilterSliceQuery) Exec(c gosql.Conn) error {
 	` // `
 
 	queryString += q.Filter.ToSQL()
-	params := q.Filter.Params()
 
+	params := q.Filter.Params()
 	rows, err := c.Query(queryString, params...)
 	if err != nil {
 		return err

@@ -246,3 +246,4 @@ func (ColumnIdent) columnExprNode() {}
 func (Coalesce) columnExprNode()    {}
 
 func (DefaultMarker) valueExprNode() {}
+func (ColumnIdent) valueExprNode()   {}

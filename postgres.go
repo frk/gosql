@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/frk/gosql/internal/errors"
+	SQL "github.com/frk/gosql/internal/sqlang"
+
 	"github.com/lib/pq"
 )
 
@@ -176,9 +178,10 @@ type pgchecker struct {
 
 // fieldcolumn is used to hold a field and its corresponding column.
 type fieldcolumn struct {
-	field  *recfield
-	column *pgcolumn
-	colid  colid
+	field    *recfield
+	column   *pgcolumn
+	colid    colid
+	sqlparam SQL.ValueExpr
 }
 
 type pginfo struct {

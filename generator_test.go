@@ -144,14 +144,18 @@ func TestGenerate(t *testing.T) {
 		filenames: []string{
 			"all_single",
 			"filter_single",
-			// "from_basic_single",
-			// "from_join_single",
+			"filter_result_slice",
+			"fromblock_basic_single",
+			"fromblock_join_single",
 			"pkey_composite_single",
+			"pkey_composite_slice",
 			"pkey_single",
-			// "returning_all_single",
+			"pkey_slice",
+			"pkey_returning_all_single",
 			"whereblock_basic_single_1",
 			"whereblock_basic_single_2",
-			"whereblock_result",
+			"whereblock_result_slice",
+			"whereblock_returning_all_single",
 		},
 	}}
 

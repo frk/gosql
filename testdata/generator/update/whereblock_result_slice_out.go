@@ -7,7 +7,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-func (q *UpdateWhereblockResultQuery) Exec(c gosql.Conn) error {
+func (q *UpdateWhereblockResultSliceQuery) Exec(c gosql.Conn) error {
 	const queryString = `UPDATE "test_user" AS u SET (
 		"email"
 		, "full_name"

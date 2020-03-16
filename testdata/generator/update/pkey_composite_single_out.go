@@ -18,7 +18,7 @@ func (q *UpdatePKeyCompositeSingleQuery) Exec(c gosql.Conn) error {
 		, $3
 		, $4
 	)
-	WHERE p."id" = $5 AND p."key" = $6 AND p."name" = $7` // `
+	WHERE p."id" = $5 AND p."key" = $1 AND p."name" = $2` // `
 
 	_, err := c.Exec(queryString,
 		q.Data.Key,
@@ -26,8 +26,6 @@ func (q *UpdatePKeyCompositeSingleQuery) Exec(c gosql.Conn) error {
 		q.Data.Fruit,
 		q.Data.Value,
 		q.Data.Id,
-		q.Data.Key,
-		q.Data.Name,
 	)
 	return err
 }

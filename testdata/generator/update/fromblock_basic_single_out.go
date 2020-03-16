@@ -6,8 +6,8 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *UpdateFilterSingleQuery) Exec(c gosql.Conn) error {
-	var queryString = `UPDATE "test_user" AS u SET (
+func (q *UpdateFromblockBasicSingleQuery) Exec(c gosql.Conn) error {
+	const queryString = `UPDATE "test_user" AS u SET (
 		"email"
 		, "full_name"
 		, "is_active"
@@ -19,19 +19,16 @@ func (q *UpdateFilterSingleQuery) Exec(c gosql.Conn) error {
 		, $3
 		, $4
 		, $5
-	)` // `
+	)
+	FROM "test_post" AS p
+	WHERE u."id" = p."user_id" AND p."is_spam" IS TRUE` // `
 
-	queryString += q.Filter.ToSQL()
-
-	params := []interface{}{
+	_, err := c.Exec(queryString,
 		q.User.Email,
 		q.User.FullName,
 		q.User.IsActive,
 		q.User.CreatedAt,
 		q.User.UpdatedAt,
-	}
-	params = append(params, q.Filter.Params()...)
-
-	_, err := c.Exec(queryString, params...)
+	)
 	return err
 }

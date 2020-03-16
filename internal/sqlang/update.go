@@ -19,7 +19,7 @@ func (s UpdateStatement) Walk(w *writer.Writer) {
 type UpdateHead struct {
 	Table Ident
 	Set   SetClause
-	From  *FromClause
+	From  FromClause
 }
 
 func (s UpdateHead) Walk(w *writer.Writer) {
@@ -38,8 +38,10 @@ type UpdateTail struct {
 }
 
 func (s UpdateTail) Walk(w *writer.Writer) {
-	s.Where.Walk(w)
-	w.NewLine()
+	if s.Where.SearchCondition != nil {
+		s.Where.Walk(w)
+		w.NewLine()
+	}
 	s.Returning.Walk(w)
 	w.NoNewLine()
 }
@@ -101,8 +103,8 @@ type FromClause struct {
 	List []TableExpr
 }
 
-func (c *FromClause) Walk(w *writer.Writer) {
-	if c == nil {
+func (c FromClause) Walk(w *writer.Writer) {
+	if len(c.List) == 0 {
 		return
 	}
 
@@ -151,6 +153,8 @@ type ValuesListClausePartial struct{}
 func (v ValuesListClausePartial) Walk(w *writer.Writer) {
 	w.Write("(VALUES")
 }
+
+func (ValuesListClausePartial) tableExprNode() {}
 
 type ValuesListAliasPartial struct {
 	Alias   string

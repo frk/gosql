@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 )
 
-type UpdateWhereblockResultQuery struct {
+type UpdateWhereblockResultSliceQuery struct {
 	User  *common.User4 `rel:"test_user:u"`
 	Where struct {
 		CreatedAfter  time.Time `sql:"u.created_at >"`
