@@ -1348,8 +1348,8 @@ func (c *pgcatalogue) cancasti(t, s pgoid) bool {
 }
 
 func (c *pgcatalogue) load(db *sql.DB, key string) error {
-	pgcataloguecache.RLock()
-	defer pgcataloguecache.RUnlock()
+	pgcataloguecache.Lock()
+	defer pgcataloguecache.Unlock()
 
 	cat := pgcataloguecache.m[key]
 	if cat != nil {

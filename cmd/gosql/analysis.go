@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/frk/gosql/internal/errors"
 	"github.com/frk/gosql/internal/typesutil"
@@ -170,7 +171,7 @@ func (a *analyzer) queryStruct() (err error) {
 				}
 				a.query.dataField.isDirective = true
 			default:
-				if err := a.relrecordtype(a.query.dataField, fld); err != nil {
+				if err := a.dataType(&a.query.dataField.data, fld); err != nil {
 					return err
 				}
 				if (a.query.kind == queryKindInsert || a.query.kind == queryKindUpdate) && a.query.dataField.data.isIter {
@@ -362,7 +363,7 @@ func (a *analyzer) filterStruct() (err error) {
 			a.filter.dataField.name = fld.Name()
 			a.filter.dataField.relId = rid
 
-			if err := a.relrecordtype(a.filter.dataField, fld); err != nil {
+			if err := a.dataType(&a.filter.dataField.data, fld); err != nil {
 				return err
 			}
 			if a.filter.dataField.data.isIter {
@@ -394,7 +395,7 @@ func (a *analyzer) filterStruct() (err error) {
 	return nil
 }
 
-func (a *analyzer) relrecordtype(rel *dataField, field *types.Var) error {
+func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 	var (
 		ftyp  = field.Type()
 		named *types.Named
@@ -405,36 +406,47 @@ func (a *analyzer) relrecordtype(rel *dataField, field *types.Var) error {
 		ftyp = named.Underlying()
 	}
 
+	// XXX Experimental: Not exactly sure that types.Type.String()
+	// will NOT produce conflicting values for different types.
+	dataTypeKey := ftyp.String()
+	dataTypeCache.RLock()
+	v := dataTypeCache.m[dataTypeKey]
+	dataTypeCache.RUnlock()
+	if v != nil {
+		*data = *v
+		return nil
+	}
+
 	// Check whether the relation field's type is an interface or a function,
 	// if so, it is then expected to be an iterator, and it is analyzed as such.
 	//
 	// Failure of the iterator analysis will cause the whole analysis to exit
 	// as there's currently no support for non-iterator interfaces nor functions.
 	if iface, ok := ftyp.(*types.Interface); ok {
-		if named, err = a.iterator(iface, named, rel); err != nil {
+		if named, err = a.iteratorInterface(data, iface, named); err != nil {
 			return err
 		}
 	} else if sig, ok := ftyp.(*types.Signature); ok {
-		if named, err = a.iteratorfunc(sig, rel); err != nil {
+		if named, err = a.iteratorFunction(data, sig); err != nil {
 			return err
 		}
 	} else {
 		// If not an iterator, check for slices, arrays, and pointers.
 		if slice, ok := ftyp.(*types.Slice); ok { // allows []T / []*T
 			ftyp = slice.Elem()
-			rel.data.isSlice = true
+			data.isSlice = true
 		} else if array, ok := ftyp.(*types.Array); ok { // allows [N]T / [N]*T
 			ftyp = array.Elem()
-			rel.data.isArray = true
-			rel.data.arrayLen = array.Len()
+			data.isArray = true
+			data.arrayLen = array.Len()
 		}
 		if ptr, ok := ftyp.(*types.Pointer); ok { // allows *T
 			ftyp = ptr.Elem()
-			rel.data.isPointer = true
+			data.isPointer = true
 		}
 
 		// Get the name of the base type, if applicable.
-		if rel.data.isSlice || rel.data.isArray || rel.data.isPointer {
+		if data.isSlice || data.isArray || data.isPointer {
 			if named, ok = ftyp.(*types.Named); !ok {
 				// Fail if the type is a slice, an array, or a pointer
 				// while its base type remains unnamed.
@@ -445,25 +457,32 @@ func (a *analyzer) relrecordtype(rel *dataField, field *types.Var) error {
 
 	if named != nil {
 		pkg := named.Obj().Pkg()
-		rel.data.typeInfo.name = named.Obj().Name()
-		rel.data.typeInfo.pkgPath = pkg.Path()
-		rel.data.typeInfo.pkgName = pkg.Name()
-		rel.data.typeInfo.pkgLocal = pkg.Name()
-		rel.data.typeInfo.isImported = a.isImportedType(named)
-		rel.data.isAfterScanner = typesutil.ImplementsAfterScanner(named)
+		data.typeInfo.name = named.Obj().Name()
+		data.typeInfo.pkgPath = pkg.Path()
+		data.typeInfo.pkgName = pkg.Name()
+		data.typeInfo.pkgLocal = pkg.Name()
+		data.typeInfo.isImported = a.isImportedType(named)
+		data.isAfterScanner = typesutil.ImplementsAfterScanner(named)
 		ftyp = named.Underlying()
 	}
 
-	rel.data.typeInfo.kind = a.typeKind(ftyp)
-	if rel.data.typeInfo.kind != kindStruct {
+	data.typeInfo.kind = a.typeKind(ftyp)
+	if data.typeInfo.kind != kindStruct {
 		return errors.BadDataFieldTypeError
 	}
 
 	styp := ftyp.(*types.Struct)
-	return a.recfields(rel, styp)
+	if err := a.fieldInfoList(data, styp); err != nil {
+		return err
+	}
+
+	dataTypeCache.Lock()
+	dataTypeCache.m[dataTypeKey] = data
+	dataTypeCache.Unlock()
+	return nil
 }
 
-func (a *analyzer) recfields(rel *dataField, styp *types.Struct) error {
+func (a *analyzer) fieldInfoList(data *dataType, styp *types.Struct) error {
 	// The loopstate type holds the state of a loop over a struct's fields.
 	type loopstate struct {
 		styp *types.Struct // the struct type whose fields are being analyzed
@@ -474,7 +493,7 @@ func (a *analyzer) recfields(rel *dataField, styp *types.Struct) error {
 	}
 
 	// LIFO stack of states used for depth first traversal of struct fields.
-	stack := []*loopstate{{styp: styp, typ: &rel.data.typeInfo}}
+	stack := []*loopstate{{styp: styp, typ: &data.typeInfo}}
 
 stackloop:
 	for len(stack) > 0 {
@@ -573,7 +592,7 @@ stackloop:
 			f.colId = colId
 
 			// Add the field to the list.
-			rel.data.fields = append(rel.data.fields, f)
+			data.fields = append(data.fields, f)
 		}
 		stack = stack[:len(stack)-1]
 	}
@@ -641,7 +660,7 @@ func (a *analyzer) typeInfo(tt types.Type) (typ typeInfo, base types.Type) {
 	return typ, base
 }
 
-func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *dataField) (*types.Named, error) {
+func (a *analyzer) iteratorInterface(data *dataType, iface *types.Interface, named *types.Named) (*types.Named, error) {
 	if iface.NumExplicitMethods() != 1 {
 		return nil, errors.BadIteratorTypeError
 	}
@@ -652,16 +671,16 @@ func (a *analyzer) iterator(iface *types.Interface, named *types.Named, rel *dat
 	}
 
 	sig := mth.Type().(*types.Signature)
-	named, err := a.iteratorfunc(sig, rel)
+	named, err := a.iteratorFunction(data, sig)
 	if err != nil {
 		return nil, err
 	}
 
-	rel.data.iterMethod = mth.Name()
+	data.iterMethod = mth.Name()
 	return named, nil
 }
 
-func (a *analyzer) iteratorfunc(sig *types.Signature, rel *dataField) (*types.Named, error) {
+func (a *analyzer) iteratorFunction(data *dataType, sig *types.Signature) (*types.Named, error) {
 	// Must take 1 argument and return one value of type error. "func(T) error"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
 		return nil, errors.BadIteratorTypeError
@@ -670,7 +689,7 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *dataField) (*types.Na
 	typ := sig.Params().At(0).Type()
 	if ptr, ok := typ.(*types.Pointer); ok { // allows *T
 		typ = ptr.Elem()
-		rel.data.isPointer = true
+		data.isPointer = true
 	}
 
 	// Make sure that the argument type is a named struct type.
@@ -681,7 +700,7 @@ func (a *analyzer) iteratorfunc(sig *types.Signature, rel *dataField) (*types.Na
 		return nil, errors.BadIteratorTypeError
 	}
 
-	rel.data.isIter = true
+	data.isIter = true
 	return named, nil
 }
 
@@ -1415,15 +1434,12 @@ func (a *analyzer) resultField(field *types.Var) error {
 		return errors.ConflictResultProducerError
 	}
 
-	rel := new(dataField)
-	rel.name = field.Name()
-	if err := a.relrecordtype(rel, field); err != nil {
+	result := new(resultField)
+	result.name = field.Name()
+	if err := a.dataType(&result.data, field); err != nil {
 		return err
 	}
 
-	result := new(resultField)
-	result.name = rel.name
-	result.data = rel.data
 	a.query.resultField = result
 	return nil
 }
@@ -1624,6 +1640,11 @@ type dataField struct {
 	isDirective bool  // indicates that the gosql.Relation directive was used
 }
 
+type resultField struct {
+	name string // name of the field that declares the result of the queryStruct
+	data dataType
+}
+
 type relId struct {
 	qual  string
 	name  string
@@ -1651,11 +1672,6 @@ func (cl *colIdList) contains(cid colId) bool {
 		}
 	}
 	return false
-}
-
-type resultField struct {
-	name string // name of the field that declares the result of the queryStruct
-	data dataType
 }
 
 type rowsAffectedField struct {
@@ -2520,3 +2536,8 @@ func isFilterType(typ types.Type) bool {
 func isColId(val string) bool {
 	return rxColId.MatchString(val) && !rxReserved.MatchString(val)
 }
+
+var dataTypeCache = struct {
+	sync.RWMutex
+	m map[string]*dataType
+}{m: make(map[string]*dataType)}
