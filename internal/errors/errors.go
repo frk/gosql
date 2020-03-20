@@ -15,7 +15,7 @@ const (
 	// large variety of errors. Eventually these values should be grouped
 	// into as few as possible error types that will replace the values
 	// and that will also be able to generate informative error messages.
-	NoRelfieldError                            errnum = 1
+	NoDataFieldError                           errnum = 1
 	NoOnConflictTargetError                    errnum = 2
 	NoLimitDirectiveValueError                 errnum = 3
 	NoOffsetDirectiveValueError                errnum = 4
@@ -34,7 +34,7 @@ const (
 	BadConstraintIdentifierValueError          errnum = 17
 	BadOverrideKindValueError                  errnum = 18
 	BadNullsOrderOptionValueError              errnum = 19
-	BadRelfieldTypeError                       errnum = 20
+	BadDataFieldTypeError                      errnum = 20
 	BadIteratorTypeError                       errnum = 21
 	BadBetweenTypeError                        errnum = 22
 	BadLimitTypeError                          errnum = 23
@@ -103,8 +103,8 @@ const (
 	BadUseJSONTargetColumnError                errnum = 85
 	BadUseXMLTargetColumnError                 errnum = 86
 	NoColumnDefaultSetError                    errnum = 87
-	ReturnDirectiveWithNoRelfieldError         errnum = 88
+	ReturnDirectiveWithNoDataFieldError        errnum = 88
 	NoFieldColumnError                         errnum = 89
-	MultipleRelfieldsError                     errnum = 90
+	MultipleDataFieldsError                    errnum = 90
 	IllegalIteratorRecordError                 errnum = 91
 )

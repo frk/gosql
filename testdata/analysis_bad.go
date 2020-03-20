@@ -6,7 +6,7 @@ import (
 )
 
 //BAD: missing relation field
-type InsertAnalysisTestBAD_NoRelfield struct {
+type InsertAnalysisTestBAD_NoDataField struct {
 	User *common.User
 }
 
@@ -285,7 +285,7 @@ type InsertAnalysisTestBAD_BadRelfiedlStructBaseType struct {
 	Rel []*notstruct `rel:"relation_a:a"`
 }
 
-//BAD: Update with bad relfield type field's colid
+//BAD: Update with bad dataType field's colid
 type UpdateAnalysisTestBAD_BadRelTypeFieldColId struct {
 	Rel struct {
 		Foo string `sql:"1234"`

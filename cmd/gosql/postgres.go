@@ -1,4 +1,4 @@
-package gosql
+package main
 
 // TODO the postgres types circle(arr) and interval(arr) need a corresponding go type
 // TODO "cancast" per-field tag option, as well as a global option, as well as a list-of-castable-types option
@@ -165,22 +165,11 @@ func (pg *postgres) close() error {
 	return pg.db.Close()
 }
 
-type pgchecker struct {
-	pg       *postgres
-	spec     *typespec
-	rel      *pgrelation   // the target relation
-	joinlist []*pgrelation // joined relations
-	relmap   map[string]*pgrelation
-
-	// result
-	info pginfo
-}
-
 // fieldcolumn is used to hold a field and its corresponding column.
 type fieldcolumn struct {
-	field    *recfield
+	field    *fieldInfo
 	column   *pgcolumn
-	colid    colid
+	colId    colId
 	sqlparam SQL.ValueExpr
 }
 
@@ -191,19 +180,39 @@ type pginfo struct {
 
 	// info on the index to be used for an ON CONFLICT clause
 	conflictindex *pgindex
+
+	// workaround: used by the generator to get the correct represenation of the
+	// the database type of the column that's associated with a predicate's field.
+	colmap map[*predicateField]*pgcolumn
 }
 
-func pgcheck(pg *postgres, spec *typespec) (info *pginfo, err error) {
-	c := pgchecker{pg: pg, spec: spec}
+type pgchecker struct {
+	pg        *postgres
+	query     *queryStruct
+	filter    *filterStruct
+	dataField *dataField
+
+	rel      *pgrelation   // the target relation
+	joinlist []*pgrelation // joined relations
+	relmap   map[string]*pgrelation
+
+	// result
+	info pginfo
+}
+
+func pgcheck(pg *postgres, ti *targetInfo) (err error) {
+	c := pgchecker{pg: pg, query: ti.query, filter: ti.filter, dataField: ti.dataField}
 	if err := c.run(); err != nil {
-		return nil, err
+		return err
 	}
-	return &c.info, nil
+	ti.info = &c.info
+	return nil
 }
 
 func (c *pgchecker) run() (err error) {
 	c.relmap = make(map[string]*pgrelation)
-	if c.rel, err = c.loadrelation(c.spec.rel.relid); err != nil {
+	c.info.colmap = make(map[*predicateField]*pgcolumn)
+	if c.rel, err = c.loadrelation(c.dataField.relId); err != nil {
 		return err
 	}
 
@@ -212,17 +221,29 @@ func (c *pgchecker) run() (err error) {
 	// to be associated with this target relation.
 	c.relmap[""] = c.rel
 
-	if join := c.spec.join; join != nil {
+	if c.query != nil {
+		return c.queryStruct()
+	}
+	if c.filter != nil {
+		return c.filterStruct()
+	}
+
+	panic("nothing to db-check")
+	return nil
+}
+
+func (c *pgchecker) queryStruct() (err error) {
+	if join := c.query.joinBlock; join != nil {
 		if err := c.checkjoin(join); err != nil {
 			return err
 		}
 	}
-	if onconf := c.spec.onconflict; onconf != nil {
+	if onconf := c.query.onConflictBlock; onconf != nil {
 		if err := c.checkonconflict(onconf); err != nil {
 			return err
 		}
 	}
-	if where := c.spec.where; where != nil {
+	if where := c.query.whereBlock; where != nil {
 		if err := c.checkwhere(where); err != nil {
 			return err
 		}
@@ -230,9 +251,9 @@ func (c *pgchecker) run() (err error) {
 
 	// If an OrderBy directive was used, make sure that the specified
 	// columns are present in the loaded relations.
-	if c.spec.orderby != nil {
-		for _, item := range c.spec.orderby.items {
-			if _, err := c.column(item.col); err != nil {
+	if c.query.orderByList != nil {
+		for _, item := range c.query.orderByList.items {
+			if _, err := c.column(item.colId); err != nil {
 				return err
 			}
 		}
@@ -240,10 +261,10 @@ func (c *pgchecker) run() (err error) {
 
 	// If a Default directive was provided, make sure that the specified
 	// columns are present in the target relation.
-	if c.spec.defaults != nil {
-		for _, item := range c.spec.defaults.items {
+	if c.query.defaultList != nil {
+		for _, item := range c.query.defaultList.items {
 			// Qualifier, if present, must match the target table's alias.
-			if len(item.qual) > 0 && item.qual != c.spec.rel.relid.alias {
+			if len(item.qual) > 0 && item.qual != c.query.dataField.relId.alias {
 				return errors.BadTargetTableForDefaultError
 			}
 
@@ -257,8 +278,8 @@ func (c *pgchecker) run() (err error) {
 
 	// If a Force directive was provided, make sure that the specified
 	// columns are present in the loaded relations.
-	if c.spec.force != nil {
-		for _, item := range c.spec.force.items {
+	if c.query.forceList != nil {
+		for _, item := range c.query.forceList.items {
 			if _, err := c.column(item); err != nil {
 				return err
 			}
@@ -267,10 +288,10 @@ func (c *pgchecker) run() (err error) {
 
 	// If a Return directive was provided, make sure that the specified
 	// columns are present in the loaded relations.
-	if c.spec.returning != nil {
-		if c.spec.returning.all {
+	if c.query.returnList != nil {
+		if c.query.returnList.all {
 			// If all is set to true, collect the to-be-returned list
-			// of fieldcolumn pairs by going over the recordtype's fields
+			// of fieldcolumn pairs by going over the dataType's fields
 			// and matching them up with columns from the target relation.
 			// Fields that have no matching column in the target relation
 			// will be ignored.
@@ -279,25 +300,25 @@ func (c *pgchecker) run() (err error) {
 			// the columns of the target relation will be considered
 			// as candidates for the RETURNING clause, other columns
 			// from joined relations will be ignored.
-			for _, field := range c.spec.rel.rec.fields {
-				if col := c.rel.column(field.colid.name); col != nil {
-					cid := colid{name: field.colid.name, qual: c.spec.rel.relid.alias}
-					pair := &fieldcolumn{field: field, column: col, colid: cid}
+			for _, field := range c.query.dataField.data.fields {
+				if col := c.rel.column(field.colId.name); col != nil {
+					cid := colId{name: field.colId.name, qual: c.query.dataField.relId.alias}
+					pair := &fieldcolumn{field: field, column: col, colId: cid}
 					c.info.output = append(c.info.output, pair)
 				}
 			}
 		} else {
-			for _, colid := range c.spec.returning.items {
+			for _, colId := range c.query.returnList.items {
 				// If a list of specific columns was provided,
 				// make sure that they are present in one of the
 				// associated relations, if not return an error.
-				col, err := c.column(colid)
+				col, err := c.column(colId)
 				if err != nil {
 					return err
 				}
 
 				// The to-be-returned columns must have a
-				// corresponding field in the recordtype.
+				// corresponding field in the dataType.
 				//
 				// NOTE(mkopriva): currently the to-be-returned
 				// columns are matched to fields using just the
@@ -306,9 +327,9 @@ func (c *pgchecker) run() (err error) {
 				// columns that have the same name and their values
 				// would be scanned into the same field.
 				var hasfield bool
-				for _, field := range c.spec.rel.rec.fields {
-					if field.colid.name == colid.name {
-						pair := &fieldcolumn{field: field, column: col, colid: colid}
+				for _, field := range c.query.dataField.data.fields {
+					if field.colId.name == colId.name {
+						pair := &fieldcolumn{field: field, column: col, colId: colId}
 						c.info.output = append(c.info.output, pair)
 						hasfield = true
 						break
@@ -321,33 +342,21 @@ func (c *pgchecker) run() (err error) {
 		}
 	}
 
-	// If a TextSearch directive was provided, make sure that the
-	// specified column is present in one of the loaded relations
-	// and that it has the correct type.
-	if c.spec.textsearch != nil {
-		col, err := c.column(*c.spec.textsearch)
-		if err != nil {
-			return err
-		} else if col.typ.oid != pgtyp_tsvector {
-			return errors.BadDBColumnTypeError
-		}
-	}
-
-	if rel := c.spec.rel; rel != nil && !rel.isdir {
-		if err := c.checkfields(rel.rec, false); err != nil {
+	if dataField := c.query.dataField; dataField != nil && !dataField.isDirective {
+		if err := c.checkfields(dataField.data, false); err != nil {
 			return err
 		}
 	}
-	if res := c.spec.result; res != nil {
-		if err := c.checkfields(res.rec, true); err != nil {
+	if res := c.query.resultField; res != nil {
+		if err := c.checkfields(res.data, true); err != nil {
 			return err
 		}
 	}
 
-	if c.spec.kind == speckindInsert {
+	if c.query.kind == queryKindInsert {
 		// TODO(mkopriva): if this is an insert make sure that all columns that
 		// do not have a DEFAULT set but do have a NOT NULL set, have a corresponding
-		// field in the relation's recordtype. (keep in mind that such a column could
+		// field in the relation's dataType. (keep in mind that such a column could
 		// be also set by a BEFORE TRIGGER, so maybe instead of erroring only warning
 		// would be thrown, or make this check optional, something that can be turned
 		// on/off...?)
@@ -357,12 +366,28 @@ func (c *pgchecker) run() (err error) {
 	// generated from the field tags cannot contain duplicate columns. Conversely
 	// if this is a read query (select, or I,U,D with returning) the columns do
 	// not have to be unique.
+	return nil
+}
+
+func (c *pgchecker) filterStruct() (err error) {
+
+	// If a TextSearch directive was provided, make sure that the
+	// specified column is present in one of the loaded relations
+	// and that it has the correct type.
+	if c.filter.textSearchColId != nil {
+		col, err := c.column(*c.filter.textSearchColId)
+		if err != nil {
+			return err
+		} else if col.typ.oid != pgtyp_tsvector {
+			return errors.BadDBColumnTypeError
+		}
+	}
 
 	return nil
 }
 
-func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
-	for _, fld := range rec.fields {
+func (c *pgchecker) checkfields(data dataType, isresult bool) (err error) {
+	for _, fld := range data.fields {
 		var col *pgcolumn
 		var atyp assigntype
 		// TODO(mkopriva): currenlty this requires that every field
@@ -371,7 +396,7 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 		// matching type in the app, this however may not always be
 		// practical and there may be cases where a single struct
 		// type is used to represent multiple different relations...
-		if c.spec.kind == speckindSelect || isresult {
+		if c.query.kind == queryKindSelect || isresult {
 			// TODO(mkopriva): currently columns specified in
 			// the fields of the struct representing the record
 			// aren't really meant to include the relation alias
@@ -384,30 +409,30 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 			// from the "Result" field, lookup the column
 			// in all of the associated relations since its
 			// ok to select columns from joined relations.
-			if col, err = c.column(fld.colid); err != nil {
+			if col, err = c.column(fld.colId); err != nil {
 				return err
 			}
 			atyp = assignread
 		} else {
-			// If this is a non-select typespec and non-result
+			// If this is a non-select queryStruct and non-result
 			// the column must be present in the target relation.
-			if col = c.rel.column(fld.colid.name); col == nil {
+			if col = c.rel.column(fld.colId.name); col == nil {
 				return errors.NoDBColumnError
 			}
 			atyp = assignwrite
 
 		}
 
-		if c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate {
-			if fld.usedefault && !col.hasdefault {
+		if c.query.kind == queryKindInsert || c.query.kind == queryKindUpdate {
+			if fld.useDefault && !col.hasdefault {
 				// TODO error
 			}
 		}
 
-		if fld.usejson && !col.typ.is(pgtyp_json, pgtyp_jsonb) {
+		if fld.useJSON && !col.typ.is(pgtyp_json, pgtyp_jsonb) {
 			return errors.BadUseJSONTargetColumnError
 		}
-		if fld.usexml && !col.typ.is(pgtyp_xml) {
+		if fld.useXML && !col.typ.is(pgtyp_xml) {
 			return errors.BadUseXMLTargetColumnError
 		}
 
@@ -417,85 +442,85 @@ func (c *pgchecker) checkfields(rec recordtype, isresult bool) (err error) {
 			return errors.BadFieldToColumnTypeError
 		}
 
-		cid := colid{name: fld.colid.name, qual: c.spec.rel.relid.alias}
-		pair := &fieldcolumn{field: fld, column: col, colid: cid}
-		if c.spec.kind == speckindSelect || isresult {
+		cid := colId{name: fld.colId.name, qual: c.query.dataField.relId.alias}
+		pair := &fieldcolumn{field: fld, column: col, colId: cid}
+		if c.query.kind == queryKindSelect || isresult {
 			c.info.output = append(c.info.output, pair)
 		}
-		if !isresult && (c.spec.kind == speckindInsert || c.spec.kind == speckindUpdate) {
+		if !isresult && (c.query.kind == queryKindInsert || c.query.kind == queryKindUpdate) {
 			c.info.input = append(c.info.input, pair)
 		}
-		if col.isprimary || fld.ispkey {
+		if col.isprimary || fld.isPKey {
 			c.info.pkeys = append(c.info.pkeys, pair)
 		}
 	}
 	return nil
 }
 
-func (c *pgchecker) checkjoin(jb *joinblock) error {
-	if len(jb.rel.name) > 0 {
-		rel, err := c.loadrelation(jb.rel)
+func (c *pgchecker) checkjoin(jb *joinBlock) error {
+	if len(jb.relId.name) > 0 {
+		rel, err := c.loadrelation(jb.relId)
 		if err != nil {
 			return err
 		}
 		c.joinlist = append(c.joinlist, rel)
 	}
 	for _, join := range jb.items {
-		rel, err := c.loadrelation(join.rel)
+		rel, err := c.loadrelation(join.relId)
 		if err != nil {
 			return err
 		}
 		c.joinlist = append(c.joinlist, rel)
 
-		for _, cond := range join.conds {
-			switch node := cond.node.(type) {
-			case *columnpredicate:
+		for _, item := range join.predicates {
+			switch pred := item.pred.(type) {
+			case *predicateColumn:
 				// A join condition's left-hand-side column MUST always
 				// reference a column of the relation being joined, so to
-				// avoid confusion make sure that node.colid has either no
+				// avoid confusion make sure that node.colId has either no
 				// qualifier or, if it has one, it matches the alias of
 				// the joined table.
-				if node.colid.qual != "" && node.colid.qual != join.rel.alias {
+				if pred.colId.qual != "" && pred.colId.qual != join.relId.alias {
 					return errors.NoDBRelationError
 				}
 
-				// Make sure that colid is present in relation being joined.
-				col := rel.column(node.colid.name)
+				// Make sure that colId is present in relation being joined.
+				col := rel.column(pred.colId.name)
 				if col == nil {
 					return errors.NoDBColumnError
 				}
 
-				if node.pred.isunary() {
+				if pred.kind.isUnary() {
 					// Column type must be bool if the predicate type produces
 					// the "IS [NOT] { FALSE | TRUE | UNKNOWN }" SQL predicate.
-					if node.pred.istruth() && col.typ.oid != pgtyp_bool {
+					if pred.kind.isTruthPred() && col.typ.oid != pgtyp_bool {
 						return errors.BadColumnTypeForUnaryOpError
 					}
 					// Column must be NULLable if the predicate type
 					// produces the "IS [NOT] NULL" SQL predicate.
-					if col.hasnotnull && (node.pred == isnull || node.pred == notnull) {
+					if col.hasnotnull && (pred.kind == isNull || pred.kind == notNull) {
 						return errors.BadColumnNULLSettingForNULLOpError
 					}
 				} else {
 					var typ *pgtype
 					// Get the type of the right hand side, which is
 					// either a column or a literal expression.
-					if len(node.colid2.name) > 0 {
-						colid2, err := c.column(node.colid2)
+					if len(pred.colId2.name) > 0 {
+						colId2, err := c.column(pred.colId2)
 						if err != nil {
 							return err
 						}
-						typ = colid2.typ
-					} else if len(node.lit) > 0 {
+						typ = colId2.typ
+					} else if len(pred.literal) > 0 {
 						var oid pgoid
-						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, node.lit))
+						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, pred.literal))
 						if err := row.Scan(&oid); err != nil {
 							return errors.BadLiteralExpressionError
 						}
 						typ = c.pg.cat.types[oid]
 					}
 
-					if node.pred.isarrcmp() || node.qua > 0 {
+					if pred.kind.isArrayPred() || pred.qua > 0 {
 						// Check that the quantifier can be used
 						// with the type of the RHS expression.
 						if typ.category != pgtypcategory_array {
@@ -505,20 +530,20 @@ func (c *pgchecker) checkjoin(jb *joinblock) error {
 					}
 
 					rhsoids := []pgoid{typ.oid}
-					if !c.cancompare(col, rhsoids, node.pred) {
+					if !c.cancompare(col, rhsoids, pred.kind) {
 						return errors.BadColumnToLiteralComparisonError
 					}
 				}
 			default:
 				// NOTE(mkopriva): currently predicates other than
-				// columnpredicate are not supported as a join condition.
+				// predicateColumn are not supported as a join condition.
 			}
 		}
 	}
 	return nil
 }
 
-func (c *pgchecker) checkonconflict(onconf *onconflictblock) error {
+func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
 	rel := c.rel
 
 	// If a Column directive was provided in an OnConflict block, make
@@ -593,9 +618,9 @@ func (c *pgchecker) checkonconflict(onconf *onconflictblock) error {
 	return nil
 }
 
-func (c *pgchecker) checkwhere(where *whereblock) error {
+func (c *pgchecker) checkwhere(where *whereBlock) error {
 	type loopstate struct {
-		items []*predicateitem // the current iteration predicate items
+		items []*predicateItem // the current iteration predicate items
 		idx   int              // keeps track of the field index
 	}
 	stack := []*loopstate{{items: where.items}} // LIFO stack of states.
@@ -613,11 +638,11 @@ stackloop:
 			// when continuing to the outer loop.
 			loop.idx++
 
-			switch node := item.node.(type) {
-			case *fieldpredicate:
+			switch pred := item.pred.(type) {
+			case *predicateField:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(node.colid)
+				col, err := c.column(pred.colId)
 				if err != nil {
 					return err
 				}
@@ -625,57 +650,57 @@ stackloop:
 				// If the column cannot be set to NULL, then make
 				// sure that the field's not a pointer.
 				if col.hasnotnull {
-					if node.field.typ.kind == kindptr {
+					if pred.typ.kind == kindPtr {
 						return errors.IllegalPtrFieldForNotNullColumnError
 					}
 				}
 
 				// list of types to which the field type can potentially be converted
-				var fieldoids = c.typeoids(node.field.typ)
+				var fieldoids = c.typeoids(pred.typ)
 
 				// If this is a quantified predicate then check that
 				// the field is a slice or array, and also make sure that
 				// the column's type can be compared to the element type
 				// of the slice / array.
-				if node.qua > 0 || node.pred.isarrcmp() {
-					if node.field.typ.kind != kindslice && node.field.typ.kind != kindarray {
+				if pred.qua > 0 || pred.kind.isArrayPred() {
+					if pred.typ.kind != kindSlice && pred.typ.kind != kindArray {
 						return errors.IllegalFieldTypeForQuantifierError
 					}
-					fieldoids = c.typeoids(*node.field.typ.elem)
+					fieldoids = c.typeoids(*pred.typ.elem)
 				}
 
-				if len(node.modfunc) > 0 {
+				if len(pred.modfunc) > 0 {
 					// Check that the modifier function can
 					// be used with the given Column's type.
-					if err := c.checkmodfunc(node.modfunc, col, fieldoids); err != nil {
+					if err := c.checkmodfunc(pred.modfunc, col, fieldoids); err != nil {
 						return err
 					}
 				} else {
 					// Check that the Field's type can be
 					// compared to that of the Column.
-					if !c.cancompare(col, fieldoids, node.pred) {
+					if !c.cancompare(col, fieldoids, pred.kind) {
 						return errors.BadFieldToColumnTypeError
 					}
 				}
 
-				node.coltype = col.typ.namefmt
-			case *columnpredicate:
+				c.info.colmap[pred] = col
+			case *predicateColumn:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(node.colid)
+				col, err := c.column(pred.colId)
 				if err != nil {
 					return err
 				}
 
-				if node.pred.isunary() {
+				if pred.kind.isUnary() {
 					// Column type must be bool if the predicate type produces
 					// the "IS [NOT] { FALSE | TRUE | UNKNOWN }" SQL predicate.
-					if node.pred.istruth() && col.typ.oid != pgtyp_bool {
+					if pred.kind.isTruthPred() && col.typ.oid != pgtyp_bool {
 						return errors.BadColumnTypeForUnaryOpError
 					}
 					// Column must be NULLable if the predicate type
 					// produces the "IS [NOT] NULL" SQL predicate.
-					if col.hasnotnull && (node.pred == isnull || node.pred == notnull) {
+					if col.hasnotnull && (pred.kind == isNull || pred.kind == notNull) {
 						return errors.BadColumnNULLSettingForNULLOpError
 					}
 				} else {
@@ -683,15 +708,15 @@ stackloop:
 
 					// Get the type of the right hand side, which is
 					// either a column or a literal expression.
-					if len(node.colid2.name) > 0 {
-						col2, err := c.column(node.colid2)
+					if len(pred.colId2.name) > 0 {
+						col2, err := c.column(pred.colId2)
 						if err != nil {
 							return err
 						}
 						typ = col2.typ
-					} else if len(node.lit) > 0 {
+					} else if len(pred.literal) > 0 {
 						var oid pgoid
-						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, node.lit))
+						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, pred.literal))
 						if err := row.Scan(&oid); err != nil {
 							return errors.BadLiteralExpressionError
 						}
@@ -700,7 +725,7 @@ stackloop:
 						panic("shouldn't happen")
 					}
 
-					if node.pred.isarrcmp() || node.qua > 0 {
+					if pred.kind.isArrayPred() || pred.qua > 0 {
 						// Check that the quantifier can be used
 						// with the type of the RHS expression.
 						if typ.category != pgtypcategory_array {
@@ -710,38 +735,38 @@ stackloop:
 					}
 
 					rhsoids := []pgoid{typ.oid}
-					if !c.cancompare(col, rhsoids, node.pred) {
+					if !c.cancompare(col, rhsoids, pred.kind) {
 						return errors.BadColumnToLiteralComparisonError
 					}
 				}
-			case *betweenpredicate:
+			case *predicateBetween:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(node.colid)
+				col, err := c.column(pred.colId)
 				if err != nil {
 					return err
 				}
 
 				// Check that both predicands, x and y, can be compared to the column.
-				for _, arg := range []interface{}{node.x, node.y} {
+				for _, arg := range []interface{}{pred.x, pred.y} {
 					var argoids []pgoid
 					switch a := arg.(type) {
-					case colid:
+					case colId:
 						col2, err := c.column(a)
 						if err != nil {
 							return err
 						}
 						argoids = []pgoid{col2.typ.oid}
-					case *paramfield:
+					case *fieldDatum:
 						argoids = c.typeoids(a.typ)
 					}
 
-					if !c.cancompare(col, argoids, isgt) {
+					if !c.cancompare(col, argoids, isGT) {
 						return errors.BadColumnToColumnTypeComparisonError
 					}
 				}
-			case *nestedpredicate:
-				stack = append(stack, &loopstate{items: node.items})
+			case *predicateNested:
+				stack = append(stack, &loopstate{items: pred.items})
 				continue stackloop
 			}
 		}
@@ -753,8 +778,8 @@ stackloop:
 }
 
 // typeoids returns a list of OIDs of those PostgreSQL types that can be
-// used to hold a value of a Go type represented by the given typeinfo.
-func (c *pgchecker) typeoids(typ typeinfo) []pgoid {
+// used to hold a value of a Go type represented by the given typeInfo.
+func (c *pgchecker) typeoids(typ typeInfo) []pgoid {
 	switch typstr := typ.string(true); typstr {
 	case gotypstringm, gotypnullstringm:
 		if t := c.pg.cat.typebyname("hstore"); t != nil {
@@ -774,8 +799,8 @@ func (c *pgchecker) typeoids(typ typeinfo) []pgoid {
 
 // cancompare reports whether a value of the given col's type can be compared to,
 // using the predicate, a value of one of the types specified by the given oids.
-func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, pred predicate) bool {
-	name := predicate2basepgops[pred]
+func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, kind predicateKind) bool {
+	name := predicateKindToBasePGOps[kind]
 	left := col.typ.oid
 	for _, right := range rhstypes {
 		if col.typ.category == pgtypcategory_string && right == pgtyp_unknown {
@@ -791,27 +816,27 @@ func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, pred predicate) 
 }
 
 // canassign reports whether a value
-func (c *pgchecker) canassign(col *pgcolumn, field *recfield, atyp assigntype) bool {
+func (c *pgchecker) canassign(col *pgcolumn, field *fieldInfo, atyp assigntype) bool {
 	// TODO(mkopriva): this returns on success, so write tests that test
 	// successful scenarios...
 
 	// If the column is gonna be written to and the field's type knows
 	// how to encode itself to a database value, accept.
-	if atyp == assignwrite && field.typ.isvaluer {
+	if atyp == assignwrite && field.typ.isValuer {
 		return true
 	}
 
 	// If the column is gonna be read from and the field's type knows how
 	// to decode itself from a database value, accept.
-	if atyp == assignread && field.typ.isscanner {
+	if atyp == assignread && field.typ.isScanner {
 		return true
 	}
 
-	// If the column's type is json(b) and the "usejson" directive was used or
+	// If the column's type is json(b) and the "useJSON" directive was used or
 	// the field's type implements json.Marshaler/json.Unmarshaler, accept.
 	if col.typ.oid == pgtyp_json || col.typ.oid == pgtyp_jsonb {
-		if field.usejson || (atyp == assignwrite && field.typ.canjsonmarshal()) ||
-			(atyp == assignread && field.typ.canjsonunmarshal()) {
+		if field.useJSON || (atyp == assignwrite && field.typ.canJSONMarshal()) ||
+			(atyp == assignread && field.typ.canJSONUnmarshal()) {
 			return true
 		}
 	}
@@ -819,17 +844,17 @@ func (c *pgchecker) canassign(col *pgcolumn, field *recfield, atyp assigntype) b
 	// If the column's type is json(b) array and the field's type is a slice
 	// whose element type implements json.Marshaler/json.Unmarshaler, accept.
 	if col.typ.oid == pgtyp_jsonarr || col.typ.oid == pgtyp_jsonbarr {
-		if (atyp == assignwrite && field.typ.kind == kindslice && field.typ.elem.canjsonmarshal()) ||
-			(atyp == assignread && field.typ.kind == kindslice && field.typ.elem.canjsonunmarshal()) {
+		if (atyp == assignwrite && field.typ.kind == kindSlice && field.typ.elem.canJSONMarshal()) ||
+			(atyp == assignread && field.typ.kind == kindSlice && field.typ.elem.canJSONUnmarshal()) {
 			return true
 		}
 	}
 
-	// If the column's type is xml and the "usexml" directive was used or
+	// If the column's type is xml and the "useXML" directive was used or
 	// the field's type implements xml.Marshaler/xml.Unmarshaler, accept.
 	if col.typ.oid == pgtyp_xml {
-		if field.usexml || (atyp == assignwrite && field.typ.canxmlmarshal()) ||
-			(atyp == assignread && field.typ.canxmlunmarshal()) {
+		if field.useXML || (atyp == assignwrite && field.typ.canXMLMarshal()) ||
+			(atyp == assignread && field.typ.canXMLUnmarshal()) {
 			return true
 		}
 	}
@@ -837,8 +862,8 @@ func (c *pgchecker) canassign(col *pgcolumn, field *recfield, atyp assigntype) b
 	// If the column's type is xml array and the field's type is a slice
 	// whose element type implements xml.Marshaler/xml.Unmarshaler, accept.
 	if col.typ.oid == pgtyp_xmlarr {
-		if (atyp == assignwrite && field.typ.kind == kindslice && field.typ.elem.canxmlmarshal()) ||
-			(atyp == assignread && field.typ.kind == kindslice && field.typ.elem.canxmlunmarshal()) {
+		if (atyp == assignwrite && field.typ.kind == kindSlice && field.typ.elem.canXMLMarshal()) ||
+			(atyp == assignread && field.typ.kind == kindSlice && field.typ.elem.canXMLUnmarshal()) {
 			return true
 		}
 	}
@@ -868,7 +893,7 @@ func (c *pgchecker) canassign(col *pgcolumn, field *recfield, atyp assigntype) b
 
 	// If casting is allowed check if the type to which the field will be
 	// converted can be coerced to the type of the column.
-	if field.cancast {
+	if field.canCast {
 		return c.cancoerce(col, field)
 	}
 	return false
@@ -876,14 +901,14 @@ func (c *pgchecker) canassign(col *pgcolumn, field *recfield, atyp assigntype) b
 
 // cancoerce reports whether or not a value of the given field's type can
 // be coerced into a value of the column's type.
-func (c *pgchecker) cancoerce(col *pgcolumn, field *recfield) bool {
+func (c *pgchecker) cancoerce(col *pgcolumn, field *fieldInfo) bool {
 	// if the target type is of the string category, accept.
 	if col.typ.category == pgtypcategory_string {
 		return true
 	}
 	// if the target type is of the array category with an element type of
 	// the string category, and the source type is a slice or an array, accept.
-	if col.typ.category == pgtypcategory_array && (field.typ.kind == kindslice || field.typ.kind == kindarray) {
+	if col.typ.category == pgtypcategory_array && (field.typ.kind == kindSlice || field.typ.kind == kindArray) {
 		elemtyp := c.pg.cat.types[col.typ.elem]
 		if elemtyp != nil && elemtyp.category == pgtypcategory_string {
 			return true
@@ -943,7 +968,7 @@ func (c *pgchecker) cancoerceoid(targetid, inputid pgoid) bool {
 }
 
 // check that the column's and field's type can be used as the argument to the specified function.
-func (c *pgchecker) checkmodfunc(fn funcname, col *pgcolumn, fieldoids []pgoid) error {
+func (c *pgchecker) checkmodfunc(fn funcName, col *pgcolumn, fieldoids []pgoid) error {
 	var (
 		ok1 bool // column's type can be coerced to the functions argument's type
 		ok2 bool // field's type can be assigned to the functions argument's type
@@ -970,7 +995,7 @@ func (c *pgchecker) checkmodfunc(fn funcname, col *pgcolumn, fieldoids []pgoid) 
 	return nil
 }
 
-func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
+func (c *pgchecker) loadrelation(id relId) (*pgrelation, error) {
 	rel := new(pgrelation)
 	rel.name = id.name
 	rel.namespace = id.qual
@@ -1090,7 +1115,7 @@ func (c *pgchecker) loadrelation(id relid) (*pgrelation, error) {
 	return rel, nil
 }
 
-func (c *pgchecker) column(id colid) (*pgcolumn, error) {
+func (c *pgchecker) column(id colId) (*pgcolumn, error) {
 	rel, ok := c.relmap[id.qual]
 	if !ok {
 		return nil, errors.NoDBRelationError
@@ -1292,7 +1317,7 @@ type pgcatalogue struct {
 	types     map[pgoid]*pgtype
 	operators map[pgopkey]*pgoperator
 	casts     map[pgcastkey]*pgcast
-	procs     map[funcname][]*pgproc
+	procs     map[funcName][]*pgproc
 }
 
 var pgcataloguecache = struct {
@@ -1324,8 +1349,9 @@ func (c *pgcatalogue) cancasti(t, s pgoid) bool {
 
 func (c *pgcatalogue) load(db *sql.DB, key string) error {
 	pgcataloguecache.RLock()
+	defer pgcataloguecache.RUnlock()
+
 	cat := pgcataloguecache.m[key]
-	pgcataloguecache.RUnlock()
 	if cat != nil {
 		*c = *cat
 		return nil
@@ -1415,7 +1441,7 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		return err
 	}
 
-	c.procs = make(map[funcname][]*pgproc)
+	c.procs = make(map[funcName][]*pgproc)
 
 	var version int
 	var pgselectprocs string
@@ -1447,15 +1473,13 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 			return err
 		}
 
-		c.procs[funcname(proc.name)] = append(c.procs[funcname(proc.name)], proc)
+		c.procs[funcName(proc.name)] = append(c.procs[funcName(proc.name)], proc)
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
 
-	pgcataloguecache.Lock()
 	pgcataloguecache.m[key] = c
-	pgcataloguecache.Unlock()
 	return nil
 }
 
@@ -1853,28 +1877,28 @@ var go2pgoids = map[string][]pgoid{
 // the constructs IN and NOT IN are essentially the same as comparing the LHS to every
 // element of the RHS with the operators "=" and "<>" respectively, and therefore the
 // isin maps to "=" and notin maps to "<>".
-var predicate2basepgops = map[predicate]string{
-	iseq:        "=",
-	noteq:       "<>",
-	noteq2:      "<>",
-	islt:        "<",
-	isgt:        ">",
-	islte:       "<=",
-	isgte:       ">=",
-	ismatch:     "~",
-	ismatchi:    "~*",
-	notmatch:    "!~",
-	notmatchi:   "!~*",
-	isdistinct:  "<>",
-	notdistinct: "=",
-	islike:      "~~",
-	notlike:     "!~~",
-	isilike:     "~~*",
-	notilike:    "!~~*",
-	issimilar:   "~~",
-	notsimilar:  "!~~",
-	isin:        "=",
-	notin:       "<>",
+var predicateKindToBasePGOps = map[predicateKind]string{
+	isEQ:        "=",
+	notEQ:       "<>",
+	notEQ2:      "<>",
+	isLT:        "<",
+	isGT:        ">",
+	isLTE:       "<=",
+	isGTE:       ">=",
+	isMatch:     "~",
+	isMatchi:    "~*",
+	notMatch:    "!~",
+	notMatchi:   "!~*",
+	isDistinct:  "<>",
+	notDistinct: "=",
+	isLike:      "~~",
+	notLike:     "!~~",
+	isILike:     "~~*",
+	notILike:    "!~~*",
+	isSimilar:   "~~",
+	notSimilar:  "!~~",
+	isIn:        "=",
+	notIn:       "<>",
 }
 
 ////////////////////////////////////////////////////////////////////////////////

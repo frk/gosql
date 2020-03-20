@@ -64,3 +64,7 @@
 //	Return
 //	Return
 package gosql
+
+// NOTE(mkopriva): This is used by default for UPDATEs which don't specify
+// a WHERE clause, if multiple fields are tagged as pkeys then a composite
+// primary key is assumed.

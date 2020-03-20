@@ -1,4 +1,4 @@
-package gosql
+package main
 
 import (
 	"bytes"
@@ -52,48 +52,51 @@ var (
 	callmakeparams      = GO.CallExpr{Fun: GO.Ident{"make"}, Args: GO.ArgsList{List: idifaces}}
 )
 
-type specinfo struct {
-	spec *typespec
-	info *pginfo
+// targetInfo holds the information for the analyzed and db-checked target type.
+type targetInfo struct {
+	query     *queryStruct
+	filter    *filterStruct
+	dataField *dataField
+	info      *pginfo
 }
 
 // skipwrite is a helper method that reports whether or not the field's column should be written to.
-func (si *specinfo) skipwrite(fc *fieldcolumn) bool {
-	return fc.field.readonly && (si.spec.force == nil ||
-		(si.spec.force.all == false && !si.spec.force.contains(fc.colid)))
+func (ti *targetInfo) skipwrite(fc *fieldcolumn) bool {
+	return fc.field.readOnly && (ti.query.forceList == nil ||
+		(ti.query.forceList.all == false && !ti.query.forceList.contains(fc.colId)))
 }
 
 // skipread is a helper method that reports whether or not the field's column should be read from.
-func (si *specinfo) skipread(fc *fieldcolumn) bool {
-	return fc.field.writeonly && (si.spec.force == nil ||
-		(si.spec.force.all == false && !si.spec.force.contains(fc.colid)))
+func (ti *targetInfo) skipread(fc *fieldcolumn) bool {
+	return fc.field.writeOnly && (ti.query.forceList == nil ||
+		(ti.query.forceList.all == false && !ti.query.forceList.contains(fc.colId)))
 }
 
 // usedefault is a helper method that reports whether or not the SQL's DEFAULT
 // marker should be used to write a column.
-func (si *specinfo) usedefault(fc *fieldcolumn) bool {
-	return fc.field.usedefault || (si.spec.defaults != nil &&
-		(si.spec.defaults.all || si.spec.defaults.contains(fc.colid)))
+func (ti *targetInfo) usedefault(fc *fieldcolumn) bool {
+	return fc.field.useDefault || (ti.query.defaultList != nil &&
+		(ti.query.defaultList.all || ti.query.defaultList.contains(fc.colId)))
 }
 
 // skipinit is a helper method that reports whether or not the GO output
 // fields should be, if they are pointers, initialized.
-func (si *specinfo) skipinit() bool {
-	return (si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) && // has input fields?
-		(si.spec.result == nil) // scan output into input fields?
+func (ti *targetInfo) skipinit() bool {
+	return (ti.query.kind == queryKindInsert || ti.query.kind == queryKindUpdate) && // has input fields?
+		(ti.query.resultField == nil) // scan output into input fields?
 }
 
-func generate(pkgname string, infos []*specinfo) (*bytes.Buffer, error) {
+func generate(pkgName string, infos []*targetInfo) (*bytes.Buffer, error) {
 	g := &generator{infos: infos}
-	if err := g.run(pkgname); err != nil {
+	if err := g.run(pkgName); err != nil {
 		return nil, err
 	}
 	return &g.buf, nil
 }
 
 type generator struct {
-	infos   []*specinfo
-	pkgname string
+	infos   []*targetInfo
+	pkgName string
 	buf     bytes.Buffer
 
 	file GO.File
@@ -101,7 +104,7 @@ type generator struct {
 	// file specific state
 	imports GO.ImportDecl
 
-	// spec specific state, needs to be reset on each iteration
+	// query specific state, needs to be reset on each iteration
 	nparam     int               // number of parameters
 	asvar      bool              // if true, the query string should be declared as a var, not const.
 	fclose     bool              // if true, the SQL query needs to be closed (with right parentheses) after the filter's been added.
@@ -124,12 +127,13 @@ type generator struct {
 	sqlInputColumns2 SQL.NameGroup
 	sqlInputValues   SQL.ValueExprList //
 	sqlInputValues2  SQL.ValueExprList //
+	targetInfo       *targetInfo
 }
 
-func (g *generator) run(pkgname string) error {
+func (g *generator) run(pkgName string) error {
 	g.imports.Specs = []GO.ImportSpec{{Path: gosqlimport}}
 
-	for _, si := range g.infos {
+	for _, ti := range g.infos {
 		g.nparam = 0
 		g.asvar = false
 		g.fclose = false
@@ -148,32 +152,33 @@ func (g *generator) run(pkgname string) error {
 		g.sqlInputColumns2 = nil
 		g.sqlInputValues = nil
 		g.sqlInputValues2 = nil
+		g.targetInfo = ti
 
-		execdecl := g.buildexecdecl(si)
+		execdecl := g.buildexecdecl(ti)
 		g.file.Decls = append(g.file.Decls, execdecl)
 	}
 
-	g.file.PkgName = pkgname
+	g.file.PkgName = pkgName
 	g.file.Preamble = GO.LineComment{filepreamble}
 	g.file.Imports = []GO.ImportDeclNode{g.imports}
 
 	return GO.Write(g.file, &g.buf)
 }
 
-func (g *generator) buildexecdecl(si *specinfo) (m GO.MethodDecl) {
+func (g *generator) buildexecdecl(si *targetInfo) (m GO.MethodDecl) {
 	m.Name = idexec
 	m.Recv.Name = idrecv
-	m.Recv.Type = GO.PointerRecvType{si.spec.name}
+	m.Recv.Type = GO.PointerRecvType{si.query.name}
 	m.Type.Params = GO.ParamList{{Names: idconn, Type: sxconn}}
 	m.Type.Results = GO.ParamList{{Type: iderror}}
 
-	g.scantoinput = ((si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) &&
-		si.spec.rel.rec.isslice && si.spec.result == nil)
+	g.scantoinput = ((si.query.kind == queryKindInsert || si.query.kind == queryKindUpdate) &&
+		si.query.dataField.data.isSlice && si.query.resultField == nil)
 
 	g.prepareInput(si)
 	g.prepareOutput(si)
 
-	g.prepareLimitOffsetFallback(si)
+	g.prepareGOLimitOffsetFallback(si)
 
 	m.Body.Add(g.buildquerystring(si))
 	m.Body.Add(g.buildGOFilterParams(si))
@@ -188,48 +193,48 @@ func (g *generator) buildexecdecl(si *specinfo) (m GO.MethodDecl) {
 }
 
 // prepareInput
-func (g *generator) prepareInput(si *specinfo) {
+func (g *generator) prepareInput(si *targetInfo) {
 	// prepare input for the INSERT / UPDATE query
 	if len(si.info.input) > 0 {
-		g.prepareInputGOFields(si)
-		g.prepareInputSQLColumns(si)
+		g.prepareGOInputFields(si)
+		g.prepareSQLInputColumns(si)
 	}
 
 	// prepare input for the WHERE clause
-	if si.spec.where != nil && len(si.spec.where.items) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.where.name}}
-		g.prepareInputGOWhereblock(si.spec.where.items, sx)
-	} else if si.spec.kind == speckindUpdate && (si.spec.all == false && si.spec.filter == "") {
-		g.prepareInputGOPkey(si)
+	if si.query.whereBlock != nil && len(si.query.whereBlock.items) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.whereBlock.name}}
+		g.prepareGOInputWhereFields(si.query.whereBlock.items, sx)
+	} else if si.query.kind == queryKindUpdate && (si.query.all == false && si.query.filterField == "") {
+		g.prepareGOInputPrimaryKeyFields(si)
 	}
 
 	// prepare input for the LIMIT clause
-	if si.spec.limit != nil && len(si.spec.limit.field) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.limit.field}}
+	if si.query.limitField != nil && len(si.query.limitField.name) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.limitField.name}}
 		g.queryargs = append(g.queryargs, sx)
 	}
 
 	// prepare input for the OFFSET clause
-	if si.spec.offset != nil && len(si.spec.offset.field) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.offset.field}}
+	if si.query.offsetField != nil && len(si.query.offsetField.name) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.offsetField.name}}
 		g.queryargs = append(g.queryargs, sx)
 	}
 }
 
-// prepareInputGOFields prepares a list of GO field selector expressions
+// prepareGOInputFields prepares a list of GO field selector expressions
 // that will be passed as arguments to the query executing function.
-func (g *generator) prepareInputGOFields(si *specinfo) {
-	rec := si.spec.rel.rec
-	name := si.spec.rel.name
+func (g *generator) prepareGOInputFields(si *targetInfo) {
+	data := si.query.dataField.data
+	name := si.query.dataField.name
 
 	// the root node for the fields to be stored
 	g.argroot = GO.ExprNode(GO.SelectorExpr{X: idrecv, Sel: GO.Ident{name}})
-	if rec.isslice {
+	if data.isSlice {
 		g.argroot = GO.Ident{"v"}
 	}
 
 	for _, item := range si.info.input {
-		if si.skipwrite(item) { // readonly?
+		if si.skipwrite(item) { // read only?
 			continue
 		}
 		if si.usedefault(item) { // DEFAULT?
@@ -238,18 +243,18 @@ func (g *generator) prepareInputGOFields(si *specinfo) {
 
 		// the GO field to be passed as argument
 		fx := g.argroot
-		for _, pe := range item.field.path {
-			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{pe.name}}
+		for _, node := range item.field.path {
+			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{node.name}}
 		}
 		fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{item.field.name}}
-		fx = g.transformInputGOFieldExpr(fx, item)
+		fx = g.transformGOInputFieldExpr(fx, item)
 		g.queryargs = append(g.queryargs, fx)
 	}
 }
 
-// transformInputGOFieldExpr ...
-func (g *generator) transformInputGOFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO.ExprNode {
-	if fc.field.usejson {
+// transformGOInputFieldExpr ...
+func (g *generator) transformGOInputFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO.ExprNode {
+	if fc.field.useJSON {
 		call := calljson
 		call.Args = GO.ArgsList{List: x}
 		return call
@@ -257,17 +262,13 @@ func (g *generator) transformInputGOFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO
 	return x
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// prepareInputSQLValuesTableAlias
-////////////////////////////////////////////////////////////////////////////////
-
-// prepareInputSQLColumns prepares the target columns for an INSERT or UPDATE
+// prepareSQLInputColumns prepares the target columns for an INSERT or UPDATE
 // query, including a list of the SQL parameter placeholders or values.
-func (g *generator) prepareInputSQLColumns(si *specinfo) {
-	updateWithSlice := (si.spec.kind == speckindUpdate && si.spec.rel.rec.isslice)
+func (g *generator) prepareSQLInputColumns(si *targetInfo) {
+	updateWithSlice := (si.query.kind == queryKindUpdate && si.query.dataField.data.isSlice)
 
 	for _, item := range si.info.input {
-		if si.skipwrite(item) { // readonly?
+		if si.skipwrite(item) { // read only?
 			continue
 		}
 
@@ -275,7 +276,6 @@ func (g *generator) prepareInputSQLColumns(si *specinfo) {
 		g.sqlInputColumns = append(g.sqlInputColumns, SQL.Name(item.column.name))
 
 		if si.usedefault(item) {
-			// the DEFAULT marker
 			g.sqlInputValues = append(g.sqlInputValues, SQL.DEFAULT)
 			continue
 		}
@@ -300,7 +300,7 @@ func (g *generator) prepareInputSQLColumns(si *specinfo) {
 	if updateWithSlice {
 		for _, item := range si.info.pkeys {
 			// TODO documentation
-			if !si.skipwrite(item) { // readonly?
+			if !si.skipwrite(item) { // read only?
 				continue
 			}
 			g.sqlInputColumns2 = append(g.sqlInputColumns2, SQL.Name(item.column.name))
@@ -311,33 +311,34 @@ func (g *generator) prepareInputSQLColumns(si *specinfo) {
 	}
 }
 
-// prepareInputGOWhereblock prepares the input for a WHERE clause which is a list of
+// prepareGOInputWhereFields prepares the input for a WHERE clause which is a list of
 // the GO "where block" fields that will be passed to the query executing function.
-func (g *generator) prepareInputGOWhereblock(items []*predicateitem, sx GO.SelectorExpr) {
+func (g *generator) prepareGOInputWhereFields(items []*predicateItem, sx GO.SelectorExpr) {
 	for _, item := range items {
-		switch node := item.node.(type) {
-		case *nestedpredicate:
-			g.prepareInputGOWhereblock(node.items, GO.SelectorExpr{X: sx, Sel: GO.Ident{node.name}})
+		switch pred := item.pred.(type) {
+		case *predicateNested:
+			g.prepareGOInputWhereFields(pred.items, GO.SelectorExpr{X: sx, Sel: GO.Ident{pred.name}})
 			continue
-		case *betweenpredicate:
-			if x, ok := node.x.(*paramfield); ok {
-				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{node.name}}
+		case *predicateBetween:
+			if x, ok := pred.x.(*fieldDatum); ok {
+				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{pred.name}}
 				sx = GO.SelectorExpr{X: sx, Sel: GO.Ident{x.name}}
 				g.queryargs = append(g.queryargs, sx)
 			}
-			if y, ok := node.y.(*paramfield); ok {
-				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{node.name}}
+			if y, ok := pred.y.(*fieldDatum); ok {
+				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{pred.name}}
 				sx = GO.SelectorExpr{X: sx, Sel: GO.Ident{y.name}}
 				g.queryargs = append(g.queryargs, sx)
 			}
-		case *fieldpredicate:
-			if node.pred != isin && node.pred != notin {
+		case *predicateField:
+			if pred.kind != isIn && pred.kind != notIn {
 				var x GO.ExprNode
 
-				x = GO.SelectorExpr{X: sx, Sel: GO.Ident{node.field.name}}
-				if node.qua > 0 {
-					gotyp := node.field.typ.string(true)
-					coltyp := node.coltype + "[]"
+				x = GO.SelectorExpr{X: sx, Sel: GO.Ident{pred.name}}
+				if pred.qua > 0 {
+
+					gotyp := pred.typ.string(true)
+					coltyp := g.targetInfo.info.colmap[pred].typ.namefmt + "[]"
 					sel, ok := gotyp2coltyp2converter[gotyp][coltyp]
 					if !ok {
 						// TODO should not happen here, this should be caught while scanning the db
@@ -348,37 +349,37 @@ func (g *generator) prepareInputGOWhereblock(items []*predicateitem, sx GO.Selec
 
 				g.queryargs = append(g.queryargs, x)
 			}
-		case *columnpredicate:
+		case *predicateColumn:
 			// nothing to do
 		}
 	}
 }
 
-// prepareInputGOPkey prepares the input for a WHERE clause using the
-// primary key(s) of the data type.
-func (g *generator) prepareInputGOPkey(si *specinfo) {
+// prepareGOInputPrimaryKeyFields prepares the input for a WHERE clause
+// using the primary key(s) of the data type.
+func (g *generator) prepareGOInputPrimaryKeyFields(si *targetInfo) {
 	for _, item := range si.info.pkeys {
 		if !si.skipwrite(item) {
 			continue
 		}
 
 		fx := GO.ExprNode(g.argroot)
-		for _, pe := range item.field.path {
-			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{pe.name}}
+		for _, node := range item.field.path {
+			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{node.name}}
 		}
 		fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{item.field.name}}
 		g.queryargs = append(g.queryargs, fx)
 	}
 }
 
-// prepareLimitOffsetFallback
-func (g *generator) prepareLimitOffsetFallback(si *specinfo) {
-	if l := si.spec.limit; l != nil && l.value > 0 && len(l.field) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{l.field}}
+// prepareGOLimitOffsetFallback
+func (g *generator) prepareGOLimitOffsetFallback(si *targetInfo) {
+	if field := si.query.limitField; field != nil && field.value > 0 && len(field.name) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{field.name}}
 
 		asn := GO.AssignStmt{Token: GO.Assign}
 		asn.Lhs = sx
-		asn.Rhs = GO.IntLit(l.value)
+		asn.Rhs = GO.IntLit(field.value)
 
 		ifzero := GO.IfStmt{}
 		ifzero.Cond = GO.BinaryExpr{X: sx, Op: GO.BinaryEql, Y: GO.IntLit(0)}
@@ -386,12 +387,12 @@ func (g *generator) prepareLimitOffsetFallback(si *specinfo) {
 		g.lofallback = append(g.lofallback, ifzero)
 	}
 
-	if o := si.spec.offset; o != nil && o.value > 0 && len(o.field) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{o.field}}
+	if field := si.query.offsetField; field != nil && field.value > 0 && len(field.name) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{field.name}}
 
 		asn := GO.AssignStmt{Token: GO.Assign}
 		asn.Lhs = sx
-		asn.Rhs = GO.IntLit(o.value)
+		asn.Rhs = GO.IntLit(field.value)
 
 		ifzero := GO.IfStmt{}
 		ifzero.Cond = GO.BinaryExpr{X: sx, Op: GO.BinaryEql, Y: GO.IntLit(0)}
@@ -405,7 +406,7 @@ func (g *generator) prepareLimitOffsetFallback(si *specinfo) {
 }
 
 // prepareOutput .................
-func (g *generator) prepareOutput(si *specinfo) {
+func (g *generator) prepareOutput(si *targetInfo) {
 	if len(si.info.output) > 0 {
 		skipinit := si.skipinit()
 		g.prepareOutputGORoot(si, skipinit)
@@ -417,37 +418,37 @@ func (g *generator) prepareOutput(si *specinfo) {
 // prepareOutputGORoot resolves the GO root expression of the fields into which
 // the output will be scanned, additionally if the root needs to be initialized
 // before scanning, an initialization statement will be prepared as well.
-func (g *generator) prepareOutputGORoot(si *specinfo, skipinit bool) {
-	rec := si.spec.rel.rec
-	name := si.spec.rel.name
-	if si.spec.result != nil {
-		rec = si.spec.result.rec
-		name = si.spec.result.name
+func (g *generator) prepareOutputGORoot(si *targetInfo, skipinit bool) {
+	data := si.query.dataField.data
+	name := si.query.dataField.name
+	if si.query.resultField != nil {
+		data = si.query.resultField.data
+		name = si.query.resultField.name
 	}
 
 	g.scanroot = GO.ExprNode(GO.SelectorExpr{X: idrecv, Sel: GO.Ident{name}})
-	if rec.isslice && skipinit {
+	if data.isSlice && skipinit {
 		g.scanroot = GO.IndexExpr{X: g.scanroot, Index: GO.Ident{"i"}}
-	} else if rec.isslice || rec.isiter {
+	} else if data.isSlice || data.isIter {
 		g.scanroot = GO.Ident{"v"}
 	}
 
 	if !skipinit {
 		// build the initialization statement for the g.scanroot node
 		var rootinit GO.StmtNode
-		if !rec.isslice && !rec.isiter && rec.ispointer {
+		if !data.isSlice && !data.isIter && data.isPointer {
 			g.scaninits = append(g.scaninits, GO.NL{})
 
 			init := GO.AssignStmt{Token: GO.Assign}
-			init.Lhs, init.Rhs = g.scanroot, GO.CallNewExpr{g.rectype(rec)}
+			init.Lhs, init.Rhs = g.scanroot, GO.CallNewExpr{g.rectype(data)}
 			rootinit = init
-		} else if (rec.isslice || rec.isiter) && rec.ispointer {
+		} else if (data.isSlice || data.isIter) && data.isPointer {
 			init := GO.AssignStmt{Token: GO.AssignDefine}
-			init.Lhs, init.Rhs = g.scanroot, GO.CallNewExpr{g.rectype(rec)}
+			init.Lhs, init.Rhs = g.scanroot, GO.CallNewExpr{g.rectype(data)}
 			rootinit = init
-		} else if (rec.isslice || rec.isiter) && !rec.ispointer {
+		} else if (data.isSlice || data.isIter) && !data.isPointer {
 			init := GO.VarDecl{}
-			init.Spec = GO.ValueSpec{Names: GO.Ident{"v"}, Type: g.rectype(rec)}
+			init.Spec = GO.ValueSpec{Names: GO.Ident{"v"}, Type: g.rectype(data)}
 			rootinit = GO.DeclStmt{init}
 		}
 		if rootinit != nil {
@@ -457,7 +458,7 @@ func (g *generator) prepareOutputGORoot(si *specinfo, skipinit bool) {
 }
 
 // prepareOutputGORootFields ....
-func (g *generator) prepareOutputGORootFields(si *specinfo, skipinit bool) {
+func (g *generator) prepareOutputGORootFields(si *targetInfo, skipinit bool) {
 	// done is used to keep track of pointer fields whose
 	// initialization statements have already been created
 	var done = make(map[string]bool)
@@ -470,22 +471,22 @@ func (g *generator) prepareOutputGORootFields(si *specinfo, skipinit bool) {
 		key := "" // key for the done map
 
 		fx := g.scanroot
-		for _, pe := range item.field.path {
-			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{pe.name}}
+		for _, node := range item.field.path {
+			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{node.name}}
 
 			if skipinit {
 				continue
 			}
 
-			key += pe.name
-			if pe.ispointer && !done[key] {
-				if pe.isimported {
-					g.addimport(pe.typepkgpath, pe.typepkgname, pe.typepkglocal)
+			key += node.name
+			if node.isPointer && !done[key] {
+				if node.isImported {
+					g.addimport(node.typePkgPath, node.typePkgName, node.typePkgLocal)
 				}
 
 				// nested pointer field initialization statement
 				init := GO.AssignStmt{Token: GO.Assign}
-				init.Lhs, init.Rhs = fx, GO.CallNewExpr{g.pathelemtype(pe)}
+				init.Lhs, init.Rhs = fx, GO.CallNewExpr{g.pathelemtype(node)}
 				g.scaninits = append(g.scaninits, init)
 
 				done[key] = true
@@ -501,7 +502,7 @@ func (g *generator) prepareOutputGORootFields(si *specinfo, skipinit bool) {
 
 // transformOutputGOFieldExpr ...
 func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO.ExprNode {
-	if fc.field.usejson {
+	if fc.field.useJSON {
 		call := calljson
 		call.Args = GO.ArgsList{List: x}
 		return call
@@ -510,7 +511,7 @@ func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, fc *fieldcolumn) G
 }
 
 // prepareOutputSQLColumns prepares the list of SQL columns to be returned by the query.
-func (g *generator) prepareOutputSQLColumns(si *specinfo) {
+func (g *generator) prepareOutputSQLColumns(si *targetInfo) {
 	for _, item := range si.info.output {
 		if si.skipread(item) { // writeonly?
 			continue
@@ -520,11 +521,11 @@ func (g *generator) prepareOutputSQLColumns(si *specinfo) {
 		// - check whether or not the column can be NULL and if so add a COALESCE
 		// - check whether or not the field has the "usecoalesce" flag set to true and if so add a COALESCE
 		// - ... anything else?
-		g.outputcolumns = append(g.outputcolumns, g.sqlcolref(item.colid))
+		g.outputcolumns = append(g.outputcolumns, g.sqlcolref(item.colId))
 	}
 }
 
-func (g *generator) buildquerystring(si *specinfo) (stmt GO.StmtNode) {
+func (g *generator) buildquerystring(si *targetInfo) (stmt GO.StmtNode) {
 
 	sqlnode := g.sqlnode(si)
 
@@ -543,10 +544,10 @@ func (g *generator) buildquerystring(si *specinfo) (stmt GO.StmtNode) {
 		}}
 	}
 
-	if (si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) && si.spec.rel.rec.isslice {
+	if (si.query.kind == queryKindInsert || si.query.kind == queryKindUpdate) && si.query.dataField.data.isSlice {
 		result := GO.StmtList{GO.DeclStmt{decl}, GO.NL{}}
 
-		idrel := GO.QualifiedIdent{idrecv.Name, si.spec.rel.name}
+		idrel := GO.QualifiedIdent{idrecv.Name, si.query.dataField.name}
 		numfields := GO.IntLit(len(g.queryargs))
 
 		if len(g.queryargs) > 0 {
@@ -733,14 +734,14 @@ func (g *generator) buildquerystring(si *specinfo) (stmt GO.StmtNode) {
 		}
 
 		return append(list, GO.NL{})
-	} else if len(si.spec.filter) > 0 {
+	} else if len(si.query.filterField) > 0 {
 		list := GO.StmtList{GO.DeclStmt{decl}, GO.NL{}}
 
 		// q.Filter.ToSQL()
 		stmt := GO.AssignStmt{Token: GO.AssignAdd}
 		stmt.Lhs = idquery
 		stmt.Rhs = GO.CallExpr{Fun: GO.SelectorExpr{
-			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.filter}},
+			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.filterField}},
 			Sel: GO.Ident{"ToSQL"},
 		}}
 		list = append(list, stmt)
@@ -763,17 +764,17 @@ func (g *generator) buildquerystring(si *specinfo) (stmt GO.StmtNode) {
 	return GO.StmtList{GO.DeclStmt{decl}, GO.NL{}}
 }
 
-func (g *generator) buildGOFilterParams(si *specinfo) (stmt GO.StmtNode) {
-	if len(si.spec.filter) > 0 {
+func (g *generator) buildGOFilterParams(si *targetInfo) (stmt GO.StmtNode) {
+	if len(si.query.filterField) > 0 {
 		var list GO.StmtList
 
 		// q.Filter.Params()
 		call := GO.CallExpr{Fun: GO.SelectorExpr{
-			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.filter}},
+			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.filterField}},
 			Sel: GO.Ident{"Params"},
 		}}
 
-		if si.spec.kind == speckindUpdate {
+		if si.query.kind == queryKindUpdate {
 			var stmt1 GO.AssignStmt
 			stmt1.Token = GO.AssignDefine
 			stmt1.Lhs = idparams
@@ -802,9 +803,9 @@ func (g *generator) buildGOFilterParams(si *specinfo) (stmt GO.StmtNode) {
 	return GO.NoOp{}
 }
 
-func (g *generator) queryexec(si *specinfo) (stmt GO.StmtNode) {
+func (g *generator) queryexec(si *targetInfo) (stmt GO.StmtNode) {
 	args := GO.ArgsList{List: idquery}
-	if len(g.insx) > 0 || len(si.spec.filter) > 0 || ((si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) && si.spec.rel.rec.isslice && len(g.queryargs) > 0) {
+	if len(g.insx) > 0 || len(si.query.filterField) > 0 || ((si.query.kind == queryKindInsert || si.query.kind == queryKindUpdate) && si.query.dataField.data.isSlice && len(g.queryargs) > 0) {
 		args.AddExprs(idparams)
 		args.Ellipsis = true
 	} else {
@@ -816,9 +817,9 @@ func (g *generator) queryexec(si *specinfo) (stmt GO.StmtNode) {
 
 	// produce c.Exec( ... ) call
 	{
-		if si.spec.kind != speckindSelect && si.spec.returning == nil && si.spec.result == nil {
+		if !si.query.kind.isSelect() && si.query.returnList == nil && si.query.resultField == nil {
 
-			if rafield := si.spec.rowsaffected; rafield != nil {
+			if rafield := si.query.rowsAffectedField; rafield != nil {
 				// call exec & assign res, err
 				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = GO.ExprList{idres, iderr}
@@ -842,11 +843,11 @@ func (g *generator) queryexec(si *specinfo) (stmt GO.StmtNode) {
 				//
 				asn3 := GO.AssignStmt{Token: GO.Assign}
 				asn3.Lhs = GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rafield.name}}
-				if rafield.kind == kindint64 {
+				if rafield.kind == kindInt64 {
 					asn3.Rhs = idi64
 				} else {
 					args := GO.ArgsList{List: idi64}
-					asn3.Rhs = GO.CallExpr{Fun: GO.Ident{typekind2string[rafield.kind]}, Args: args}
+					asn3.Rhs = GO.CallExpr{Fun: GO.Ident{rafield.kind.String()}, Args: args}
 				}
 
 				return GO.StmtList{asn, iferr, asn2, iferr2, GO.NL{}, asn3}
@@ -861,12 +862,12 @@ func (g *generator) queryexec(si *specinfo) (stmt GO.StmtNode) {
 
 	// produce c.QueryRow( ... ) call
 	{
-		rec := si.spec.rel.rec
-		if si.spec.result != nil {
-			rec = si.spec.result.rec
+		data := si.query.dataField.data
+		if si.query.resultField != nil {
+			data = si.query.resultField.data
 		}
 
-		if !rec.isslice && !rec.isiter {
+		if !data.isSlice && !data.isIter {
 			asn := GO.AssignStmt{Token: GO.AssignDefine}
 			asn.Lhs = idrow
 			asn.Rhs = GO.CallExpr{Fun: sxqueryrow, Args: args}
@@ -902,22 +903,22 @@ func (g *generator) queryexec(si *specinfo) (stmt GO.StmtNode) {
 	return stmt
 }
 
-func (g *generator) returnerr(si *specinfo, errx GO.ExprNode) GO.ReturnStmt {
-	if si.spec.erh == nil {
+func (g *generator) returnerr(si *targetInfo, errx GO.ExprNode) GO.ReturnStmt {
+	if si.query.errorHandlerField == nil {
 		return GO.ReturnStmt{errx}
 	}
-	if si.spec.erh.isinfo {
+	if si.query.errorHandlerField.isInfo {
 		lit := GO.StructLit{Type: sxerrorinfo, Compact: true}
 		lit.Elems = []GO.FieldElement{
 			{"Error", iderr},
 			{"Query", idquery},
-			{"SpecKind", GO.StringLit(si.spec.kind.String())},
-			{"SpecName", GO.StringLit(si.spec.name)},
+			{"SpecKind", GO.StringLit(si.query.kind.String())},
+			{"SpecName", GO.StringLit(si.query.name)},
 			{"SpecValue", idrecv},
 		}
 		litptr := GO.UnaryExpr{Op: GO.UnaryAmp, X: lit}
 
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.erh.name}}
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.errorHandlerField.name}}
 		fun := GO.SelectorExpr{X: sx, Sel: GO.Ident{"HandleErrorInfo"}}
 		call := GO.CallExpr{Fun: fun, Args: GO.ArgsList{List: litptr}}
 		return GO.ReturnStmt{call}
@@ -925,13 +926,13 @@ func (g *generator) returnerr(si *specinfo, errx GO.ExprNode) GO.ReturnStmt {
 		// TODO if errx is not iderr, then errx is probably a CallFunc and
 		// should first be executed and it's result passed into HandleErrorInfo..
 	}
-	sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.spec.erh.name}}
+	sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.errorHandlerField.name}}
 	fun := GO.SelectorExpr{X: sx, Sel: GO.Ident{"HandleError"}}
 	call := GO.CallExpr{Fun: fun, Args: GO.ArgsList{List: errx}}
 	return GO.ReturnStmt{call}
 }
 
-func (g *generator) fornext(si *specinfo, inputscan bool) (stmt GO.ForStmt) {
+func (g *generator) fornext(si *targetInfo, inputscan bool) (stmt GO.ForStmt) {
 	stmt.Clause = GO.ForCondition{callrowsnext}
 	// scan & assign error
 	{
@@ -958,26 +959,26 @@ func (g *generator) fornext(si *specinfo, inputscan bool) (stmt GO.ForStmt) {
 
 	// append OR iterate
 	{
-		rec := si.spec.rel.rec
-		fieldname := si.spec.rel.name
-		if si.spec.result != nil {
-			rec = si.spec.result.rec
-			fieldname = si.spec.result.name
+		data := si.query.dataField.data
+		fieldname := si.query.dataField.name
+		if si.query.resultField != nil {
+			data = si.query.resultField.data
+			fieldname = si.query.resultField.name
 		}
 
-		if rec.isafterscanner {
+		if data.isAfterScanner {
 			// call afterscan
 			sx := GO.SelectorExpr{X: g.scanroot, Sel: idafterscan}
 			afterscan := GO.ExprStmt{GO.CallExpr{Fun: sx}}
 			stmt.Body.List = append(stmt.Body.List, afterscan)
 		}
 
-		if rec.isiter {
+		if data.isIter {
 			var call GO.CallExpr
-			if len(rec.itermethod) > 0 {
+			if len(data.iterMethod) > 0 {
 				call = GO.CallExpr{Fun: GO.SelectorExpr{
 					X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{fieldname}},
-					Sel: GO.Ident{rec.itermethod}},
+					Sel: GO.Ident{data.iterMethod}},
 					Args: GO.ArgsList{List: GO.Ident{"v"}},
 				}
 			} else {
@@ -1018,21 +1019,20 @@ func (g *generator) fornext(si *specinfo, inputscan bool) (stmt GO.ForStmt) {
 	return stmt
 }
 
-func (g *generator) returnstmt(si *specinfo) (stmt GO.StmtNode) {
-	if si.spec.rowsaffected != nil {
+func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
+	if si.query.rowsAffectedField != nil {
 		return GO.ReturnStmt{idnil}
 	}
-
-	if si.spec.kind == speckindSelect || si.spec.returning != nil {
-		rel := si.spec.rel
+	if si.query.kind.isSelect() || si.query.returnList != nil {
+		dataField := si.query.dataField
 
 		// does the record type need pre-allocation? and is it imported?
-		if rel.rec.base.isimported && (rel.rec.isslice || rel.rec.ispointer) && (si.spec.kind != speckindInsert && si.spec.kind != speckindUpdate) {
-			g.addimport(rel.rec.base.pkgpath, rel.rec.base.pkgname, rel.rec.base.pkglocal)
+		if dataField.data.typeInfo.isImported && (dataField.data.isSlice || dataField.data.isPointer) && (si.query.kind != queryKindInsert && si.query.kind != queryKindUpdate) {
+			g.addimport(dataField.data.typeInfo.pkgPath, dataField.data.typeInfo.pkgName, dataField.data.typeInfo.pkgLocal)
 		}
 
-		if rel.rec.isslice || rel.rec.isarray || rel.rec.isiter {
-			if si.spec.erh != nil && si.spec.erh.isinfo {
+		if dataField.data.isSlice || dataField.data.isArray || dataField.data.isIter {
+			if si.query.errorHandlerField != nil && si.query.errorHandlerField.isInfo {
 				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = callrowserr
@@ -1049,8 +1049,8 @@ func (g *generator) returnstmt(si *specinfo) (stmt GO.StmtNode) {
 			var args GO.ArgsList
 			var list GO.StmtList // result
 
-			if si.spec.selkind > selectfrom {
-				fx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rel.name}}
+			if si.query.kind.isNonFromSelect() {
+				fx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{dataField.name}}
 				args.AddExprs(GO.UnaryExpr{Op: GO.UnaryAmp, X: fx})
 			} else {
 				if len(g.scanargs) > 2 {
@@ -1060,9 +1060,9 @@ func (g *generator) returnstmt(si *specinfo) (stmt GO.StmtNode) {
 				list = append(list, g.scaninits...)
 			}
 
-			if !rel.rec.isafterscanner {
+			if !dataField.data.isAfterScanner {
 				call := GO.CallExpr{Fun: sxrowscan, Args: args}
-				if si.spec.erh != nil && si.spec.erh.isinfo {
+				if si.query.errorHandlerField != nil && si.query.errorHandlerField.isInfo {
 					asn := GO.AssignStmt{Token: GO.AssignDefine}
 					asn.Lhs = iderr
 					asn.Rhs = call
@@ -1087,7 +1087,7 @@ func (g *generator) returnstmt(si *specinfo) (stmt GO.StmtNode) {
 				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
 
 				// call afterscan
-				sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rel.name}}
+				sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{dataField.name}}
 				sx = GO.SelectorExpr{X: sx, Sel: idafterscan}
 				afterscan := GO.ExprStmt{GO.CallExpr{Fun: sx}}
 
@@ -1103,15 +1103,15 @@ func (g *generator) returnstmt(si *specinfo) (stmt GO.StmtNode) {
 	}
 
 	// result field
-	if si.spec.result != nil {
-		rel := si.spec.result
+	if si.query.resultField != nil {
+		rel := si.query.resultField
 		// does the record type need pre-allocation? and is it imported?
-		if rel.rec.base.isimported && (rel.rec.isslice || rel.rec.ispointer) {
-			g.addimport(rel.rec.base.pkgpath, rel.rec.base.pkgname, rel.rec.base.pkglocal)
+		if rel.data.typeInfo.isImported && (rel.data.isSlice || rel.data.isPointer) {
+			g.addimport(rel.data.typeInfo.pkgPath, rel.data.typeInfo.pkgName, rel.data.typeInfo.pkgLocal)
 		}
 
-		if rel.rec.isslice || rel.rec.isarray || rel.rec.isiter {
-			if si.spec.erh != nil && si.spec.erh.isinfo {
+		if rel.data.isSlice || rel.data.isArray || rel.data.isIter {
+			if si.query.errorHandlerField != nil && si.query.errorHandlerField.isInfo {
 				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = callrowserr
@@ -1134,9 +1134,9 @@ func (g *generator) returnstmt(si *specinfo) (stmt GO.StmtNode) {
 			var list GO.StmtList // result
 			list = append(list, g.scaninits...)
 
-			if !rel.rec.isafterscanner {
+			if !rel.data.isAfterScanner {
 				call := GO.CallExpr{Fun: sxrowscan, Args: args}
-				if si.spec.erh != nil && si.spec.erh.isinfo {
+				if si.query.errorHandlerField != nil && si.query.errorHandlerField.isInfo {
 					asn := GO.AssignStmt{Token: GO.AssignDefine}
 					asn.Lhs = iderr
 					asn.Rhs = call
@@ -1179,18 +1179,18 @@ func (g *generator) returnstmt(si *specinfo) (stmt GO.StmtNode) {
 	return g.returnerr(si, iderr)
 }
 
-func (g *generator) rectype(rec recordtype) GO.TypeNode {
-	if rec.base.isimported {
-		return GO.QualifiedIdent{rec.base.pkgname, rec.base.name}
+func (g *generator) rectype(data dataType) GO.TypeNode {
+	if data.typeInfo.isImported {
+		return GO.QualifiedIdent{data.typeInfo.pkgName, data.typeInfo.name}
 	}
-	return GO.Ident{rec.base.name}
+	return GO.Ident{data.typeInfo.name}
 }
 
-func (g *generator) pathelemtype(pe *pathelem) GO.TypeNode {
-	if pe.isimported {
-		return GO.QualifiedIdent{pe.typepkgname, pe.typename}
+func (g *generator) pathelemtype(node *fieldNode) GO.TypeNode {
+	if node.isImported {
+		return GO.QualifiedIdent{node.typePkgName, node.typeName}
 	}
-	return GO.Ident{pe.typename}
+	return GO.Ident{node.typeName}
 }
 
 func (g *generator) addimport(path, name, local string) {
@@ -1210,42 +1210,40 @@ func (g *generator) addimport(path, name, local string) {
 	g.imports.Specs = append(g.imports.Specs, spec)
 }
 
-func (g *generator) sqlnode(si *specinfo) (node GO.Node) {
-	switch si.spec.kind {
-	case speckindInsert:
+func (g *generator) sqlnode(si *targetInfo) (node GO.Node) {
+	switch si.query.kind {
+	case queryKindInsert:
 		return g.sqlinsert(si)
-	case speckindUpdate:
+	case queryKindUpdate:
 		return g.sqlupdate(si)
-	case speckindSelect:
-		switch si.spec.selkind {
-		case selectcount:
-			return g.sqlselectcount(si)
-		case selectexists, selectnotexists:
-			return g.sqlselectexists(si)
-		}
+	case queryKindSelect:
 		return g.sqlselect(si)
-	case speckindDelete:
+	case queryKindSelectCount:
+		return g.sqlselectcount(si)
+	case queryKindSelectExists, queryKindSelectNotExists:
+		return g.sqlselectexists(si)
+	case queryKindDelete:
 		return g.sqldelete(si)
 	}
 	return node
 }
 
 // sqlinsert builds and returns an SQL.InsertStatement.
-func (g *generator) sqlinsert(si *specinfo) (stmt SQL.InsertStatement) {
+func (g *generator) sqlinsert(si *targetInfo) (stmt SQL.InsertStatement) {
 	var src SQL.InsertSource
-	if si.spec.rel.rec.isslice {
+	if si.query.dataField.data.isSlice {
 		src.Values = &SQL.ValuesClause{}
 	} else {
 		src.Values = &SQL.ValuesClause{g.sqlInputValues}
 	}
 
-	stmt.Head.Table = g.sqlrelid(si.spec.rel.relid)
+	stmt.Head.Table = g.sqlrelid(si.query.dataField.relId)
 	stmt.Head.Columns = g.sqlInputColumns
-	stmt.Head.Overriding = overridingkind2sqlclause[si.spec.override]
+	stmt.Head.Overriding = overridingKindToSQLOverridingClause[si.query.overridingKind]
 	stmt.Head.Source = src
 	//stmt.Head.Source.Select = nil
 
-	if si.spec.rel.rec.isslice && (len(g.outputcolumns) > 0 || si.spec.onconflict != nil) {
+	if si.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || si.query.onConflictBlock != nil) {
 		var tail SQL.InsertTail
 		tail.OnConflict = g.sqlonconflict(si)
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
@@ -1257,13 +1255,13 @@ func (g *generator) sqlinsert(si *specinfo) (stmt SQL.InsertStatement) {
 	return stmt
 }
 
-func (g *generator) sqlupdate(si *specinfo) (stmt SQL.UpdateStatement) {
-	stmt.Head.Table = g.sqlrelid(si.spec.rel.relid)
+func (g *generator) sqlupdate(si *targetInfo) (stmt SQL.UpdateStatement) {
+	stmt.Head.Table = g.sqlrelid(si.query.dataField.relId)
 	stmt.Head.Set.Targets = g.sqlInputColumns
 	stmt.Head.Set.Values.Exprs = g.sqlInputValues
-	stmt.Head.From = g.sqlfrom(si.spec.join)
+	stmt.Head.From = g.sqlfrom(si.query.joinBlock)
 
-	if si.spec.kind == speckindUpdate && si.spec.rel.rec.isslice {
+	if si.query.kind == queryKindUpdate && si.query.dataField.data.isSlice {
 		// SQL.ValuesListClausePartial{}
 		// SQL.ValuesListAliasPartial{}
 		stmt.Head.From.List = append(stmt.Head.From.List, SQL.ValuesListClausePartial{})
@@ -1280,11 +1278,11 @@ func (g *generator) sqlupdate(si *specinfo) (stmt SQL.UpdateStatement) {
 		return stmt
 	}
 
-	if si.spec.filter != "" && len(g.outputcolumns) > 0 {
+	if si.query.filterField != "" && len(g.outputcolumns) > 0 {
 		var tail SQL.UpdateTail
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
 		g.sqltailnode = tail
-	} else if si.spec.rel.rec.isslice && (len(g.outputcolumns) > 0 || si.spec.where != nil) {
+	} else if si.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || si.query.whereBlock != nil) {
 		var tail SQL.UpdateTail
 		tail.Where = g.buildSQLWhereClause(si)
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
@@ -1298,36 +1296,36 @@ func (g *generator) sqlupdate(si *specinfo) (stmt SQL.UpdateStatement) {
 }
 
 // sqlselect builds and returns an SQL.SelectStatement.
-func (g *generator) sqlselect(si *specinfo) (selstmt SQL.SelectStatement) {
+func (g *generator) sqlselect(si *targetInfo) (selstmt SQL.SelectStatement) {
 	selstmt.Columns = g.outputcolumns // columns
-	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
-	selstmt.Join = g.sqljoin(si.spec.join)
+	selstmt.Table = g.sqlrelid(si.query.dataField.relId)
+	selstmt.Join = g.sqljoin(si.query.joinBlock)
 	selstmt.Where = g.buildSQLWhereClause(si)
-	selstmt.Order = g.sqlorderby(si.spec)
-	selstmt.Limit = g.sqllimit(si.spec)
-	selstmt.Offset = g.sqloffset(si.spec)
+	selstmt.Order = g.sqlorderby(si.query)
+	selstmt.Limit = g.sqllimit(si.query)
+	selstmt.Offset = g.sqloffset(si.query)
 	return selstmt
 }
 
 // sqldelete builds and returns an SQL.DeleteStatement.
-func (g *generator) sqldelete(si *specinfo) (delstmt SQL.DeleteStatement) {
-	delstmt.Table = g.sqlrelid(si.spec.rel.relid)
-	delstmt.Using = g.sqlusing(si.spec.join)
+func (g *generator) sqldelete(si *targetInfo) (delstmt SQL.DeleteStatement) {
+	delstmt.Table = g.sqlrelid(si.query.dataField.relId)
+	delstmt.Using = g.sqlusing(si.query.joinBlock)
 	delstmt.Where = g.buildSQLWhereClause(si)
 	delstmt.Returning = SQL.ReturningClause(g.outputcolumns) //returning
 	return delstmt
 }
 
 // sqlselectexists builds and returns an SQL.SelectExistsStatement.
-func (g *generator) sqlselectexists(si *specinfo) (selstmt SQL.SelectExistsStatement) {
-	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
-	selstmt.Join = g.sqljoin(si.spec.join)
-	selstmt.Not = si.spec.selkind == selectnotexists
-	if si.spec.filter == "" {
+func (g *generator) sqlselectexists(si *targetInfo) (selstmt SQL.SelectExistsStatement) {
+	selstmt.Table = g.sqlrelid(si.query.dataField.relId)
+	selstmt.Join = g.sqljoin(si.query.joinBlock)
+	selstmt.Not = si.query.kind == queryKindSelectNotExists
+	if si.query.filterField == "" {
 		selstmt.Where = g.buildSQLWhereClause(si)
-		selstmt.Order = g.sqlorderby(si.spec)
-		selstmt.Limit = g.sqllimit(si.spec)
-		selstmt.Offset = g.sqloffset(si.spec)
+		selstmt.Order = g.sqlorderby(si.query)
+		selstmt.Limit = g.sqllimit(si.query)
+		selstmt.Offset = g.sqloffset(si.query)
 	} else {
 		selstmt.Open = true
 		g.fclose = true
@@ -1336,36 +1334,36 @@ func (g *generator) sqlselectexists(si *specinfo) (selstmt SQL.SelectExistsState
 }
 
 // sqlselectcount builds and returns an SQL.SelectCountStatement.
-func (g *generator) sqlselectcount(si *specinfo) (selstmt SQL.SelectCountStatement) {
-	selstmt.Table = g.sqlrelid(si.spec.rel.relid)
-	selstmt.Join = g.sqljoin(si.spec.join)
-	if si.spec.filter == "" {
+func (g *generator) sqlselectcount(si *targetInfo) (selstmt SQL.SelectCountStatement) {
+	selstmt.Table = g.sqlrelid(si.query.dataField.relId)
+	selstmt.Join = g.sqljoin(si.query.joinBlock)
+	if si.query.filterField == "" {
 		selstmt.Where = g.buildSQLWhereClause(si)
-		selstmt.Order = g.sqlorderby(si.spec)
-		selstmt.Offset = g.sqloffset(si.spec)
+		selstmt.Order = g.sqlorderby(si.query)
+		selstmt.Offset = g.sqloffset(si.query)
 	}
 	return selstmt
 }
 
 // buildSQLWhereClause builds and returns ...
-func (g *generator) buildSQLWhereClause(si *specinfo) (where SQL.WhereClause) {
-	if w := si.spec.where; w != nil {
+func (g *generator) buildSQLWhereClause(si *targetInfo) (where SQL.WhereClause) {
+	if w := si.query.whereBlock; w != nil {
 		sel := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{w.name}}
 		where.SearchCondition, _ = g.sqlsearchcond(w.items, sel, false)
-	} else if si.spec.kind == speckindUpdate && (si.spec.all == false && si.spec.filter == "") {
+	} else if si.query.kind == queryKindUpdate && (si.query.all == false && si.query.filterField == "") {
 		var list SQL.BoolValueExprList
 		for i, item := range si.info.pkeys {
 			p := SQL.ComparisonPredicate{}
-			p.Cmp = predicate2sqlcmpop[iseq]
-			p.LPredicand = g.sqlcolref(item.colid)
+			p.Cmp = predicateKindToSQLCmpOp[isEQ]
+			p.LPredicand = g.sqlcolref(item.colId)
 
 			if item.sqlparam == nil {
 				item.sqlparam = g.sqlparam()
 			}
 			p.RPredicand = item.sqlparam
 
-			if si.spec.rel.rec.isslice {
-				col := SQL.ColumnIdent{Qual: "x", Name: SQL.Name(item.colid.name)}
+			if si.query.dataField.data.isSlice {
+				col := SQL.ColumnIdent{Qual: "x", Name: SQL.Name(item.colId.name)}
 				p.RPredicand = SQL.CastExpr{Expr: col, Type: item.column.typ.name}
 			}
 
@@ -1380,82 +1378,82 @@ func (g *generator) buildSQLWhereClause(si *specinfo) (where SQL.WhereClause) {
 	return where
 }
 
-func (g *generator) sqlsearchcond(items []*predicateitem, sel GO.SelectorExpr, parenthesized bool) (list SQL.BoolValueExprList, count int) {
+func (g *generator) sqlsearchcond(items []*predicateItem, sel GO.SelectorExpr, parenthesized bool) (list SQL.BoolValueExprList, count int) {
 	for _, item := range items {
 		count += 1
 
 		var x SQL.BoolValueExpr
-		switch node := item.node.(type) {
+		switch pred := item.pred.(type) {
 		// nested: recurse
-		case *nestedpredicate:
+		case *predicateNested:
 			var ncount int
 
-			sel := GO.SelectorExpr{X: sel, Sel: GO.Ident{node.name}}
-			x, ncount = g.sqlsearchcond(node.items, sel, true)
+			sel := GO.SelectorExpr{X: sel, Sel: GO.Ident{pred.name}}
+			x, ncount = g.sqlsearchcond(pred.items, sel, true)
 
 			count += ncount - 1
 
 		// 3-arg predicate: build & return
-		case *betweenpredicate:
+		case *predicateBetween:
 			p := SQL.BetweenPredicate{}
-			p.Predicand = g.sqlcolref(node.colid)
-			if x, ok := node.x.(colid); ok {
+			p.Predicand = g.sqlcolref(pred.colId)
+			if x, ok := pred.x.(colId); ok {
 				p.LowEnd = g.sqlcolref(x)
 			} else {
-				// assume node.x is *paramfield
+				// assume pred.x is *fieldDatum
 				p.LowEnd = g.sqlparam()
 			}
-			if y, ok := node.y.(colid); ok {
+			if y, ok := pred.y.(colId); ok {
 				p.HighEnd = g.sqlcolref(y)
 			} else {
-				// assume node.x is *paramfield
+				// assume pred.x is *fieldDatum
 				p.HighEnd = g.sqlparam()
 			}
 			x = p
 
 		// 2-arg predicates: prepare first, then build & return
-		case *fieldpredicate, *columnpredicate:
+		case *predicateField, *predicateColumn:
 			var (
-				lhs     SQL.ValueExpr
-				rhs     SQL.ValueExpr
-				pred    predicate
-				qua     quantifier
-				field   string
-				coltype string
+				lhs      SQL.ValueExpr
+				rhs      SQL.ValueExpr
+				predKind predicateKind
+				qua      quantifier
+				field    string
+				coltype  string
 			)
 
 			// prepare
-			switch node := node.(type) {
-			case *fieldpredicate:
-				pred = node.pred
-				qua = node.qua
-				lhs = g.sqlcolref(node.colid)
+			switch pred := pred.(type) {
+			case *predicateField:
+				predKind = pred.kind
+				qua = pred.qua
+				lhs = g.sqlcolref(pred.colId)
 				rhs = g.sqlparam()
-				if len(node.modfunc) > 0 {
+				if len(pred.modfunc) > 0 {
 					li := SQL.RoutineInvocation{}
-					li.Name = string(node.modfunc)
+					li.Name = string(pred.modfunc)
 					li.Args = []SQL.ValueExpr{lhs}
 					lhs = li
 
 					ri := SQL.RoutineInvocation{}
-					ri.Name = string(node.modfunc)
+					ri.Name = string(pred.modfunc)
 					ri.Args = []SQL.ValueExpr{rhs}
 					rhs = ri
 				}
 
 				if qua > 0 {
-					coltype = node.coltype
+					coltype = g.targetInfo.info.colmap[pred].typ.namefmt
 				}
 
-				field = node.field.name // needed for isin/notin predicates
-			case *columnpredicate:
-				pred = node.pred
-				qua = node.qua
-				lhs = g.sqlcolref(node.colid)
-				if !node.colid2.isempty() {
-					rhs = g.sqlcolref(node.colid2)
-				} else if len(node.lit) > 0 {
-					rhs = SQL.Literal{node.lit}
+				field = pred.name // needed for isin/notin predicates
+			case *predicateColumn:
+				predKind = pred.kind
+				qua = pred.qua
+				lhs = g.sqlcolref(pred.colId)
+				if !pred.colId2.isEmpty() {
+					rhs = g.sqlcolref(pred.colId2)
+				} else if len(pred.literal) > 0 {
+					rhs = SQL.Literal{pred.literal}
 				}
 			}
 
@@ -1468,50 +1466,50 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel GO.SelectorExpr, p
 					rhs = cast
 				}
 				qx := SQL.QuantifiedExpr{}
-				qx.Qua = quantifier2sqlquantifier[qua]
+				qx.Qua = quantifierToSQLQuantifier[qua]
 				qx.Expr = rhs
 				rhs = qx
 			}
 
 			// build & return
-			switch pred {
-			case iseq, noteq, noteq2, islt, isgt, islte, isgte:
+			switch predKind {
+			case isEQ, notEQ, notEQ2, isLT, isGT, isLTE, isGTE:
 				p := SQL.ComparisonPredicate{}
-				p.Cmp = predicate2sqlcmpop[pred]
+				p.Cmp = predicateKindToSQLCmpOp[predKind]
 				p.LPredicand = lhs
 				p.RPredicand = rhs
 				x = p
-			case islike, notlike:
+			case isLike, notLike:
 				p := SQL.LikePredicate{}
-				p.Not = (pred == notlike)
+				p.Not = (predKind == notLike)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
-			case isilike, notilike:
+			case isILike, notILike:
 				p := SQL.ILikePredicate{}
-				p.Not = (pred == notilike)
+				p.Not = (predKind == notILike)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
-			case issimilar, notsimilar:
+			case isSimilar, notSimilar:
 				p := SQL.SimilarPredicate{}
-				p.Not = (pred == notsimilar)
+				p.Not = (predKind == notSimilar)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
-			case isdistinct, notdistinct:
+			case isDistinct, notDistinct:
 				p := SQL.DistinctPredicate{}
-				p.Not = (pred == notdistinct)
+				p.Not = (predKind == notDistinct)
 				p.LPredicand = lhs
 				p.RPredicand = rhs
 				x = p
-			case ismatch, ismatchi, notmatch, notmatchi:
+			case isMatch, isMatchi, notMatch, notMatchi:
 				p := SQL.RegexPredicate{}
-				p.Op = predicate2sqlregexop[pred]
+				p.Op = predicateKindToSQLRegExOp[predKind]
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
-			case isin, notin:
+			case isIn, notIn:
 				sx := GO.SelectorExpr{X: sel, Sel: GO.Ident{field}}
 				g.insx = append(g.insx, sx)
 				g.nparam -= 1  // ordinal param won't be used directly
@@ -1526,19 +1524,19 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel GO.SelectorExpr, p
 				call.Args = GO.ArgsList{List: GO.ExprList{arg1, arg2}}
 
 				p := SQL.InPredicate{}
-				p.Not = (pred == notin)
+				p.Not = (predKind == notIn)
 				p.Predicand = lhs
 				p.ValueList = SQL.HostValue{GO.RawStringInsertExpr{call}}
 				x = p
-			case istrue, nottrue, isfalse, notfalse, isunknown, notunknown:
+			case isTrue, notTrue, isFalse, notFalse, isUnknown, notUnknown:
 				p := SQL.TruthPredicate{}
-				p.Not = (pred == nottrue || pred == notfalse || pred == notunknown)
-				p.Truth = predicate2sqltruth[pred]
+				p.Not = (predKind == notTrue || predKind == notFalse || predKind == notUnknown)
+				p.Truth = predicateKindToSQLTruth[predKind]
 				p.Predicand = lhs
 				x = p
-			case isnull, notnull:
+			case isNull, notNull:
 				p := SQL.NullPredicate{}
-				p.Not = (pred == notnull)
+				p.Not = (predKind == notNull)
 				p.Predicand = lhs
 				x = p
 			default:
@@ -1549,12 +1547,12 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel GO.SelectorExpr, p
 			}
 		}
 
-		switch item.op {
+		switch item.bool {
 		default: // initial
 			list.Initial = x
-		case booland:
+		case boolAnd:
 			list.Items = append(list.Items, SQL.AND{Operand: x})
-		case boolor:
+		case boolOr:
 			list.Items = append(list.Items, SQL.OR{Operand: x})
 		}
 
@@ -1568,43 +1566,43 @@ func (g *generator) sqlsearchcond(items []*predicateitem, sel GO.SelectorExpr, p
 	return list, count
 }
 
-func (g *generator) sqlonconflict(si *specinfo) (clause *SQL.OnConflictClause) {
-	if si.spec.onconflict == nil {
+func (g *generator) sqlonconflict(si *targetInfo) (clause *SQL.OnConflictClause) {
+	if si.query.onConflictBlock == nil {
 		return nil
 	}
 
 	clause = new(SQL.OnConflictClause)
 
 	// conflict target
-	if len(si.spec.onconflict.column) > 0 {
-		target := make(SQL.ConflictColumns, len(si.spec.onconflict.column))
+	if len(si.query.onConflictBlock.column) > 0 {
+		target := make(SQL.ConflictColumns, len(si.query.onConflictBlock.column))
 		for i := 0; i < len(target); i++ {
-			target[i] = SQL.Name(si.spec.onconflict.column[i].name)
+			target[i] = SQL.Name(si.query.onConflictBlock.column[i].name)
 		}
 		clause.Target = target
-	} else if len(si.spec.onconflict.index) > 0 {
+	} else if len(si.query.onConflictBlock.index) > 0 {
 		target := SQL.ConflictIndex{}
 		target.Expr = si.info.conflictindex.indexpr
 		target.Pred = si.info.conflictindex.indpred
 		clause.Target = target
-	} else if len(si.spec.onconflict.constraint) > 0 {
-		clause.Target = SQL.ConflictConstraint(si.spec.onconflict.constraint)
+	} else if len(si.query.onConflictBlock.constraint) > 0 {
+		clause.Target = SQL.ConflictConstraint(si.query.onConflictBlock.constraint)
 	}
 
 	// conflict action
-	if si.spec.onconflict.ignore {
+	if si.query.onConflictBlock.ignore {
 		return clause
-	} else if si.spec.onconflict.update != nil {
+	} else if si.query.onConflictBlock.update != nil {
 		ux := SQL.UpdateExcluded{}
-		if si.spec.onconflict.update.all {
+		if si.query.onConflictBlock.update.all {
 			for _, item := range si.info.input {
 				if si.skipwrite(item) {
 					continue
 				}
-				ux.Columns = append(ux.Columns, SQL.Name(item.colid.name))
+				ux.Columns = append(ux.Columns, SQL.Name(item.colId.name))
 			}
 		} else {
-			for _, cid := range si.spec.onconflict.update.items {
+			for _, cid := range si.query.onConflictBlock.update.items {
 				ux.Columns = append(ux.Columns, SQL.Name(cid.name))
 			}
 		}
@@ -1616,68 +1614,68 @@ func (g *generator) sqlonconflict(si *specinfo) (clause *SQL.OnConflictClause) {
 	return clause
 }
 
-func (g *generator) sqlorderby(spec *typespec) (order SQL.OrderClause) {
-	if spec.orderby == nil {
+func (g *generator) sqlorderby(query *queryStruct) (order SQL.OrderClause) {
+	if query.orderByList == nil {
 		return order
 	}
 
-	for _, item := range spec.orderby.items {
+	for _, item := range query.orderByList.items {
 		by := SQL.OrderBy{}
-		by.Column = g.sqlcolref(item.col)
-		by.Desc = (item.dir == orderdesc)
+		by.Column = g.sqlcolref(item.colId)
+		by.Desc = (item.direction == orderDesc)
 		order.List = append(order.List, by)
 	}
 	return order
 }
 
-func (g *generator) sqlfrom(jb *joinblock) (from SQL.FromClause) {
+func (g *generator) sqlfrom(jb *joinBlock) (from SQL.FromClause) {
 	if jb == nil {
 		return from
 	}
 
-	from.List = []SQL.TableExpr{g.sqlrelid(jb.rel)}
+	from.List = []SQL.TableExpr{g.sqlrelid(jb.relId)}
 	for _, item := range jb.items {
 		var join SQL.TableJoin
-		join.Type = jointype2sqljointype[item.typ]
-		join.Rel = g.sqlrelid(item.rel)
-		join.Cond = g.sqljoincond(item.conds)
+		join.Type = joinTypeToSQLJoinType[item.joinType]
+		join.Rel = g.sqlrelid(item.relId)
+		join.Cond = g.sqljoincond(item.predicates)
 		from.List = append(from.List, join)
 	}
 	return from
 }
 
-func (g *generator) sqlusing(jb *joinblock) (using SQL.UsingClause) {
+func (g *generator) sqlusing(jb *joinBlock) (using SQL.UsingClause) {
 	if jb == nil {
 		return using
 	}
 
-	using.List = []SQL.TableExpr{g.sqlrelid(jb.rel)}
+	using.List = []SQL.TableExpr{g.sqlrelid(jb.relId)}
 	for _, item := range jb.items {
 		var join SQL.TableJoin
-		join.Type = jointype2sqljointype[item.typ]
-		join.Rel = g.sqlrelid(item.rel)
-		join.Cond = g.sqljoincond(item.conds)
+		join.Type = joinTypeToSQLJoinType[item.joinType]
+		join.Rel = g.sqlrelid(item.relId)
+		join.Cond = g.sqljoincond(item.predicates)
 		using.List = append(using.List, join)
 	}
 	return using
 }
 
-func (g *generator) sqljoin(jb *joinblock) (jc SQL.JoinClause) {
+func (g *generator) sqljoin(jb *joinBlock) (jc SQL.JoinClause) {
 	if jb == nil {
 		return jc
 	}
 
 	for _, item := range jb.items {
 		var join SQL.TableJoin
-		join.Type = jointype2sqljointype[item.typ]
-		join.Rel = g.sqlrelid(item.rel)
-		join.Cond = g.sqljoincond(item.conds)
+		join.Type = joinTypeToSQLJoinType[item.joinType]
+		join.Rel = g.sqlrelid(item.relId)
+		join.Cond = g.sqljoincond(item.predicates)
 		jc.List = append(jc.List, join)
 	}
 	return jc
 }
 
-func (g *generator) sqljoincond(items []*predicateitem) (cond SQL.JoinCondition) {
+func (g *generator) sqljoincond(items []*predicateItem) (cond SQL.JoinCondition) {
 	if len(items) > 0 {
 		list, _ := g.sqlsearchcond(items, GO.SelectorExpr{}, false)
 		list.ListStyle = false
@@ -1687,41 +1685,41 @@ func (g *generator) sqljoincond(items []*predicateitem) (cond SQL.JoinCondition)
 	return cond
 }
 
-// sqllimit generates and returns an SQL.LimitClause based on the given spec's "limit" field.
-func (g *generator) sqllimit(spec *typespec) (limit SQL.LimitClause) {
-	if spec.limit != nil {
-		if len(spec.limit.field) > 0 {
+// sqllimit generates and returns an SQL.LimitClause based on the given query's "limit" field.
+func (g *generator) sqllimit(query *queryStruct) (limit SQL.LimitClause) {
+	if query.limitField != nil {
+		if len(query.limitField.name) > 0 {
 			limit.Value = g.sqlparam()
-		} else if spec.limit.value > 0 {
-			limit.Value = SQL.LimitUint(spec.limit.value)
+		} else if query.limitField.value > 0 {
+			limit.Value = SQL.LimitUint(query.limitField.value)
 		}
 		return limit
 	}
 
-	// In case the spec doesn't have a "limit" field, but the relation
+	// In case the query doesn't have a "limit" field, but the relation
 	// field handles only a single record (i.e. it's not a slice, etc.)
 	// then, by default, generate a `LIMIT 1` clause.
-	if r := spec.rel.rec; !r.isarray && !r.isslice && !r.isiter {
+	if r := query.dataField.data; !r.isArray && !r.isSlice && !r.isIter {
 		limit.Value = SQL.LimitInt(1)
 		return limit
 	}
 	return limit
 }
 
-// sqloffset generates and returns an SQL.OffsetClause based on the given spec's "offset" field.
-func (g *generator) sqloffset(spec *typespec) (offset SQL.OffsetClause) {
-	if spec.offset != nil {
-		if len(spec.offset.field) > 0 {
+// sqloffset generates and returns an SQL.OffsetClause based on the given query's "offset" field.
+func (g *generator) sqloffset(query *queryStruct) (offset SQL.OffsetClause) {
+	if query.offsetField != nil {
+		if len(query.offsetField.name) > 0 {
 			offset.Value = g.sqlparam()
-		} else if spec.offset.value > 0 {
-			offset.Value = SQL.OffsetUint(spec.offset.value)
+		} else if query.offsetField.value > 0 {
+			offset.Value = SQL.OffsetUint(query.offsetField.value)
 		}
 		return offset
 	}
 	return offset
 }
 
-func (g *generator) sqlrelid(id relid) SQL.Ident {
+func (g *generator) sqlrelid(id relId) SQL.Ident {
 	return SQL.Ident{
 		Name:  SQL.Name(id.name),
 		Qual:  id.qual,
@@ -1729,7 +1727,7 @@ func (g *generator) sqlrelid(id relid) SQL.Ident {
 	}
 }
 
-func (g *generator) sqlcolref(id colid) SQL.ColumnReference {
+func (g *generator) sqlcolref(id colId) SQL.ColumnReference {
 	return SQL.ColumnReference{
 		Qual: id.qual,
 		Name: SQL.Name(id.name),
@@ -1742,54 +1740,54 @@ func (g *generator) sqlparam() SQL.OrdinalParameterSpec {
 }
 
 // declarevar reports whether the queryString value should be declared as a var or as a const.
-func (g *generator) declarevar(si *specinfo) bool {
-	return g.asvar || len(si.spec.filter) > 0 ||
-		((si.spec.kind == speckindInsert || si.spec.kind == speckindUpdate) &&
-			si.spec.rel.rec.isslice)
+func (g *generator) declarevar(si *targetInfo) bool {
+	return g.asvar || len(si.query.filterField) > 0 ||
+		((si.query.kind == queryKindInsert || si.query.kind == queryKindUpdate) &&
+			si.query.dataField.data.isSlice)
 }
 
-var overridingkind2sqlclause = map[overridingkind]SQL.OverridingClause{
-	overridingsystem: "SYSTEM",
-	overridinguser:   "USER",
+var overridingKindToSQLOverridingClause = map[overridingKind]SQL.OverridingClause{
+	overridingSystem: "SYSTEM",
+	overridingUser:   "USER",
 }
 
-var predicate2sqlcmpop = map[predicate]SQL.CMPOP{
-	iseq:   SQL.EQUAL,
-	noteq:  SQL.NOT_EQUAL,
-	noteq2: SQL.NOT_EQUAL2,
-	islt:   SQL.LESS_THAN,
-	isgt:   SQL.GREATER_THAN,
-	islte:  SQL.LESS_THAN_EQUAL,
-	isgte:  SQL.GREATER_THAN_EQUAL,
+var predicateKindToSQLCmpOp = map[predicateKind]SQL.CMPOP{
+	isEQ:   SQL.EQUAL,
+	notEQ:  SQL.NOT_EQUAL,
+	notEQ2: SQL.NOT_EQUAL2,
+	isLT:   SQL.LESS_THAN,
+	isGT:   SQL.GREATER_THAN,
+	isLTE:  SQL.LESS_THAN_EQUAL,
+	isGTE:  SQL.GREATER_THAN_EQUAL,
 }
 
-var predicate2sqlregexop = map[predicate]SQL.REGEXOP{
-	ismatch:   SQL.MATCH,
-	ismatchi:  SQL.MATCH_CI,
-	notmatch:  SQL.NOT_MATCH,
-	notmatchi: SQL.NOT_MATCH_CI,
+var predicateKindToSQLRegExOp = map[predicateKind]SQL.REGEXOP{
+	isMatch:   SQL.MATCH,
+	isMatchi:  SQL.MATCH_CI,
+	notMatch:  SQL.NOT_MATCH,
+	notMatchi: SQL.NOT_MATCH_CI,
 }
 
-var predicate2sqltruth = map[predicate]SQL.TRUTH{
-	isunknown:  SQL.UNKNOWN,
-	notunknown: SQL.UNKNOWN,
-	istrue:     SQL.TRUE,
-	nottrue:    SQL.TRUE,
-	isfalse:    SQL.FALSE,
-	notfalse:   SQL.FALSE,
+var predicateKindToSQLTruth = map[predicateKind]SQL.TRUTH{
+	isUnknown:  SQL.UNKNOWN,
+	notUnknown: SQL.UNKNOWN,
+	isTrue:     SQL.TRUE,
+	notTrue:    SQL.TRUE,
+	isFalse:    SQL.FALSE,
+	notFalse:   SQL.FALSE,
 }
 
-var quantifier2sqlquantifier = map[quantifier]SQL.QUANTIFIER{
-	quantany:  SQL.ANY,
-	quantsome: SQL.SOME,
-	quantall:  SQL.ALL,
+var quantifierToSQLQuantifier = map[quantifier]SQL.QUANTIFIER{
+	quantAny:  SQL.ANY,
+	quantSome: SQL.SOME,
+	quantAll:  SQL.ALL,
 }
 
-var jointype2sqljointype = map[jointype]SQL.JoinType{
-	joinleft:  SQL.JoinLeft,
-	joinright: SQL.JoinRight,
-	joinfull:  SQL.JoinFull,
-	joincross: SQL.JoinCross,
+var joinTypeToSQLJoinType = map[joinType]SQL.JoinType{
+	joinLeft:  SQL.JoinLeft,
+	joinRight: SQL.JoinRight,
+	joinFull:  SQL.JoinFull,
+	joinCross: SQL.JoinCross,
 }
 
 var gotyp2coltyp2converter = map[string]map[string]GO.SelectorExpr{

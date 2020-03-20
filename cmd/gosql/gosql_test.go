@@ -1,4 +1,4 @@
-package gosql
+package main
 
 import (
 	"database/sql"

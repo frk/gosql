@@ -1,4 +1,4 @@
-package gosql
+package main
 
 import (
 	"bytes"
@@ -173,14 +173,14 @@ func TestGenerate(t *testing.T) {
 		cmd := new(command)
 		cmd.pg = testdb.pg
 
-		dir, err := cmd.parsedir("./testdata/generator/" + tt.dirname)
+		dir, err := cmd.parsedir("../../testdata/generator/" + tt.dirname)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		for _, filename := range tt.filenames {
 			t.Run(filename, func(t *testing.T) {
-				fileprefix := "testdata/generator/" + tt.dirname + "/" + filename
+				fileprefix := "../../testdata/generator/" + tt.dirname + "/" + filename
 
 				f := cmd.aggtypes(dir, fileprefix+"_in.go")
 				buf, err := cmd.run(f)

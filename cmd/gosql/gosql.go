@@ -1,4 +1,4 @@
-package gosql
+package main
 
 // TODO(mkopriva): currently handles only single file, update to handle a list of files, or a file pattern.
 //
@@ -90,24 +90,22 @@ func (cmd *command) exec(dburl string, files ...string) error {
 }
 
 func (cmd *command) run(f *file) (*bytes.Buffer, error) {
-	var infos []*specinfo
+	var infos []*targetInfo
 
 	// analyze named types
 	for _, typ := range f.types {
-		spec, err := analyze(typ)
-		if err != nil {
+		ti := new(targetInfo)
+		if err := analyze(typ, ti); err != nil {
 			return nil, err
 		}
-		infos = append(infos, &specinfo{spec: spec})
+		infos = append(infos, ti)
 	}
 
 	// type-check specs against the db
-	for _, si := range infos {
-		info, err := pgcheck(cmd.pg, si.spec)
-		if err != nil {
+	for _, ti := range infos {
+		if err := pgcheck(cmd.pg, ti); err != nil {
 			return nil, err
 		}
-		si.info = info
 	}
 
 	// generate code

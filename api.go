@@ -11,9 +11,6 @@ import (
 	"github.com/frk/gosql/internal/filter"
 )
 
-// documentation purpose only
-type TypeSpec struct{}
-
 type Conn interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
