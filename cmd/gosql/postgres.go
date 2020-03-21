@@ -183,7 +183,7 @@ type pginfo struct {
 
 	// workaround: used by the generator to get the correct represenation of the
 	// the database type of the column that's associated with a predicate's field.
-	colmap map[*predicateField]*pgcolumn
+	colmap map[*searchConditionField]*pgcolumn
 }
 
 type pgchecker struct {
@@ -211,7 +211,7 @@ func pgcheck(pg *postgres, ti *targetInfo) (err error) {
 
 func (c *pgchecker) run() (err error) {
 	c.relmap = make(map[string]*pgrelation)
-	c.info.colmap = make(map[*predicateField]*pgcolumn)
+	c.info.colmap = make(map[*searchConditionField]*pgcolumn)
 	if c.rel, err = c.loadrelation(c.dataField.relId); err != nil {
 		return err
 	}
@@ -366,6 +366,11 @@ func (c *pgchecker) queryStruct() (err error) {
 	// generated from the field tags cannot contain duplicate columns. Conversely
 	// if this is a read query (select, or I,U,D with returning) the columns do
 	// not have to be unique.
+
+	// TODO(mkopriva): if this is an UPDATE but none of the columns associated
+	// with the available fields constitute a complete primary key of the table,
+	// an error should be returned as then there's no way to properly match the
+	// data instances with specific rows in the table.
 	return nil
 }
 
@@ -472,55 +477,55 @@ func (c *pgchecker) checkjoin(jb *joinBlock) error {
 		}
 		c.joinlist = append(c.joinlist, rel)
 
-		for _, item := range join.predicates {
-			switch pred := item.pred.(type) {
-			case *predicateColumn:
+		for _, item := range join.conds {
+			switch cond := item.cond.(type) {
+			case *searchConditionColumn:
 				// A join condition's left-hand-side column MUST always
 				// reference a column of the relation being joined, so to
 				// avoid confusion make sure that node.colId has either no
 				// qualifier or, if it has one, it matches the alias of
 				// the joined table.
-				if pred.colId.qual != "" && pred.colId.qual != join.relId.alias {
+				if cond.colId.qual != "" && cond.colId.qual != join.relId.alias {
 					return errors.NoDBRelationError
 				}
 
 				// Make sure that colId is present in relation being joined.
-				col := rel.column(pred.colId.name)
+				col := rel.column(cond.colId.name)
 				if col == nil {
 					return errors.NoDBColumnError
 				}
 
-				if pred.kind.isUnary() {
+				if cond.pred.isUnary() {
 					// Column type must be bool if the predicate type produces
 					// the "IS [NOT] { FALSE | TRUE | UNKNOWN }" SQL predicate.
-					if pred.kind.isTruthPred() && col.typ.oid != pgtyp_bool {
+					if cond.pred.isBoolean() && col.typ.oid != pgtyp_bool {
 						return errors.BadColumnTypeForUnaryOpError
 					}
 					// Column must be NULLable if the predicate type
 					// produces the "IS [NOT] NULL" SQL predicate.
-					if col.hasnotnull && (pred.kind == isNull || pred.kind == notNull) {
+					if col.hasnotnull && (cond.pred == isNull || cond.pred == notNull) {
 						return errors.BadColumnNULLSettingForNULLOpError
 					}
 				} else {
 					var typ *pgtype
 					// Get the type of the right hand side, which is
 					// either a column or a literal expression.
-					if len(pred.colId2.name) > 0 {
-						colId2, err := c.column(pred.colId2)
+					if len(cond.colId2.name) > 0 {
+						colId2, err := c.column(cond.colId2)
 						if err != nil {
 							return err
 						}
 						typ = colId2.typ
-					} else if len(pred.literal) > 0 {
+					} else if len(cond.literal) > 0 {
 						var oid pgoid
-						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, pred.literal))
+						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, cond.literal))
 						if err := row.Scan(&oid); err != nil {
 							return errors.BadLiteralExpressionError
 						}
 						typ = c.pg.cat.types[oid]
 					}
 
-					if pred.kind.isArrayPred() || pred.qua > 0 {
+					if cond.pred.isQuantified() || cond.qua > 0 {
 						// Check that the quantifier can be used
 						// with the type of the RHS expression.
 						if typ.category != pgtypcategory_array {
@@ -530,13 +535,13 @@ func (c *pgchecker) checkjoin(jb *joinBlock) error {
 					}
 
 					rhsoids := []pgoid{typ.oid}
-					if !c.cancompare(col, rhsoids, pred.kind) {
+					if !c.cancompare(col, rhsoids, cond.pred) {
 						return errors.BadColumnToLiteralComparisonError
 					}
 				}
 			default:
 				// NOTE(mkopriva): currently predicates other than
-				// predicateColumn are not supported as a join condition.
+				// searchConditionColumn are not supported as a join condition.
 			}
 		}
 	}
@@ -620,29 +625,29 @@ func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
 
 func (c *pgchecker) checkwhere(where *whereBlock) error {
 	type loopstate struct {
-		items []*predicateItem // the current iteration predicate items
-		idx   int              // keeps track of the field index
+		conds []*searchCondition // the current iteration search conditions
+		idx   int                // keeps track of the field index
 	}
-	stack := []*loopstate{{items: where.items}} // LIFO stack of states.
+	stack := []*loopstate{{conds: where.conds}} // LIFO stack of states.
 
 stackloop:
 	for len(stack) > 0 {
-		// Loop over the various items of a whereblock, including
+		// Loop over the various conds of a whereblock, including
 		// other nested whereblocks and check them against the db.
 		loop := stack[len(stack)-1]
-		for loop.idx < len(loop.items) {
-			item := loop.items[loop.idx]
+		for loop.idx < len(loop.conds) {
+			item := loop.conds[loop.idx]
 
 			// Instead of incrementing the index in the for-statement
 			// it is done here manually to ensure that it is not skipped
 			// when continuing to the outer loop.
 			loop.idx++
 
-			switch pred := item.pred.(type) {
-			case *predicateField:
+			switch cond := item.cond.(type) {
+			case *searchConditionField:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(pred.colId)
+				col, err := c.column(cond.colId)
 				if err != nil {
 					return err
 				}
@@ -650,57 +655,57 @@ stackloop:
 				// If the column cannot be set to NULL, then make
 				// sure that the field's not a pointer.
 				if col.hasnotnull {
-					if pred.typ.kind == kindPtr {
+					if cond.typ.kind == kindPtr {
 						return errors.IllegalPtrFieldForNotNullColumnError
 					}
 				}
 
 				// list of types to which the field type can potentially be converted
-				var fieldoids = c.typeoids(pred.typ)
+				var fieldoids = c.typeoids(cond.typ)
 
 				// If this is a quantified predicate then check that
 				// the field is a slice or array, and also make sure that
 				// the column's type can be compared to the element type
 				// of the slice / array.
-				if pred.qua > 0 || pred.kind.isArrayPred() {
-					if pred.typ.kind != kindSlice && pred.typ.kind != kindArray {
+				if cond.qua > 0 || cond.pred.isQuantified() {
+					if cond.typ.kind != kindSlice && cond.typ.kind != kindArray {
 						return errors.IllegalFieldTypeForQuantifierError
 					}
-					fieldoids = c.typeoids(*pred.typ.elem)
+					fieldoids = c.typeoids(*cond.typ.elem)
 				}
 
-				if len(pred.modfunc) > 0 {
+				if len(cond.modFunc) > 0 {
 					// Check that the modifier function can
 					// be used with the given Column's type.
-					if err := c.checkmodfunc(pred.modfunc, col, fieldoids); err != nil {
+					if err := c.checkModifierFunction(cond.modFunc, col, fieldoids); err != nil {
 						return err
 					}
 				} else {
 					// Check that the Field's type can be
 					// compared to that of the Column.
-					if !c.cancompare(col, fieldoids, pred.kind) {
+					if !c.cancompare(col, fieldoids, cond.pred) {
 						return errors.BadFieldToColumnTypeError
 					}
 				}
 
-				c.info.colmap[pred] = col
-			case *predicateColumn:
+				c.info.colmap[cond] = col
+			case *searchConditionColumn:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(pred.colId)
+				col, err := c.column(cond.colId)
 				if err != nil {
 					return err
 				}
 
-				if pred.kind.isUnary() {
+				if cond.pred.isUnary() {
 					// Column type must be bool if the predicate type produces
 					// the "IS [NOT] { FALSE | TRUE | UNKNOWN }" SQL predicate.
-					if pred.kind.isTruthPred() && col.typ.oid != pgtyp_bool {
+					if cond.pred.isBoolean() && col.typ.oid != pgtyp_bool {
 						return errors.BadColumnTypeForUnaryOpError
 					}
 					// Column must be NULLable if the predicate type
 					// produces the "IS [NOT] NULL" SQL predicate.
-					if col.hasnotnull && (pred.kind == isNull || pred.kind == notNull) {
+					if col.hasnotnull && (cond.pred == isNull || cond.pred == notNull) {
 						return errors.BadColumnNULLSettingForNULLOpError
 					}
 				} else {
@@ -708,15 +713,15 @@ stackloop:
 
 					// Get the type of the right hand side, which is
 					// either a column or a literal expression.
-					if len(pred.colId2.name) > 0 {
-						col2, err := c.column(pred.colId2)
+					if len(cond.colId2.name) > 0 {
+						col2, err := c.column(cond.colId2)
 						if err != nil {
 							return err
 						}
 						typ = col2.typ
-					} else if len(pred.literal) > 0 {
+					} else if len(cond.literal) > 0 {
 						var oid pgoid
-						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, pred.literal))
+						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, cond.literal))
 						if err := row.Scan(&oid); err != nil {
 							return errors.BadLiteralExpressionError
 						}
@@ -725,7 +730,7 @@ stackloop:
 						panic("shouldn't happen")
 					}
 
-					if pred.kind.isArrayPred() || pred.qua > 0 {
+					if cond.pred.isQuantified() || cond.qua > 0 {
 						// Check that the quantifier can be used
 						// with the type of the RHS expression.
 						if typ.category != pgtypcategory_array {
@@ -735,20 +740,20 @@ stackloop:
 					}
 
 					rhsoids := []pgoid{typ.oid}
-					if !c.cancompare(col, rhsoids, pred.kind) {
+					if !c.cancompare(col, rhsoids, cond.pred) {
 						return errors.BadColumnToLiteralComparisonError
 					}
 				}
-			case *predicateBetween:
+			case *searchConditionBetween:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(pred.colId)
+				col, err := c.column(cond.colId)
 				if err != nil {
 					return err
 				}
 
 				// Check that both predicands, x and y, can be compared to the column.
-				for _, arg := range []interface{}{pred.x, pred.y} {
+				for _, arg := range []interface{}{cond.x, cond.y} {
 					var argoids []pgoid
 					switch a := arg.(type) {
 					case colId:
@@ -765,8 +770,8 @@ stackloop:
 						return errors.BadColumnToColumnTypeComparisonError
 					}
 				}
-			case *predicateNested:
-				stack = append(stack, &loopstate{items: pred.items})
+			case *searchConditionNested:
+				stack = append(stack, &loopstate{conds: cond.conds})
 				continue stackloop
 			}
 		}
@@ -781,11 +786,11 @@ stackloop:
 // used to hold a value of a Go type represented by the given typeInfo.
 func (c *pgchecker) typeoids(typ typeInfo) []pgoid {
 	switch typstr := typ.string(true); typstr {
-	case gotypstringm, gotypnullstringm:
+	case gotypeStringMap, gotypeNullStringMap:
 		if t := c.pg.cat.typebyname("hstore"); t != nil {
 			return []pgoid{t.oid}
 		}
-	case gotypstringms, gotypnullstringms:
+	case gotypeStringMapSlice, gotypeNullStringMapSlice:
 		if t := c.pg.cat.typebyname("_hstore"); t != nil {
 			return []pgoid{t.oid}
 		}
@@ -799,8 +804,8 @@ func (c *pgchecker) typeoids(typ typeInfo) []pgoid {
 
 // cancompare reports whether a value of the given col's type can be compared to,
 // using the predicate, a value of one of the types specified by the given oids.
-func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, kind predicateKind) bool {
-	name := predicateKindToBasePGOps[kind]
+func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, pred predicate) bool {
+	name := predicateToBasePGOps[pred]
 	left := col.typ.oid
 	for _, right := range rhstypes {
 		if col.typ.category == pgtypcategory_string && right == pgtyp_unknown {
@@ -968,7 +973,7 @@ func (c *pgchecker) cancoerceoid(targetid, inputid pgoid) bool {
 }
 
 // check that the column's and field's type can be used as the argument to the specified function.
-func (c *pgchecker) checkmodfunc(fn funcName, col *pgcolumn, fieldoids []pgoid) error {
+func (c *pgchecker) checkModifierFunction(fn funcName, col *pgcolumn, fieldoids []pgoid) error {
 	var (
 		ok1 bool // column's type can be coerced to the functions argument's type
 		ok2 bool // field's type can be assigned to the functions argument's type
@@ -1646,223 +1651,223 @@ type pg2goconv struct {
 // a map of supported conversions
 var pg2goconversions = map[pg2goconv]struct{}{
 	// typemod=1
-	{pgtyp: pgtyp_char, gotyp: gotyprune, typmod1: true}:        {},
-	{pgtyp: pgtyp_chararr, gotyp: gotyprunes, typmod1: true}:    {},
-	{pgtyp: pgtyp_varchar, gotyp: gotyprune, typmod1: true}:     {},
-	{pgtyp: pgtyp_varchararr, gotyp: gotyprunes, typmod1: true}: {},
-	{pgtyp: pgtyp_bpchar, gotyp: gotyprune, typmod1: true}:      {},
-	{pgtyp: pgtyp_bpchararr, gotyp: gotyprunes, typmod1: true}:  {},
+	{pgtyp: pgtyp_char, gotyp: gotypeRune, typmod1: true}:            {},
+	{pgtyp: pgtyp_chararr, gotyp: gotypeRuneSlice, typmod1: true}:    {},
+	{pgtyp: pgtyp_varchar, gotyp: gotypeRune, typmod1: true}:         {},
+	{pgtyp: pgtyp_varchararr, gotyp: gotypeRuneSlice, typmod1: true}: {},
+	{pgtyp: pgtyp_bpchar, gotyp: gotypeRune, typmod1: true}:          {},
+	{pgtyp: pgtyp_bpchararr, gotyp: gotypeRuneSlice, typmod1: true}:  {},
 	// numeric with scale=0
-	{pgtyp: pgtyp_numeric, gotyp: gotypbigint, noscale: true}:     {},
-	{pgtyp: pgtyp_numericarr, gotyp: gotypbigints, noscale: true}: {},
+	{pgtyp: pgtyp_numeric, gotyp: gotypeBigInt, noscale: true}:         {},
+	{pgtyp: pgtyp_numericarr, gotyp: gotypeBigIntSlice, noscale: true}: {},
 	// everything else
-	{pgtyp: pgtyp_bit, gotyp: gotypstring}:          {},
-	{pgtyp: pgtyp_bit, gotyp: gotypbytes}:           {},
-	{pgtyp: pgtyp_bitarr, gotyp: gotypstrings}:      {},
-	{pgtyp: pgtyp_bitarr, gotyp: gotypbytess}:       {},
-	{pgtyp: pgtyp_bool, gotyp: gotypbool}:           {},
-	{pgtyp: pgtyp_boolarr, gotyp: gotypbools}:       {},
-	{pgtyp: pgtyp_box, gotyp: gotypfloat64a2a2}:     {},
-	{pgtyp: pgtyp_boxarr, gotyp: gotypfloat64a2a2s}: {},
-	{pgtyp: pgtyp_bpchar, gotyp: gotypstring}:       {},
-	{pgtyp: pgtyp_bpchar, gotyp: gotypbytes}:        {},
-	{pgtyp: pgtyp_bpchararr, gotyp: gotypstrings}:   {},
-	{pgtyp: pgtyp_bpchararr, gotyp: gotypbytess}:    {},
-	{pgtyp: pgtyp_bpchararr, gotyp: gotypruness}:    {},
-	{pgtyp: pgtyp_bytea, gotyp: gotypstring}:        {},
-	{pgtyp: pgtyp_bytea, gotyp: gotypbytes}:         {},
-	{pgtyp: pgtyp_byteaarr, gotyp: gotypstrings}:    {},
-	{pgtyp: pgtyp_byteaarr, gotyp: gotypbytess}:     {},
-	{pgtyp: pgtyp_char, gotyp: gotypstring}:         {},
-	{pgtyp: pgtyp_char, gotyp: gotypbytes}:          {},
-	{pgtyp: pgtyp_chararr, gotyp: gotypstrings}:     {},
-	{pgtyp: pgtyp_chararr, gotyp: gotypbytess}:      {},
-	{pgtyp: pgtyp_chararr, gotyp: gotypruness}:      {},
-	{pgtyp: pgtyp_cidr, gotyp: gotypstring}:         {},
-	{pgtyp: pgtyp_cidr, gotyp: gotypipnet}:          {},
-	{pgtyp: pgtyp_cidrarr, gotyp: gotypstrings}:     {},
-	{pgtyp: pgtyp_cidrarr, gotyp: gotypipnets}:      {},
+	{pgtyp: pgtyp_bit, gotyp: gotypeString}:                      {},
+	{pgtyp: pgtyp_bit, gotyp: gotypeByteSlice}:                   {},
+	{pgtyp: pgtyp_bitarr, gotyp: gotypeStringSlice}:              {},
+	{pgtyp: pgtyp_bitarr, gotyp: gotypeByteSliceSlice}:           {},
+	{pgtyp: pgtyp_bool, gotyp: gotypeBool}:                       {},
+	{pgtyp: pgtyp_boolarr, gotyp: gotypeBoolSlice}:               {},
+	{pgtyp: pgtyp_box, gotyp: gotypeFloat64Array2Array2}:         {},
+	{pgtyp: pgtyp_boxarr, gotyp: gotypeFloat64Array2Array2Slice}: {},
+	{pgtyp: pgtyp_bpchar, gotyp: gotypeString}:                   {},
+	{pgtyp: pgtyp_bpchar, gotyp: gotypeByteSlice}:                {},
+	{pgtyp: pgtyp_bpchararr, gotyp: gotypeStringSlice}:           {},
+	{pgtyp: pgtyp_bpchararr, gotyp: gotypeByteSliceSlice}:        {},
+	{pgtyp: pgtyp_bpchararr, gotyp: gotypeRuneSliceSlice}:        {},
+	{pgtyp: pgtyp_bytea, gotyp: gotypeString}:                    {},
+	{pgtyp: pgtyp_bytea, gotyp: gotypeByteSlice}:                 {},
+	{pgtyp: pgtyp_byteaarr, gotyp: gotypeStringSlice}:            {},
+	{pgtyp: pgtyp_byteaarr, gotyp: gotypeByteSliceSlice}:         {},
+	{pgtyp: pgtyp_char, gotyp: gotypeString}:                     {},
+	{pgtyp: pgtyp_char, gotyp: gotypeByteSlice}:                  {},
+	{pgtyp: pgtyp_chararr, gotyp: gotypeStringSlice}:             {},
+	{pgtyp: pgtyp_chararr, gotyp: gotypeByteSliceSlice}:          {},
+	{pgtyp: pgtyp_chararr, gotyp: gotypeRuneSliceSlice}:          {},
+	{pgtyp: pgtyp_cidr, gotyp: gotypeString}:                     {},
+	{pgtyp: pgtyp_cidr, gotyp: gotypeIPNet}:                      {},
+	{pgtyp: pgtyp_cidrarr, gotyp: gotypeStringSlice}:             {},
+	{pgtyp: pgtyp_cidrarr, gotyp: gotypeIPNetSlice}:              {},
 	// TODO {pgtyp: pgtyp_circle, gotyp: ""}:        {},
 	// TODO {pgtyp: pgtyp_circlearr, gotyp: ""}:        {},
-	{pgtyp: pgtyp_date, gotyp: gotyptime}:             {},
-	{pgtyp: pgtyp_datearr, gotyp: gotyptimes}:         {},
-	{pgtyp: pgtyp_daterange, gotyp: gotyptimea2}:      {},
-	{pgtyp: pgtyp_daterangearr, gotyp: gotyptimea2s}:  {},
-	{pgtyp: pgtyp_float4, gotyp: gotypfloat32}:        {},
-	{pgtyp: pgtyp_float4arr, gotyp: gotypfloat32s}:    {},
-	{pgtyp: pgtyp_float8, gotyp: gotypfloat64}:        {},
-	{pgtyp: pgtyp_float8arr, gotyp: gotypfloat64s}:    {},
-	{pgtyp: pgtyp_inet, gotyp: gotypstring}:           {},
-	{pgtyp: pgtyp_inet, gotyp: gotypipnet}:            {},
-	{pgtyp: pgtyp_inetarr, gotyp: gotypstrings}:       {},
-	{pgtyp: pgtyp_inetarr, gotyp: gotypipnets}:        {},
-	{pgtyp: pgtyp_int2, gotyp: gotypint16}:            {},
-	{pgtyp: pgtyp_int2arr, gotyp: gotypint16s}:        {},
-	{pgtyp: pgtyp_int2vector, gotyp: gotypint16s}:     {},
-	{pgtyp: pgtyp_int2vectorarr, gotyp: gotypint16ss}: {},
-	{pgtyp: pgtyp_int4, gotyp: gotypint32}:            {},
-	{pgtyp: pgtyp_int4, gotyp: gotypint}:              {},
-	{pgtyp: pgtyp_int4arr, gotyp: gotypint32s}:        {},
-	{pgtyp: pgtyp_int4arr, gotyp: gotypints}:          {},
-	{pgtyp: pgtyp_int4range, gotyp: gotypint32a2}:     {},
-	{pgtyp: pgtyp_int4range, gotyp: gotypinta2}:       {},
-	{pgtyp: pgtyp_int4rangearr, gotyp: gotypint32a2s}: {},
-	{pgtyp: pgtyp_int4rangearr, gotyp: gotypinta2s}:   {},
-	{pgtyp: pgtyp_int8, gotyp: gotypint64}:            {},
-	{pgtyp: pgtyp_int8, gotyp: gotypint}:              {},
-	{pgtyp: pgtyp_int8arr, gotyp: gotypint64s}:        {},
-	{pgtyp: pgtyp_int8arr, gotyp: gotypints}:          {},
-	{pgtyp: pgtyp_int8range, gotyp: gotypint64a2}:     {},
-	{pgtyp: pgtyp_int8range, gotyp: gotypinta2}:       {},
-	{pgtyp: pgtyp_int8rangearr, gotyp: gotypint64a2s}: {},
-	{pgtyp: pgtyp_int8rangearr, gotyp: gotypinta2s}:   {},
+	{pgtyp: pgtyp_date, gotyp: gotypeTime}:                     {},
+	{pgtyp: pgtyp_datearr, gotyp: gotypeTimeSlice}:             {},
+	{pgtyp: pgtyp_daterange, gotyp: gotypeTimeArray2}:          {},
+	{pgtyp: pgtyp_daterangearr, gotyp: gotypeTimeArray2Slice}:  {},
+	{pgtyp: pgtyp_float4, gotyp: gotypeFloat32}:                {},
+	{pgtyp: pgtyp_float4arr, gotyp: gotypeFloat32Slice}:        {},
+	{pgtyp: pgtyp_float8, gotyp: gotypeFloat64}:                {},
+	{pgtyp: pgtyp_float8arr, gotyp: gotypeFloat64Slice}:        {},
+	{pgtyp: pgtyp_inet, gotyp: gotypeString}:                   {},
+	{pgtyp: pgtyp_inet, gotyp: gotypeIPNet}:                    {},
+	{pgtyp: pgtyp_inetarr, gotyp: gotypeStringSlice}:           {},
+	{pgtyp: pgtyp_inetarr, gotyp: gotypeIPNetSlice}:            {},
+	{pgtyp: pgtyp_int2, gotyp: gotypeInt16}:                    {},
+	{pgtyp: pgtyp_int2arr, gotyp: gotypeInt16Slice}:            {},
+	{pgtyp: pgtyp_int2vector, gotyp: gotypeInt16Slice}:         {},
+	{pgtyp: pgtyp_int2vectorarr, gotyp: gotypeInt16SliceSlice}: {},
+	{pgtyp: pgtyp_int4, gotyp: gotypeInt32}:                    {},
+	{pgtyp: pgtyp_int4, gotyp: gotypeInt}:                      {},
+	{pgtyp: pgtyp_int4arr, gotyp: gotypeInt32Slice}:            {},
+	{pgtyp: pgtyp_int4arr, gotyp: gotypeIntSlice}:              {},
+	{pgtyp: pgtyp_int4range, gotyp: gotypeInt32Array2}:         {},
+	{pgtyp: pgtyp_int4range, gotyp: gotypeIntArray2}:           {},
+	{pgtyp: pgtyp_int4rangearr, gotyp: gotypeInt32Array2Slice}: {},
+	{pgtyp: pgtyp_int4rangearr, gotyp: gotypeIntArray2Slice}:   {},
+	{pgtyp: pgtyp_int8, gotyp: gotypeInt64}:                    {},
+	{pgtyp: pgtyp_int8, gotyp: gotypeInt}:                      {},
+	{pgtyp: pgtyp_int8arr, gotyp: gotypeInt64Slice}:            {},
+	{pgtyp: pgtyp_int8arr, gotyp: gotypeIntSlice}:              {},
+	{pgtyp: pgtyp_int8range, gotyp: gotypeInt64Array2}:         {},
+	{pgtyp: pgtyp_int8range, gotyp: gotypeIntArray2}:           {},
+	{pgtyp: pgtyp_int8rangearr, gotyp: gotypeInt64Array2Slice}: {},
+	{pgtyp: pgtyp_int8rangearr, gotyp: gotypeIntArray2Slice}:   {},
 	// TODO {pgtyp: pgtyp_interval, gotyp: ""}:   {},
 	// TODO {pgtyp: pgtyp_intervalarr, gotyp: ""}:   {},
-	{pgtyp: pgtyp_json, gotyp: gotypstring}:             {},
-	{pgtyp: pgtyp_json, gotyp: gotypbytes}:              {},
-	{pgtyp: pgtyp_jsonarr, gotyp: gotypstrings}:         {},
-	{pgtyp: pgtyp_jsonarr, gotyp: gotypbytess}:          {},
-	{pgtyp: pgtyp_jsonb, gotyp: gotypstring}:            {},
-	{pgtyp: pgtyp_jsonb, gotyp: gotypbytes}:             {},
-	{pgtyp: pgtyp_jsonbarr, gotyp: gotypstrings}:        {},
-	{pgtyp: pgtyp_jsonbarr, gotyp: gotypbytess}:         {},
-	{pgtyp: pgtyp_line, gotyp: gotypfloat64a3}:          {},
-	{pgtyp: pgtyp_linearr, gotyp: gotypfloat64a3s}:      {},
-	{pgtyp: pgtyp_lseg, gotyp: gotypfloat64a2a2}:        {},
-	{pgtyp: pgtyp_lsegarr, gotyp: gotypfloat64a2a2s}:    {},
-	{pgtyp: pgtyp_macaddr, gotyp: gotypstring}:          {},
-	{pgtyp: pgtyp_macaddr, gotyp: gotypbytes}:           {},
-	{pgtyp: pgtyp_macaddrarr, gotyp: gotypstrings}:      {},
-	{pgtyp: pgtyp_macaddrarr, gotyp: gotypbytess}:       {},
-	{pgtyp: pgtyp_macaddr8, gotyp: gotypstring}:         {},
-	{pgtyp: pgtyp_macaddr8, gotyp: gotypbytes}:          {},
-	{pgtyp: pgtyp_macaddr8arr, gotyp: gotypstrings}:     {},
-	{pgtyp: pgtyp_macaddr8arr, gotyp: gotypbytess}:      {},
-	{pgtyp: pgtyp_money, gotyp: gotypint64}:             {},
-	{pgtyp: pgtyp_moneyarr, gotyp: gotypint64s}:         {},
-	{pgtyp: pgtyp_numeric, gotyp: gotypfloat64}:         {},
-	{pgtyp: pgtyp_numeric, gotyp: gotypbigfloat}:        {},
-	{pgtyp: pgtyp_numericarr, gotyp: gotypfloat64s}:     {},
-	{pgtyp: pgtyp_numericarr, gotyp: gotypbigfloats}:    {},
-	{pgtyp: pgtyp_numrange, gotyp: gotypfloat64a2}:      {},
-	{pgtyp: pgtyp_numrange, gotyp: gotypbigfloata2}:     {},
-	{pgtyp: pgtyp_numrangearr, gotyp: gotypfloat64a2s}:  {},
-	{pgtyp: pgtyp_numrangearr, gotyp: gotypbigfloata2s}: {},
-	{pgtyp: pgtyp_path, gotyp: gotypfloat64a2s}:         {},
-	{pgtyp: pgtyp_patharr, gotyp: gotypfloat64a2ss}:     {},
-	{pgtyp: pgtyp_point, gotyp: gotypfloat64a2}:         {},
-	{pgtyp: pgtyp_pointarr, gotyp: gotypfloat64a2s}:     {},
-	{pgtyp: pgtyp_polygon, gotyp: gotypfloat64a2s}:      {},
-	{pgtyp: pgtyp_polygonarr, gotyp: gotypfloat64a2ss}:  {},
-	{pgtyp: pgtyp_text, gotyp: gotypstring}:             {},
-	{pgtyp: pgtyp_text, gotyp: gotypbytes}:              {},
-	{pgtyp: pgtyp_textarr, gotyp: gotypstrings}:         {},
-	{pgtyp: pgtyp_textarr, gotyp: gotypbytess}:          {},
-	{pgtyp: pgtyp_time, gotyp: gotyptime}:               {},
-	{pgtyp: pgtyp_timearr, gotyp: gotyptimes}:           {},
-	{pgtyp: pgtyp_timestamp, gotyp: gotyptime}:          {},
-	{pgtyp: pgtyp_timestamparr, gotyp: gotyptimes}:      {},
-	{pgtyp: pgtyp_timestamptz, gotyp: gotyptime}:        {},
-	{pgtyp: pgtyp_timestamptzarr, gotyp: gotyptimes}:    {},
-	{pgtyp: pgtyp_timetz, gotyp: gotyptime}:             {},
-	{pgtyp: pgtyp_timetzarr, gotyp: gotyptimes}:         {},
-	{pgtyp: pgtyp_tsquery, gotyp: gotypstring}:          {},
-	{pgtyp: pgtyp_tsquery, gotyp: gotypbytes}:           {},
-	{pgtyp: pgtyp_tsqueryarr, gotyp: gotypstring}:       {},
-	{pgtyp: pgtyp_tsqueryarr, gotyp: gotypbytess}:       {},
-	{pgtyp: pgtyp_tsrange, gotyp: gotyptimea2}:          {},
-	{pgtyp: pgtyp_tsrangearr, gotyp: gotyptimea2s}:      {},
-	{pgtyp: pgtyp_tstzrange, gotyp: gotyptimea2}:        {},
-	{pgtyp: pgtyp_tstzrangearr, gotyp: gotyptimea2s}:    {},
-	{pgtyp: pgtyp_tsvector, gotyp: gotypstring}:         {},
-	{pgtyp: pgtyp_tsvector, gotyp: gotypbytes}:          {},
-	{pgtyp: pgtyp_tsvectorarr, gotyp: gotypstrings}:     {},
-	{pgtyp: pgtyp_tsvectorarr, gotyp: gotypbytess}:      {},
-	{pgtyp: pgtyp_uuid, gotyp: gotypstring}:             {},
-	{pgtyp: pgtyp_uuid, gotyp: gotypbytea16}:            {},
-	{pgtyp: pgtyp_uuidarr, gotyp: gotypstrings}:         {},
-	{pgtyp: pgtyp_uuidarr, gotyp: gotypbytea16s}:        {},
-	{pgtyp: pgtyp_varbit, gotyp: gotypstring}:           {},
-	{pgtyp: pgtyp_varbit, gotyp: gotypbytes}:            {},
-	{pgtyp: pgtyp_varbitarr, gotyp: gotypstrings}:       {},
-	{pgtyp: pgtyp_varbitarr, gotyp: gotypbytess}:        {},
-	{pgtyp: pgtyp_varchar, gotyp: gotypstring}:          {},
-	{pgtyp: pgtyp_varchar, gotyp: gotypbytes}:           {},
-	{pgtyp: pgtyp_varchararr, gotyp: gotypstrings}:      {},
-	{pgtyp: pgtyp_varchararr, gotyp: gotypbytess}:       {},
-	{pgtyp: pgtyp_varchararr, gotyp: gotypruness}:       {},
-	{pgtyp: pgtyp_xml, gotyp: gotypstring}:              {},
-	{pgtyp: pgtyp_xml, gotyp: gotypbytes}:               {},
-	{pgtyp: pgtyp_xmlarr, gotyp: gotypstrings}:          {},
-	{pgtyp: pgtyp_xmlarr, gotyp: gotypbytess}:           {},
+	{pgtyp: pgtyp_json, gotyp: gotypeString}:                        {},
+	{pgtyp: pgtyp_json, gotyp: gotypeByteSlice}:                     {},
+	{pgtyp: pgtyp_jsonarr, gotyp: gotypeStringSlice}:                {},
+	{pgtyp: pgtyp_jsonarr, gotyp: gotypeByteSliceSlice}:             {},
+	{pgtyp: pgtyp_jsonb, gotyp: gotypeString}:                       {},
+	{pgtyp: pgtyp_jsonb, gotyp: gotypeByteSlice}:                    {},
+	{pgtyp: pgtyp_jsonbarr, gotyp: gotypeStringSlice}:               {},
+	{pgtyp: pgtyp_jsonbarr, gotyp: gotypeByteSliceSlice}:            {},
+	{pgtyp: pgtyp_line, gotyp: gotypeFloat64Array3}:                 {},
+	{pgtyp: pgtyp_linearr, gotyp: gotypeFloat64Array3Slice}:         {},
+	{pgtyp: pgtyp_lseg, gotyp: gotypeFloat64Array2Array2}:           {},
+	{pgtyp: pgtyp_lsegarr, gotyp: gotypeFloat64Array2Array2Slice}:   {},
+	{pgtyp: pgtyp_macaddr, gotyp: gotypeString}:                     {},
+	{pgtyp: pgtyp_macaddr, gotyp: gotypeByteSlice}:                  {},
+	{pgtyp: pgtyp_macaddrarr, gotyp: gotypeStringSlice}:             {},
+	{pgtyp: pgtyp_macaddrarr, gotyp: gotypeByteSliceSlice}:          {},
+	{pgtyp: pgtyp_macaddr8, gotyp: gotypeString}:                    {},
+	{pgtyp: pgtyp_macaddr8, gotyp: gotypeByteSlice}:                 {},
+	{pgtyp: pgtyp_macaddr8arr, gotyp: gotypeStringSlice}:            {},
+	{pgtyp: pgtyp_macaddr8arr, gotyp: gotypeByteSliceSlice}:         {},
+	{pgtyp: pgtyp_money, gotyp: gotypeInt64}:                        {},
+	{pgtyp: pgtyp_moneyarr, gotyp: gotypeInt64Slice}:                {},
+	{pgtyp: pgtyp_numeric, gotyp: gotypeFloat64}:                    {},
+	{pgtyp: pgtyp_numeric, gotyp: gotypeBigFloat}:                   {},
+	{pgtyp: pgtyp_numericarr, gotyp: gotypeFloat64Slice}:            {},
+	{pgtyp: pgtyp_numericarr, gotyp: gotypeBigFloatSlice}:           {},
+	{pgtyp: pgtyp_numrange, gotyp: gotypeFloat64Array2}:             {},
+	{pgtyp: pgtyp_numrange, gotyp: gotypeBigFloatArray2}:            {},
+	{pgtyp: pgtyp_numrangearr, gotyp: gotypeFloat64Array2Slice}:     {},
+	{pgtyp: pgtyp_numrangearr, gotyp: gotypeBigFloatArray2Slice}:    {},
+	{pgtyp: pgtyp_path, gotyp: gotypeFloat64Array2Slice}:            {},
+	{pgtyp: pgtyp_patharr, gotyp: gotypeFloat64Array2SliceSlice}:    {},
+	{pgtyp: pgtyp_point, gotyp: gotypeFloat64Array2}:                {},
+	{pgtyp: pgtyp_pointarr, gotyp: gotypeFloat64Array2Slice}:        {},
+	{pgtyp: pgtyp_polygon, gotyp: gotypeFloat64Array2Slice}:         {},
+	{pgtyp: pgtyp_polygonarr, gotyp: gotypeFloat64Array2SliceSlice}: {},
+	{pgtyp: pgtyp_text, gotyp: gotypeString}:                        {},
+	{pgtyp: pgtyp_text, gotyp: gotypeByteSlice}:                     {},
+	{pgtyp: pgtyp_textarr, gotyp: gotypeStringSlice}:                {},
+	{pgtyp: pgtyp_textarr, gotyp: gotypeByteSliceSlice}:             {},
+	{pgtyp: pgtyp_time, gotyp: gotypeTime}:                          {},
+	{pgtyp: pgtyp_timearr, gotyp: gotypeTimeSlice}:                  {},
+	{pgtyp: pgtyp_timestamp, gotyp: gotypeTime}:                     {},
+	{pgtyp: pgtyp_timestamparr, gotyp: gotypeTimeSlice}:             {},
+	{pgtyp: pgtyp_timestamptz, gotyp: gotypeTime}:                   {},
+	{pgtyp: pgtyp_timestamptzarr, gotyp: gotypeTimeSlice}:           {},
+	{pgtyp: pgtyp_timetz, gotyp: gotypeTime}:                        {},
+	{pgtyp: pgtyp_timetzarr, gotyp: gotypeTimeSlice}:                {},
+	{pgtyp: pgtyp_tsquery, gotyp: gotypeString}:                     {},
+	{pgtyp: pgtyp_tsquery, gotyp: gotypeByteSlice}:                  {},
+	{pgtyp: pgtyp_tsqueryarr, gotyp: gotypeString}:                  {},
+	{pgtyp: pgtyp_tsqueryarr, gotyp: gotypeByteSliceSlice}:          {},
+	{pgtyp: pgtyp_tsrange, gotyp: gotypeTimeArray2}:                 {},
+	{pgtyp: pgtyp_tsrangearr, gotyp: gotypeTimeArray2Slice}:         {},
+	{pgtyp: pgtyp_tstzrange, gotyp: gotypeTimeArray2}:               {},
+	{pgtyp: pgtyp_tstzrangearr, gotyp: gotypeTimeArray2Slice}:       {},
+	{pgtyp: pgtyp_tsvector, gotyp: gotypeString}:                    {},
+	{pgtyp: pgtyp_tsvector, gotyp: gotypeByteSlice}:                 {},
+	{pgtyp: pgtyp_tsvectorarr, gotyp: gotypeStringSlice}:            {},
+	{pgtyp: pgtyp_tsvectorarr, gotyp: gotypeByteSliceSlice}:         {},
+	{pgtyp: pgtyp_uuid, gotyp: gotypeString}:                        {},
+	{pgtyp: pgtyp_uuid, gotyp: gotypeByteArray16}:                   {},
+	{pgtyp: pgtyp_uuidarr, gotyp: gotypeStringSlice}:                {},
+	{pgtyp: pgtyp_uuidarr, gotyp: gotypeByteArray16Slice}:           {},
+	{pgtyp: pgtyp_varbit, gotyp: gotypeString}:                      {},
+	{pgtyp: pgtyp_varbit, gotyp: gotypeByteSlice}:                   {},
+	{pgtyp: pgtyp_varbitarr, gotyp: gotypeStringSlice}:              {},
+	{pgtyp: pgtyp_varbitarr, gotyp: gotypeByteSliceSlice}:           {},
+	{pgtyp: pgtyp_varchar, gotyp: gotypeString}:                     {},
+	{pgtyp: pgtyp_varchar, gotyp: gotypeByteSlice}:                  {},
+	{pgtyp: pgtyp_varchararr, gotyp: gotypeStringSlice}:             {},
+	{pgtyp: pgtyp_varchararr, gotyp: gotypeByteSliceSlice}:          {},
+	{pgtyp: pgtyp_varchararr, gotyp: gotypeRuneSliceSlice}:          {},
+	{pgtyp: pgtyp_xml, gotyp: gotypeString}:                         {},
+	{pgtyp: pgtyp_xml, gotyp: gotypeByteSlice}:                      {},
+	{pgtyp: pgtyp_xmlarr, gotyp: gotypeStringSlice}:                 {},
+	{pgtyp: pgtyp_xmlarr, gotyp: gotypeByteSliceSlice}:              {},
 }
 
 var go2pgoids = map[string][]pgoid{
-	gotypbool:         {pgtyp_bool},
-	gotypbools:        {pgtyp_boolarr},
-	gotypint:          {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypints:         {pgtyp_int4arr, pgtyp_int2arr, pgtyp_int2vector, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypinta2:        {pgtyp_int4range, pgtyp_int8range, pgtyp_numrange},
-	gotypinta2s:       {pgtyp_int4rangearr, pgtyp_int8rangearr, pgtyp_numrangearr},
-	gotypint8:         {pgtyp_int2, pgtyp_int4, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypint8s:        {pgtyp_int2arr, pgtyp_int2vector, pgtyp_int4arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypint8ss:       {pgtyp_int2vectorarr},
-	gotypint16:        {pgtyp_int2, pgtyp_int4, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypint16s:       {pgtyp_int2arr, pgtyp_int2vector, pgtyp_int4arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypint16ss:      {pgtyp_int2vectorarr},
-	gotypint32:        {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypint32s:       {pgtyp_int4arr, pgtyp_int2arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypint32a2:      {pgtyp_int4range, pgtyp_int8range, pgtyp_numrange},
-	gotypint32a2s:     {pgtyp_int4rangearr, pgtyp_int8rangearr, pgtyp_numrangearr},
-	gotypint64:        {pgtyp_int8, pgtyp_int4, pgtyp_int2, pgtyp_float4, pgtyp_float8, pgtyp_numeric, pgtyp_money},
-	gotypint64s:       {pgtyp_int8arr, pgtyp_int4arr, pgtyp_int2arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr, pgtyp_moneyarr},
-	gotypint64a2:      {pgtyp_int8range, pgtyp_int4range, pgtyp_numrange},
-	gotypint64a2s:     {pgtyp_int8rangearr, pgtyp_int4rangearr, pgtyp_numrangearr},
-	gotypuint:         {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypuints:        {pgtyp_int4arr, pgtyp_int2arr, pgtyp_int2vector, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypuint8:        {pgtyp_int2, pgtyp_int4, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypuint8s:       {pgtyp_int2arr, pgtyp_int2vector, pgtyp_int4arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypuint16:       {pgtyp_int2, pgtyp_int4, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypuint16s:      {pgtyp_int2arr, pgtyp_int2vector, pgtyp_int4arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypuint32:       {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypuint32s:      {pgtyp_int4arr, pgtyp_int2arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypuint64:       {pgtyp_int8, pgtyp_int4, pgtyp_int2, pgtyp_float4, pgtyp_float8, pgtyp_numeric, pgtyp_money},
-	gotypuint64s:      {pgtyp_int8arr, pgtyp_int4arr, pgtyp_int2arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr, pgtyp_moneyarr},
-	gotypfloat32:      {pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypfloat32s:     {pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypfloat64:      {pgtyp_float4, pgtyp_float8, pgtyp_numeric},
-	gotypfloat64s:     {pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypfloat64a2:    {pgtyp_int4rangearr, pgtyp_int8rangearr, pgtyp_numrange, pgtyp_point},
-	gotypfloat64a2s:   {pgtyp_numrangearr, pgtyp_path, pgtyp_pointarr, pgtyp_polygon},
-	gotypfloat64a2ss:  {pgtyp_patharr, pgtyp_polygonarr},
-	gotypfloat64a2a2:  {pgtyp_box, pgtyp_lseg, pgtyp_path},
-	gotypfloat64a2a2s: {pgtyp_boxarr, pgtyp_lsegarr, pgtyp_patharr},
-	gotypfloat64a3:    {pgtyp_line, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
-	gotypfloat64a3s:   {pgtyp_linearr},
-	gotypbyte:         {pgtyp_bpchar, pgtyp_bytea, pgtyp_char, pgtyp_text, pgtyp_varchar},
-	gotypbytes:        {pgtyp_bit, pgtyp_bpchar, pgtyp_bytea, pgtyp_char, pgtyp_cidr, pgtyp_inet, pgtyp_json, pgtyp_jsonb, pgtyp_macaddr, pgtyp_macaddr8, pgtyp_text, pgtyp_tsquery, pgtyp_tsvector, pgtyp_uuid, pgtyp_varbit, pgtyp_varchar, pgtyp_xml},
-	gotypbytess:       {pgtyp_bitarr, pgtyp_bpchararr, pgtyp_byteaarr, pgtyp_chararr, pgtyp_cidrarr, pgtyp_inetarr, pgtyp_jsonarr, pgtyp_jsonbarr, pgtyp_macaddrarr, pgtyp_macaddr8arr, pgtyp_textarr, pgtyp_tsqueryarr, pgtyp_tsvectorarr, pgtyp_uuidarr, pgtyp_varbitarr, pgtyp_varchararr, pgtyp_xmlarr},
-	gotypstring:       {pgtyp_bit, pgtyp_bpchar, pgtyp_bytea, pgtyp_char, pgtyp_cidr, pgtyp_inet, pgtyp_json, pgtyp_jsonb, pgtyp_macaddr, pgtyp_macaddr8, pgtyp_text, pgtyp_tsquery, pgtyp_tsvector, pgtyp_uuid, pgtyp_varbit, pgtyp_varchar, pgtyp_xml},
-	gotypstrings:      {pgtyp_bitarr, pgtyp_bpchararr, pgtyp_byteaarr, pgtyp_chararr, pgtyp_cidrarr, pgtyp_inetarr, pgtyp_jsonarr, pgtyp_jsonbarr, pgtyp_macaddrarr, pgtyp_macaddr8arr, pgtyp_textarr, pgtyp_tsqueryarr, pgtyp_tsvectorarr, pgtyp_uuidarr, pgtyp_varbitarr, pgtyp_varchararr, pgtyp_xmlarr},
-	gotypbytea16:      {pgtyp_uuid, pgtyp_bytea, pgtyp_text, pgtyp_varchar},
-	gotypbytea16s:     {pgtyp_uuidarr, pgtyp_byteaarr, pgtyp_textarr, pgtyp_varchararr},
-	gotyprune:         {pgtyp_char, pgtyp_bytea, pgtyp_varchar, pgtyp_bpchar},
-	gotyprunes:        {pgtyp_bpchar, pgtyp_char, pgtyp_text, pgtyp_varchar /* the rest assumes typmod=1 */, pgtyp_bpchararr, pgtyp_chararr, pgtyp_text, pgtyp_varchararr},
-	gotypruness:       {pgtyp_bpchararr, pgtyp_byteaarr, pgtyp_chararr, pgtyp_textarr, pgtyp_varchararr},
-	gotypipnet:        {pgtyp_cidr, pgtyp_inet, pgtyp_text, pgtyp_bpchar, pgtyp_bytea, pgtyp_char, pgtyp_varchar},
-	gotypipnets:       {pgtyp_cidrarr, pgtyp_inetarr, pgtyp_textarr, pgtyp_bpchararr, pgtyp_byteaarr, pgtyp_chararr, pgtyp_varchararr},
-	gotyptime:         {pgtyp_date, pgtyp_time, pgtyp_timestamp, pgtyp_timestamptz, pgtyp_timetz},
-	gotyptimes:        {pgtyp_datearr, pgtyp_timearr, pgtyp_timestamparr, pgtyp_timestamptzarr, pgtyp_timetzarr, pgtyp_intervalarr},
-	gotyptimea2:       {pgtyp_daterange, pgtyp_tsrange, pgtyp_tstzrange},
-	gotyptimea2s:      {pgtyp_daterangearr, pgtyp_tsrangearr, pgtyp_tstzrangearr},
-	gotypbigint:       {pgtyp_numeric, pgtyp_text},
-	gotypbigints:      {pgtyp_numericarr, pgtyp_textarr},
-	gotypbiginta2:     {pgtyp_numrange},
-	gotypbiginta2s:    {pgtyp_numrangearr},
-	gotypbigfloat:     {pgtyp_numeric, pgtyp_text},
-	gotypbigfloats:    {pgtyp_numericarr, pgtyp_textarr},
-	gotypbigfloata2:   {pgtyp_numrange},
-	gotypbigfloata2s:  {pgtyp_numrangearr},
+	gotypeBool:                     {pgtyp_bool},
+	gotypeBoolSlice:                {pgtyp_boolarr},
+	gotypeInt:                      {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeIntSlice:                 {pgtyp_int4arr, pgtyp_int2arr, pgtyp_int2vector, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeIntArray2:                {pgtyp_int4range, pgtyp_int8range, pgtyp_numrange},
+	gotypeIntArray2Slice:           {pgtyp_int4rangearr, pgtyp_int8rangearr, pgtyp_numrangearr},
+	gotypeInt8:                     {pgtyp_int2, pgtyp_int4, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeInt8Slice:                {pgtyp_int2arr, pgtyp_int2vector, pgtyp_int4arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeInt8SliceSlice:           {pgtyp_int2vectorarr},
+	gotypeInt16:                    {pgtyp_int2, pgtyp_int4, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeInt16Slice:               {pgtyp_int2arr, pgtyp_int2vector, pgtyp_int4arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeInt16SliceSlice:          {pgtyp_int2vectorarr},
+	gotypeInt32:                    {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeInt32Slice:               {pgtyp_int4arr, pgtyp_int2arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeInt32Array2:              {pgtyp_int4range, pgtyp_int8range, pgtyp_numrange},
+	gotypeInt32Array2Slice:         {pgtyp_int4rangearr, pgtyp_int8rangearr, pgtyp_numrangearr},
+	gotypeInt64:                    {pgtyp_int8, pgtyp_int4, pgtyp_int2, pgtyp_float4, pgtyp_float8, pgtyp_numeric, pgtyp_money},
+	gotypeInt64Slice:               {pgtyp_int8arr, pgtyp_int4arr, pgtyp_int2arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr, pgtyp_moneyarr},
+	gotypeInt64Array2:              {pgtyp_int8range, pgtyp_int4range, pgtyp_numrange},
+	gotypeInt64Array2Slice:         {pgtyp_int8rangearr, pgtyp_int4rangearr, pgtyp_numrangearr},
+	gotypeUint:                     {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeUintSlice:                {pgtyp_int4arr, pgtyp_int2arr, pgtyp_int2vector, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeUint8:                    {pgtyp_int2, pgtyp_int4, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeUint8Slice:               {pgtyp_int2arr, pgtyp_int2vector, pgtyp_int4arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeUint16:                   {pgtyp_int2, pgtyp_int4, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeUint16Slice:              {pgtyp_int2arr, pgtyp_int2vector, pgtyp_int4arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeUint32:                   {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeUint32Slice:              {pgtyp_int4arr, pgtyp_int2arr, pgtyp_int8arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeUint64:                   {pgtyp_int8, pgtyp_int4, pgtyp_int2, pgtyp_float4, pgtyp_float8, pgtyp_numeric, pgtyp_money},
+	gotypeUint64Slice:              {pgtyp_int8arr, pgtyp_int4arr, pgtyp_int2arr, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr, pgtyp_moneyarr},
+	gotypeFloat32:                  {pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeFloat32Slice:             {pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeFloat64:                  {pgtyp_float4, pgtyp_float8, pgtyp_numeric},
+	gotypeFloat64Slice:             {pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeFloat64Array2:            {pgtyp_int4rangearr, pgtyp_int8rangearr, pgtyp_numrange, pgtyp_point},
+	gotypeFloat64Array2Slice:       {pgtyp_numrangearr, pgtyp_path, pgtyp_pointarr, pgtyp_polygon},
+	gotypeFloat64Array2SliceSlice:  {pgtyp_patharr, pgtyp_polygonarr},
+	gotypeFloat64Array2Array2:      {pgtyp_box, pgtyp_lseg, pgtyp_path},
+	gotypeFloat64Array2Array2Slice: {pgtyp_boxarr, pgtyp_lsegarr, pgtyp_patharr},
+	gotypeFloat64Array3:            {pgtyp_line, pgtyp_float4arr, pgtyp_float8arr, pgtyp_numericarr},
+	gotypeFloat64Array3Slice:       {pgtyp_linearr},
+	gotypeByte:                     {pgtyp_bpchar, pgtyp_bytea, pgtyp_char, pgtyp_text, pgtyp_varchar},
+	gotypeByteSlice:                {pgtyp_bit, pgtyp_bpchar, pgtyp_bytea, pgtyp_char, pgtyp_cidr, pgtyp_inet, pgtyp_json, pgtyp_jsonb, pgtyp_macaddr, pgtyp_macaddr8, pgtyp_text, pgtyp_tsquery, pgtyp_tsvector, pgtyp_uuid, pgtyp_varbit, pgtyp_varchar, pgtyp_xml},
+	gotypeByteSliceSlice:           {pgtyp_bitarr, pgtyp_bpchararr, pgtyp_byteaarr, pgtyp_chararr, pgtyp_cidrarr, pgtyp_inetarr, pgtyp_jsonarr, pgtyp_jsonbarr, pgtyp_macaddrarr, pgtyp_macaddr8arr, pgtyp_textarr, pgtyp_tsqueryarr, pgtyp_tsvectorarr, pgtyp_uuidarr, pgtyp_varbitarr, pgtyp_varchararr, pgtyp_xmlarr},
+	gotypeString:                   {pgtyp_bit, pgtyp_bpchar, pgtyp_bytea, pgtyp_char, pgtyp_cidr, pgtyp_inet, pgtyp_json, pgtyp_jsonb, pgtyp_macaddr, pgtyp_macaddr8, pgtyp_text, pgtyp_tsquery, pgtyp_tsvector, pgtyp_uuid, pgtyp_varbit, pgtyp_varchar, pgtyp_xml},
+	gotypeStringSlice:              {pgtyp_bitarr, pgtyp_bpchararr, pgtyp_byteaarr, pgtyp_chararr, pgtyp_cidrarr, pgtyp_inetarr, pgtyp_jsonarr, pgtyp_jsonbarr, pgtyp_macaddrarr, pgtyp_macaddr8arr, pgtyp_textarr, pgtyp_tsqueryarr, pgtyp_tsvectorarr, pgtyp_uuidarr, pgtyp_varbitarr, pgtyp_varchararr, pgtyp_xmlarr},
+	gotypeByteArray16:              {pgtyp_uuid, pgtyp_bytea, pgtyp_text, pgtyp_varchar},
+	gotypeByteArray16Slice:         {pgtyp_uuidarr, pgtyp_byteaarr, pgtyp_textarr, pgtyp_varchararr},
+	gotypeRune:                     {pgtyp_char, pgtyp_bytea, pgtyp_varchar, pgtyp_bpchar},
+	gotypeRuneSlice:                {pgtyp_bpchar, pgtyp_char, pgtyp_text, pgtyp_varchar /* the rest assumes typmod=1 */, pgtyp_bpchararr, pgtyp_chararr, pgtyp_text, pgtyp_varchararr},
+	gotypeRuneSliceSlice:           {pgtyp_bpchararr, pgtyp_byteaarr, pgtyp_chararr, pgtyp_textarr, pgtyp_varchararr},
+	gotypeIPNet:                    {pgtyp_cidr, pgtyp_inet, pgtyp_text, pgtyp_bpchar, pgtyp_bytea, pgtyp_char, pgtyp_varchar},
+	gotypeIPNetSlice:               {pgtyp_cidrarr, pgtyp_inetarr, pgtyp_textarr, pgtyp_bpchararr, pgtyp_byteaarr, pgtyp_chararr, pgtyp_varchararr},
+	gotypeTime:                     {pgtyp_date, pgtyp_time, pgtyp_timestamp, pgtyp_timestamptz, pgtyp_timetz},
+	gotypeTimeSlice:                {pgtyp_datearr, pgtyp_timearr, pgtyp_timestamparr, pgtyp_timestamptzarr, pgtyp_timetzarr, pgtyp_intervalarr},
+	gotypeTimeArray2:               {pgtyp_daterange, pgtyp_tsrange, pgtyp_tstzrange},
+	gotypeTimeArray2Slice:          {pgtyp_daterangearr, pgtyp_tsrangearr, pgtyp_tstzrangearr},
+	gotypeBigInt:                   {pgtyp_numeric, pgtyp_text},
+	gotypeBigIntSlice:              {pgtyp_numericarr, pgtyp_textarr},
+	gotypeBigIntArray2:             {pgtyp_numrange},
+	gotypeBigIntArray2Slice:        {pgtyp_numrangearr},
+	gotypeBigFloat:                 {pgtyp_numeric, pgtyp_text},
+	gotypeBigFloatSlice:            {pgtyp_numericarr, pgtyp_textarr},
+	gotypeBigFloatArray2:           {pgtyp_numrange},
+	gotypeBigFloatArray2Slice:      {pgtyp_numrangearr},
 
 	// NOTE(mkopriva): The hstore pgoids for these 4 go types are returned by
 	// the typeoids method, this is because hstore doesn't have a "common" oid.
@@ -1877,7 +1882,7 @@ var go2pgoids = map[string][]pgoid{
 // the constructs IN and NOT IN are essentially the same as comparing the LHS to every
 // element of the RHS with the operators "=" and "<>" respectively, and therefore the
 // isin maps to "=" and notin maps to "<>".
-var predicateKindToBasePGOps = map[predicateKind]string{
+var predicateToBasePGOps = map[predicate]string{
 	isEQ:        "=",
 	notEQ:       "<>",
 	notEQ2:      "<>",

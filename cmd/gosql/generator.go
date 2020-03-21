@@ -201,9 +201,9 @@ func (g *generator) prepareInput(si *targetInfo) {
 	}
 
 	// prepare input for the WHERE clause
-	if si.query.whereBlock != nil && len(si.query.whereBlock.items) > 0 {
+	if si.query.whereBlock != nil && len(si.query.whereBlock.conds) > 0 {
 		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.whereBlock.name}}
-		g.prepareGOInputWhereFields(si.query.whereBlock.items, sx)
+		g.prepareGOInputWhereFields(si.query.whereBlock.conds, sx)
 	} else if si.query.kind == queryKindUpdate && (si.query.all == false && si.query.filterField == "") {
 		g.prepareGOInputPrimaryKeyFields(si)
 	}
@@ -313,32 +313,32 @@ func (g *generator) prepareSQLInputColumns(si *targetInfo) {
 
 // prepareGOInputWhereFields prepares the input for a WHERE clause which is a list of
 // the GO "where block" fields that will be passed to the query executing function.
-func (g *generator) prepareGOInputWhereFields(items []*predicateItem, sx GO.SelectorExpr) {
-	for _, item := range items {
-		switch pred := item.pred.(type) {
-		case *predicateNested:
-			g.prepareGOInputWhereFields(pred.items, GO.SelectorExpr{X: sx, Sel: GO.Ident{pred.name}})
+func (g *generator) prepareGOInputWhereFields(conds []*searchCondition, sx GO.SelectorExpr) {
+	for _, item := range conds {
+		switch cond := item.cond.(type) {
+		case *searchConditionNested:
+			g.prepareGOInputWhereFields(cond.conds, GO.SelectorExpr{X: sx, Sel: GO.Ident{cond.name}})
 			continue
-		case *predicateBetween:
-			if x, ok := pred.x.(*fieldDatum); ok {
-				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{pred.name}}
+		case *searchConditionBetween:
+			if x, ok := cond.x.(*fieldDatum); ok {
+				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{cond.name}}
 				sx = GO.SelectorExpr{X: sx, Sel: GO.Ident{x.name}}
 				g.queryargs = append(g.queryargs, sx)
 			}
-			if y, ok := pred.y.(*fieldDatum); ok {
-				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{pred.name}}
+			if y, ok := cond.y.(*fieldDatum); ok {
+				sx := GO.SelectorExpr{X: sx, Sel: GO.Ident{cond.name}}
 				sx = GO.SelectorExpr{X: sx, Sel: GO.Ident{y.name}}
 				g.queryargs = append(g.queryargs, sx)
 			}
-		case *predicateField:
-			if pred.kind != isIn && pred.kind != notIn {
+		case *searchConditionField:
+			if cond.pred != isIn && cond.pred != notIn {
 				var x GO.ExprNode
 
-				x = GO.SelectorExpr{X: sx, Sel: GO.Ident{pred.name}}
-				if pred.qua > 0 {
+				x = GO.SelectorExpr{X: sx, Sel: GO.Ident{cond.name}}
+				if cond.qua > 0 {
 
-					gotyp := pred.typ.string(true)
-					coltyp := g.targetInfo.info.colmap[pred].typ.namefmt + "[]"
+					gotyp := cond.typ.string(true)
+					coltyp := g.targetInfo.info.colmap[cond].typ.namefmt + "[]"
 					sel, ok := gotyp2coltyp2converter[gotyp][coltyp]
 					if !ok {
 						// TODO should not happen here, this should be caught while scanning the db
@@ -349,7 +349,7 @@ func (g *generator) prepareGOInputWhereFields(items []*predicateItem, sx GO.Sele
 
 				g.queryargs = append(g.queryargs, x)
 			}
-		case *predicateColumn:
+		case *searchConditionColumn:
 			// nothing to do
 		}
 	}
@@ -1349,12 +1349,12 @@ func (g *generator) sqlselectcount(si *targetInfo) (selstmt SQL.SelectCountState
 func (g *generator) buildSQLWhereClause(si *targetInfo) (where SQL.WhereClause) {
 	if w := si.query.whereBlock; w != nil {
 		sel := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{w.name}}
-		where.SearchCondition, _ = g.sqlsearchcond(w.items, sel, false)
+		where.SearchCondition, _ = g.sqlsearchcond(w.conds, sel, false)
 	} else if si.query.kind == queryKindUpdate && (si.query.all == false && si.query.filterField == "") {
 		var list SQL.BoolValueExprList
 		for i, item := range si.info.pkeys {
 			p := SQL.ComparisonPredicate{}
-			p.Cmp = predicateKindToSQLCmpOp[isEQ]
+			p.Cmp = predicateToSQLCmpOp[isEQ]
 			p.LPredicand = g.sqlcolref(item.colId)
 
 			if item.sqlparam == nil {
@@ -1378,82 +1378,82 @@ func (g *generator) buildSQLWhereClause(si *targetInfo) (where SQL.WhereClause) 
 	return where
 }
 
-func (g *generator) sqlsearchcond(items []*predicateItem, sel GO.SelectorExpr, parenthesized bool) (list SQL.BoolValueExprList, count int) {
-	for _, item := range items {
+func (g *generator) sqlsearchcond(conds []*searchCondition, sel GO.SelectorExpr, parenthesized bool) (list SQL.BoolValueExprList, count int) {
+	for _, item := range conds {
 		count += 1
 
 		var x SQL.BoolValueExpr
-		switch pred := item.pred.(type) {
+		switch cond := item.cond.(type) {
 		// nested: recurse
-		case *predicateNested:
+		case *searchConditionNested:
 			var ncount int
 
-			sel := GO.SelectorExpr{X: sel, Sel: GO.Ident{pred.name}}
-			x, ncount = g.sqlsearchcond(pred.items, sel, true)
+			sel := GO.SelectorExpr{X: sel, Sel: GO.Ident{cond.name}}
+			x, ncount = g.sqlsearchcond(cond.conds, sel, true)
 
 			count += ncount - 1
 
 		// 3-arg predicate: build & return
-		case *predicateBetween:
+		case *searchConditionBetween:
 			p := SQL.BetweenPredicate{}
-			p.Predicand = g.sqlcolref(pred.colId)
-			if x, ok := pred.x.(colId); ok {
+			p.Predicand = g.sqlcolref(cond.colId)
+			if x, ok := cond.x.(colId); ok {
 				p.LowEnd = g.sqlcolref(x)
 			} else {
-				// assume pred.x is *fieldDatum
+				// assume cond.x is *fieldDatum
 				p.LowEnd = g.sqlparam()
 			}
-			if y, ok := pred.y.(colId); ok {
+			if y, ok := cond.y.(colId); ok {
 				p.HighEnd = g.sqlcolref(y)
 			} else {
-				// assume pred.x is *fieldDatum
+				// assume cond.x is *fieldDatum
 				p.HighEnd = g.sqlparam()
 			}
 			x = p
 
 		// 2-arg predicates: prepare first, then build & return
-		case *predicateField, *predicateColumn:
+		case *searchConditionField, *searchConditionColumn:
 			var (
-				lhs      SQL.ValueExpr
-				rhs      SQL.ValueExpr
-				predKind predicateKind
-				qua      quantifier
-				field    string
-				coltype  string
+				lhs     SQL.ValueExpr
+				rhs     SQL.ValueExpr
+				pred    predicate
+				qua     quantifier
+				field   string
+				coltype string
 			)
 
 			// prepare
-			switch pred := pred.(type) {
-			case *predicateField:
-				predKind = pred.kind
-				qua = pred.qua
-				lhs = g.sqlcolref(pred.colId)
+			switch cond := cond.(type) {
+			case *searchConditionField:
+				pred = cond.pred
+				qua = cond.qua
+				lhs = g.sqlcolref(cond.colId)
 				rhs = g.sqlparam()
-				if len(pred.modfunc) > 0 {
+				if len(cond.modFunc) > 0 {
 					li := SQL.RoutineInvocation{}
-					li.Name = string(pred.modfunc)
+					li.Name = string(cond.modFunc)
 					li.Args = []SQL.ValueExpr{lhs}
 					lhs = li
 
 					ri := SQL.RoutineInvocation{}
-					ri.Name = string(pred.modfunc)
+					ri.Name = string(cond.modFunc)
 					ri.Args = []SQL.ValueExpr{rhs}
 					rhs = ri
 				}
 
 				if qua > 0 {
-					coltype = g.targetInfo.info.colmap[pred].typ.namefmt
+					coltype = g.targetInfo.info.colmap[cond].typ.namefmt
 				}
 
-				field = pred.name // needed for isin/notin predicates
-			case *predicateColumn:
-				predKind = pred.kind
-				qua = pred.qua
-				lhs = g.sqlcolref(pred.colId)
-				if !pred.colId2.isEmpty() {
-					rhs = g.sqlcolref(pred.colId2)
-				} else if len(pred.literal) > 0 {
-					rhs = SQL.Literal{pred.literal}
+				field = cond.name // needed for isin/notin predicates
+			case *searchConditionColumn:
+				pred = cond.pred
+				qua = cond.qua
+				lhs = g.sqlcolref(cond.colId)
+				if !cond.colId2.isEmpty() {
+					rhs = g.sqlcolref(cond.colId2)
+				} else if len(cond.literal) > 0 {
+					rhs = SQL.Literal{cond.literal}
 				}
 			}
 
@@ -1472,40 +1472,40 @@ func (g *generator) sqlsearchcond(items []*predicateItem, sel GO.SelectorExpr, p
 			}
 
 			// build & return
-			switch predKind {
+			switch pred {
 			case isEQ, notEQ, notEQ2, isLT, isGT, isLTE, isGTE:
 				p := SQL.ComparisonPredicate{}
-				p.Cmp = predicateKindToSQLCmpOp[predKind]
+				p.Cmp = predicateToSQLCmpOp[pred]
 				p.LPredicand = lhs
 				p.RPredicand = rhs
 				x = p
 			case isLike, notLike:
 				p := SQL.LikePredicate{}
-				p.Not = (predKind == notLike)
+				p.Not = (pred == notLike)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
 			case isILike, notILike:
 				p := SQL.ILikePredicate{}
-				p.Not = (predKind == notILike)
+				p.Not = (pred == notILike)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
 			case isSimilar, notSimilar:
 				p := SQL.SimilarPredicate{}
-				p.Not = (predKind == notSimilar)
+				p.Not = (pred == notSimilar)
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
 			case isDistinct, notDistinct:
 				p := SQL.DistinctPredicate{}
-				p.Not = (predKind == notDistinct)
+				p.Not = (pred == notDistinct)
 				p.LPredicand = lhs
 				p.RPredicand = rhs
 				x = p
 			case isMatch, isMatchi, notMatch, notMatchi:
 				p := SQL.RegexPredicate{}
-				p.Op = predicateKindToSQLRegExOp[predKind]
+				p.Op = predicateToSQLRegExOp[pred]
 				p.Predicand = lhs
 				p.Pattern = rhs
 				x = p
@@ -1524,19 +1524,19 @@ func (g *generator) sqlsearchcond(items []*predicateItem, sel GO.SelectorExpr, p
 				call.Args = GO.ArgsList{List: GO.ExprList{arg1, arg2}}
 
 				p := SQL.InPredicate{}
-				p.Not = (predKind == notIn)
+				p.Not = (pred == notIn)
 				p.Predicand = lhs
 				p.ValueList = SQL.HostValue{GO.RawStringInsertExpr{call}}
 				x = p
 			case isTrue, notTrue, isFalse, notFalse, isUnknown, notUnknown:
 				p := SQL.TruthPredicate{}
-				p.Not = (predKind == notTrue || predKind == notFalse || predKind == notUnknown)
-				p.Truth = predicateKindToSQLTruth[predKind]
+				p.Not = (pred == notTrue || pred == notFalse || pred == notUnknown)
+				p.Truth = predicateToSQLTruth[pred]
 				p.Predicand = lhs
 				x = p
 			case isNull, notNull:
 				p := SQL.NullPredicate{}
-				p.Not = (predKind == notNull)
+				p.Not = (pred == notNull)
 				p.Predicand = lhs
 				x = p
 			default:
@@ -1638,7 +1638,7 @@ func (g *generator) sqlfrom(jb *joinBlock) (from SQL.FromClause) {
 		var join SQL.TableJoin
 		join.Type = joinTypeToSQLJoinType[item.joinType]
 		join.Rel = g.sqlrelid(item.relId)
-		join.Cond = g.sqljoincond(item.predicates)
+		join.Cond = g.sqljoincond(item.conds)
 		from.List = append(from.List, join)
 	}
 	return from
@@ -1654,7 +1654,7 @@ func (g *generator) sqlusing(jb *joinBlock) (using SQL.UsingClause) {
 		var join SQL.TableJoin
 		join.Type = joinTypeToSQLJoinType[item.joinType]
 		join.Rel = g.sqlrelid(item.relId)
-		join.Cond = g.sqljoincond(item.predicates)
+		join.Cond = g.sqljoincond(item.conds)
 		using.List = append(using.List, join)
 	}
 	return using
@@ -1669,13 +1669,13 @@ func (g *generator) sqljoin(jb *joinBlock) (jc SQL.JoinClause) {
 		var join SQL.TableJoin
 		join.Type = joinTypeToSQLJoinType[item.joinType]
 		join.Rel = g.sqlrelid(item.relId)
-		join.Cond = g.sqljoincond(item.predicates)
+		join.Cond = g.sqljoincond(item.conds)
 		jc.List = append(jc.List, join)
 	}
 	return jc
 }
 
-func (g *generator) sqljoincond(items []*predicateItem) (cond SQL.JoinCondition) {
+func (g *generator) sqljoincond(items []*searchCondition) (cond SQL.JoinCondition) {
 	if len(items) > 0 {
 		list, _ := g.sqlsearchcond(items, GO.SelectorExpr{}, false)
 		list.ListStyle = false
@@ -1751,7 +1751,7 @@ var overridingKindToSQLOverridingClause = map[overridingKind]SQL.OverridingClaus
 	overridingUser:   "USER",
 }
 
-var predicateKindToSQLCmpOp = map[predicateKind]SQL.CMPOP{
+var predicateToSQLCmpOp = map[predicate]SQL.CMPOP{
 	isEQ:   SQL.EQUAL,
 	notEQ:  SQL.NOT_EQUAL,
 	notEQ2: SQL.NOT_EQUAL2,
@@ -1761,14 +1761,14 @@ var predicateKindToSQLCmpOp = map[predicateKind]SQL.CMPOP{
 	isGTE:  SQL.GREATER_THAN_EQUAL,
 }
 
-var predicateKindToSQLRegExOp = map[predicateKind]SQL.REGEXOP{
+var predicateToSQLRegExOp = map[predicate]SQL.REGEXOP{
 	isMatch:   SQL.MATCH,
 	isMatchi:  SQL.MATCH_CI,
 	notMatch:  SQL.NOT_MATCH,
 	notMatchi: SQL.NOT_MATCH_CI,
 }
 
-var predicateKindToSQLTruth = map[predicateKind]SQL.TRUTH{
+var predicateToSQLTruth = map[predicate]SQL.TRUTH{
 	isUnknown:  SQL.UNKNOWN,
 	notUnknown: SQL.UNKNOWN,
 	isTrue:     SQL.TRUE,
@@ -1791,29 +1791,29 @@ var joinTypeToSQLJoinType = map[joinType]SQL.JoinType{
 }
 
 var gotyp2coltyp2converter = map[string]map[string]GO.SelectorExpr{
-	gotypbools:   {"boolean[]": GO.SelectorExpr{ /*TODO*/ }},
-	gotypstrings: {"text[]": GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"StringSliceToTextArray"}}},
-	gotypints: {
+	gotypeBoolSlice:   {"boolean[]": GO.SelectorExpr{ /*TODO*/ }},
+	gotypeStringSlice: {"text[]": GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"StringSliceToTextArray"}}},
+	gotypeIntSlice: {
 		"integer[]":  GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
 		"smallint[]": GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
 		"bigint[]":   GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
 	},
-	gotypint8s: {
+	gotypeInt8Slice: {
 		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
 		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
 		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
-	gotypint16s: {
+	gotypeInt16Slice: {
 		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
 		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
 		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
-	gotypint32s: {
+	gotypeInt32Slice: {
 		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
 		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
 		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
-	gotypint64s: {
+	gotypeInt64Slice: {
 		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
 		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
 		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },

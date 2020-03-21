@@ -666,12 +666,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{{
-				pred: &predicateField{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{{
+				cond: &searchConditionField{
 					name:  "ID",
 					typ:   typeInfo{kind: kindInt},
 					colId: colId{name: "id"},
-					kind:  isEQ,
+					pred:  isEQ,
 				},
 			}}},
 		},
@@ -685,16 +685,16 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateColumn{colId: colId{name: "column_a"}, kind: notNull}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_b"}, kind: isNull}},
-				{bool: boolOr, pred: &predicateColumn{colId: colId{name: "column_c"}, kind: notTrue}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_d"}, kind: isTrue}},
-				{bool: boolOr, pred: &predicateColumn{colId: colId{name: "column_e"}, kind: notFalse}},
-				{bool: boolOr, pred: &predicateColumn{colId: colId{name: "column_f"}, kind: isFalse}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_g"}, kind: notUnknown}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_h"}, kind: isUnknown}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_i"}, kind: isTrue}},
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{colId: colId{name: "column_a"}, pred: notNull}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_b"}, pred: isNull}},
+				{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_c"}, pred: notTrue}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_d"}, pred: isTrue}},
+				{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_e"}, pred: notFalse}},
+				{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_f"}, pred: isFalse}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_g"}, pred: notUnknown}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_h"}, pred: isUnknown}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_i"}, pred: isTrue}},
 			}},
 		},
 	}, {
@@ -707,47 +707,47 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateNested{name: "x", items: []*predicateItem{
-					{pred: &predicateField{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionNested{name: "x", conds: []*searchCondition{
+					{cond: &searchConditionField{
 						name:  "foo",
 						typ:   typeInfo{kind: kindInt},
 						colId: colId{name: "column_foo"},
-						kind:  isEQ,
+						pred:  isEQ,
 					}},
-					{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_a"}, kind: isNull}},
+					{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_a"}, pred: isNull}},
 				}}},
-				{bool: boolOr, pred: &predicateNested{name: "y", items: []*predicateItem{
-					{pred: &predicateColumn{colId: colId{name: "column_b"}, kind: notTrue}},
-					{bool: boolOr, pred: &predicateField{
+				{bool: boolOr, cond: &searchConditionNested{name: "y", conds: []*searchCondition{
+					{cond: &searchConditionColumn{colId: colId{name: "column_b"}, pred: notTrue}},
+					{bool: boolOr, cond: &searchConditionField{
 						name:  "bar",
 						typ:   typeInfo{kind: kindString},
 						colId: colId{name: "column_bar"},
-						kind:  isEQ,
+						pred:  isEQ,
 					}},
-					{bool: boolAnd, pred: &predicateNested{name: "z", items: []*predicateItem{
-						{pred: &predicateField{
+					{bool: boolAnd, cond: &searchConditionNested{name: "z", conds: []*searchCondition{
+						{cond: &searchConditionField{
 							name:  "baz",
 							typ:   typeInfo{kind: kindBool},
 							colId: colId{name: "column_baz"},
-							kind:  isEQ,
+							pred:  isEQ,
 						}},
-						{bool: boolAnd, pred: &predicateField{
+						{bool: boolAnd, cond: &searchConditionField{
 							name:  "quux",
 							typ:   typeInfo{kind: kindString},
 							colId: colId{name: "column_quux"},
-							kind:  isEQ,
+							pred:  isEQ,
 						}},
-						{bool: boolOr, pred: &predicateColumn{colId: colId{name: "column_c"}, kind: isTrue}},
+						{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_c"}, pred: isTrue}},
 					}}},
 				}}},
-				{bool: boolOr, pred: &predicateColumn{colId: colId{name: "column_d"}, kind: notFalse}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_e"}, kind: isFalse}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_d"}, pred: notFalse}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_e"}, pred: isFalse}},
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "foo",
 					typ:   typeInfo{kind: kindInt},
 					colId: colId{name: "column_foo"},
-					kind:  isEQ,
+					pred:  isEQ,
 				}},
 			}},
 		},
@@ -761,14 +761,14 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateField{name: "a", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_a"}, kind: isLT}},
-				{bool: boolAnd, pred: &predicateField{name: "b", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_b"}, kind: isGT}},
-				{bool: boolAnd, pred: &predicateField{name: "c", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_c"}, kind: isLTE}},
-				{bool: boolAnd, pred: &predicateField{name: "d", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_d"}, kind: isGTE}},
-				{bool: boolAnd, pred: &predicateField{name: "e", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_e"}, kind: isEQ}},
-				{bool: boolAnd, pred: &predicateField{name: "f", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_f"}, kind: notEQ}},
-				{bool: boolAnd, pred: &predicateField{name: "g", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_g"}, kind: isEQ}},
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionField{name: "a", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_a"}, pred: isLT}},
+				{bool: boolAnd, cond: &searchConditionField{name: "b", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_b"}, pred: isGT}},
+				{bool: boolAnd, cond: &searchConditionField{name: "c", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_c"}, pred: isLTE}},
+				{bool: boolAnd, cond: &searchConditionField{name: "d", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_d"}, pred: isGTE}},
+				{bool: boolAnd, cond: &searchConditionField{name: "e", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_e"}, pred: isEQ}},
+				{bool: boolAnd, cond: &searchConditionField{name: "f", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_f"}, pred: notEQ}},
+				{bool: boolAnd, cond: &searchConditionField{name: "g", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_g"}, pred: isEQ}},
 			}},
 		},
 	}, {
@@ -781,12 +781,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateColumn{colId: colId{name: "column_a"}, kind: notEQ, colId2: colId{name: "column_b"}}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{qual: "t", name: "column_c"}, kind: isEQ, colId2: colId{qual: "u", name: "column_d"}}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{qual: "t", name: "column_e"}, kind: isGT, literal: "123"}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{qual: "t", name: "column_f"}, kind: isEQ, literal: "'active'"}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{qual: "t", name: "column_g"}, kind: notEQ, literal: "true"}},
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{colId: colId{name: "column_a"}, pred: notEQ, colId2: colId{name: "column_b"}}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{qual: "t", name: "column_c"}, pred: isEQ, colId2: colId{qual: "u", name: "column_d"}}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{qual: "t", name: "column_e"}, pred: isGT, literal: "123"}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{qual: "t", name: "column_f"}, pred: isEQ, literal: "'active'"}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{qual: "t", name: "column_g"}, pred: notEQ, literal: "true"}},
 			}},
 		},
 	}, {
@@ -799,32 +799,32 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateBetween{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionBetween{
 					name:  "a",
 					colId: colId{name: "column_a"},
-					kind:  isBetween,
+					pred:  isBetween,
 					x:     &fieldDatum{name: "x", typ: typeInfo{kind: kindInt}},
 					y:     &fieldDatum{name: "y", typ: typeInfo{kind: kindInt}},
 				}},
-				{bool: boolAnd, pred: &predicateBetween{
+				{bool: boolAnd, cond: &searchConditionBetween{
 					name:  "b",
 					colId: colId{name: "column_b"},
-					kind:  isBetweenSym,
+					pred:  isBetweenSym,
 					x:     colId{name: "column_x"},
 					y:     colId{name: "column_y"},
 				}},
-				{bool: boolAnd, pred: &predicateBetween{
+				{bool: boolAnd, cond: &searchConditionBetween{
 					name:  "c",
 					colId: colId{name: "column_c"},
-					kind:  notBetweenSym,
+					pred:  notBetweenSym,
 					x:     colId{name: "column_z"},
 					y:     &fieldDatum{name: "z", typ: typeInfo{kind: kindInt}},
 				}},
-				{bool: boolAnd, pred: &predicateBetween{
+				{bool: boolAnd, cond: &searchConditionBetween{
 					name:  "d",
 					colId: colId{name: "column_d"},
-					kind:  notBetween,
+					pred:  notBetween,
 					x:     &fieldDatum{name: "z", typ: typeInfo{kind: kindInt}},
 					y:     colId{name: "column_z"},
 				}},
@@ -840,21 +840,21 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateField{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionField{
 					name:  "a",
 					typ:   typeInfo{kind: kindInt},
 					colId: colId{name: "column_a"},
-					kind:  isDistinct,
+					pred:  isDistinct,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "b",
 					typ:   typeInfo{kind: kindInt},
 					colId: colId{name: "column_b"},
-					kind:  notDistinct,
+					pred:  notDistinct,
 				}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_c"}, kind: isDistinct, colId2: colId{name: "column_x"}}},
-				{bool: boolAnd, pred: &predicateColumn{colId: colId{name: "column_d"}, kind: notDistinct, colId2: colId{name: "column_y"}}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_c"}, pred: isDistinct, colId2: colId{name: "column_x"}}},
+				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_d"}, pred: notDistinct, colId2: colId{name: "column_y"}}},
 			}},
 		},
 	}, {
@@ -867,8 +867,8 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateField{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionField{
 					name: "a",
 					typ: typeInfo{
 						kind: kindSlice,
@@ -877,9 +877,9 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						},
 					},
 					colId: colId{name: "column_a"},
-					kind:  isIn,
+					pred:  isIn,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name: "b",
 					typ: typeInfo{
 						kind: kindArray,
@@ -889,9 +889,9 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						arrayLen: 5,
 					},
 					colId: colId{name: "column_b"},
-					kind:  notIn,
+					pred:  notIn,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name: "c",
 					typ: typeInfo{
 						kind: kindSlice,
@@ -900,10 +900,10 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						},
 					},
 					colId: colId{name: "column_c"},
-					kind:  isEQ,
+					pred:  isEQ,
 					qua:   quantAny,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name: "d",
 					typ: typeInfo{
 						kind: kindArray,
@@ -913,10 +913,10 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						arrayLen: 10,
 					},
 					colId: colId{name: "column_d"},
-					kind:  isGT,
+					pred:  isGT,
 					qua:   quantSome,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name: "e",
 					typ: typeInfo{
 						kind: kindSlice,
@@ -925,7 +925,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						},
 					},
 					colId: colId{name: "column_e"},
-					kind:  isLTE,
+					pred:  isLTE,
 					qua:   quantAll,
 				}},
 			}},
@@ -940,54 +940,54 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateField{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionField{
 					name:  "a",
 					typ:   typeInfo{kind: kindString},
 					colId: colId{name: "column_a"},
-					kind:  isLike,
+					pred:  isLike,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "b",
 					typ:   typeInfo{kind: kindString},
 					colId: colId{name: "column_b"},
-					kind:  notLike,
+					pred:  notLike,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "c",
 					typ:   typeInfo{kind: kindString},
 					colId: colId{name: "column_c"},
-					kind:  isSimilar,
+					pred:  isSimilar,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "d",
 					typ:   typeInfo{kind: kindString},
 					colId: colId{name: "column_d"},
-					kind:  notSimilar,
+					pred:  notSimilar,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "e",
 					typ:   typeInfo{kind: kindString},
 					colId: colId{name: "column_e"},
-					kind:  isMatch,
+					pred:  isMatch,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "f",
 					typ:   typeInfo{kind: kindString},
 					colId: colId{name: "column_f"},
-					kind:  isMatchi,
+					pred:  isMatchi,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "g",
 					typ:   typeInfo{kind: kindString},
 					colId: colId{name: "column_g"},
-					kind:  notMatch,
+					pred:  notMatch,
 				}},
-				{bool: boolAnd, pred: &predicateField{
+				{bool: boolAnd, cond: &searchConditionField{
 					name:  "h",
 					typ:   typeInfo{kind: kindString},
 					colId: colId{name: "column_h"},
-					kind:  notMatchi,
+					pred:  notMatchi,
 				}},
 			}},
 		},
@@ -1002,45 +1002,45 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
 			joinBlock: &joinBlock{relId: relId{name: "relation_b", alias: "b"}, items: []*joinItem{
-				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "c", name: "b_id"},
 						colId2: colId{qual: "b", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					}}}},
-				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "d", name: "c_id"},
 						colId2: colId{qual: "c", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}, {
 					bool: boolOr,
-					pred: &predicateColumn{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "d", name: "num"},
 						colId2: colId{qual: "b", name: "num"},
-						kind:   isGT,
+						pred:   isGT,
 					},
 				}}},
-				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "e", name: "d_id"},
 						colId2: colId{qual: "d", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}, {
 					bool: boolAnd,
-					pred: &predicateColumn{
+					cond: &searchConditionColumn{
 						colId: colId{qual: "e", name: "is_foo"},
-						kind:  isFalse,
+						pred:  isFalse,
 					},
 				}}},
 				{joinType: joinCross, relId: relId{name: "relation_f", alias: "f"}},
 			}},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateColumn{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{
 					colId:  colId{qual: "a", name: "id"},
-					kind:   isEQ,
+					pred:   isEQ,
 					colId2: colId{qual: "d", name: "a_id"},
 				}},
 			}},
@@ -1056,47 +1056,47 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
 			joinBlock: &joinBlock{relId: relId{name: "relation_b", alias: "b"}, items: []*joinItem{
-				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "c", name: "b_id"},
 						colId2: colId{qual: "b", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}}},
-				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "d", name: "c_id"},
 						colId2: colId{qual: "c", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}, {
 					bool: boolOr,
-					pred: &predicateColumn{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "d", name: "num"},
 						colId2: colId{qual: "b", name: "num"},
-						kind:   isGT,
+						pred:   isGT,
 					},
 				}}},
-				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "e", name: "d_id"},
 						colId2: colId{qual: "d", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}, {
 					bool: boolAnd,
-					pred: &predicateColumn{
+					cond: &searchConditionColumn{
 						colId: colId{qual: "e", name: "is_foo"},
-						kind:  isFalse,
+						pred:  isFalse,
 					},
 				}}},
 				{joinType: joinCross, relId: relId{name: "relation_f", alias: "f"}},
 			}},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateColumn{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{
 					colId:  colId{qual: "a", name: "id"},
 					colId2: colId{qual: "d", name: "a_id"},
-					kind:   isEQ,
+					pred:   isEQ,
 				}},
 			}},
 		},
@@ -1111,53 +1111,53 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
 			},
 			joinBlock: &joinBlock{items: []*joinItem{
-				{joinType: joinLeft, relId: relId{name: "relation_b", alias: "b"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinLeft, relId: relId{name: "relation_b", alias: "b"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "b", name: "a_id"},
 						colId2: colId{qual: "a", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}}},
-				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "c", name: "b_id"},
 						colId2: colId{qual: "b", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}}},
-				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "d", name: "c_id"},
 						colId2: colId{qual: "c", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}, {
 					bool: boolOr,
-					pred: &predicateColumn{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "d", name: "num"},
 						colId2: colId{qual: "b", name: "num"},
-						kind:   isGT,
+						pred:   isGT,
 					},
 				}}},
-				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, predicates: []*predicateItem{{
-					pred: &predicateColumn{
+				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, conds: []*searchCondition{{
+					cond: &searchConditionColumn{
 						colId:  colId{qual: "e", name: "d_id"},
 						colId2: colId{qual: "d", name: "id"},
-						kind:   isEQ,
+						pred:   isEQ,
 					},
 				}, {
 					bool: boolAnd,
-					pred: &predicateColumn{
+					cond: &searchConditionColumn{
 						colId: colId{qual: "e", name: "is_foo"},
-						kind:  isFalse,
+						pred:  isFalse,
 					},
 				}}},
 				{joinType: joinCross, relId: relId{name: "relation_f", alias: "f"}},
 			}},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateColumn{
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{
 					colId:  colId{qual: "a", name: "id"},
-					kind:   isEQ,
+					pred:   isEQ,
 					colId2: colId{qual: "d", name: "a_id"},
 				}},
 			}},
@@ -1479,8 +1479,8 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId:       relId{name: "relation_a", alias: "a"},
 				isDirective: true,
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateColumn{colId: colId{qual: "a", name: "is_inactive"}, kind: isTrue}},
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{colId: colId{qual: "a", name: "is_inactive"}, pred: isTrue}},
 			}},
 			resultField: &resultField{
 				name: "Result",
@@ -1497,8 +1497,8 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId:       relId{name: "relation_a", alias: "a"},
 				isDirective: true,
 			},
-			whereBlock: &whereBlock{name: "Where", items: []*predicateItem{
-				{pred: &predicateColumn{colId: colId{qual: "a", name: "is_inactive"}, kind: isTrue}},
+			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{colId: colId{qual: "a", name: "is_inactive"}, pred: isTrue}},
 			}},
 			rowsAffectedField: &rowsAffectedField{
 				name: "RowsAffected",
@@ -1919,79 +1919,79 @@ func TestTypeinfo_string(t *testing.T) {
 		name string
 		want string
 	}{
-		{"f01", gotypbool},
-		{"f02", gotypbool},
-		{"f03", gotypbools},
-		{"f04", gotypstring},
-		{"f05", gotypstring},
-		{"f06", gotypstrings},
-		{"f07", gotypstringss},
-		{"f08", gotypstringm},
-		{"f09", gotypstringm},
-		{"f10", gotypstringms},
-		{"f11", gotypstringms},
-		{"f12", gotypbyte},
-		{"f13", gotypbyte},
-		{"f14", gotypbytes},
-		{"f15", gotypbytess},
-		{"f16", gotypbytea16},
-		{"f17", gotypbytea16s},
-		{"f18", gotyprune},
-		{"f19", gotyprune},
-		{"f20", gotyprunes},
-		{"f21", gotypruness},
-		{"f22", gotypint8},
-		{"f23", gotypint8},
-		{"f24", gotypint8s},
-		{"f25", gotypint8ss},
-		{"f26", gotypint16},
-		{"f27", gotypint16},
-		{"f28", gotypint16s},
-		{"f29", gotypint16ss},
-		{"f30", gotypint32},
-		{"f31", gotypint32},
-		{"f32", gotypint32s},
-		{"f33", gotypint32a2},
-		{"f34", gotypint32a2s},
-		{"f35", gotypint64},
-		{"f36", gotypint64},
-		{"f37", gotypint64s},
-		{"f38", gotypint64a2},
-		{"f39", gotypint64a2s},
-		{"f40", gotypfloat32},
-		{"f41", gotypfloat32},
-		{"f42", gotypfloat32s},
-		{"f43", gotypfloat64},
-		{"f44", gotypfloat64},
-		{"f45", gotypfloat64s},
-		{"f46", gotypfloat64a2},
-		{"f47", gotypfloat64a2s},
-		{"f48", gotypfloat64a2ss},
-		{"f49", gotypfloat64a2a2},
-		{"f50", gotypfloat64a2a2s},
-		{"f51", gotypfloat64a3},
-		{"f52", gotypfloat64a3s},
-		{"f53", gotypipnet},
-		{"f54", gotypipnets},
-		{"f55", gotyptime},
-		{"f56", gotyptime},
-		{"f57", gotyptimes},
-		{"f58", gotyptimes},
-		{"f59", gotyptimea2},
-		{"f60", gotyptimea2s},
-		{"f61", gotypbytes},
-		{"f62", gotypbytess},
-		{"f63", gotypbigint},
-		{"f64", gotypbigint},
-		{"f65", gotypbigints},
-		{"f66", gotypbigints},
-		{"f67", gotypbiginta2},
-		{"f68", gotypbiginta2},
-		{"f69", gotypbiginta2s},
-		{"f70", gotypnullstringm},
-		{"f71", gotypnullstringms},
-		{"f72", gotypbytes},
-		{"f73", gotypbytess},
+		{"f01", gotypeBool},
+		{"f02", gotypeBool},
+		{"f03", gotypeBoolSlice},
+		{"f04", gotypeString},
+		{"f05", gotypeString},
+		{"f06", gotypeStringSlice},
+		{"f07", gotypeStringSliceSlice},
+		{"f08", gotypeStringMap},
+		{"f09", gotypeStringMap},
+		{"f10", gotypeStringMapSlice},
+		{"f11", gotypeStringMapSlice},
+		{"f12", gotypeByte},
+		{"f13", gotypeByte},
+		{"f14", gotypeByteSlice},
+		{"f15", gotypeByteSliceSlice},
+		{"f16", gotypeByteArray16},
+		{"f17", gotypeByteArray16Slice},
+		{"f18", gotypeRune},
+		{"f19", gotypeRune},
+		{"f20", gotypeRuneSlice},
+		{"f21", gotypeRuneSliceSlice},
+		{"f22", gotypeInt8},
+		{"f23", gotypeInt8},
+		{"f24", gotypeInt8Slice},
+		{"f25", gotypeInt8SliceSlice},
+		{"f26", gotypeInt16},
+		{"f27", gotypeInt16},
+		{"f28", gotypeInt16Slice},
+		{"f29", gotypeInt16SliceSlice},
+		{"f30", gotypeInt32},
+		{"f31", gotypeInt32},
+		{"f32", gotypeInt32Slice},
+		{"f33", gotypeInt32Array2},
+		{"f34", gotypeInt32Array2Slice},
+		{"f35", gotypeInt64},
+		{"f36", gotypeInt64},
+		{"f37", gotypeInt64Slice},
+		{"f38", gotypeInt64Array2},
+		{"f39", gotypeInt64Array2Slice},
+		{"f40", gotypeFloat32},
+		{"f41", gotypeFloat32},
+		{"f42", gotypeFloat32Slice},
+		{"f43", gotypeFloat64},
+		{"f44", gotypeFloat64},
+		{"f45", gotypeFloat64Slice},
+		{"f46", gotypeFloat64Array2},
+		{"f47", gotypeFloat64Array2Slice},
+		{"f48", gotypeFloat64Array2SliceSlice},
+		{"f49", gotypeFloat64Array2Array2},
+		{"f50", gotypeFloat64Array2Array2Slice},
+		{"f51", gotypeFloat64Array3},
+		{"f52", gotypeFloat64Array3Slice},
+		{"f53", gotypeIPNet},
+		{"f54", gotypeIPNetSlice},
+		{"f55", gotypeTime},
+		{"f56", gotypeTime},
+		{"f57", gotypeTimeSlice},
+		{"f58", gotypeTimeSlice},
+		{"f59", gotypeTimeArray2},
+		{"f60", gotypeTimeArray2Slice},
+		{"f61", gotypeByteSlice},
+		{"f62", gotypeByteSliceSlice},
+		{"f63", gotypeBigInt},
+		{"f64", gotypeBigInt},
+		{"f65", gotypeBigIntSlice},
+		{"f66", gotypeBigIntSlice},
+		{"f67", gotypeBigIntArray2},
+		{"f68", gotypeBigIntArray2},
+		{"f69", gotypeBigIntArray2Slice},
+		{"f70", gotypeNullStringMap},
+		{"f71", gotypeNullStringMapSlice},
+		{"f72", gotypeByteSlice},
+		{"f73", gotypeByteSliceSlice},
 	}
 
 	ti, err := runAnalysis("SelectAnalysisTestOK_typeinfo_string", t)

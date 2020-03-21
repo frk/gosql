@@ -42,6 +42,9 @@ var (
 // TODO(mkopriva): to provide more detailed error messages either pass in the
 // details about the file under analysis, or make sure that the caller has that
 // information and appends it to the error.
+//
+// The analyze function runs the analysis on the given named type.
+// The result of the analysis is stored in the targetInfo struct.
 func analyze(named *types.Named, ti *targetInfo) error {
 	structType, ok := named.Underlying().(*types.Struct)
 	if !ok {
@@ -202,14 +205,6 @@ func (a *analyzer) queryStruct() (err error) {
 				if a.query.defaultList, err = a.colIdList(tag["sql"], fld); err != nil {
 					return err
 				}
-				// TODO DEFAULTS ALL is INSERT-only, so if a.query.defaults.all==true:
-				// - either check if this an update and if so return an error
-				// - or set a.query.defaults.all to false and instead
-				//   fill the items slice with all columns in the target...
-				// - or leave it as is, and have the generator check
-				//   whether this is update or not and if it is, instead
-				//   of generating DEFAULTS ALL, it would generate the DEAULT
-				//   marker for each column in the SET (<column_list>).
 			case "force":
 				if a.query.kind != queryKindInsert && a.query.kind != queryKindUpdate {
 					return errors.IllegalForceDirectiveError
@@ -320,9 +315,14 @@ func (a *analyzer) queryStruct() (err error) {
 		return errors.NoDataFieldError
 	}
 
-	// TODO if queryKind is Update, and dataField.record.isSlice == true THEN only
-	// matching the items by PKEY makes sense, therefore a whereBlock, or filter,
-	// or the all directive, should be disallowed!
+	if a.query.kind == queryKindUpdate && a.query.dataField.data.isSlice {
+		// If this is an UPDATE with a slice of values, then only matching
+		// by primary keys makes sense, therefore a whereBlock, or filter,
+		// or the all directive, are disallowed.
+		if a.query.whereBlock != nil || len(a.query.filterField) > 0 || a.query.all {
+			return errors.IllegalSliceUpdateQueryModifier
+		}
+	}
 
 	// TODO if queryKind is Update and the record (single or slice) does not
 	// have a primary key AND there's no whereBlock, no filter, no all directive
@@ -758,13 +758,13 @@ func (a *analyzer) whereBlock(field *types.Var) (err error) {
 
 	// The loopstate type holds the state of a loop over a struct's fields.
 	type loopstate struct {
-		items  []*predicateItem
-		nested *predicateNested
+		conds  []*searchCondition
+		nested *searchConditionNested
 		ns     *typesutil.NamedStruct // the struct type of the whereBlock
 		idx    int                    // keeps track of the field index
 	}
 
-	// root holds the reference to the root level predicate items
+	// root holds the reference to the root level search conditions
 	root := &loopstate{ns: ns}
 	// LIFO stack of states used for depth first traversal of struct fields.
 	stack := []*loopstate{root}
@@ -793,13 +793,13 @@ stackloop:
 				continue
 			}
 
-			item := new(predicateItem)
-			loop.items = append(loop.items, item)
+			item := new(searchCondition)
+			loop.conds = append(loop.conds, item)
 
 			// Analyze the bool operation for any but the first
 			// item in a whereBlock. Fail if a value was provided
 			// but it is not "or" nor "and".
-			if len(loop.items) > 1 {
+			if len(loop.conds) > 1 {
 				item.bool = boolAnd // default to "and"
 				if booltag := tag.First("bool"); len(booltag) > 0 {
 					v := strings.ToLower(booltag)
@@ -819,18 +819,18 @@ stackloop:
 					return errors.BadWhereBlockTypeError
 				}
 
-				pred := new(predicateNested)
-				pred.name = fld.Name()
-				item.pred = pred
+				cond := new(searchConditionNested)
+				cond.name = fld.Name()
+				item.cond = cond
 
 				loop2 := new(loopstate)
 				loop2.ns = ns
-				loop2.nested = pred
+				loop2.nested = cond
 				stack = append(stack, loop2)
 				continue stackloop
 			}
 
-			lhs, op, op2, rhs := a.splitpredicateexpr(sqltag)
+			lhs, op, op2, rhs := a.splitPredicateExpr(sqltag)
 
 			// Analyze directive where item.
 			if fld.Name() == "_" {
@@ -848,25 +848,25 @@ stackloop:
 						return err
 					}
 
-					pred := new(predicateColumn)
-					pred.colId = colId
-					pred.kind = stringToPredicateKind[op]
-					pred.qua = stringToQuantifier[op2]
+					cond := new(searchConditionColumn)
+					cond.colId = colId
+					cond.pred = stringToPredicate[op]
+					cond.qua = stringToQuantifier[op2]
 
 					if isColId(rhs) {
-						pred.colId2, _ = a.colId(rhs, fld) // ignore error since isColId returned true
+						cond.colId2, _ = a.colId(rhs, fld) // ignore error since isColId returned true
 					} else {
-						pred.literal = rhs // assume literal expression
+						cond.literal = rhs // assume literal expression
 					}
 
-					if pred.kind.isUnary() {
+					if cond.pred.isUnary() {
 						// TODO add test
 						return errors.IllegalUnaryPredicateError
-					} else if pred.qua > 0 && !pred.kind.isQuantifiable() {
+					} else if cond.qua > 0 && !cond.pred.canQuantify() {
 						return errors.BadPredicateComboError
 					}
 
-					item.pred = pred
+					item.cond = cond
 					continue
 				}
 
@@ -880,18 +880,18 @@ stackloop:
 				if len(op) == 0 {
 					op = "istrue"
 				}
-				predKind := stringToPredicateKind[op]
-				if !predKind.isUnary() {
+				pred := stringToPredicate[op]
+				if !pred.isUnary() {
 					return errors.BadUnaryPredicateError
 				}
 				if len(op2) > 0 {
 					return errors.ExtraQuantifierError
 				}
 
-				pred := new(predicateColumn)
-				pred.colId = colId
-				pred.kind = predKind
-				item.pred = pred
+				cond := new(searchConditionColumn)
+				cond.colId = colId
+				cond.pred = pred
+				item.cond = cond
 				continue
 			}
 
@@ -957,13 +957,13 @@ stackloop:
 					return err
 				}
 
-				pred := new(predicateBetween)
-				pred.name = fld.Name()
-				pred.colId = colId
-				pred.kind = stringToPredicateKind[op]
-				pred.x = x
-				pred.y = y
-				item.pred = pred
+				cond := new(searchConditionBetween)
+				cond.name = fld.Name()
+				cond.colId = colId
+				cond.pred = stringToPredicate[op]
+				cond.x = x
+				cond.y = y
+				item.cond = cond
 				continue
 			}
 
@@ -977,34 +977,34 @@ stackloop:
 			if len(op) == 0 {
 				op = "="
 			}
-			predKind := stringToPredicateKind[op]
-			if predKind.isUnary() {
+			pred := stringToPredicate[op]
+			if pred.isUnary() {
 				// TODO add test
 				return errors.IllegalUnaryPredicateError
 			}
 
 			qua := stringToQuantifier[op2]
-			if qua > 0 && !predKind.isQuantifiable() {
+			if qua > 0 && !pred.canQuantify() {
 				return errors.BadPredicateComboError
 			}
 
-			pred := new(predicateField)
-			pred.name = fld.Name()
-			pred.typ, _ = a.typeInfo(fld.Type())
-			pred.colId = colId
-			pred.kind = predKind
-			pred.qua = qua
-			pred.modfunc = a.funcName(tag["sql"][1:])
+			cond := new(searchConditionField)
+			cond.name = fld.Name()
+			cond.typ, _ = a.typeInfo(fld.Type())
+			cond.colId = colId
+			cond.pred = pred
+			cond.qua = qua
+			cond.modFunc = a.funcName(tag["sql"][1:])
 
-			if pred.qua > 0 && pred.typ.kind != kindSlice && pred.typ.kind != kindArray {
+			if cond.qua > 0 && cond.typ.kind != kindSlice && cond.typ.kind != kindArray {
 				return errors.BadQuantifierFieldTypeError
 			}
 
-			item.pred = pred
+			item.cond = cond
 		}
 
 		if loop.nested != nil {
-			loop.nested.items = loop.items
+			loop.nested.conds = loop.conds
 		}
 
 		stack = stack[:len(stack)-1]
@@ -1012,7 +1012,7 @@ stackloop:
 
 	wb := new(whereBlock)
 	wb.name = field.Name()
-	wb.items = root.items
+	wb.conds = root.conds
 	a.query.whereBlock = wb
 	return nil
 }
@@ -1066,58 +1066,58 @@ func (a *analyzer) joinBlock(field *types.Var) (err error) {
 				return err
 			}
 
-			var predicates []*predicateItem
+			var conditions []*searchCondition
 			for _, val := range tag["sql"][1:] {
 				vals := strings.Split(val, ";")
 				for i, val := range vals {
 
-					pred := new(predicateColumn)
-					lhs, op, op2, rhs := a.splitpredicateexpr(val)
-					if pred.colId, err = a.colId(lhs, fld); err != nil {
+					cond := new(searchConditionColumn)
+					lhs, op, op2, rhs := a.splitPredicateExpr(val)
+					if cond.colId, err = a.colId(lhs, fld); err != nil {
 						return err
 					}
 
 					// optional right-hand side
 					if isColId(rhs) {
-						pred.colId2, _ = a.colId(rhs, fld) // ignore error since isColId returned true
+						cond.colId2, _ = a.colId(rhs, fld) // ignore error since isColId returned true
 					} else {
-						pred.literal = rhs
+						cond.literal = rhs
 					}
 
-					pred.kind = stringToPredicateKind[op]
-					pred.qua = stringToQuantifier[op2]
+					cond.pred = stringToPredicate[op]
+					cond.qua = stringToQuantifier[op2]
 
 					if len(rhs) > 0 {
-						if pred.kind.isUnary() {
+						if cond.pred.isUnary() {
 							// TODO add test
 							return errors.IllegalUnaryPredicateError
-						} else if pred.qua > 0 && !pred.kind.isQuantifiable() {
+						} else if cond.qua > 0 && !cond.pred.canQuantify() {
 							return errors.BadPredicateComboError
 						}
 					} else {
-						if !pred.kind.isUnary() {
+						if !cond.pred.isUnary() {
 							return errors.BadUnaryPredicateError
 						} else if len(op2) > 0 {
 							return errors.ExtraQuantifierError
 						}
 					}
 
-					item := new(predicateItem)
-					item.pred = pred
-					if len(predicates) > 0 && i == 0 {
+					item := new(searchCondition)
+					item.cond = cond
+					if len(conditions) > 0 && i == 0 {
 						item.bool = boolAnd
-					} else if len(predicates) > 0 && i > 0 {
+					} else if len(conditions) > 0 && i > 0 {
 						item.bool = boolOr
 					}
 
-					predicates = append(predicates, item)
+					conditions = append(conditions, item)
 				}
 			}
 
 			item := new(joinItem)
 			item.joinType = stringToJoinType[dirname]
 			item.relId = id
-			item.predicates = predicates
+			item.conds = conditions
 			join.items = append(join.items, item)
 		default:
 			return errors.IllegalJoinBlockDirectiveError
@@ -1203,7 +1203,7 @@ func (a *analyzer) onConflictBlock(field *types.Var) (err error) {
 // Parses the given string as a predicate expression and returns the individual
 // elements of that expression. The expected format is:
 // { column [ predicate-type [ quantifier ] { column | literal } ] }
-func (a *analyzer) splitpredicateexpr(expr string) (lhs, cop, qua, rhs string) {
+func (a *analyzer) splitPredicateExpr(expr string) (lhs, cop, qua, rhs string) {
 	expr = strings.TrimSpace(expr)
 
 	for i := range expr {
@@ -1912,7 +1912,7 @@ type fieldNode struct {
 }
 
 // fieldDatum holds the bare minimum info of a field, its name and type,
-// and it is used to represent a parameter of a predicate.
+// and it is used to represent a parameter of a search condition.
 type fieldDatum struct {
 	name string
 	typ  typeInfo
@@ -1928,73 +1928,81 @@ type joinBlock struct {
 
 // joinItem ....
 type joinItem struct {
-	joinType   joinType
-	relId      relId
-	predicates []*predicateItem
+	joinType joinType
+	relId    relId
+	conds    []*searchCondition
 }
 
-// whereBlock ....
+// whereBlock represents the result of the analysis of a queryStruct's "where block" field.
 type whereBlock struct {
-	name  string // name of the where block field
-	items []*predicateItem
-}
-
-// predicateItem.......
-type predicateItem struct {
-	bool boolean
-	pred interface{} // predicateField, predicateColumn, predicateBetween, or predicateNested
-}
-
-// predicateNested ....
-type predicateNested struct {
-	name  string
-	items []*predicateItem
-}
-
-// predicateField holds the information extracted from a whereBlock's "predicate" field.
-type predicateField struct {
-	// The name of the field that's one of the two predicands.
+	// The name of the "where block" field.
 	name string
-	// Information on the field's type.
+	// The list of search conditions declared in the whereBlock.
+	conds []*searchCondition
+}
+
+// searchCondition represents the result of the analysis of a whereBlock's or joinBlock's field or directive.
+type searchCondition struct {
+	// If set, the logical connective.
+	bool boolean
+	// The specific search condition type. Can be either searchConditionField,
+	// searchConditionColumn, searchConditionBetween, or searchConditionNested.
+	cond interface{}
+}
+
+// searchConditionNested represents the result of the analysis of a nested whereBlock.
+type searchConditionNested struct {
+	// The field's name.
+	name string
+	// The list of search conditions declared in the nested field.
+	conds []*searchCondition
+}
+
+// searchConditionField represents the result of the analysis of a whereBlock's basic field.
+type searchConditionField struct {
+	// The field's name.
+	name string
+	// The field's type information.
 	typ typeInfo
-	// Identifies the column that's the other of the two predicands.
+	// The identifier of the associated column.
 	colId colId
-	// The kind of the predicate.
-	kind predicateKind
+	// The type of the condition's predicate.
+	pred predicate
 	// If set, indentifies the quantifier to be used with the predicate.
 	qua quantifier
 	// If set, the name of the function to be applied to both predicands.
-	modfunc funcName
+	modFunc funcName
 }
 
-// predicateColumn holds the information extracted from a queryStruct's gosql.Column
-// directive. The predicateColumn type can represent either a column with a unary comparison
-// predicate, a column-to-column comparison, or a column-to-literal comparison.
-type predicateColumn struct {
+// searchConditionColumn represents the result of the analysis of a gosql.Column directive's tag.
+type searchConditionColumn struct {
 	// The column representing the LHS predicand.
 	colId colId
 	// If set, the column representing the RHS predicand.
 	colId2 colId
 	// If set, the literal value representing the RHS predicand.
 	literal string
-	// If set, indentifies the kind of the predicate.
-	kind predicateKind
+	// If set, indentifies the type of the condition's predicate.
+	pred predicate
 	// If set, indentifies the quantifier to be used with the predicate.
 	qua quantifier
 }
 
-// predicateBetween holds the information extracted from a queryStruct's "between" field.
-type predicateBetween struct {
-	// The name of the field declaring the predicate.
+// searchConditionBetween represents the result of the analysis of a whereBlock's "between" field.
+type searchConditionBetween struct {
+	// The name of the "between" field.
 	name string
-	// The primary predicand of the predicate.
+	// The type of the BETWEEN predicate.
+	pred predicate
+	// The primary predicand of the BETWEEN predicate.
 	colId colId
-	// Identifies the kind of the between predicate
-	kind predicateKind
-	x, y interface{}
+	// The lower bound range predicand. Either a colId, or a fieldDatum.
+	x interface{}
+	// The upper bound range predicand. Either a colId, or a fieldDatum.
+	y interface{}
 }
 
-// onConflictBlock holds the information extracted from a queryStruct's "on conflict" field.
+// onConflictBlock represents the result of the analysis of a queryStruct's "on conflict" field.
 type onConflictBlock struct {
 	// If set, indicates that the gosql.Column directive was used and the contents
 	// of the slice are the column ids parsed from the tag of that directive.
@@ -2090,10 +2098,11 @@ const (
 	boolNot                // negation
 )
 
-type predicateKind uint // predicate
+// predicate represents the type of search condition's predicate.
+type predicate uint
 
 const (
-	_ predicateKind = iota // no predicate
+	_ predicate = iota // no predicate
 
 	// binary comparison predicates
 	isEQ        // equals
@@ -2143,55 +2152,54 @@ const (
 	notUnknown // IS NOT UNKNOWN
 )
 
-// isQuantifiable returns true if the predicate can be used together with a quantifier.
-func (p predicateKind) isQuantifiable() bool {
-	return p.isBinary() || p.isPatternPred()
+// canQuantify reports whether or not the predicate can be used together with a quantifier.
+func (p predicate) canQuantify() bool {
+	return p.isBinary() || p.isPatternMatch()
 }
 
-// isBinary returns true if the predicate is a binary comparison predicate.
-func (p predicateKind) isBinary() bool {
+// isBinary reports whether or not the predicate represents a binary comparison.
+func (p predicate) isBinary() bool {
 	return p == isEQ || p == notEQ || p == notEQ2 ||
 		p == isLT || p == isGT || p == isLTE || p == isGTE ||
 		p == isDistinct || p == notDistinct
 }
 
-// isUnary returns true if the predicate is a "unary" predicate.
-func (p predicateKind) isUnary() bool {
+// isUnary reports whether or not the predicate represents a unary comparison.
+func (p predicate) isUnary() bool {
 	return p == isNull || p == notNull ||
 		p == isTrue || p == notTrue ||
 		p == isFalse || p == notFalse ||
 		p == isUnknown || p == notUnknown
 }
 
-// isPatternPred returns true if the predicate is a pattern matching predicate.
-func (p predicateKind) isPatternPred() bool {
-	return p == isMatch || p == isMatchi || p == notMatch || p == notMatchi ||
-		p == isLike || p == notLike || p == isILike || p == notILike ||
-		p == isSimilar || p == notSimilar
-}
-
-// isRangePred returns true if the predicate is a range predicate.
-func (p predicateKind) isRangePred() bool {
-	return p == isBetween || p == notBetween ||
-		p == isBetweenSym || p == notBetweenSym ||
-		p == isBetweenAsym || p == notBetweenAsym
-}
-
-// isTruthPred returns true if the predicate is a "truth" predicate.
-func (p predicateKind) isTruthPred() bool {
+// isBoolean reports whether or not the predicate represents a a boolean test.
+func (p predicate) isBoolean() bool {
 	return p == isTrue || p == notTrue ||
 		p == isFalse || p == notFalse ||
 		p == isUnknown || p == notUnknown
 }
 
-// isArrayPred returns true if the predicate is an array predicate.
-func (p predicateKind) isArrayPred() bool {
+// isPatternMatch reports whether or not the predicate represents a pattern-match comparison.
+func (p predicate) isPatternMatch() bool {
+	return p == isMatch || p == isMatchi || p == notMatch || p == notMatchi ||
+		p == isLike || p == notLike || p == isILike || p == notILike ||
+		p == isSimilar || p == notSimilar
+}
+
+// isRange reports whether or not the predicate represents a range comparison.
+func (p predicate) isRange() bool {
+	return p == isBetween || p == notBetween ||
+		p == isBetweenSym || p == notBetweenSym ||
+		p == isBetweenAsym || p == notBetweenAsym
+}
+
+// isQuantified reports whether or not the predicate represents a quantified comparison.
+func (p predicate) isQuantified() bool {
 	return p == isIn || p == notIn
 }
 
-// stringToPredicateKind is a map of string literals to supported predicateKinds.
-// Used for parsing tags.
-var stringToPredicateKind = map[string]predicateKind{
+// stringToPredicate is a map of string literals to supported predicates. Used for parsing tags.
+var stringToPredicate = map[string]predicate{
 	"=":           isEQ,
 	"<>":          notEQ,
 	"!=":          notEQ2,
@@ -2248,6 +2256,7 @@ var predicateAdjectives = []string{
 	"unknown",
 }
 
+// quantifier represents the type of a comparison predicate quantifier.
 type quantifier uint8
 
 const (
@@ -2264,6 +2273,7 @@ var stringToQuantifier = map[string]quantifier{
 	"all":  quantAll,
 }
 
+// overridingKind represents the kind of the optional OVERRIDING clause in an INSERT query.
 type overridingKind uint8
 
 const (
@@ -2276,22 +2286,25 @@ const (
 // a value, like lower, upper, etc. or a function that can be used as an aggregate.
 type funcName string
 
+// joinType represents the type of an SQL JOIN clause.
 type joinType uint
 
 const (
 	_         joinType = iota // no join
+	joinCross                 // CROSS JOIN
+	joinInner                 // INNER JOIN
 	joinLeft                  // LEFT JOIN
 	joinRight                 // RIGHT JOIN
 	joinFull                  // FULL JOIN
-	joinCross                 // CROSS JOIN
 )
 
 // stringToJoinType is a map of string literals to supported join types. Used for parsing of directives.
 var stringToJoinType = map[string]joinType{
+	"crossjoin": joinCross,
+	"innerjoin": joinInner,
 	"leftjoin":  joinLeft,
 	"rightjoin": joinRight,
 	"fulljoin":  joinFull,
-	"crossjoin": joinCross,
 }
 
 // typeKind indicate the specific kind of a Go type.
@@ -2399,76 +2412,76 @@ var typeKindToString = map[typeKind]string{
 const (
 	// A list of common Go types ("identifiers" and "literals")
 	// used for resolving type convertability.
-	gotypbool         = "bool"
-	gotypbools        = "[]bool"
-	gotypstring       = "string"
-	gotypstrings      = "[]string"
-	gotypstringss     = "[][]string"
-	gotypstringm      = "map[string]string"
-	gotypstringms     = "[]map[string]string"
-	gotypbyte         = "byte"
-	gotypbytes        = "[]byte"
-	gotypbytess       = "[][]byte"
-	gotypbytea16      = "[16]byte"
-	gotypbytea16s     = "[][16]byte"
-	gotyprune         = "rune"
-	gotyprunes        = "[]rune"
-	gotypruness       = "[][]rune"
-	gotypint          = "int"
-	gotypints         = "[]int"
-	gotypinta2        = "[2]int"
-	gotypinta2s       = "[][2]int"
-	gotypint8         = "int8"
-	gotypint8s        = "[]int8"
-	gotypint8ss       = "[][]int8"
-	gotypint16        = "int16"
-	gotypint16s       = "[]int16"
-	gotypint16ss      = "[][]int16"
-	gotypint32        = "int32"
-	gotypint32s       = "[]int32"
-	gotypint32a2      = "[2]int32"
-	gotypint32a2s     = "[][2]int32"
-	gotypint64        = "int64"
-	gotypint64s       = "[]int64"
-	gotypint64a2      = "[2]int64"
-	gotypint64a2s     = "[][2]int64"
-	gotypuint         = "uint"
-	gotypuints        = "[]uint"
-	gotypuint8        = "uint8"
-	gotypuint8s       = "[]uint8"
-	gotypuint16       = "uint16"
-	gotypuint16s      = "[]uint16"
-	gotypuint32       = "uint32"
-	gotypuint32s      = "[]uint32"
-	gotypuint64       = "uint64"
-	gotypuint64s      = "[]uint64"
-	gotypfloat32      = "float32"
-	gotypfloat32s     = "[]float32"
-	gotypfloat64      = "float64"
-	gotypfloat64s     = "[]float64"
-	gotypfloat64a2    = "[2]float64"
-	gotypfloat64a2s   = "[][2]float64"
-	gotypfloat64a2ss  = "[][][2]float64"
-	gotypfloat64a2a2  = "[2][2]float64"
-	gotypfloat64a2a2s = "[][2][2]float64"
-	gotypfloat64a3    = "[3]float64"
-	gotypfloat64a3s   = "[][3]float64"
-	gotypipnet        = "net.IPNet"
-	gotypipnets       = "[]net.IPNet"
-	gotyptime         = "time.Time"
-	gotyptimes        = "[]time.Time"
-	gotyptimea2       = "[2]time.Time"
-	gotyptimea2s      = "[][2]time.Time"
-	gotypbigint       = "big.Int"
-	gotypbigints      = "[]big.Int"
-	gotypbiginta2     = "[2]big.Int"
-	gotypbiginta2s    = "[][2]big.Int"
-	gotypbigfloat     = "big.Float"
-	gotypbigfloats    = "[]big.Float"
-	gotypbigfloata2   = "[2]big.Float"
-	gotypbigfloata2s  = "[][2]big.Float"
-	gotypnullstringm  = "map[string]sql.NullString"
-	gotypnullstringms = "[]map[string]sql.NullString"
+	gotypeBool                     = "bool"
+	gotypeBoolSlice                = "[]bool"
+	gotypeString                   = "string"
+	gotypeStringSlice              = "[]string"
+	gotypeStringSliceSlice         = "[][]string"
+	gotypeStringMap                = "map[string]string"
+	gotypeStringMapSlice           = "[]map[string]string"
+	gotypeByte                     = "byte"
+	gotypeByteSlice                = "[]byte"
+	gotypeByteSliceSlice           = "[][]byte"
+	gotypeByteArray16              = "[16]byte"
+	gotypeByteArray16Slice         = "[][16]byte"
+	gotypeRune                     = "rune"
+	gotypeRuneSlice                = "[]rune"
+	gotypeRuneSliceSlice           = "[][]rune"
+	gotypeInt                      = "int"
+	gotypeIntSlice                 = "[]int"
+	gotypeIntArray2                = "[2]int"
+	gotypeIntArray2Slice           = "[][2]int"
+	gotypeInt8                     = "int8"
+	gotypeInt8Slice                = "[]int8"
+	gotypeInt8SliceSlice           = "[][]int8"
+	gotypeInt16                    = "int16"
+	gotypeInt16Slice               = "[]int16"
+	gotypeInt16SliceSlice          = "[][]int16"
+	gotypeInt32                    = "int32"
+	gotypeInt32Slice               = "[]int32"
+	gotypeInt32Array2              = "[2]int32"
+	gotypeInt32Array2Slice         = "[][2]int32"
+	gotypeInt64                    = "int64"
+	gotypeInt64Slice               = "[]int64"
+	gotypeInt64Array2              = "[2]int64"
+	gotypeInt64Array2Slice         = "[][2]int64"
+	gotypeUint                     = "uint"
+	gotypeUintSlice                = "[]uint"
+	gotypeUint8                    = "uint8"
+	gotypeUint8Slice               = "[]uint8"
+	gotypeUint16                   = "uint16"
+	gotypeUint16Slice              = "[]uint16"
+	gotypeUint32                   = "uint32"
+	gotypeUint32Slice              = "[]uint32"
+	gotypeUint64                   = "uint64"
+	gotypeUint64Slice              = "[]uint64"
+	gotypeFloat32                  = "float32"
+	gotypeFloat32Slice             = "[]float32"
+	gotypeFloat64                  = "float64"
+	gotypeFloat64Slice             = "[]float64"
+	gotypeFloat64Array2            = "[2]float64"
+	gotypeFloat64Array2Slice       = "[][2]float64"
+	gotypeFloat64Array2SliceSlice  = "[][][2]float64"
+	gotypeFloat64Array2Array2      = "[2][2]float64"
+	gotypeFloat64Array2Array2Slice = "[][2][2]float64"
+	gotypeFloat64Array3            = "[3]float64"
+	gotypeFloat64Array3Slice       = "[][3]float64"
+	gotypeIPNet                    = "net.IPNet"
+	gotypeIPNetSlice               = "[]net.IPNet"
+	gotypeTime                     = "time.Time"
+	gotypeTimeSlice                = "[]time.Time"
+	gotypeTimeArray2               = "[2]time.Time"
+	gotypeTimeArray2Slice          = "[][2]time.Time"
+	gotypeBigInt                   = "big.Int"
+	gotypeBigIntSlice              = "[]big.Int"
+	gotypeBigIntArray2             = "[2]big.Int"
+	gotypeBigIntArray2Slice        = "[][2]big.Int"
+	gotypeBigFloat                 = "big.Float"
+	gotypeBigFloatSlice            = "[]big.Float"
+	gotypeBigFloatArray2           = "[2]big.Float"
+	gotypeBigFloatArray2Slice      = "[][2]big.Float"
+	gotypeNullStringMap            = "map[string]sql.NullString"
+	gotypeNullStringMapSlice       = "[]map[string]sql.NullString"
 )
 
 // isIntegerType reports whether or not the given type is one of the basic (un)signed integer types.

@@ -44,10 +44,11 @@ type (
 	// from those two blocks.
 	Relation directive
 
+	CrossJoin directive
+	InnerJoin directive
 	LeftJoin  directive
 	RightJoin directive
 	FullJoin  directive
-	CrossJoin directive
 
 	// The Return directive produces a postgres RETURNING clause. The columns
 	// to be returned have to be specified in the struct field's tag.
