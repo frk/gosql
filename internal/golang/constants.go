@@ -8,6 +8,8 @@ type stringnode string
 
 const (
 	Ellipsis stringnode = "..."
+	True     stringnode = "true"
+	False    stringnode = "false"
 )
 
 func (s stringnode) Walk(w *writer.Writer) {

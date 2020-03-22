@@ -320,7 +320,7 @@ func (a *analyzer) queryStruct() (err error) {
 		// by primary keys makes sense, therefore a whereBlock, or filter,
 		// or the all directive, are disallowed.
 		if a.query.whereBlock != nil || len(a.query.filterField) > 0 || a.query.all {
-			return errors.IllegalSliceUpdateQueryModifier
+			return errors.IllegalSliceUpdateQueryModifierError
 		}
 	}
 
@@ -406,8 +406,8 @@ func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 		ftyp = named.Underlying()
 	}
 
-	// XXX Experimental: Not exactly sure that types.Type.String()
-	// will NOT produce conflicting values for different types.
+	// XXX Experimental: Not confident that "go/types.Type.String()" won't
+	// produce conflicting values for different types.
 	dataTypeKey := ftyp.String()
 	dataTypeCache.RLock()
 	v := dataTypeCache.m[dataTypeKey]
@@ -1660,6 +1660,20 @@ func (id colId) isEmpty() bool {
 	return id == colId{}
 }
 
+func (id colId) string() string {
+	if len(id.qual) > 0 {
+		return id.qual + "." + id.name
+	}
+	return id.name
+}
+
+func (id colId) quoted() string {
+	if len(id.qual) > 0 {
+		return id.qual + `."` + id.name + `"`
+	}
+	return `"` + id.name + `"`
+}
+
 type colIdList struct {
 	all   bool
 	items []colId
@@ -1731,7 +1745,7 @@ type typeInfo struct {
 }
 
 // string returns a textual representation of the type that t represents.
-// If elideptr is true the "*" will be elided from the output.
+// - If elideptr is true the "*" will be elided from the output.
 func (t *typeInfo) string(elideptr bool) string {
 	if t.isTime {
 		return "time.Time"
@@ -1781,8 +1795,47 @@ func (t *typeInfo) string(elideptr bool) string {
 	return "<unknown>"
 }
 
-// is returns true if t represents a type one of the given kinds or a pointer
-// to one of the given kinds.
+// nameOrLiteral builds and returns the type's name or literal if it's not a named type.
+func (t *typeInfo) nameOrLiteral(pkglocal bool) string {
+	if len(t.name) > 0 {
+		if pkglocal && len(t.pkgLocal) > 0 && t.pkgLocal != "." {
+			return t.pkgLocal + "." + t.name
+		} else if len(t.pkgName) > 0 {
+			return t.pkgName + "." + t.name
+		}
+		return t.name
+	}
+
+	switch t.kind {
+	case kindArray:
+		return "[" + strconv.FormatInt(t.arrayLen, 10) + "]" + t.elem.nameOrLiteral(pkglocal)
+	case kindSlice:
+		return "[]" + t.elem.nameOrLiteral(pkglocal)
+	case kindMap:
+		return "map[" + t.key.nameOrLiteral(pkglocal) + "]" + t.elem.nameOrLiteral(pkglocal)
+	case kindPtr:
+		return "*" + t.elem.nameOrLiteral(pkglocal)
+	case kindUint8:
+		if t.isByte {
+			return "byte"
+		}
+		return "uint8"
+	case kindInt32:
+		if t.isRune {
+			return "rune"
+		}
+		return "int32"
+	case kindStruct, kindInterface, kindChan, kindFunc:
+		return "<unsupported>"
+	default:
+		// assume builtin basic
+		return typeKindToString[t.kind]
+	}
+	return "<unknown>"
+}
+
+// is reports whether or not t represents a type whose kind matches one of
+// the provided typeKinds or a pointer to one of the provided typeKinds.
 func (t *typeInfo) is(kk ...typeKind) bool {
 	for _, k := range kk {
 		if t.kind == k || (t.kind == kindPtr && t.elem.kind == k) {
@@ -1792,8 +1845,8 @@ func (t *typeInfo) is(kk ...typeKind) bool {
 	return false
 }
 
-// isSlice returns true if t represents a slice type whose elem type is one of
-// the given kinds.
+// isSlice reports whether or not t represents a slice type whose elem type
+// is one of the provided typeKinds.
 func (t *typeInfo) isSlice(kk ...typeKind) bool {
 	if t.kind == kindSlice {
 		for _, k := range kk {
@@ -1805,135 +1858,149 @@ func (t *typeInfo) isSlice(kk ...typeKind) bool {
 	return false
 }
 
-// isSliceN returns true if t represents an n dimensional slice type whose
-// base elem type is one of the given kinds.
-func (t *typeInfo) isSliceN(n int, kk ...typeKind) bool {
-	for ; n > 0; n-- {
-		if t.kind != kindSlice {
-			return false
-		}
-		t = t.elem
-	}
-	for _, k := range kk {
-		if t.kind == k {
-			return true
-		}
-	}
-	return false
-}
-
-// isNamed returns true if t represents a named type, or a pointer to a named
-// type, whose package path and type name match the given arguments.
-func (t *typeInfo) isNamed(pkgPath, name string) bool {
-	if t.kind == kindPtr {
-		t = t.elem
-	}
-	return t.pkgPath == pkgPath && t.name == name
-}
-
-// isNilable returns true if t represents a type that can be nil.
+// isNilable reports whether or not t represents a type that can be nil.
 func (t *typeInfo) isNilable() bool {
 	return t.is(kindPtr, kindSlice, kindArray, kindMap, kindInterface)
 }
 
-// indicates whether or not the MarshalJSON method can be called on the type.
+// canJSONMarshal reports whether or not the MarshalJSON method can be invoked
+// on an instance of the type represented by t.
 func (t *typeInfo) canJSONMarshal() bool {
 	return t.isJSONMarshaler || (t.kind == kindPtr && t.elem.isJSONMarshaler)
 }
 
-// indicates whether or not the UnmarshalJSON method can be called on the type.
+// canJSONUnmarshal reports whether or not the UnmarshalJSON method can
+// be invoked on an instance of the type represented by t.
 func (t *typeInfo) canJSONUnmarshal() bool {
 	return t.isJSONUnmarshaler || (t.kind == kindPtr && t.elem.isJSONUnmarshaler)
 }
 
-// indicates whether or not the MarshalXML method can be called on the type.
+// canXMLMarshal reports whether or not the MarshalXML method can be invoked
+// on an instance of the type represented by t.
 func (t *typeInfo) canXMLMarshal() bool {
 	return t.isXMLMarshaler || (t.kind == kindPtr && t.elem.isXMLMarshaler)
 }
 
-// indicates whether or not the UnmarshalXML method can be called on the type.
+// canXMLUnmarshal reports whether or not the UnmarshalXML method can be
+// invoked on an instance of the type represented by t.
 func (t *typeInfo) canXMLUnmarshal() bool {
 	return t.isXMLUnmarshaler || (t.kind == kindPtr && t.elem.isXMLUnmarshaler)
 }
 
 // fieldInfo holds information about a dataType's field.
 type fieldInfo struct {
-	name string   // name of the struct field
-	typ  typeInfo // info about the field's type
-	// if the field is nested, path will hold the parent fields' information
+	// Name of the struct field.
+	name string
+	// Info about the field's type.
+	typ typeInfo
+	// If the field is nested, path will hold the parent fields' information.
 	path []*fieldNode
-	// indicates whether or not the field is embedded
+	// Indicates whether or not the field is embedded.
 	isEmbedded bool
-	// indicates whether or not the field is exported
+	// Indicates whether or not the field is exported.
 	isExported bool
-	// the field's parsed tag
+	// The field's parsed tag.
 	tag tagutil.Tag
-	// the id of the corresponding column
+	// The identifier of the field's corresponding column.
 	colId colId
-	// identifies the field's corresponding column as a primary key
+	// Identifies the field's corresponding column as a primary key.
 	isPKey bool
-	// indicates that if the field's value is EMPTY then NULL should
-	// be stored in the column during INSERT/UPDATE
+	// Indicates that if the field's value is EMPTY then NULL should
+	// be stored in the column during INSERT/UPDATE.
 	nullEmpty bool
-	// indicates that field should only be read from the database and never written
+	// Indicates that field should only be used to read from the database and
+	// never to write to it. Can be overriden with the gosql.Force directive.
 	readOnly bool
-	// indicates that field should only be written into the database and never read
+	// Indicates that field should only be used to write to the database and
+	// never to read from it. Can be overriden with the gosql.Force directive.
 	writeOnly bool
-	// indicates that the DEFAULT marker should be used during INSERT/UPDATE
+	// Indicates that the DEFAULT marker should be used during INSERT/UPDATE.
 	useDefault bool
-	// indicates that the column value should be marshaled/unmarshaled
-	// to/from json before/after being stored/retrieved.
+	// Indicates that the column value should be marshaled/unmarshaled
+	// to/from JSON before/after being stored/retrieved.
 	useJSON bool
-	// indicates that the column value should be marshaled/unmarshaled
-	// to/from xml before/after being stored/retrieved.
+	// Indicates that the column value should be marshaled/unmarshaled
+	// to/from XML before/after being stored/retrieved.
 	useXML bool
-	// for UPDATEs, if set to true, it indicates that the provided field
-	// value should be added to the already existing column value.
+	// If set to true, it indicates that the provided field value should be
+	// "added" to the already existing column value.
+	// For UPDATEs only.
 	useAdd bool
-	// indicates whether or not an implicit CAST should be allowed.
+	// Indicates whether or not an implicit CAST should be allowed.
 	canCast bool
-	// if set to true it indicates that the column value should be wrapped
-	// in a COALESCE call when read from the db.
-	useCoalesce   bool
+	// If set to true, it indicates that the column expression should be
+	// wrapped in a COALESCE call when read from the db.
+	useCoalesce bool
+	// If set, it will hold the value literal to be passed as the second
+	// argument to the COALESCE call.
 	coalesceValue string
 }
 
+// fieldNode represents a single node in a nested field's "path". The fieldNode
+// is a stripped-down version of fieldInfo that holds only that information that
+// is needed by the generator to produce correct Go field selector expressions.
 type fieldNode struct {
-	name         string
-	tag          tagutil.Tag
-	typeName     string // the name of a named type or empty string for unnamed types
-	typePkgPath  string // the package import path
-	typePkgName  string // the package's name
-	typePkgLocal string // the local package name (including ".")
-	isImported   bool   // indicates whether or not the type is imported
-	isEmbedded   bool   // indicates whether or not the field is embedded
-	isExported   bool   // indicates whether or not the field is exported
-	isPointer    bool   // indicates whether or not the field type is a pointer type
-}
-
-// fieldDatum holds the bare minimum info of a field, its name and type,
-// and it is used to represent a parameter of a search condition.
-type fieldDatum struct {
+	// The name of the field.
 	name string
-	typ  typeInfo
+	// The tag of the field.
+	tag tagutil.Tag
+	// The name of the field's type. Empty if the type is unnamed.
+	typeName string
+	// The package import path for the field's type. Empty if the type is unnamed.
+	typePkgPath string
+	// The name of the package of the field's type. Empty if the type is unnamed.
+	typePkgName string
+	// The local name of the imported package of the field's type (including ".").
+	// Empty if the type is unnamed.
+	typePkgLocal string
+	// Indicates whether or not the type is imported.
+	isImported bool
+	// Indicates whether or not the field is embedded.
+	isEmbedded bool
+	// Indicates whether or not the field is exported.
+	isExported bool
+	// Indicates whether or not the field type is a pointer type.
+	isPointer bool
 }
 
-// joinBlock  ...........
+// fieldDatum holds the bare minimum of information for a field, its name and
+// its type, it is used to represent a parameter of a search condition.
+type fieldDatum struct {
+	// The name of the field.
+	name string
+	// The type of the field.
+	typ typeInfo
+}
+
+// joinBlock represents the result of the analysis of a queryStruct's "join block" field.
+// The joinBlock is used by the generator to produce a list of table JOIN expressions in
+// a SELECT's FROM clause, or an UPDATE's FROM clause, or a DELETE's USING clause.
+//
+// The joinBlock is declared in 3 different ways:
+// - As a "join" field in a select query type
+// - As a "from" field in an update query type
+// - As a "using" field in a delete query type
 type joinBlock struct {
 	// The identifier of the top relation in a DELETE-USING / UPDATE-FROM
 	// clause, empty in SELECT commands.
 	relId relId
+	// The list of join items declared in a join block.
 	items []*joinItem
 }
 
-// joinItem ....
+// joinItem represents the result of parsing the tag of a gosql.JoinXxx directive.
+// The joinItem is used by the generator to produce a single JOIN clause.
 type joinItem struct {
+	// The type of the join.
 	joinType joinType
-	relId    relId
-	conds    []*searchCondition
+	// The identifier of the relation to be joined.
+	relId relId
+	// A list of search conditions for the join specification.
+	conds []*searchCondition
 }
 
-// whereBlock represents the result of the analysis of a queryStruct's "where block" field.
+// whereBlock represents the result of the analysis of a queryStruct's "where block"
+// field. The whereBlock is used by the generator to produce a WHERE clause.
 type whereBlock struct {
 	// The name of the "where block" field.
 	name string
@@ -1941,16 +2008,22 @@ type whereBlock struct {
 	conds []*searchCondition
 }
 
-// searchCondition represents the result of the analysis of a whereBlock's or joinBlock's field or directive.
+// searchCondition represents the result of the analysis of a whereBlock's or
+// joinBlock's field or directive. The searchCondition is used by the generator
+// to produce a search condition in a WHERE clause, or a qualified JOIN ON clause.
 type searchCondition struct {
 	// If set, the logical connective.
 	bool boolean
-	// The specific search condition type. Can be either searchConditionField,
-	// searchConditionColumn, searchConditionBetween, or searchConditionNested.
+	// The specific search condition type:
+	// - For a whereBlock this can be either searchConditionField, searchConditionColumn,
+	//   searchConditionBetween, or searchConditionNested.
+	// - For a joinBlock this can only be searchConditionColumn.
 	cond interface{}
 }
 
 // searchConditionNested represents the result of the analysis of a nested whereBlock.
+// The searchConditionNested is used by the generator to produce nested, parenthesized
+// search conditions in a WHERE clause.
 type searchConditionNested struct {
 	// The field's name.
 	name string
@@ -1958,7 +2031,9 @@ type searchConditionNested struct {
 	conds []*searchCondition
 }
 
-// searchConditionField represents the result of the analysis of a whereBlock's basic field.
+// searchConditionField represents the result of the analysis of a whereBlock's field.
+// The searchConditionField is used by the generator to produce a column-to-parameter
+// comparison in a WHERE clause, passing the field value as the argument to the query.
 type searchConditionField struct {
 	// The field's name.
 	name string
@@ -1974,7 +2049,11 @@ type searchConditionField struct {
 	modFunc funcName
 }
 
-// searchConditionColumn represents the result of the analysis of a gosql.Column directive's tag.
+// searchConditionColumn represents the result of the analysis of a gosql.Column
+// directive's tag, or a gosql.JoinXxx directive's tag. The searchConditionColumn
+// is used by the generator to produce a search condition with either a unary column
+// comparison, a column-to-column comparison, or a column-to-literal comparison as
+// part of a WHERE clause or a qualified JOIN clause.
 type searchConditionColumn struct {
 	// The column representing the LHS predicand.
 	colId colId
@@ -1989,6 +2068,7 @@ type searchConditionColumn struct {
 }
 
 // searchConditionBetween represents the result of the analysis of a whereBlock's "between" field.
+// The searchConditionBetween is used by the generator to produce a BETWEEN predicate in a WHERE clause.
 type searchConditionBetween struct {
 	// The name of the "between" field.
 	name string
@@ -2003,6 +2083,7 @@ type searchConditionBetween struct {
 }
 
 // onConflictBlock represents the result of the analysis of a queryStruct's "on conflict" field.
+// The onConflictBlock is used by the generator to produce an ON CONFLICT clause in an INSERT query.
 type onConflictBlock struct {
 	// If set, indicates that the gosql.Column directive was used and the contents
 	// of the slice are the column ids parsed from the tag of that directive.
@@ -2011,13 +2092,13 @@ type onConflictBlock struct {
 	// is parsed from the directive's tag and represents the index to be used
 	// for the on conflict target.
 	//
-	// NOTE The index name will be used by the db check to retrive the index
+	// NOTE(mkopriva): The index name will be used by the db check to retrive the index
 	// expression and the generator will use that to produce the conflict target.
 	index string
 	// If set, indicates that the gosql.Constraint directive was used. The value
 	// is the name of a unique constraint as parsed from the directive's tag.
 	//
-	// NOTE The generator will use this value to generate
+	// NOTE(mkopriva): The generator will use this value to generate
 	// the ON CONFLICT ON CONSTRAINT <constraint_name> clause.
 	constraint string
 	// If set to true, indicates that the gosql.Ignore directive was used.
@@ -2059,16 +2140,23 @@ type offsetField struct {
 	value uint64
 }
 
-// orderByList contains the information extracted from a queryStruct's gosql.OrderBy directive.
+// orderByList represents the result of the analysis of a gosql.OrderBy directive.
+// The orderByList is used by the generator to produce the ORDER BY clause.
 type orderByList struct {
+	// The list of individual orderByItems as parsed from the directive's tag.
 	items []*orderByItem
 }
 
-// orderByItem holds information about the sort expression to be used in an ORDER BY clause.
+// orderByItem represents a single item parsed from the tag of a gosql.OrderBy
+// directive. The orderByItem is used by the generator to produce a single
+// item in the "sort specification list" of an ORDER BY clause.
 type orderByItem struct {
-	colId     colId          // the identifier of the column to order by
-	direction orderDirection // the direction of the sort order
-	nulls     nullsPosition  // the position of nulls in the sort order
+	// The identifier of the column to order by.
+	colId colId
+	// The direction of the sort order.
+	direction orderDirection
+	// The position of nulls in the sort order.
+	nulls nullsPosition
 }
 
 // orderDirection is used to specify the order direction in an ORDER BY clause.
@@ -2412,76 +2500,76 @@ var typeKindToString = map[typeKind]string{
 const (
 	// A list of common Go types ("identifiers" and "literals")
 	// used for resolving type convertability.
-	gotypeBool                     = "bool"
-	gotypeBoolSlice                = "[]bool"
-	gotypeString                   = "string"
-	gotypeStringSlice              = "[]string"
-	gotypeStringSliceSlice         = "[][]string"
-	gotypeStringMap                = "map[string]string"
-	gotypeStringMapSlice           = "[]map[string]string"
-	gotypeByte                     = "byte"
-	gotypeByteSlice                = "[]byte"
-	gotypeByteSliceSlice           = "[][]byte"
-	gotypeByteArray16              = "[16]byte"
-	gotypeByteArray16Slice         = "[][16]byte"
-	gotypeRune                     = "rune"
-	gotypeRuneSlice                = "[]rune"
-	gotypeRuneSliceSlice           = "[][]rune"
-	gotypeInt                      = "int"
-	gotypeIntSlice                 = "[]int"
-	gotypeIntArray2                = "[2]int"
-	gotypeIntArray2Slice           = "[][2]int"
-	gotypeInt8                     = "int8"
-	gotypeInt8Slice                = "[]int8"
-	gotypeInt8SliceSlice           = "[][]int8"
-	gotypeInt16                    = "int16"
-	gotypeInt16Slice               = "[]int16"
-	gotypeInt16SliceSlice          = "[][]int16"
-	gotypeInt32                    = "int32"
-	gotypeInt32Slice               = "[]int32"
-	gotypeInt32Array2              = "[2]int32"
-	gotypeInt32Array2Slice         = "[][2]int32"
-	gotypeInt64                    = "int64"
-	gotypeInt64Slice               = "[]int64"
-	gotypeInt64Array2              = "[2]int64"
-	gotypeInt64Array2Slice         = "[][2]int64"
-	gotypeUint                     = "uint"
-	gotypeUintSlice                = "[]uint"
-	gotypeUint8                    = "uint8"
-	gotypeUint8Slice               = "[]uint8"
-	gotypeUint16                   = "uint16"
-	gotypeUint16Slice              = "[]uint16"
-	gotypeUint32                   = "uint32"
-	gotypeUint32Slice              = "[]uint32"
-	gotypeUint64                   = "uint64"
-	gotypeUint64Slice              = "[]uint64"
-	gotypeFloat32                  = "float32"
-	gotypeFloat32Slice             = "[]float32"
-	gotypeFloat64                  = "float64"
-	gotypeFloat64Slice             = "[]float64"
-	gotypeFloat64Array2            = "[2]float64"
-	gotypeFloat64Array2Slice       = "[][2]float64"
-	gotypeFloat64Array2SliceSlice  = "[][][2]float64"
-	gotypeFloat64Array2Array2      = "[2][2]float64"
-	gotypeFloat64Array2Array2Slice = "[][2][2]float64"
-	gotypeFloat64Array3            = "[3]float64"
-	gotypeFloat64Array3Slice       = "[][3]float64"
-	gotypeIPNet                    = "net.IPNet"
-	gotypeIPNetSlice               = "[]net.IPNet"
-	gotypeTime                     = "time.Time"
-	gotypeTimeSlice                = "[]time.Time"
-	gotypeTimeArray2               = "[2]time.Time"
-	gotypeTimeArray2Slice          = "[][2]time.Time"
-	gotypeBigInt                   = "big.Int"
-	gotypeBigIntSlice              = "[]big.Int"
-	gotypeBigIntArray2             = "[2]big.Int"
-	gotypeBigIntArray2Slice        = "[][2]big.Int"
-	gotypeBigFloat                 = "big.Float"
-	gotypeBigFloatSlice            = "[]big.Float"
-	gotypeBigFloatArray2           = "[2]big.Float"
-	gotypeBigFloatArray2Slice      = "[][2]big.Float"
-	gotypeNullStringMap            = "map[string]sql.NullString"
-	gotypeNullStringMapSlice       = "[]map[string]sql.NullString"
+	goTypeBool                     = "bool"
+	goTypeBoolSlice                = "[]bool"
+	goTypeString                   = "string"
+	goTypeStringSlice              = "[]string"
+	goTypeStringSliceSlice         = "[][]string"
+	goTypeStringMap                = "map[string]string"
+	goTypeStringMapSlice           = "[]map[string]string"
+	goTypeByte                     = "byte"
+	goTypeByteSlice                = "[]byte"
+	goTypeByteSliceSlice           = "[][]byte"
+	goTypeByteArray16              = "[16]byte"
+	goTypeByteArray16Slice         = "[][16]byte"
+	goTypeRune                     = "rune"
+	goTypeRuneSlice                = "[]rune"
+	goTypeRuneSliceSlice           = "[][]rune"
+	goTypeInt                      = "int"
+	goTypeIntSlice                 = "[]int"
+	goTypeIntArray2                = "[2]int"
+	goTypeIntArray2Slice           = "[][2]int"
+	goTypeInt8                     = "int8"
+	goTypeInt8Slice                = "[]int8"
+	goTypeInt8SliceSlice           = "[][]int8"
+	goTypeInt16                    = "int16"
+	goTypeInt16Slice               = "[]int16"
+	goTypeInt16SliceSlice          = "[][]int16"
+	goTypeInt32                    = "int32"
+	goTypeInt32Slice               = "[]int32"
+	goTypeInt32Array2              = "[2]int32"
+	goTypeInt32Array2Slice         = "[][2]int32"
+	goTypeInt64                    = "int64"
+	goTypeInt64Slice               = "[]int64"
+	goTypeInt64Array2              = "[2]int64"
+	goTypeInt64Array2Slice         = "[][2]int64"
+	goTypeUint                     = "uint"
+	goTypeUintSlice                = "[]uint"
+	goTypeUint8                    = "uint8"
+	goTypeUint8Slice               = "[]uint8"
+	goTypeUint16                   = "uint16"
+	goTypeUint16Slice              = "[]uint16"
+	goTypeUint32                   = "uint32"
+	goTypeUint32Slice              = "[]uint32"
+	goTypeUint64                   = "uint64"
+	goTypeUint64Slice              = "[]uint64"
+	goTypeFloat32                  = "float32"
+	goTypeFloat32Slice             = "[]float32"
+	goTypeFloat64                  = "float64"
+	goTypeFloat64Slice             = "[]float64"
+	goTypeFloat64Array2            = "[2]float64"
+	goTypeFloat64Array2Slice       = "[][2]float64"
+	goTypeFloat64Array2SliceSlice  = "[][][2]float64"
+	goTypeFloat64Array2Array2      = "[2][2]float64"
+	goTypeFloat64Array2Array2Slice = "[][2][2]float64"
+	goTypeFloat64Array3            = "[3]float64"
+	goTypeFloat64Array3Slice       = "[][3]float64"
+	goTypeIPNet                    = "net.IPNet"
+	goTypeIPNetSlice               = "[]net.IPNet"
+	goTypeTime                     = "time.Time"
+	goTypeTimeSlice                = "[]time.Time"
+	goTypeTimeArray2               = "[2]time.Time"
+	goTypeTimeArray2Slice          = "[][2]time.Time"
+	goTypeBigInt                   = "big.Int"
+	goTypeBigIntSlice              = "[]big.Int"
+	goTypeBigIntArray2             = "[2]big.Int"
+	goTypeBigIntArray2Slice        = "[][2]big.Int"
+	goTypeBigFloat                 = "big.Float"
+	goTypeBigFloatSlice            = "[]big.Float"
+	goTypeBigFloatArray2           = "[2]big.Float"
+	goTypeBigFloatArray2Slice      = "[][2]big.Float"
+	goTypeNullStringMap            = "map[string]sql.NullString"
+	goTypeNullStringMapSlice       = "[]map[string]sql.NullString"
 )
 
 // isIntegerType reports whether or not the given type is one of the basic (un)signed integer types.

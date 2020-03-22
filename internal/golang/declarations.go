@@ -65,7 +65,7 @@ func (d TypeDecl) Walk(w *writer.Writer) {
 type FuncDecl struct {
 	Doc  CommentNode // associated documentation
 	Name Ident       // the function's name
-	Type FuncType    // the function signature
+	Type Signature   // the function signature
 	Body BlockStmt   // the body of the function
 }
 
@@ -96,7 +96,7 @@ type MethodDecl struct {
 	Doc  CommentNode // associated documentation
 	Recv RecvParam   // the receiver parameter
 	Name Ident       // method name
-	Type FuncType    // the function signature
+	Type Signature   // the function signature
 	Body BlockStmt   // the function body
 }
 
@@ -156,4 +156,6 @@ func (VarDecl) declNode()   {}
 func (TypeDecl) declNode()  {}
 
 // implements RecvTypeNode
-func (PointerRecvType) recvTypeNode() {}
+func (PointerRecvType) recvTypeNode()              {}
+func (PointerRecvType) typeNode()                  {}
+func (t PointerRecvType) typeListNode() []TypeNode { return []TypeNode{t} }

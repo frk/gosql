@@ -1,4 +1,4 @@
-package filter
+package gosql
 
 import (
 	"strconv"
@@ -16,7 +16,8 @@ type Filter struct {
 	canAndor bool
 }
 
-func (f *Filter) ParseFQL(fqlString string, colmap map[string]string) error {
+// UnmarshalFQL
+func (f *Filter) UnmarshalFQL(fqlString string, colmap map[string]string, strict bool) error {
 	fqlString = strings.Trim(fqlString, ";,")
 	z := fql.NewTokenizer(fqlString)
 	for {
@@ -46,7 +47,7 @@ func (f *Filter) ParseFQL(fqlString string, colmap map[string]string) error {
 				}
 
 				f.Col(col, cmpop2string[rule.Cmp], val)
-			} else {
+			} else if strict {
 				// TODO return unknown column error
 			}
 		}
@@ -54,11 +55,11 @@ func (f *Filter) ParseFQL(fqlString string, colmap map[string]string) error {
 	return nil
 }
 
-// ParseSort parses sortString as a comma separated list of column keys that can
+// UnmarshalSort parses sortString as a comma separated list of column keys that can
 // optionally be preceded by a hyphen to indicate the descending sort order. The
 // keys are then used to build the Order By clause of the filter.
 // Empty items between commas in the sortString are ignored.
-func (f *Filter) ParseSort(sortString string, colmap map[string]string) error {
+func (f *Filter) UnmarshalSort(sortString string, colmap map[string]string, strict bool) error {
 	start, end := 0, len(sortString)
 	for start < end {
 		pos := start
@@ -72,15 +73,28 @@ func (f *Filter) ParseSort(sortString string, colmap map[string]string) error {
 		}
 
 		if key := sortString[start:pos]; len(key) > 0 {
-			if col, ok := colmap[key]; !ok {
-				// TODO retrun unknown column error
-			} else {
+			if col, ok := colmap[key]; ok {
 				f.OrderBy(col, desc, false)
+			} else if strict {
+				// TODO retrun unknown column error
 			}
 		}
 		start = pos + 1
 	}
 	return nil
+}
+
+func (f *Filter) TextSearch(document, value string) *Filter {
+	if f.canAndor {
+		f.where += ` AND `
+	}
+
+	f.params = append(f.params, value)
+	pos := `$` + strconv.Itoa(len(f.params))
+
+	f.where += document + ` @@ to_tsquery('simple', ` + pos + `)`
+	f.canAndor = true
+	return f
 }
 
 func (f *Filter) Col(column, operator string, value interface{}) *Filter {
@@ -117,19 +131,6 @@ func (f *Filter) Col(column, operator string, value interface{}) *Filter {
 	}
 
 	f.where += column + ` ` + comparison
-	f.canAndor = true
-	return f
-}
-
-func (f *Filter) TextSearch(document, value string) *Filter {
-	if f.canAndor {
-		f.where += ` AND `
-	}
-
-	f.params = append(f.params, value)
-	pos := `$` + strconv.Itoa(len(f.params))
-
-	f.where += document + ` @@ to_tsquery('simple', ` + pos + `)`
 	f.canAndor = true
 	return f
 }

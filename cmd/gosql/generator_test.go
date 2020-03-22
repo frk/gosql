@@ -157,11 +157,14 @@ func TestGenerate(t *testing.T) {
 			"whereblock_result_slice",
 			"whereblock_returning_all_single",
 		},
+	}, {
+		dirname: "filter",
+		filenames: []string{
+			"basic",
+			// TODO filter (with textsearch)
+		},
 	}}
 
-	// TODO update
-	// TODO filter (with textsearch)
-	//
 	// TODO test conversions
 	// TODO test casts
 
@@ -179,7 +182,7 @@ func TestGenerate(t *testing.T) {
 		}
 
 		for _, filename := range tt.filenames {
-			t.Run(filename, func(t *testing.T) {
+			t.Run(tt.dirname+"/"+filename, func(t *testing.T) {
 				fileprefix := "../../testdata/generator/" + tt.dirname + "/" + filename
 
 				f := cmd.aggtypes(dir, fileprefix+"_in.go")

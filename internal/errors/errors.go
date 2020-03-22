@@ -107,5 +107,6 @@ const (
 	NoFieldColumnError                         errnum = 89
 	MultipleDataFieldsError                    errnum = 90
 	IllegalIteratorRecordError                 errnum = 91
-	IllegalSliceUpdateQueryModifier            errnum = 92
+	IllegalSliceUpdateQueryModifierError       errnum = 92
+	UnsupportedFieldDataNopError               errnum = 93
 )

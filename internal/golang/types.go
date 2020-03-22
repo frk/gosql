@@ -92,27 +92,35 @@ func (list FieldList) Walk(w *writer.Writer) {
 }
 
 // FuncType produces a function signature.
-type FuncType struct {
+type FuncType Signature
+
+func (ft FuncType) Walk(w *writer.Writer) {
+	w.Write("func")
+	Signature(ft).Walk(w)
+}
+
+// Signature produces a function signature.
+type Signature struct {
 	Params  ParamList
 	Results ParamList
 }
 
-func (ft FuncType) Walk(w *writer.Writer) {
+func (sig Signature) Walk(w *writer.Writer) {
 	w.Write("(")
-	ft.Params.Walk(w)
+	sig.Params.Walk(w)
 	w.Write(")")
 
-	if len(ft.Results) < 1 {
+	if len(sig.Results) < 1 {
 		return
 	}
 	w.Write(" ")
 
-	withParens := len(ft.Results) > 1 || ft.Results[0].Names != nil
+	withParens := len(sig.Results) > 1 || sig.Results[0].Names != nil
 
 	if withParens {
 		w.Write("(")
 	}
-	ft.Results.Walk(w)
+	sig.Results.Walk(w)
 	if withParens {
 		w.Write(")")
 	}
@@ -173,7 +181,7 @@ func (it InterfaceType) Walk(w *writer.Writer) {
 type Method struct {
 	Doc     CommentNode // associated documentation
 	Name    Ident       // the method's name
-	Type    FuncType    // the method's signature
+	Type    Signature   // the method's signature
 	Comment CommentNode // trailing comment
 }
 

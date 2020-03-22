@@ -104,21 +104,21 @@ func TestFuncType(t *testing.T) {
 		typ: FuncType{
 			Params: ParamList{},
 		},
-		want: "()",
+		want: "func()",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
 				{Names: Ident{"foo"}, Type: Ident{"string"}},
 			},
 		},
-		want: "(foo string)",
+		want: "func(foo string)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
 				{Names: IdentList{{"foo"}, {"bar"}, {"baz"}}, Type: Ident{"string"}},
 			},
 		},
-		want: "(foo, bar, baz string)",
+		want: "func(foo, bar, baz string)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
@@ -127,7 +127,7 @@ func TestFuncType(t *testing.T) {
 				{Names: Ident{"baz"}, Type: Ident{"bool"}},
 			},
 		},
-		want: "(foo string, bar int, baz bool)",
+		want: "func(foo string, bar int, baz bool)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
@@ -135,7 +135,7 @@ func TestFuncType(t *testing.T) {
 				{Names: Ident{"bar"}, Type: Ident{"int"}, Variadic: true},
 			},
 		},
-		want: "(foo string, bar ...int)",
+		want: "func(foo string, bar ...int)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
@@ -145,7 +145,7 @@ func TestFuncType(t *testing.T) {
 				{Names: nil, Type: Ident{"error"}},
 			},
 		},
-		want: "(foo, bar string) error",
+		want: "func(foo, bar string) error",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
@@ -155,7 +155,7 @@ func TestFuncType(t *testing.T) {
 				{Names: Ident{"err"}, Type: Ident{"error"}},
 			},
 		},
-		want: "(foo, bar string) (err error)",
+		want: "func(foo, bar string) (err error)",
 	}, {
 		typ: FuncType{
 			Params: ParamList{
@@ -166,9 +166,107 @@ func TestFuncType(t *testing.T) {
 				{Names: nil, Type: Ident{"error"}},
 			},
 		},
-		want: "(foo, bar string) (int, error)",
+		want: "func(foo, bar string) (int, error)",
 	}, {
 		typ: FuncType{
+			Params: ParamList{
+				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+			},
+			Results: ParamList{
+				{Names: Ident{"num"}, Type: Ident{"int"}},
+				{Names: Ident{"err"}, Type: Ident{"error"}},
+			},
+		},
+		want: "func(foo, bar string) (num int, err error)",
+	}}
+
+	for _, tt := range tests {
+		w := new(bytes.Buffer)
+
+		if err := Write(tt.typ, w); err != nil {
+			t.Error(err)
+		}
+
+		got := w.String()
+		if err := compare.Compare(got, tt.want); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestSignature(t *testing.T) {
+	tests := []struct {
+		typ  Signature
+		want string
+	}{{
+		typ: Signature{
+			Params: ParamList{},
+		},
+		want: "()",
+	}, {
+		typ: Signature{
+			Params: ParamList{
+				{Names: Ident{"foo"}, Type: Ident{"string"}},
+			},
+		},
+		want: "(foo string)",
+	}, {
+		typ: Signature{
+			Params: ParamList{
+				{Names: IdentList{{"foo"}, {"bar"}, {"baz"}}, Type: Ident{"string"}},
+			},
+		},
+		want: "(foo, bar, baz string)",
+	}, {
+		typ: Signature{
+			Params: ParamList{
+				{Names: Ident{"foo"}, Type: Ident{"string"}},
+				{Names: Ident{"bar"}, Type: Ident{"int"}},
+				{Names: Ident{"baz"}, Type: Ident{"bool"}},
+			},
+		},
+		want: "(foo string, bar int, baz bool)",
+	}, {
+		typ: Signature{
+			Params: ParamList{
+				{Names: Ident{"foo"}, Type: Ident{"string"}},
+				{Names: Ident{"bar"}, Type: Ident{"int"}, Variadic: true},
+			},
+		},
+		want: "(foo string, bar ...int)",
+	}, {
+		typ: Signature{
+			Params: ParamList{
+				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+			},
+			Results: ParamList{
+				{Names: nil, Type: Ident{"error"}},
+			},
+		},
+		want: "(foo, bar string) error",
+	}, {
+		typ: Signature{
+			Params: ParamList{
+				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+			},
+			Results: ParamList{
+				{Names: Ident{"err"}, Type: Ident{"error"}},
+			},
+		},
+		want: "(foo, bar string) (err error)",
+	}, {
+		typ: Signature{
+			Params: ParamList{
+				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
+			},
+			Results: ParamList{
+				{Names: nil, Type: Ident{"int"}},
+				{Names: nil, Type: Ident{"error"}},
+			},
+		},
+		want: "(foo, bar string) (int, error)",
+	}, {
+		typ: Signature{
 			Params: ParamList{
 				{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
 			},
@@ -203,18 +301,18 @@ func TestInterfaceType(t *testing.T) {
 		want: "interface{}",
 	}, {
 		typ: InterfaceType{Methods: MethodList{
-			{Name: Ident{"Foo"}, Type: FuncType{}},
+			{Name: Ident{"Foo"}, Type: Signature{}},
 		}},
 		want: "interface {\nFoo()\n}",
 	}, {
 		typ: InterfaceType{Methods: MethodList{
-			{Name: Ident{"Foo"}, Type: FuncType{}},
-			{Name: Ident{"Bar"}, Type: FuncType{
+			{Name: Ident{"Foo"}, Type: Signature{}},
+			{Name: Ident{"Bar"}, Type: Signature{
 				Params: ParamList{
 					{Names: Ident{"a"}, Type: Ident{"string"}},
 				},
 			}},
-			{Name: Ident{"Baz"}, Type: FuncType{
+			{Name: Ident{"Baz"}, Type: Signature{
 				Results: ParamList{
 					{Names: nil, Type: Ident{"error"}},
 				},

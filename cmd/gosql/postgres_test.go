@@ -196,12 +196,11 @@ func Test_pgchecker_run(t *testing.T) {
 
 			dbc := new(pgchecker)
 			dbc.pg = testdb.pg
-			dbc.query = ti.query
-			dbc.filter = ti.filter
-			if dbc.query != nil {
-				dbc.dataField = dbc.query.dataField
-			} else if dbc.filter != nil {
-				dbc.dataField = dbc.filter.dataField
+			dbc.ti = ti
+			if dbc.ti.query != nil {
+				dbc.ti.dataField = dbc.ti.query.dataField
+			} else if dbc.ti.filter != nil {
+				dbc.ti.dataField = dbc.ti.filter.dataField
 			}
 
 			err = dbc.run()
@@ -239,8 +238,8 @@ func Test_pgchecker_loadrelation(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.query = &queryStruct{dataField: &dataField{relId: tt.relId}}
-		dbc.dataField = dbc.query.dataField
+		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
+		dbc.ti.dataField = dbc.ti.query.dataField
 
 		err := dbc.run()
 		rel := dbc.rel
@@ -374,8 +373,8 @@ func Test_pgchecker_loadcolumns(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.query = &queryStruct{dataField: &dataField{relId: tt.relId}}
-		dbc.dataField = dbc.query.dataField
+		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
+		dbc.ti.dataField = dbc.ti.query.dataField
 
 		err := dbc.run()
 		if err == nil {
@@ -413,8 +412,8 @@ func Test_pgchecker_loadconstraints(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.query = &queryStruct{dataField: &dataField{relId: tt.relId}}
-		dbc.dataField = dbc.query.dataField
+		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
+		dbc.ti.dataField = dbc.ti.query.dataField
 
 		err := dbc.run()
 		if err == nil {
@@ -524,8 +523,8 @@ func Test_pgchecker_loadindexes(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.query = &queryStruct{dataField: &dataField{relId: tt.relId}}
-		dbc.dataField = dbc.query.dataField
+		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
+		dbc.ti.dataField = dbc.ti.query.dataField
 
 		err := dbc.run()
 		if err == nil {
@@ -580,8 +579,7 @@ func Test_pgchecker_check_textsearch(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.filter = tt.filter
-		dbc.dataField = tt.filter.dataField
+		dbc.ti = &targetInfo{filter: tt.filter, dataField: tt.filter.dataField}
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -635,8 +633,7 @@ func Test_pgchecker_check_orderby(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.query = tt.query
-		dbc.dataField = tt.query.dataField
+		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -692,8 +689,7 @@ func Test_pgchecker_check_defaults(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.query = tt.query
-		dbc.dataField = tt.query.dataField
+		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -749,8 +745,7 @@ func Test_pgchecker_check_force(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.query = tt.query
-		dbc.dataField = tt.query.dataField
+		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {
@@ -882,8 +877,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 	for i, tt := range tests {
 		dbc := new(pgchecker)
 		dbc.pg = testdb.pg
-		dbc.query = tt.query
-		dbc.dataField = tt.query.dataField
+		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
 
 		err := dbc.run()
 		if e := compare.Compare(err, tt.err); e != nil {

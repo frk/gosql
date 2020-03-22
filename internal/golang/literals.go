@@ -33,12 +33,11 @@ func (s RawStringLit) Walk(w *writer.Writer) {
 
 // FuncLit produces a function literal.
 type FuncLit struct {
-	Type FuncType  // the function's signature
+	Type FuncType  // the function type
 	Body BlockStmt // function's body
 }
 
 func (lit FuncLit) Walk(w *writer.Writer) {
-	w.Write("func")
 	lit.Type.Walk(w)
 	w.Write(" ")
 	lit.Body.Walk(w)

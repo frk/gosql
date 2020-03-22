@@ -52,29 +52,67 @@ var (
 	callmakeparams      = GO.CallExpr{Fun: GO.Ident{"make"}, Args: GO.ArgsList{List: idifaces}}
 )
 
-// targetInfo holds the information for the analyzed and db-checked target type.
+// targetInfo holds the information for the analyzed and type checked target type.
 type targetInfo struct {
-	query     *queryStruct
-	filter    *filterStruct
+	// Populated by the analyzer. Set to the dataField of either the queryStruct
+	// or the filterStruct, depending on which one was analyzed.
 	dataField *dataField
-	info      *pginfo
+	// Populated by the analyzer. If the target is a query struct, then this
+	// field will be set to the result of the query struct analysis, otherwise
+	// it will remain uninitialized.
+	query *queryStruct
+	// Populated by the analyzer. If the target is a filter struct, then this
+	// field will be set to the result of the filter struct analysis, otherwise
+	// it will remain uninitialized.
+	filter *filterStruct
+
+	// Populated by the type checker. A fieldColumnInfo slice that holds
+	// the data source fields and their corresponding target columns into
+	// which the data is stored.
+	input []*fieldColumnInfo
+	// Populated by the type checker. A fieldColumnInfo slice that holds
+	// the data target fields and their corresponding source columns from
+	// which the data is read.
+	output []*fieldColumnInfo
+	// Populated by the type checker. A list of fieldColumnInfos that
+	// represent the primary key of the target relation.
+	primaryKeys []*fieldColumnInfo
+	// Populated by the type checker and used by the generator to get the
+	// correct represenation of the the database type of the column that's
+	// associated with a predicate's field.
+	searchConditionFieldColumns map[*searchConditionField]*pgcolumn
+	// Set by the type checker. Info on the index to be used for an ON CONFLICT clause.
+	onConflictIndex *pgindex
+}
+
+// fieldColumnInfo holds the combined field-column information from
+// the analyzer, the type checker, and the generator.
+type fieldColumnInfo struct {
+	// The result of the data type's field analysis.
+	field *fieldInfo
+	// The field's corresponding column.
+	column *pgcolumn
+	// The column identifier.
+	colId colId
+	// The column SQL expression.
+	sqlExpr SQL.ValueExpr
 }
 
 // skipwrite is a helper method that reports whether or not the field's column should be written to.
-func (ti *targetInfo) skipwrite(fc *fieldcolumn) bool {
+func (ti *targetInfo) skipwrite(fc *fieldColumnInfo) bool {
 	return fc.field.readOnly && (ti.query.forceList == nil ||
 		(ti.query.forceList.all == false && !ti.query.forceList.contains(fc.colId)))
 }
 
 // skipread is a helper method that reports whether or not the field's column should be read from.
-func (ti *targetInfo) skipread(fc *fieldcolumn) bool {
+func (ti *targetInfo) skipread(fc *fieldColumnInfo) bool {
 	return fc.field.writeOnly && (ti.query.forceList == nil ||
 		(ti.query.forceList.all == false && !ti.query.forceList.contains(fc.colId)))
 }
 
 // usedefault is a helper method that reports whether or not the SQL's DEFAULT
 // marker should be used to write a column.
-func (ti *targetInfo) usedefault(fc *fieldcolumn) bool {
+func (ti *targetInfo) usedefault(fc *fieldColumnInfo) bool {
 	return fc.field.useDefault || (ti.query.defaultList != nil &&
 		(ti.query.defaultList.all || ti.query.defaultList.contains(fc.colId)))
 }
@@ -105,6 +143,7 @@ type generator struct {
 	imports GO.ImportDecl
 
 	// query specific state, needs to be reset on each iteration
+	ti         *targetInfo
 	nparam     int               // number of parameters
 	asvar      bool              // if true, the query string should be declared as a var, not const.
 	fclose     bool              // if true, the SQL query needs to be closed (with right parentheses) after the filter's been added.
@@ -127,13 +166,11 @@ type generator struct {
 	sqlInputColumns2 SQL.NameGroup
 	sqlInputValues   SQL.ValueExprList //
 	sqlInputValues2  SQL.ValueExprList //
-	targetInfo       *targetInfo
 }
 
 func (g *generator) run(pkgName string) error {
-	g.imports.Specs = []GO.ImportSpec{{Path: gosqlimport}}
-
 	for _, ti := range g.infos {
+		g.ti = ti
 		g.nparam = 0
 		g.asvar = false
 		g.fclose = false
@@ -152,11 +189,19 @@ func (g *generator) run(pkgName string) error {
 		g.sqlInputColumns2 = nil
 		g.sqlInputValues = nil
 		g.sqlInputValues2 = nil
-		g.targetInfo = ti
 
-		execdecl := g.buildexecdecl(ti)
-		g.file.Decls = append(g.file.Decls, execdecl)
+		if ti.query != nil {
+			execdecl := g.buildQueryCode(ti)
+			g.file.Decls = append(g.file.Decls, execdecl)
+		}
+
+		if ti.filter != nil {
+			decls := g.buildFilterCode(ti)
+			g.file.Decls = append(g.file.Decls, decls...)
+		}
 	}
+
+	g.imports.Specs = append(g.imports.Specs, GO.ImportSpec{Doc: GO.NL{}, Path: gosqlimport})
 
 	g.file.PkgName = pkgName
 	g.file.Preamble = GO.LineComment{filepreamble}
@@ -165,67 +210,266 @@ func (g *generator) run(pkgName string) error {
 	return GO.Write(g.file, &g.buf)
 }
 
-func (g *generator) buildexecdecl(si *targetInfo) (m GO.MethodDecl) {
+// buildFilterCode
+func (g *generator) buildFilterCode(ti *targetInfo) (decls []GO.TopLevelDeclNode) {
+	mapId, columnMap := g.buildFilterMap(ti)
+	fqlMethod := g.buildFilterUnmarshalFQLMethod(ti, mapId)
+	sortMethod := g.buildFilterUnmarshalSortMethod(ti, mapId)
+	searchMethod := g.buildFilterTextSearchMethod(ti)
+	columnMethods := g.buildFilterColumnMethodList(ti, mapId)
+	andMethod := g.buildFilterBoolOpMethod(ti, "AND")
+	orMethod := g.buildFilterBoolOpMethod(ti, "OR")
+
+	decls = append(decls, columnMap, fqlMethod, sortMethod, searchMethod)
+	decls = append(decls, columnMethods...)
+	decls = append(decls, andMethod, orMethod)
+	return decls
+}
+
+func (g *generator) buildFilterMap(ti *targetInfo) (mapId GO.Ident, mapDecl GO.VarDecl) {
+	mapId.Name = "_" + ti.filter.name + "_colmap"
+
+	elems := make([]GO.KeyElement, 0)
+	keyset := make(map[string]struct{})
+	for _, item := range ti.input {
+		// TODO(mkopriva): add support for choosing the "source" for
+		// constructing the map keys, possible options could be:
+		//	- from field names
+		// 	- from tags other than json
+		// 	- from tags other than json
+		// TODO(mkopriva): add support for choosing "how" the map keys
+		// should be constructed, possible options could be:
+		//	- using the base of the "source"
+		//	- concatenating the source if nested, and the concat "node"
+		//	for could be provided by the user, i.e. "." or "_" or ...
+		//
+		// NOTE(mkopriva): the solutions for the above TODO items could
+		// be supported by a global config or by a directive.
+		key := item.field.tag.First("json")
+		if _, ok := keyset[key]; ok {
+			continue
+		}
+		keyset[key] = struct{}{}
+
+		var e GO.KeyElement
+		e.Key = GO.StringLit(key)
+		e.Value = GO.RawStringLit(item.colId.quoted())
+		elems = append(elems, e)
+	}
+
+	mapDecl.Spec = GO.ValueSpec{
+		Names: mapId,
+		Values: GO.MapLit{
+			Type:  GO.MapType{Key: GO.Ident{"string"}, Value: GO.Ident{"string"}},
+			Elems: elems,
+		},
+	}
+	return mapId, mapDecl
+}
+
+func (g *generator) buildFilterUnmarshalFQLMethod(ti *targetInfo, mapId GO.Ident) (m GO.MethodDecl) {
+	m.Recv.Name.Name = "f"
+	m.Recv.Type = GO.PointerRecvType{ti.filter.name}
+	m.Name.Name = "UnmarshalFQL"
+	m.Type.Params = GO.ParamList{{Names: GO.Ident{"fqlString"}, Type: GO.Ident{"string"}}}
+	m.Type.Results = GO.ParamList{{Type: GO.Ident{"error"}}}
+	m.Body.List = []GO.StmtNode{GO.ReturnStmt{GO.CallExpr{
+		Fun:  GO.Ident{"f.Filter.UnmarshalFQL"},
+		Args: GO.ArgsList{List: GO.ExprList{GO.Ident{"fqlString"}, mapId, GO.False}},
+	}}}
+	return m
+}
+
+func (g *generator) buildFilterUnmarshalSortMethod(ti *targetInfo, mapId GO.Ident) (m GO.MethodDecl) {
+	m.Recv.Name.Name = "f"
+	m.Recv.Type = GO.PointerRecvType{ti.filter.name}
+	m.Name.Name = "UnmarshalSort"
+	m.Type.Params = GO.ParamList{{Names: GO.Ident{"sortString"}, Type: GO.Ident{"string"}}}
+	m.Type.Results = GO.ParamList{{Type: GO.Ident{"error"}}}
+	m.Body.List = []GO.StmtNode{GO.ReturnStmt{GO.CallExpr{
+		Fun:  GO.Ident{"f.Filter.UnmarshalSort"},
+		Args: GO.ArgsList{List: GO.ExprList{GO.Ident{"sortString"}, mapId, GO.False}},
+	}}}
+	return m
+}
+
+func (g *generator) buildFilterTextSearchMethod(ti *targetInfo) (m GO.MethodDecl) {
+	m.Recv.Name.Name = "f"
+	m.Recv.Type = GO.PointerRecvType{ti.filter.name}
+	m.Name.Name = "TextSearch"
+	m.Type.Params = GO.ParamList{{Names: GO.Ident{"v"}, Type: GO.Ident{"string"}}}
+	if cid := ti.filter.textSearchColId; cid != nil {
+		m.Body.List = []GO.StmtNode{GO.ReturnStmt{GO.CallExpr{
+			Fun:  GO.Ident{"f.Filter.TextSearch"},
+			Args: GO.ArgsList{List: GO.ExprList{GO.RawStringLit(cid.quoted()), GO.Ident{"v"}}},
+		}}}
+	} else {
+		m.Body.List = []GO.StmtNode{GO.LineComment{" No search document specified."}}
+	}
+	return m
+}
+
+func (g *generator) buildFilterColumnMethodList(ti *targetInfo, mapId GO.Ident) (mm []GO.TopLevelDeclNode) {
+	var (
+		f   = GO.Ident{"f"}   // the receiver name
+		op  = GO.Ident{"op"}  // the operator argument name
+		val = GO.Ident{"val"} // the value argument name
+	)
+
+	for _, item := range ti.input {
+		var m GO.MethodDecl
+
+		// the method's receiver
+		m.Recv.Name = f
+		m.Recv.Type = GO.PointerRecvType{ti.filter.name}
+
+		// the method's name
+		for _, node := range item.field.path {
+			// If the field's nested, concatenate the names of the parent fields.
+			//
+			// TODO(mkopriva): reconsider concatenating without prejudice, might
+			// be better to omit embedded fields, so that the method name match
+			// the corresponding field selection ability.
+			// NOTE(mkopriva): keep in mind that if the above TODO item is implemented,
+			// it will be important to keep track of the field "promotion hierarchy",
+			// i.e. two fields with the same name, nested in embedded fields, but at
+			// different depths...
+			m.Name.Name += node.name
+		}
+		m.Name.Name += item.field.name
+		if _, ok := filterMethodNamesReserved[m.Name.Name]; ok {
+			continue // skip if name is reserved
+		}
+
+		if typ := item.field.typ; typ.isImported {
+			g.addimport(typ.pkgPath, typ.pkgName, typ.pkgLocal)
+		}
+
+		// the method's input and output arguments
+		m.Type.Params = GO.ParamList{
+			{Names: op, Type: GO.Ident{"string"}},
+			{Names: val, Type: GO.Ident{item.field.typ.nameOrLiteral(true)}},
+		}
+		m.Type.Results = GO.ParamList{{Type: GO.PointerType{GO.Ident{ti.filter.name}}}}
+
+		// the method's body
+		m.Body.List = []GO.StmtNode{
+			GO.ExprStmt{GO.CallExpr{
+				Fun:  GO.Ident{"f.Filter.Col"},
+				Args: GO.ArgsList{List: GO.ExprList{GO.RawStringLit(item.colId.quoted()), op, val}},
+			}},
+			GO.ReturnStmt{f},
+		}
+		mm = append(mm, m)
+	}
+	return mm
+}
+
+func (g *generator) buildFilterBoolOpMethod(ti *targetInfo, name string) (m GO.MethodDecl) {
+	var (
+		f     = GO.Ident{"f"}                      // method's receiver name
+		typ   = GO.PointerRecvType{ti.filter.name} // method's reciever type
+		nest  = GO.Ident{"nest"}                   // method's argument name
+		ftype = GO.PointerType{GO.QualifiedIdent{"gosql", "Filter"}}
+	)
+	m.Recv.Name = f
+	m.Recv.Type = typ
+	m.Name.Name = name
+
+	// the method's input and output arguments
+	m.Type.Params = GO.ParamList{
+		{Names: nest, Type: GO.FuncType{Params: GO.ParamList{{Type: typ}}}, Variadic: true},
+	}
+	m.Type.Results = GO.ParamList{{Type: typ}}
+
+	// the method's body
+	m.Body.List = []GO.StmtNode{
+		GO.IfStmt{
+			Cond: GO.BinaryExpr{X: GO.CallLenExpr{nest}, Op: GO.BinaryEql, Y: GO.IntLit(0)},
+			Body: GO.BlockStmt{[]GO.StmtNode{
+				GO.ExprStmt{GO.CallExpr{Fun: GO.Ident{"f.Filter." + name}}},
+				GO.ReturnStmt{f},
+			}},
+		},
+		GO.ExprStmt{GO.CallExpr{
+			Fun: GO.Ident{"f.Filter." + name},
+			Args: GO.ArgsList{List: GO.ExprList{GO.FuncLit{
+				Type: GO.FuncType{Params: GO.ParamList{{Names: idblank, Type: ftype}}},
+				Body: GO.BlockStmt{[]GO.StmtNode{
+					GO.ExprStmt{GO.CallExpr{
+						Fun:  GO.IndexExpr{X: nest, Index: GO.IntLit(0)},
+						Args: GO.ArgsList{List: f},
+					}},
+				}},
+			}}},
+		}},
+		GO.ReturnStmt{f},
+	}
+	return m
+}
+
+// buildQueryCode
+func (g *generator) buildQueryCode(ti *targetInfo) (m GO.MethodDecl) {
 	m.Name = idexec
 	m.Recv.Name = idrecv
-	m.Recv.Type = GO.PointerRecvType{si.query.name}
+	m.Recv.Type = GO.PointerRecvType{ti.query.name}
 	m.Type.Params = GO.ParamList{{Names: idconn, Type: sxconn}}
 	m.Type.Results = GO.ParamList{{Type: iderror}}
 
-	g.scantoinput = ((si.query.kind == queryKindInsert || si.query.kind == queryKindUpdate) &&
-		si.query.dataField.data.isSlice && si.query.resultField == nil)
+	g.scantoinput = ((ti.query.kind == queryKindInsert || ti.query.kind == queryKindUpdate) &&
+		ti.query.dataField.data.isSlice && ti.query.resultField == nil)
 
-	g.prepareInput(si)
-	g.prepareOutput(si)
+	g.prepareInput(ti)
+	g.prepareOutput(ti)
 
-	g.prepareGOLimitOffsetFallback(si)
+	g.prepareGOLimitOffsetFallback(ti)
 
-	m.Body.Add(g.buildquerystring(si))
-	m.Body.Add(g.buildGOFilterParams(si))
+	m.Body.Add(g.buildquerystring(ti))
+	m.Body.Add(g.buildGOFilterParams(ti))
 
 	if len(g.lofallback) > 0 {
 		m.Body.Add(g.lofallback)
 	}
 
-	m.Body.Add(g.queryexec(si))
-	m.Body.Add(g.returnstmt(si))
+	m.Body.Add(g.queryexec(ti))
+	m.Body.Add(g.returnstmt(ti))
 	return m
 }
 
 // prepareInput
-func (g *generator) prepareInput(si *targetInfo) {
+func (g *generator) prepareInput(ti *targetInfo) {
 	// prepare input for the INSERT / UPDATE query
-	if len(si.info.input) > 0 {
-		g.prepareGOInputFields(si)
-		g.prepareSQLInputColumns(si)
+	if len(ti.input) > 0 {
+		g.prepareGOInputFields(ti)
+		g.prepareSQLInputColumns(ti)
 	}
 
 	// prepare input for the WHERE clause
-	if si.query.whereBlock != nil && len(si.query.whereBlock.conds) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.whereBlock.name}}
-		g.prepareGOInputWhereFields(si.query.whereBlock.conds, sx)
-	} else if si.query.kind == queryKindUpdate && (si.query.all == false && si.query.filterField == "") {
-		g.prepareGOInputPrimaryKeyFields(si)
+	if ti.query.whereBlock != nil && len(ti.query.whereBlock.conds) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.whereBlock.name}}
+		g.prepareGOInputWhereFields(ti.query.whereBlock.conds, sx)
+	} else if ti.query.kind == queryKindUpdate && (ti.query.all == false && ti.query.filterField == "") {
+		g.prepareGOInputPrimaryKeyFields(ti)
 	}
 
 	// prepare input for the LIMIT clause
-	if si.query.limitField != nil && len(si.query.limitField.name) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.limitField.name}}
+	if ti.query.limitField != nil && len(ti.query.limitField.name) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.limitField.name}}
 		g.queryargs = append(g.queryargs, sx)
 	}
 
 	// prepare input for the OFFSET clause
-	if si.query.offsetField != nil && len(si.query.offsetField.name) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.offsetField.name}}
+	if ti.query.offsetField != nil && len(ti.query.offsetField.name) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.offsetField.name}}
 		g.queryargs = append(g.queryargs, sx)
 	}
 }
 
 // prepareGOInputFields prepares a list of GO field selector expressions
 // that will be passed as arguments to the query executing function.
-func (g *generator) prepareGOInputFields(si *targetInfo) {
-	data := si.query.dataField.data
-	name := si.query.dataField.name
+func (g *generator) prepareGOInputFields(ti *targetInfo) {
+	data := ti.query.dataField.data
+	name := ti.query.dataField.name
 
 	// the root node for the fields to be stored
 	g.argroot = GO.ExprNode(GO.SelectorExpr{X: idrecv, Sel: GO.Ident{name}})
@@ -233,11 +477,11 @@ func (g *generator) prepareGOInputFields(si *targetInfo) {
 		g.argroot = GO.Ident{"v"}
 	}
 
-	for _, item := range si.info.input {
-		if si.skipwrite(item) { // read only?
+	for _, item := range ti.input {
+		if ti.skipwrite(item) { // read only?
 			continue
 		}
-		if si.usedefault(item) { // DEFAULT?
+		if ti.usedefault(item) { // DEFAULT?
 			continue
 		}
 
@@ -253,7 +497,7 @@ func (g *generator) prepareGOInputFields(si *targetInfo) {
 }
 
 // transformGOInputFieldExpr ...
-func (g *generator) transformGOInputFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO.ExprNode {
+func (g *generator) transformGOInputFieldExpr(x GO.ExprNode, fc *fieldColumnInfo) GO.ExprNode {
 	if fc.field.useJSON {
 		call := calljson
 		call.Args = GO.ArgsList{List: x}
@@ -264,18 +508,18 @@ func (g *generator) transformGOInputFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO
 
 // prepareSQLInputColumns prepares the target columns for an INSERT or UPDATE
 // query, including a list of the SQL parameter placeholders or values.
-func (g *generator) prepareSQLInputColumns(si *targetInfo) {
-	updateWithSlice := (si.query.kind == queryKindUpdate && si.query.dataField.data.isSlice)
+func (g *generator) prepareSQLInputColumns(ti *targetInfo) {
+	updateWithSlice := (ti.query.kind == queryKindUpdate && ti.query.dataField.data.isSlice)
 
-	for _, item := range si.info.input {
-		if si.skipwrite(item) { // read only?
+	for _, item := range ti.input {
+		if ti.skipwrite(item) { // read only?
 			continue
 		}
 
 		// the target column
 		g.sqlInputColumns = append(g.sqlInputColumns, SQL.Name(item.column.name))
 
-		if si.usedefault(item) {
+		if ti.usedefault(item) {
 			g.sqlInputValues = append(g.sqlInputValues, SQL.DEFAULT)
 			continue
 		}
@@ -293,20 +537,20 @@ func (g *generator) prepareSQLInputColumns(si *targetInfo) {
 		}
 
 		// the parameter placeholder
-		item.sqlparam = g.sqlparam()
-		g.sqlInputValues = append(g.sqlInputValues, item.sqlparam)
+		item.sqlExpr = g.sqlparam()
+		g.sqlInputValues = append(g.sqlInputValues, item.sqlExpr)
 	}
 
 	if updateWithSlice {
-		for _, item := range si.info.pkeys {
+		for _, item := range ti.primaryKeys {
 			// TODO documentation
-			if !si.skipwrite(item) { // read only?
+			if !ti.skipwrite(item) { // read only?
 				continue
 			}
 			g.sqlInputColumns2 = append(g.sqlInputColumns2, SQL.Name(item.column.name))
 
-			item.sqlparam = g.sqlparam()
-			g.sqlInputValues2 = append(g.sqlInputValues2, item.sqlparam)
+			item.sqlExpr = g.sqlparam()
+			g.sqlInputValues2 = append(g.sqlInputValues2, item.sqlExpr)
 		}
 	}
 }
@@ -338,7 +582,7 @@ func (g *generator) prepareGOInputWhereFields(conds []*searchCondition, sx GO.Se
 				if cond.qua > 0 {
 
 					gotyp := cond.typ.string(true)
-					coltyp := g.targetInfo.info.colmap[cond].typ.namefmt + "[]"
+					coltyp := g.ti.searchConditionFieldColumns[cond].typ.namefmt + "[]"
 					sel, ok := gotyp2coltyp2converter[gotyp][coltyp]
 					if !ok {
 						// TODO should not happen here, this should be caught while scanning the db
@@ -357,9 +601,9 @@ func (g *generator) prepareGOInputWhereFields(conds []*searchCondition, sx GO.Se
 
 // prepareGOInputPrimaryKeyFields prepares the input for a WHERE clause
 // using the primary key(s) of the data type.
-func (g *generator) prepareGOInputPrimaryKeyFields(si *targetInfo) {
-	for _, item := range si.info.pkeys {
-		if !si.skipwrite(item) {
+func (g *generator) prepareGOInputPrimaryKeyFields(ti *targetInfo) {
+	for _, item := range ti.primaryKeys {
+		if !ti.skipwrite(item) {
 			continue
 		}
 
@@ -373,8 +617,8 @@ func (g *generator) prepareGOInputPrimaryKeyFields(si *targetInfo) {
 }
 
 // prepareGOLimitOffsetFallback
-func (g *generator) prepareGOLimitOffsetFallback(si *targetInfo) {
-	if field := si.query.limitField; field != nil && field.value > 0 && len(field.name) > 0 {
+func (g *generator) prepareGOLimitOffsetFallback(ti *targetInfo) {
+	if field := ti.query.limitField; field != nil && field.value > 0 && len(field.name) > 0 {
 		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{field.name}}
 
 		asn := GO.AssignStmt{Token: GO.Assign}
@@ -387,7 +631,7 @@ func (g *generator) prepareGOLimitOffsetFallback(si *targetInfo) {
 		g.lofallback = append(g.lofallback, ifzero)
 	}
 
-	if field := si.query.offsetField; field != nil && field.value > 0 && len(field.name) > 0 {
+	if field := ti.query.offsetField; field != nil && field.value > 0 && len(field.name) > 0 {
 		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{field.name}}
 
 		asn := GO.AssignStmt{Token: GO.Assign}
@@ -406,24 +650,24 @@ func (g *generator) prepareGOLimitOffsetFallback(si *targetInfo) {
 }
 
 // prepareOutput .................
-func (g *generator) prepareOutput(si *targetInfo) {
-	if len(si.info.output) > 0 {
-		skipinit := si.skipinit()
-		g.prepareOutputGORoot(si, skipinit)
-		g.prepareOutputGORootFields(si, skipinit)
-		g.prepareOutputSQLColumns(si)
+func (g *generator) prepareOutput(ti *targetInfo) {
+	if len(ti.output) > 0 {
+		skipinit := ti.skipinit()
+		g.prepareOutputGORoot(ti, skipinit)
+		g.prepareOutputGORootFields(ti, skipinit)
+		g.prepareOutputSQLColumns(ti)
 	}
 }
 
 // prepareOutputGORoot resolves the GO root expression of the fields into which
 // the output will be scanned, additionally if the root needs to be initialized
 // before scanning, an initialization statement will be prepared as well.
-func (g *generator) prepareOutputGORoot(si *targetInfo, skipinit bool) {
-	data := si.query.dataField.data
-	name := si.query.dataField.name
-	if si.query.resultField != nil {
-		data = si.query.resultField.data
-		name = si.query.resultField.name
+func (g *generator) prepareOutputGORoot(ti *targetInfo, skipinit bool) {
+	data := ti.query.dataField.data
+	name := ti.query.dataField.name
+	if ti.query.resultField != nil {
+		data = ti.query.resultField.data
+		name = ti.query.resultField.name
 	}
 
 	g.scanroot = GO.ExprNode(GO.SelectorExpr{X: idrecv, Sel: GO.Ident{name}})
@@ -458,13 +702,13 @@ func (g *generator) prepareOutputGORoot(si *targetInfo, skipinit bool) {
 }
 
 // prepareOutputGORootFields ....
-func (g *generator) prepareOutputGORootFields(si *targetInfo, skipinit bool) {
+func (g *generator) prepareOutputGORootFields(ti *targetInfo, skipinit bool) {
 	// done is used to keep track of pointer fields whose
 	// initialization statements have already been created
 	var done = make(map[string]bool)
 
-	for _, item := range si.info.output {
-		if si.skipread(item) { // writeonly?
+	for _, item := range ti.output {
+		if ti.skipread(item) { // writeonly?
 			continue
 		}
 
@@ -501,7 +745,7 @@ func (g *generator) prepareOutputGORootFields(si *targetInfo, skipinit bool) {
 }
 
 // transformOutputGOFieldExpr ...
-func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, fc *fieldcolumn) GO.ExprNode {
+func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, fc *fieldColumnInfo) GO.ExprNode {
 	if fc.field.useJSON {
 		call := calljson
 		call.Args = GO.ArgsList{List: x}
@@ -511,9 +755,9 @@ func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, fc *fieldcolumn) G
 }
 
 // prepareOutputSQLColumns prepares the list of SQL columns to be returned by the query.
-func (g *generator) prepareOutputSQLColumns(si *targetInfo) {
-	for _, item := range si.info.output {
-		if si.skipread(item) { // writeonly?
+func (g *generator) prepareOutputSQLColumns(ti *targetInfo) {
+	for _, item := range ti.output {
+		if ti.skipread(item) { // writeonly?
 			continue
 		}
 
@@ -525,12 +769,12 @@ func (g *generator) prepareOutputSQLColumns(si *targetInfo) {
 	}
 }
 
-func (g *generator) buildquerystring(si *targetInfo) (stmt GO.StmtNode) {
+func (g *generator) buildquerystring(ti *targetInfo) (stmt GO.StmtNode) {
 
-	sqlnode := g.sqlnode(si)
+	sqlnode := g.sqlnode(ti)
 
 	var decl GO.DeclNode
-	if g.declarevar(si) {
+	if g.declarevar(ti) {
 		decl = GO.VarDecl{Spec: GO.ValueSpec{
 			Names:   idquery,
 			Values:  GO.RawStringNode{N: sqlnode},
@@ -544,10 +788,10 @@ func (g *generator) buildquerystring(si *targetInfo) (stmt GO.StmtNode) {
 		}}
 	}
 
-	if (si.query.kind == queryKindInsert || si.query.kind == queryKindUpdate) && si.query.dataField.data.isSlice {
+	if (ti.query.kind == queryKindInsert || ti.query.kind == queryKindUpdate) && ti.query.dataField.data.isSlice {
 		result := GO.StmtList{GO.DeclStmt{decl}, GO.NL{}}
 
-		idrel := GO.QualifiedIdent{idrecv.Name, si.query.dataField.name}
+		idrel := GO.QualifiedIdent{idrecv.Name, ti.query.dataField.name}
 		numfields := GO.IntLit(len(g.queryargs))
 
 		if len(g.queryargs) > 0 {
@@ -734,14 +978,14 @@ func (g *generator) buildquerystring(si *targetInfo) (stmt GO.StmtNode) {
 		}
 
 		return append(list, GO.NL{})
-	} else if len(si.query.filterField) > 0 {
+	} else if len(ti.query.filterField) > 0 {
 		list := GO.StmtList{GO.DeclStmt{decl}, GO.NL{}}
 
 		// q.Filter.ToSQL()
 		stmt := GO.AssignStmt{Token: GO.AssignAdd}
 		stmt.Lhs = idquery
 		stmt.Rhs = GO.CallExpr{Fun: GO.SelectorExpr{
-			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.filterField}},
+			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.filterField}},
 			Sel: GO.Ident{"ToSQL"},
 		}}
 		list = append(list, stmt)
@@ -764,17 +1008,17 @@ func (g *generator) buildquerystring(si *targetInfo) (stmt GO.StmtNode) {
 	return GO.StmtList{GO.DeclStmt{decl}, GO.NL{}}
 }
 
-func (g *generator) buildGOFilterParams(si *targetInfo) (stmt GO.StmtNode) {
-	if len(si.query.filterField) > 0 {
+func (g *generator) buildGOFilterParams(ti *targetInfo) (stmt GO.StmtNode) {
+	if len(ti.query.filterField) > 0 {
 		var list GO.StmtList
 
 		// q.Filter.Params()
 		call := GO.CallExpr{Fun: GO.SelectorExpr{
-			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.filterField}},
+			X:   GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.filterField}},
 			Sel: GO.Ident{"Params"},
 		}}
 
-		if si.query.kind == queryKindUpdate {
+		if ti.query.kind == queryKindUpdate {
 			var stmt1 GO.AssignStmt
 			stmt1.Token = GO.AssignDefine
 			stmt1.Lhs = idparams
@@ -803,9 +1047,9 @@ func (g *generator) buildGOFilterParams(si *targetInfo) (stmt GO.StmtNode) {
 	return GO.NoOp{}
 }
 
-func (g *generator) queryexec(si *targetInfo) (stmt GO.StmtNode) {
+func (g *generator) queryexec(ti *targetInfo) (stmt GO.StmtNode) {
 	args := GO.ArgsList{List: idquery}
-	if len(g.insx) > 0 || len(si.query.filterField) > 0 || ((si.query.kind == queryKindInsert || si.query.kind == queryKindUpdate) && si.query.dataField.data.isSlice && len(g.queryargs) > 0) {
+	if len(g.insx) > 0 || len(ti.query.filterField) > 0 || ((ti.query.kind == queryKindInsert || ti.query.kind == queryKindUpdate) && ti.query.dataField.data.isSlice && len(g.queryargs) > 0) {
 		args.AddExprs(idparams)
 		args.Ellipsis = true
 	} else {
@@ -817,9 +1061,9 @@ func (g *generator) queryexec(si *targetInfo) (stmt GO.StmtNode) {
 
 	// produce c.Exec( ... ) call
 	{
-		if !si.query.kind.isSelect() && si.query.returnList == nil && si.query.resultField == nil {
+		if !ti.query.kind.isSelect() && ti.query.returnList == nil && ti.query.resultField == nil {
 
-			if rafield := si.query.rowsAffectedField; rafield != nil {
+			if rafield := ti.query.rowsAffectedField; rafield != nil {
 				// call exec & assign res, err
 				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = GO.ExprList{idres, iderr}
@@ -828,7 +1072,7 @@ func (g *generator) queryexec(si *targetInfo) (stmt GO.StmtNode) {
 				// check err
 				iferr := GO.IfStmt{}
 				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 				// call RowsAffected & assing i64, err
 				asn2 := GO.AssignStmt{Token: GO.AssignDefine}
@@ -838,7 +1082,7 @@ func (g *generator) queryexec(si *targetInfo) (stmt GO.StmtNode) {
 				// check err
 				iferr2 := GO.IfStmt{}
 				iferr2.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-				iferr2.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+				iferr2.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 				//
 				asn3 := GO.AssignStmt{Token: GO.Assign}
@@ -862,9 +1106,9 @@ func (g *generator) queryexec(si *targetInfo) (stmt GO.StmtNode) {
 
 	// produce c.QueryRow( ... ) call
 	{
-		data := si.query.dataField.data
-		if si.query.resultField != nil {
-			data = si.query.resultField.data
+		data := ti.query.dataField.data
+		if ti.query.resultField != nil {
+			data = ti.query.resultField.data
 		}
 
 		if !data.isSlice && !data.isIter {
@@ -886,12 +1130,12 @@ func (g *generator) queryexec(si *targetInfo) (stmt GO.StmtNode) {
 
 		iferr := GO.IfStmt{}
 		iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-		iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+		iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 		defclose := GO.DeferStmt{}
 		defclose.Call = GO.CallExpr{Fun: sxrowsclose}
 
-		fornext := g.fornext(si, g.scantoinput)
+		fornext := g.fornext(ti, g.scantoinput)
 		if g.scantoinput {
 			asni := GO.AssignStmt{Token: GO.AssignDefine}
 			asni.Lhs = GO.Ident{"i"}
@@ -903,22 +1147,22 @@ func (g *generator) queryexec(si *targetInfo) (stmt GO.StmtNode) {
 	return stmt
 }
 
-func (g *generator) returnerr(si *targetInfo, errx GO.ExprNode) GO.ReturnStmt {
-	if si.query.errorHandlerField == nil {
+func (g *generator) returnerr(ti *targetInfo, errx GO.ExprNode) GO.ReturnStmt {
+	if ti.query.errorHandlerField == nil {
 		return GO.ReturnStmt{errx}
 	}
-	if si.query.errorHandlerField.isInfo {
+	if ti.query.errorHandlerField.isInfo {
 		lit := GO.StructLit{Type: sxerrorinfo, Compact: true}
 		lit.Elems = []GO.FieldElement{
 			{"Error", iderr},
 			{"Query", idquery},
-			{"SpecKind", GO.StringLit(si.query.kind.String())},
-			{"SpecName", GO.StringLit(si.query.name)},
+			{"SpecKind", GO.StringLit(ti.query.kind.String())},
+			{"SpecName", GO.StringLit(ti.query.name)},
 			{"SpecValue", idrecv},
 		}
 		litptr := GO.UnaryExpr{Op: GO.UnaryAmp, X: lit}
 
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.errorHandlerField.name}}
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.errorHandlerField.name}}
 		fun := GO.SelectorExpr{X: sx, Sel: GO.Ident{"HandleErrorInfo"}}
 		call := GO.CallExpr{Fun: fun, Args: GO.ArgsList{List: litptr}}
 		return GO.ReturnStmt{call}
@@ -926,13 +1170,13 @@ func (g *generator) returnerr(si *targetInfo, errx GO.ExprNode) GO.ReturnStmt {
 		// TODO if errx is not iderr, then errx is probably a CallFunc and
 		// should first be executed and it's result passed into HandleErrorInfo..
 	}
-	sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{si.query.errorHandlerField.name}}
+	sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.errorHandlerField.name}}
 	fun := GO.SelectorExpr{X: sx, Sel: GO.Ident{"HandleError"}}
 	call := GO.CallExpr{Fun: fun, Args: GO.ArgsList{List: errx}}
 	return GO.ReturnStmt{call}
 }
 
-func (g *generator) fornext(si *targetInfo, inputscan bool) (stmt GO.ForStmt) {
+func (g *generator) fornext(ti *targetInfo, inputscan bool) (stmt GO.ForStmt) {
 	stmt.Clause = GO.ForCondition{callrowsnext}
 	// scan & assign error
 	{
@@ -953,17 +1197,17 @@ func (g *generator) fornext(si *targetInfo, inputscan bool) (stmt GO.ForStmt) {
 	{
 		iferr := GO.IfStmt{}
 		iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-		iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+		iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 		stmt.Body.List = append(stmt.Body.List, iferr, GO.NL{})
 	}
 
 	// append OR iterate
 	{
-		data := si.query.dataField.data
-		fieldname := si.query.dataField.name
-		if si.query.resultField != nil {
-			data = si.query.resultField.data
-			fieldname = si.query.resultField.name
+		data := ti.query.dataField.data
+		fieldname := ti.query.dataField.name
+		if ti.query.resultField != nil {
+			data = ti.query.resultField.data
+			fieldname = ti.query.resultField.name
 		}
 
 		if data.isAfterScanner {
@@ -996,7 +1240,7 @@ func (g *generator) fornext(si *targetInfo, inputscan bool) (stmt GO.ForStmt) {
 			iferr := GO.IfStmt{}
 			iferr.Init = asn
 			iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-			iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+			iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 			stmt.Body.List = append(stmt.Body.List, iferr)
 		} else if g.scantoinput {
 			asn := GO.AssignStmt{Token: GO.AssignAdd}
@@ -1019,20 +1263,20 @@ func (g *generator) fornext(si *targetInfo, inputscan bool) (stmt GO.ForStmt) {
 	return stmt
 }
 
-func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
-	if si.query.rowsAffectedField != nil {
+func (g *generator) returnstmt(ti *targetInfo) (stmt GO.StmtNode) {
+	if ti.query.rowsAffectedField != nil {
 		return GO.ReturnStmt{idnil}
 	}
-	if si.query.kind.isSelect() || si.query.returnList != nil {
-		dataField := si.query.dataField
+	if ti.query.kind.isSelect() || ti.query.returnList != nil {
+		dataField := ti.query.dataField
 
 		// does the record type need pre-allocation? and is it imported?
-		if dataField.data.typeInfo.isImported && (dataField.data.isSlice || dataField.data.isPointer) && (si.query.kind != queryKindInsert && si.query.kind != queryKindUpdate) {
+		if dataField.data.typeInfo.isImported && (dataField.data.isSlice || dataField.data.isPointer) && (ti.query.kind != queryKindInsert && ti.query.kind != queryKindUpdate) {
 			g.addimport(dataField.data.typeInfo.pkgPath, dataField.data.typeInfo.pkgName, dataField.data.typeInfo.pkgLocal)
 		}
 
 		if dataField.data.isSlice || dataField.data.isArray || dataField.data.isIter {
-			if si.query.errorHandlerField != nil && si.query.errorHandlerField.isInfo {
+			if ti.query.errorHandlerField != nil && ti.query.errorHandlerField.isInfo {
 				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = callrowserr
@@ -1040,16 +1284,16 @@ func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
 				iferr := GO.IfStmt{}
 				iferr.Init = asn
 				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 				return GO.StmtList{iferr, GO.ReturnStmt{idnil}}
 			}
-			return g.returnerr(si, callrowserr)
+			return g.returnerr(ti, callrowserr)
 		} else {
 			var args GO.ArgsList
 			var list GO.StmtList // result
 
-			if si.query.kind.isNonFromSelect() {
+			if ti.query.kind.isNonFromSelect() {
 				fx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{dataField.name}}
 				args.AddExprs(GO.UnaryExpr{Op: GO.UnaryAmp, X: fx})
 			} else {
@@ -1062,18 +1306,18 @@ func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
 
 			if !dataField.data.isAfterScanner {
 				call := GO.CallExpr{Fun: sxrowscan, Args: args}
-				if si.query.errorHandlerField != nil && si.query.errorHandlerField.isInfo {
+				if ti.query.errorHandlerField != nil && ti.query.errorHandlerField.isInfo {
 					asn := GO.AssignStmt{Token: GO.AssignDefine}
 					asn.Lhs = iderr
 					asn.Rhs = call
 
 					iferr := GO.IfStmt{}
 					iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-					iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+					iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 					list = append(list, asn, iferr, GO.ReturnStmt{idnil})
 				} else {
-					list = append(list, g.returnerr(si, call))
+					list = append(list, g.returnerr(ti, call))
 				}
 			} else {
 				// scan & assign error
@@ -1084,7 +1328,7 @@ func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
 				// check error
 				iferr := GO.IfStmt{}
 				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 				// call afterscan
 				sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{dataField.name}}
@@ -1103,15 +1347,15 @@ func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
 	}
 
 	// result field
-	if si.query.resultField != nil {
-		rel := si.query.resultField
+	if ti.query.resultField != nil {
+		rel := ti.query.resultField
 		// does the record type need pre-allocation? and is it imported?
 		if rel.data.typeInfo.isImported && (rel.data.isSlice || rel.data.isPointer) {
 			g.addimport(rel.data.typeInfo.pkgPath, rel.data.typeInfo.pkgName, rel.data.typeInfo.pkgLocal)
 		}
 
 		if rel.data.isSlice || rel.data.isArray || rel.data.isIter {
-			if si.query.errorHandlerField != nil && si.query.errorHandlerField.isInfo {
+			if ti.query.errorHandlerField != nil && ti.query.errorHandlerField.isInfo {
 				asn := GO.AssignStmt{Token: GO.AssignDefine}
 				asn.Lhs = iderr
 				asn.Rhs = callrowserr
@@ -1119,11 +1363,11 @@ func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
 				iferr := GO.IfStmt{}
 				iferr.Init = asn
 				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 				return GO.StmtList{iferr, GO.ReturnStmt{idnil}}
 			}
-			return g.returnerr(si, callrowserr)
+			return g.returnerr(ti, callrowserr)
 		} else {
 			var args GO.ArgsList
 			if len(g.scanargs) > 2 {
@@ -1136,18 +1380,18 @@ func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
 
 			if !rel.data.isAfterScanner {
 				call := GO.CallExpr{Fun: sxrowscan, Args: args}
-				if si.query.errorHandlerField != nil && si.query.errorHandlerField.isInfo {
+				if ti.query.errorHandlerField != nil && ti.query.errorHandlerField.isInfo {
 					asn := GO.AssignStmt{Token: GO.AssignDefine}
 					asn.Lhs = iderr
 					asn.Rhs = call
 
 					iferr := GO.IfStmt{}
 					iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-					iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+					iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 					list = append(list, asn, iferr, GO.ReturnStmt{idnil})
 				} else {
-					list = append(list, g.returnerr(si, call))
+					list = append(list, g.returnerr(ti, call))
 				}
 			} else {
 				// scan & assing error
@@ -1158,7 +1402,7 @@ func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
 				// check error
 				iferr := GO.IfStmt{}
 				iferr.Cond = GO.BinaryExpr{X: iderr, Op: GO.BinaryNeq, Y: idnil}
-				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(si, iderr)}}
+				iferr.Body = GO.BlockStmt{List: []GO.StmtNode{g.returnerr(ti, iderr)}}
 
 				// call afterscan
 				sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rel.name}}
@@ -1176,7 +1420,7 @@ func (g *generator) returnstmt(si *targetInfo) (stmt GO.StmtNode) {
 		}
 	}
 
-	return g.returnerr(si, iderr)
+	return g.returnerr(ti, iderr)
 }
 
 func (g *generator) rectype(data dataType) GO.TypeNode {
@@ -1210,58 +1454,58 @@ func (g *generator) addimport(path, name, local string) {
 	g.imports.Specs = append(g.imports.Specs, spec)
 }
 
-func (g *generator) sqlnode(si *targetInfo) (node GO.Node) {
-	switch si.query.kind {
+func (g *generator) sqlnode(ti *targetInfo) (node GO.Node) {
+	switch ti.query.kind {
 	case queryKindInsert:
-		return g.sqlinsert(si)
+		return g.sqlinsert(ti)
 	case queryKindUpdate:
-		return g.sqlupdate(si)
+		return g.sqlupdate(ti)
 	case queryKindSelect:
-		return g.sqlselect(si)
+		return g.sqlselect(ti)
 	case queryKindSelectCount:
-		return g.sqlselectcount(si)
+		return g.sqlselectcount(ti)
 	case queryKindSelectExists, queryKindSelectNotExists:
-		return g.sqlselectexists(si)
+		return g.sqlselectexists(ti)
 	case queryKindDelete:
-		return g.sqldelete(si)
+		return g.sqldelete(ti)
 	}
 	return node
 }
 
 // sqlinsert builds and returns an SQL.InsertStatement.
-func (g *generator) sqlinsert(si *targetInfo) (stmt SQL.InsertStatement) {
+func (g *generator) sqlinsert(ti *targetInfo) (stmt SQL.InsertStatement) {
 	var src SQL.InsertSource
-	if si.query.dataField.data.isSlice {
+	if ti.query.dataField.data.isSlice {
 		src.Values = &SQL.ValuesClause{}
 	} else {
 		src.Values = &SQL.ValuesClause{g.sqlInputValues}
 	}
 
-	stmt.Head.Table = g.sqlrelid(si.query.dataField.relId)
+	stmt.Head.Table = g.sqlrelid(ti.query.dataField.relId)
 	stmt.Head.Columns = g.sqlInputColumns
-	stmt.Head.Overriding = overridingKindToSQLOverridingClause[si.query.overridingKind]
+	stmt.Head.Overriding = overridingKindToSQLOverridingClause[ti.query.overridingKind]
 	stmt.Head.Source = src
 	//stmt.Head.Source.Select = nil
 
-	if si.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || si.query.onConflictBlock != nil) {
+	if ti.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || ti.query.onConflictBlock != nil) {
 		var tail SQL.InsertTail
-		tail.OnConflict = g.sqlonconflict(si)
+		tail.OnConflict = g.sqlonconflict(ti)
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
 		g.sqltailnode = tail
 	} else {
-		stmt.Tail.OnConflict = g.sqlonconflict(si)
+		stmt.Tail.OnConflict = g.sqlonconflict(ti)
 		stmt.Tail.Returning = SQL.ReturningClause(g.outputcolumns)
 	}
 	return stmt
 }
 
-func (g *generator) sqlupdate(si *targetInfo) (stmt SQL.UpdateStatement) {
-	stmt.Head.Table = g.sqlrelid(si.query.dataField.relId)
+func (g *generator) sqlupdate(ti *targetInfo) (stmt SQL.UpdateStatement) {
+	stmt.Head.Table = g.sqlrelid(ti.query.dataField.relId)
 	stmt.Head.Set.Targets = g.sqlInputColumns
 	stmt.Head.Set.Values.Exprs = g.sqlInputValues
-	stmt.Head.From = g.sqlfrom(si.query.joinBlock)
+	stmt.Head.From = g.sqlfrom(ti.query.joinBlock)
 
-	if si.query.kind == queryKindUpdate && si.query.dataField.data.isSlice {
+	if ti.query.kind == queryKindUpdate && ti.query.dataField.data.isSlice {
 		// SQL.ValuesListClausePartial{}
 		// SQL.ValuesListAliasPartial{}
 		stmt.Head.From.List = append(stmt.Head.From.List, SQL.ValuesListClausePartial{})
@@ -1272,23 +1516,23 @@ func (g *generator) sqlupdate(si *targetInfo) (stmt SQL.UpdateStatement) {
 		alias.Columns = append(alias.Columns, g.sqlInputColumns2...)
 
 		var tail SQL.UpdateTail
-		tail.Where = g.buildSQLWhereClause(si)
+		tail.Where = g.buildSQLWhereClause(ti)
 
 		g.sqltailnode = SQL.NodeList{alias, tail}
 		return stmt
 	}
 
-	if si.query.filterField != "" && len(g.outputcolumns) > 0 {
+	if ti.query.filterField != "" && len(g.outputcolumns) > 0 {
 		var tail SQL.UpdateTail
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
 		g.sqltailnode = tail
-	} else if si.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || si.query.whereBlock != nil) {
+	} else if ti.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || ti.query.whereBlock != nil) {
 		var tail SQL.UpdateTail
-		tail.Where = g.buildSQLWhereClause(si)
+		tail.Where = g.buildSQLWhereClause(ti)
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
 		g.sqltailnode = tail
 	} else {
-		stmt.Tail.Where = g.buildSQLWhereClause(si)
+		stmt.Tail.Where = g.buildSQLWhereClause(ti)
 		stmt.Tail.Returning = SQL.ReturningClause(g.outputcolumns)
 	}
 
@@ -1296,36 +1540,36 @@ func (g *generator) sqlupdate(si *targetInfo) (stmt SQL.UpdateStatement) {
 }
 
 // sqlselect builds and returns an SQL.SelectStatement.
-func (g *generator) sqlselect(si *targetInfo) (selstmt SQL.SelectStatement) {
+func (g *generator) sqlselect(ti *targetInfo) (selstmt SQL.SelectStatement) {
 	selstmt.Columns = g.outputcolumns // columns
-	selstmt.Table = g.sqlrelid(si.query.dataField.relId)
-	selstmt.Join = g.sqljoin(si.query.joinBlock)
-	selstmt.Where = g.buildSQLWhereClause(si)
-	selstmt.Order = g.sqlorderby(si.query)
-	selstmt.Limit = g.sqllimit(si.query)
-	selstmt.Offset = g.sqloffset(si.query)
+	selstmt.Table = g.sqlrelid(ti.query.dataField.relId)
+	selstmt.Join = g.sqljoin(ti.query.joinBlock)
+	selstmt.Where = g.buildSQLWhereClause(ti)
+	selstmt.Order = g.sqlorderby(ti.query)
+	selstmt.Limit = g.sqllimit(ti.query)
+	selstmt.Offset = g.sqloffset(ti.query)
 	return selstmt
 }
 
 // sqldelete builds and returns an SQL.DeleteStatement.
-func (g *generator) sqldelete(si *targetInfo) (delstmt SQL.DeleteStatement) {
-	delstmt.Table = g.sqlrelid(si.query.dataField.relId)
-	delstmt.Using = g.sqlusing(si.query.joinBlock)
-	delstmt.Where = g.buildSQLWhereClause(si)
+func (g *generator) sqldelete(ti *targetInfo) (delstmt SQL.DeleteStatement) {
+	delstmt.Table = g.sqlrelid(ti.query.dataField.relId)
+	delstmt.Using = g.sqlusing(ti.query.joinBlock)
+	delstmt.Where = g.buildSQLWhereClause(ti)
 	delstmt.Returning = SQL.ReturningClause(g.outputcolumns) //returning
 	return delstmt
 }
 
 // sqlselectexists builds and returns an SQL.SelectExistsStatement.
-func (g *generator) sqlselectexists(si *targetInfo) (selstmt SQL.SelectExistsStatement) {
-	selstmt.Table = g.sqlrelid(si.query.dataField.relId)
-	selstmt.Join = g.sqljoin(si.query.joinBlock)
-	selstmt.Not = si.query.kind == queryKindSelectNotExists
-	if si.query.filterField == "" {
-		selstmt.Where = g.buildSQLWhereClause(si)
-		selstmt.Order = g.sqlorderby(si.query)
-		selstmt.Limit = g.sqllimit(si.query)
-		selstmt.Offset = g.sqloffset(si.query)
+func (g *generator) sqlselectexists(ti *targetInfo) (selstmt SQL.SelectExistsStatement) {
+	selstmt.Table = g.sqlrelid(ti.query.dataField.relId)
+	selstmt.Join = g.sqljoin(ti.query.joinBlock)
+	selstmt.Not = ti.query.kind == queryKindSelectNotExists
+	if ti.query.filterField == "" {
+		selstmt.Where = g.buildSQLWhereClause(ti)
+		selstmt.Order = g.sqlorderby(ti.query)
+		selstmt.Limit = g.sqllimit(ti.query)
+		selstmt.Offset = g.sqloffset(ti.query)
 	} else {
 		selstmt.Open = true
 		g.fclose = true
@@ -1334,35 +1578,35 @@ func (g *generator) sqlselectexists(si *targetInfo) (selstmt SQL.SelectExistsSta
 }
 
 // sqlselectcount builds and returns an SQL.SelectCountStatement.
-func (g *generator) sqlselectcount(si *targetInfo) (selstmt SQL.SelectCountStatement) {
-	selstmt.Table = g.sqlrelid(si.query.dataField.relId)
-	selstmt.Join = g.sqljoin(si.query.joinBlock)
-	if si.query.filterField == "" {
-		selstmt.Where = g.buildSQLWhereClause(si)
-		selstmt.Order = g.sqlorderby(si.query)
-		selstmt.Offset = g.sqloffset(si.query)
+func (g *generator) sqlselectcount(ti *targetInfo) (selstmt SQL.SelectCountStatement) {
+	selstmt.Table = g.sqlrelid(ti.query.dataField.relId)
+	selstmt.Join = g.sqljoin(ti.query.joinBlock)
+	if ti.query.filterField == "" {
+		selstmt.Where = g.buildSQLWhereClause(ti)
+		selstmt.Order = g.sqlorderby(ti.query)
+		selstmt.Offset = g.sqloffset(ti.query)
 	}
 	return selstmt
 }
 
 // buildSQLWhereClause builds and returns ...
-func (g *generator) buildSQLWhereClause(si *targetInfo) (where SQL.WhereClause) {
-	if w := si.query.whereBlock; w != nil {
+func (g *generator) buildSQLWhereClause(ti *targetInfo) (where SQL.WhereClause) {
+	if w := ti.query.whereBlock; w != nil {
 		sel := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{w.name}}
 		where.SearchCondition, _ = g.sqlsearchcond(w.conds, sel, false)
-	} else if si.query.kind == queryKindUpdate && (si.query.all == false && si.query.filterField == "") {
+	} else if ti.query.kind == queryKindUpdate && (ti.query.all == false && ti.query.filterField == "") {
 		var list SQL.BoolValueExprList
-		for i, item := range si.info.pkeys {
+		for i, item := range ti.primaryKeys {
 			p := SQL.ComparisonPredicate{}
 			p.Cmp = predicateToSQLCmpOp[isEQ]
 			p.LPredicand = g.sqlcolref(item.colId)
 
-			if item.sqlparam == nil {
-				item.sqlparam = g.sqlparam()
+			if item.sqlExpr == nil {
+				item.sqlExpr = g.sqlparam()
 			}
-			p.RPredicand = item.sqlparam
+			p.RPredicand = item.sqlExpr
 
-			if si.query.dataField.data.isSlice {
+			if ti.query.dataField.data.isSlice {
 				col := SQL.ColumnIdent{Qual: "x", Name: SQL.Name(item.colId.name)}
 				p.RPredicand = SQL.CastExpr{Expr: col, Type: item.column.typ.name}
 			}
@@ -1442,7 +1686,7 @@ func (g *generator) sqlsearchcond(conds []*searchCondition, sel GO.SelectorExpr,
 				}
 
 				if qua > 0 {
-					coltype = g.targetInfo.info.colmap[cond].typ.namefmt
+					coltype = g.ti.searchConditionFieldColumns[cond].typ.namefmt
 				}
 
 				field = cond.name // needed for isin/notin predicates
@@ -1566,43 +1810,43 @@ func (g *generator) sqlsearchcond(conds []*searchCondition, sel GO.SelectorExpr,
 	return list, count
 }
 
-func (g *generator) sqlonconflict(si *targetInfo) (clause *SQL.OnConflictClause) {
-	if si.query.onConflictBlock == nil {
+func (g *generator) sqlonconflict(ti *targetInfo) (clause *SQL.OnConflictClause) {
+	if ti.query.onConflictBlock == nil {
 		return nil
 	}
 
 	clause = new(SQL.OnConflictClause)
 
 	// conflict target
-	if len(si.query.onConflictBlock.column) > 0 {
-		target := make(SQL.ConflictColumns, len(si.query.onConflictBlock.column))
+	if len(ti.query.onConflictBlock.column) > 0 {
+		target := make(SQL.ConflictColumns, len(ti.query.onConflictBlock.column))
 		for i := 0; i < len(target); i++ {
-			target[i] = SQL.Name(si.query.onConflictBlock.column[i].name)
+			target[i] = SQL.Name(ti.query.onConflictBlock.column[i].name)
 		}
 		clause.Target = target
-	} else if len(si.query.onConflictBlock.index) > 0 {
+	} else if len(ti.query.onConflictBlock.index) > 0 {
 		target := SQL.ConflictIndex{}
-		target.Expr = si.info.conflictindex.indexpr
-		target.Pred = si.info.conflictindex.indpred
+		target.Expr = ti.onConflictIndex.indexpr
+		target.Pred = ti.onConflictIndex.indpred
 		clause.Target = target
-	} else if len(si.query.onConflictBlock.constraint) > 0 {
-		clause.Target = SQL.ConflictConstraint(si.query.onConflictBlock.constraint)
+	} else if len(ti.query.onConflictBlock.constraint) > 0 {
+		clause.Target = SQL.ConflictConstraint(ti.query.onConflictBlock.constraint)
 	}
 
 	// conflict action
-	if si.query.onConflictBlock.ignore {
+	if ti.query.onConflictBlock.ignore {
 		return clause
-	} else if si.query.onConflictBlock.update != nil {
+	} else if ti.query.onConflictBlock.update != nil {
 		ux := SQL.UpdateExcluded{}
-		if si.query.onConflictBlock.update.all {
-			for _, item := range si.info.input {
-				if si.skipwrite(item) {
+		if ti.query.onConflictBlock.update.all {
+			for _, item := range ti.input {
+				if ti.skipwrite(item) {
 					continue
 				}
 				ux.Columns = append(ux.Columns, SQL.Name(item.colId.name))
 			}
 		} else {
-			for _, cid := range si.query.onConflictBlock.update.items {
+			for _, cid := range ti.query.onConflictBlock.update.items {
 				ux.Columns = append(ux.Columns, SQL.Name(cid.name))
 			}
 		}
@@ -1740,10 +1984,18 @@ func (g *generator) sqlparam() SQL.OrdinalParameterSpec {
 }
 
 // declarevar reports whether the queryString value should be declared as a var or as a const.
-func (g *generator) declarevar(si *targetInfo) bool {
-	return g.asvar || len(si.query.filterField) > 0 ||
-		((si.query.kind == queryKindInsert || si.query.kind == queryKindUpdate) &&
-			si.query.dataField.data.isSlice)
+func (g *generator) declarevar(ti *targetInfo) bool {
+	return g.asvar || len(ti.query.filterField) > 0 ||
+		((ti.query.kind == queryKindInsert || ti.query.kind == queryKindUpdate) &&
+			ti.query.dataField.data.isSlice)
+}
+
+var filterMethodNamesReserved = map[string]struct{}{
+	"UnmarshalFQL":  struct{}{},
+	"UnmarshalSort": struct{}{},
+	"TextSearch":    struct{}{},
+	"AND":           struct{}{},
+	"OR":            struct{}{},
 }
 
 var overridingKindToSQLOverridingClause = map[overridingKind]SQL.OverridingClause{
@@ -1791,29 +2043,29 @@ var joinTypeToSQLJoinType = map[joinType]SQL.JoinType{
 }
 
 var gotyp2coltyp2converter = map[string]map[string]GO.SelectorExpr{
-	gotypeBoolSlice:   {"boolean[]": GO.SelectorExpr{ /*TODO*/ }},
-	gotypeStringSlice: {"text[]": GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"StringSliceToTextArray"}}},
-	gotypeIntSlice: {
+	goTypeBoolSlice:   {"boolean[]": GO.SelectorExpr{ /*TODO*/ }},
+	goTypeStringSlice: {"text[]": GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"StringSliceToTextArray"}}},
+	goTypeIntSlice: {
 		"integer[]":  GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
 		"smallint[]": GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
 		"bigint[]":   GO.SelectorExpr{X: GO.Ident{"gosql"}, Sel: GO.Ident{"IntSliceToIntArray"}},
 	},
-	gotypeInt8Slice: {
+	goTypeInt8Slice: {
 		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
 		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
 		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
-	gotypeInt16Slice: {
+	goTypeInt16Slice: {
 		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
 		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
 		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
-	gotypeInt32Slice: {
+	goTypeInt32Slice: {
 		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
 		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
 		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },
 	},
-	gotypeInt64Slice: {
+	goTypeInt64Slice: {
 		"integer[]":  GO.SelectorExpr{ /*TODO*/ },
 		"smallint[]": GO.SelectorExpr{ /*TODO*/ },
 		"bigint[]":   GO.SelectorExpr{ /*TODO*/ },

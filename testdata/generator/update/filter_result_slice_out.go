@@ -3,8 +3,9 @@
 package testdata
 
 import (
-	"github.com/frk/gosql"
 	"github.com/frk/gosql/testdata/common"
+
+	"github.com/frk/gosql"
 )
 
 func (q *UpdateFilterResultSliceQuery) Exec(c gosql.Conn) error {

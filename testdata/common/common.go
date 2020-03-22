@@ -24,10 +24,10 @@ type User2Iterator interface {
 }
 
 type User2 struct {
-	Id        int       `sql:"id"`
-	Email     string    `sql:"email"`
-	FullName  string    `sql:"full_name"`
-	CreatedAt time.Time `sql:"created_at"`
+	Id        int       `sql:"id" json:"id"`
+	Email     string    `sql:"email" json:"email"`
+	FullName  string    `sql:"full_name" json:"fullName"`
+	CreatedAt time.Time `sql:"created_at" json:"createdAt"`
 }
 
 func (u *User2) AfterScan() {

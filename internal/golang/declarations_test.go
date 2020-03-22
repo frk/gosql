@@ -140,7 +140,7 @@ func TestFuncDecl(t *testing.T) {
 	}{{
 		decl: FuncDecl{
 			Name: Ident{"Foo"},
-			Type: FuncType{},
+			Type: Signature{},
 		},
 		want: "func Foo() {}",
 	}}
@@ -167,14 +167,14 @@ func TestMethodDecl(t *testing.T) {
 		decl: MethodDecl{
 			Name: Ident{"Foo"},
 			Recv: RecvParam{Name: Ident{"t"}, Type: PointerRecvType{"Type"}},
-			Type: FuncType{},
+			Type: Signature{},
 		},
 		want: "func (t *Type) Foo() {}",
 	}, {
 		decl: MethodDecl{
 			Name: Ident{"Foo"},
 			Recv: RecvParam{Name: Ident{"t"}, Type: PointerRecvType{"Type"}},
-			Type: FuncType{
+			Type: Signature{
 				Params: ParamList{
 					{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
 					{Names: Ident{"baz"}, Type: Ident{"bool"}},
@@ -186,7 +186,7 @@ func TestMethodDecl(t *testing.T) {
 		decl: MethodDecl{
 			Name: Ident{"Foo"},
 			Recv: RecvParam{Name: Ident{"t"}, Type: PointerRecvType{"Type"}},
-			Type: FuncType{
+			Type: Signature{
 				Params: ParamList{
 					{Names: IdentList{{"foo"}, {"bar"}}, Type: Ident{"string"}},
 					{Names: Ident{"baz"}, Type: Ident{"bool"}},

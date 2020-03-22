@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/frk/gosql/internal/convert"
-	"github.com/frk/gosql/internal/filter"
+	//"github.com/frk/gosql/internal/filter"
 )
 
 type Conn interface {
@@ -37,9 +37,9 @@ type ErrorInfoHandler interface {
 	HandleErrorInfo(info *ErrorInfo) error
 }
 
-type Filter struct {
-	filter.Filter
-}
+//type Filter struct {
+//	filter.Filter
+//}
 
 func InValueList(num, pos int) string {
 	var b strings.Builder

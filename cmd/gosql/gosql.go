@@ -103,7 +103,8 @@ func (cmd *command) run(f *file) (*bytes.Buffer, error) {
 
 	// type-check specs against the db
 	for _, ti := range infos {
-		if err := pgcheck(cmd.pg, ti); err != nil {
+		c := pgchecker{pg: cmd.pg, ti: ti}
+		if err := c.run(); err != nil {
 			return nil, err
 		}
 	}

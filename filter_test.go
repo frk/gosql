@@ -1,4 +1,4 @@
-package filter
+package gosql
 
 import (
 	"testing"
@@ -28,7 +28,35 @@ var test_colmap = map[string]string{
 	"j": "col_j",
 }
 
-func TestParseFQL(t *testing.T) {
+func TestFilterUnmarshalSort(t *testing.T) {
+	// TODO
+}
+
+func TestFilterTextSearch(t *testing.T) {
+	// TODO
+}
+
+func TestFilterCol(t *testing.T) {
+	// TODO
+}
+
+func TestFilterOrderBy(t *testing.T) {
+	// TODO
+}
+
+func TestFilterAND(t *testing.T) {
+	// TODO
+}
+
+func TestFilterOR(t *testing.T) {
+	// TODO
+}
+
+func Test_formatTSQuery(t *testing.T) {
+	// TODO
+}
+
+func TestFilterUnmarshalFQL_ToSQL_Params(t *testing.T) {
 	type result struct {
 		clause string
 		params []interface{}
@@ -87,7 +115,7 @@ func TestParseFQL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run("", func(t *testing.T) {
 			f := new(Filter)
-			err := f.ParseFQL(tt.fql, test_colmap)
+			err := f.UnmarshalFQL(tt.fql, test_colmap, false)
 			if e := compare.Compare(err, tt.err); e != nil {
 				t.Error(e)
 			} else {
