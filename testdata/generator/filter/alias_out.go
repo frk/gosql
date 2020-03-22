@@ -9,10 +9,10 @@ import (
 )
 
 var _FilterBasicAliasRecords_colmap = map[string]string{
-	"id":        `u."id"`,
-	"email":     `u."email"`,
-	"fullName":  `u."full_name"`,
-	"createdAt": `u."created_at"`,
+	"Id":        `u."id"`,
+	"Email":     `u."email"`,
+	"FullName":  `u."full_name"`,
+	"CreatedAt": `u."created_at"`,
 }
 
 func (f *FilterBasicAliasRecords) UnmarshalFQL(fqlString string) error {

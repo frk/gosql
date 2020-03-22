@@ -54,6 +54,14 @@ type directory struct {
 type command struct {
 	pg   *postgres
 	dirs []*directory
+
+	// options
+	// TODO(mkopriva): this is just getting copied verbatim to the the generator
+	// which is ugly, I probably need a config struct that's passed to from the
+	// command to the analyzer, type checker, and generator....
+	keytag  string
+	keysep  string
+	keybase bool
 }
 
 func (cmd *command) exec(dburl string, files ...string) error {
@@ -110,7 +118,14 @@ func (cmd *command) run(f *file) (*bytes.Buffer, error) {
 	}
 
 	// generate code
-	return generate(f.dir.pkg.Name, infos)
+	g := &generator{infos: infos}
+	g.keytag = cmd.keytag
+	g.keysep = cmd.keysep
+	g.keybase = cmd.keybase
+	if err := g.run(f.dir.pkg.Name); err != nil {
+		return nil, err
+	}
+	return &g.buf, nil
 }
 
 // parsedir parses and type-checks the directory at its given path.

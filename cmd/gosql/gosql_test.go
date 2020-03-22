@@ -114,6 +114,7 @@ CREATE TABLE test_user (
 	, is_active boolean not null default true
 	, metadata1 json not null default '{}'
 	, metadata2 jsonb
+	, _search_document tsvector
 	, created_at timestamptz not null
 	, updated_at timestamptz not null default now()
 );

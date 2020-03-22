@@ -160,8 +160,10 @@ func TestGenerate(t *testing.T) {
 	}, {
 		dirname: "filter",
 		filenames: []string{
+			"alias",
 			"basic",
-			// TODO filter (with textsearch)
+			"nested",
+			"textsearch",
 		},
 	}}
 
@@ -175,6 +177,7 @@ func TestGenerate(t *testing.T) {
 
 		cmd := new(command)
 		cmd.pg = testdb.pg
+		cmd.keysep = "."
 
 		dir, err := cmd.parsedir("../../testdata/generator/" + tt.dirname)
 		if err != nil {

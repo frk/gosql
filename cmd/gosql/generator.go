@@ -124,18 +124,15 @@ func (ti *targetInfo) skipinit() bool {
 		(ti.query.resultField == nil) // scan output into input fields?
 }
 
-func generate(pkgName string, infos []*targetInfo) (*bytes.Buffer, error) {
-	g := &generator{infos: infos}
-	if err := g.run(pkgName); err != nil {
-		return nil, err
-	}
-	return &g.buf, nil
-}
-
 type generator struct {
 	infos   []*targetInfo
 	pkgName string
 	buf     bytes.Buffer
+
+	keytag  string
+	keysep  string
+	keybase bool
+	keyfunc func(*fieldColumnInfo) string
 
 	file GO.File
 
@@ -169,6 +166,8 @@ type generator struct {
 }
 
 func (g *generator) run(pkgName string) error {
+	g.resolveKeyFunc()
+
 	for _, ti := range g.infos {
 		g.ti = ti
 		g.nparam = 0
@@ -232,20 +231,7 @@ func (g *generator) buildFilterMap(ti *targetInfo) (mapId GO.Ident, mapDecl GO.V
 	elems := make([]GO.KeyElement, 0)
 	keyset := make(map[string]struct{})
 	for _, item := range ti.input {
-		// TODO(mkopriva): add support for choosing the "source" for
-		// constructing the map keys, possible options could be:
-		//	- from field names
-		// 	- from tags other than json
-		// 	- from tags other than json
-		// TODO(mkopriva): add support for choosing "how" the map keys
-		// should be constructed, possible options could be:
-		//	- using the base of the "source"
-		//	- concatenating the source if nested, and the concat "node"
-		//	for could be provided by the user, i.e. "." or "_" or ...
-		//
-		// NOTE(mkopriva): the solutions for the above TODO items could
-		// be supported by a global config or by a directive.
-		key := item.field.tag.First("json")
+		key := g.keyfunc(item) //.field.tag.First("json")
 		if _, ok := keyset[key]; ok {
 			continue
 		}
@@ -299,7 +285,7 @@ func (g *generator) buildFilterTextSearchMethod(ti *targetInfo) (m GO.MethodDecl
 	m.Name.Name = "TextSearch"
 	m.Type.Params = GO.ParamList{{Names: GO.Ident{"v"}, Type: GO.Ident{"string"}}}
 	if cid := ti.filter.textSearchColId; cid != nil {
-		m.Body.List = []GO.StmtNode{GO.ReturnStmt{GO.CallExpr{
+		m.Body.List = []GO.StmtNode{GO.ExprStmt{GO.CallExpr{
 			Fun:  GO.Ident{"f.Filter.TextSearch"},
 			Args: GO.ArgsList{List: GO.ExprList{GO.RawStringLit(cid.quoted()), GO.Ident{"v"}}},
 		}}}
@@ -1988,6 +1974,46 @@ func (g *generator) declarevar(ti *targetInfo) bool {
 	return g.asvar || len(ti.query.filterField) > 0 ||
 		((ti.query.kind == queryKindInsert || ti.query.kind == queryKindUpdate) &&
 			ti.query.dataField.data.isSlice)
+}
+
+func (g *generator) resolveKeyFunc() {
+	if len(g.keytag) > 0 {
+		if g.keybase {
+			g.keyfunc = g._tagNameBase
+		} else {
+			g.keyfunc = g._tagNameJoin
+		}
+	} else {
+		if g.keybase {
+			g.keyfunc = g._fieldNameBase
+		} else {
+			g.keyfunc = g._fieldNameJoin
+		}
+	}
+}
+
+func (g *generator) _fieldNameBase(fc *fieldColumnInfo) (key string) {
+	return fc.field.name
+}
+
+func (g *generator) _fieldNameJoin(fc *fieldColumnInfo) (key string) {
+	for _, node := range fc.field.path {
+		key += node.name + g.keysep
+	}
+	key += fc.field.name
+	return key
+}
+
+func (g *generator) _tagNameBase(fc *fieldColumnInfo) (key string) {
+	return fc.field.tag.First(g.keytag)
+}
+
+func (g *generator) _tagNameJoin(fc *fieldColumnInfo) (key string) {
+	for _, node := range fc.field.path {
+		key += node.tag.First(g.keytag) + g.keysep
+	}
+	key += fc.field.tag.First(g.keytag)
+	return key
 }
 
 var filterMethodNamesReserved = map[string]struct{}{

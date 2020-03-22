@@ -9,10 +9,10 @@ import (
 )
 
 var _FilterBasicRecords_colmap = map[string]string{
-	"id":        `"id"`,
-	"email":     `"email"`,
-	"fullName":  `"full_name"`,
-	"createdAt": `"created_at"`,
+	"Id":        `"id"`,
+	"Email":     `"email"`,
+	"FullName":  `"full_name"`,
+	"CreatedAt": `"created_at"`,
 }
 
 func (f *FilterBasicRecords) UnmarshalFQL(fqlString string) error {
