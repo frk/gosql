@@ -395,6 +395,7 @@ func (a *analyzer) filterStruct() (err error) {
 	return nil
 }
 
+// dataType
 func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 	var (
 		ftyp  = field.Type()
@@ -482,6 +483,7 @@ func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 	return nil
 }
 
+// fieldInfoList
 func (a *analyzer) fieldInfoList(data *dataType, styp *types.Struct) error {
 	// The loopstate type holds the state of a loop over a struct's fields.
 	type loopstate struct {
@@ -582,7 +584,7 @@ stackloop:
 			f.useAdd = tag.HasOption("sql", "add")
 			f.canCast = tag.HasOption("sql", "cast")
 			f.useDefault = tag.HasOption("sql", "default")
-			f.useCoalesce, f.coalesceValue = a.coalesceinfo(tag)
+			f.useCoalesce, f.coalesceValue = a.coalesceInfo(tag)
 
 			// Resolve the column id.
 			colId, err := a.colId(loop.pfx+sqltag, fld)
@@ -660,6 +662,7 @@ func (a *analyzer) typeInfo(tt types.Type) (typ typeInfo, base types.Type) {
 	return typ, base
 }
 
+// iteratorInterface
 func (a *analyzer) iteratorInterface(data *dataType, iface *types.Interface, named *types.Named) (*types.Named, error) {
 	if iface.NumExplicitMethods() != 1 {
 		return nil, errors.BadIteratorTypeError
@@ -680,6 +683,7 @@ func (a *analyzer) iteratorInterface(data *dataType, iface *types.Interface, nam
 	return named, nil
 }
 
+// iteratorFunction
 func (a *analyzer) iteratorFunction(data *dataType, sig *types.Signature) (*types.Named, error) {
 	// Must take 1 argument and return one value of type error. "func(T) error"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
@@ -728,7 +732,8 @@ func (a *analyzer) typeKind(typ types.Type) typeKind {
 	return 0 // unsupported / unknown
 }
 
-func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
+// coalesceInfo
+func (a *analyzer) coalesceInfo(tag tagutil.Tag) (use bool, val string) {
 	if sqltag := tag["sql"]; len(sqltag) > 0 {
 		for _, opt := range sqltag[1:] {
 			if strings.HasPrefix(opt, "coalesce") {
@@ -743,6 +748,7 @@ func (a *analyzer) coalesceinfo(tag tagutil.Tag) (use bool, val string) {
 	return use, val
 }
 
+// whereBlock
 func (a *analyzer) whereBlock(field *types.Var) (err error) {
 	if !a.query.kind.isSelect() && a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
 		return errors.IllegalWhereBlockError
@@ -1017,6 +1023,7 @@ stackloop:
 	return nil
 }
 
+// joinBlock
 func (a *analyzer) joinBlock(field *types.Var) (err error) {
 	joinblockname := strings.ToLower(field.Name())
 	if joinblockname == "join" && !a.query.kind.isSelect() {
@@ -1129,6 +1136,7 @@ func (a *analyzer) joinBlock(field *types.Var) (err error) {
 	return nil
 }
 
+// onConflictBlock
 func (a *analyzer) onConflictBlock(field *types.Var) (err error) {
 	if a.query.kind != queryKindInsert {
 		return errors.IllegalOnConflictBlockError

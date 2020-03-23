@@ -1,48 +1,16 @@
 package convert
 
 import (
-	"database/sql"
 	"testing"
 )
 
-func TestBitArrWithoutScanner(t *testing.T) {
-	test_table{{
-		dest: func() interface{} {
-			return new([]byte)
-		},
-		rows: []testrow{
-			{typ: "bitarr", in: nil, want: new([]byte)},
-			{typ: "bitarr", in: `{}`, want: bytesptr(`{}`)},
-			{typ: "bitarr", in: `{0}`, want: bytesptr(`{0}`)},
-			{typ: "bitarr", in: `{1}`, want: bytesptr(`{1}`)},
-			{typ: "bitarr", in: `{1,0}`, want: bytesptr(`{1,0}`)},
-			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: bytesptr(`{0,1,1,1,0,1,0,0}`)},
-		},
-	}, {
-		dest: func() interface{} {
-			return new(string)
-		},
-		rows: []testrow{
-			// NOTE: NULL is not supported by string, if the source column
-			// is NULLable one should use sql.NullString or *string instead.
-			// {typ: "bitarr", in: nil, want: new(string)},
-
-			{typ: "bitarr", in: `{}`, want: strptr(`{}`)},
-			{typ: "bitarr", in: `{0}`, want: strptr(`{0}`)},
-			{typ: "bitarr", in: `{1}`, want: strptr(`{1}`)},
-			{typ: "bitarr", in: `{1,0}`, want: strptr(`{1,0}`)},
-			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: strptr(`{0,1,1,1,0,1,0,0}`)},
-		},
-	}}.execute(t)
-}
-
-func TestBitArrScanners(t *testing.T) {
-	test_table{{
-		scnr: func() (sql.Scanner, interface{}) {
-			s := BitArr2BoolSlice{Ptr: new([]bool)}
+func TestBitArr_Scanner(t *testing.T) {
+	test_scanner{{
+		scanner: func() (interface{}, interface{}) {
+			s := BitArrToBoolSlice{Ptr: new([]bool)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "bitarr", in: nil, want: new([]bool)},
 			{typ: "bitarr", in: `{}`, want: &[]bool{}},
 			{typ: "bitarr", in: `{0}`, want: &[]bool{false}},
@@ -51,11 +19,11 @@ func TestBitArrScanners(t *testing.T) {
 			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: &[]bool{false, true, true, true, false, true, false, false}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
-			s := BitArr2Uint8Slice{Ptr: new([]uint8)}
+		scanner: func() (interface{}, interface{}) {
+			s := BitArrToUint8Slice{Ptr: new([]uint8)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "bitarr", in: nil, want: new([]uint8)},
 			{typ: "bitarr", in: `{}`, want: &[]uint8{}},
 			{typ: "bitarr", in: `{0}`, want: &[]uint8{0}},
@@ -64,17 +32,46 @@ func TestBitArrScanners(t *testing.T) {
 			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: &[]uint8{0, 1, 1, 1, 0, 1, 0, 0}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
-			s := BitArr2UintSlice{Ptr: new([]uint)}
+		scanner: func() (interface{}, interface{}) {
+			s := BitArrToUintSlice{Ptr: new([]uint)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "bitarr", in: nil, want: new([]uint)},
 			{typ: "bitarr", in: `{}`, want: &[]uint{}},
 			{typ: "bitarr", in: `{0}`, want: &[]uint{0}},
 			{typ: "bitarr", in: `{1}`, want: &[]uint{1}},
 			{typ: "bitarr", in: `{1,0}`, want: &[]uint{1, 0}},
 			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: &[]uint{0, 1, 1, 1, 0, 1, 0, 0}},
+		},
+	}}.execute(t)
+}
+
+func TestBitArr_NoScanner(t *testing.T) {
+	test_scanner{{
+		scanner: func() (interface{}, interface{}) {
+			d := new([]byte)
+			return d, d
+		},
+		rows: []test_scanner_row{
+			{typ: "bitarr", in: nil, want: new([]byte)},
+			{typ: "bitarr", in: `{}`, want: bytesptr(`{}`)},
+			{typ: "bitarr", in: `{0}`, want: bytesptr(`{0}`)},
+			{typ: "bitarr", in: `{1}`, want: bytesptr(`{1}`)},
+			{typ: "bitarr", in: `{1,0}`, want: bytesptr(`{1,0}`)},
+			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: bytesptr(`{0,1,1,1,0,1,0,0}`)},
+		},
+	}, {
+		scanner: func() (interface{}, interface{}) {
+			d := new(string)
+			return d, d
+		},
+		rows: []test_scanner_row{
+			{typ: "bitarr", in: `{}`, want: strptr(`{}`)},
+			{typ: "bitarr", in: `{0}`, want: strptr(`{0}`)},
+			{typ: "bitarr", in: `{1}`, want: strptr(`{1}`)},
+			{typ: "bitarr", in: `{1,0}`, want: strptr(`{1,0}`)},
+			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: strptr(`{0,1,1,1,0,1,0,0}`)},
 		},
 	}}.execute(t)
 }

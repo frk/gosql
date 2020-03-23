@@ -1,5 +1,17 @@
 ## convert
 
+| postgres type     | go type           | Valuer               | Scanner               |
+|-------------------|-------------------|----------------------| ----------------------|
+| `bit`             | `bool`            | `BitFromBool`        | **native**            |
+| `bit`             | `byte`            | **native**           | **native**            |
+| `bit`             | `string`          | **native**           | **native**            |
+| `bitarr`          | `[]bool`          | ???                  | `BitArrToBoolSlice`   |
+| `bitarr`          | `[]uint8`         | ???                  | `BitArrToUint8Slice`  |
+| `bitarr`          | `[]uint`          | ???                  | `BitArrToUintSlice`   |
+| `json`            | `interface{}`     | `JSON`               | `JSON`                |
+| `json`            | `[]byte`          | **native**           | **native**            |
+| `json`            | `string`          | **native**           | **native**            |
+
 ### TODO: 
 
 **basic types**

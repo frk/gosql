@@ -1,17 +1,16 @@
 package convert
 
 import (
-	"database/sql"
 	"testing"
 )
 
 func TestBPCharArrScanners(t *testing.T) {
-	test_table{{
-		scnr: func() (sql.Scanner, interface{}) {
+	test_scanner{{
+		scanner: func() (interface{}, interface{}) {
 			s := BPCharArr2ByteSlice{Ptr: new([]byte)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "bpchararr", in: nil, want: new([]byte)},
 			{typ: "bpchararr", in: `{}`, want: &[]byte{}},
 			{typ: "bpchararr", in: `{a,b,c}`, want: &[]byte{'a', 'b', 'c'}},
@@ -25,11 +24,11 @@ func TestBPCharArrScanners(t *testing.T) {
 			{typ: "bpchararr", in: "{\"\a\",\"\v\",\"\\\\\"}", want: &[]byte{'\a', '\v', '\\'}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
+		scanner: func() (interface{}, interface{}) {
 			s := BPCharArr2RuneSlice{Ptr: new([]rune)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "bpchararr", in: nil, want: new([]rune)},
 			{typ: "bpchararr", in: `{}`, want: &[]rune{}},
 			{typ: "bpchararr", in: `{a,b,c}`, want: &[]rune{'a', 'b', 'c'}},
@@ -43,11 +42,11 @@ func TestBPCharArrScanners(t *testing.T) {
 			{typ: "bpchararr", in: "{\"\a\",\"\v\",\"\\\\\"}", want: &[]rune{'\a', '\v', '\\'}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
+		scanner: func() (interface{}, interface{}) {
 			s := BPCharArr2String{Ptr: new(string)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "bpchararr", in: nil, want: new(string)},
 			{typ: "bpchararr", in: `{}`, want: strptr(``)},
 			{typ: "bpchararr", in: `{a,b,c}`, want: strptr(`abc`)},

@@ -1,17 +1,16 @@
 package convert
 
 import (
-	"database/sql"
 	"testing"
 )
 
 func TestIntArrScanners(t *testing.T) {
-	test_table{{
-		scnr: func() (sql.Scanner, interface{}) {
+	test_scanner{{
+		scanner: func() (interface{}, interface{}) {
 			s := IntArr2IntSlice{Ptr: new([]int)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "int2arr", in: nil, want: new([]int)},
 			{typ: "int2arr", in: `{}`, want: &[]int{}},
 			{typ: "int2arr", in: `{42,32767,-10,0}`, want: &[]int{42, 32767, -10, 0}},
@@ -23,11 +22,11 @@ func TestIntArrScanners(t *testing.T) {
 			{typ: "int8arr", in: `{42,9223372036854775807,-10,0}`, want: &[]int{42, 9223372036854775807, -10, 0}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
+		scanner: func() (interface{}, interface{}) {
 			s := IntArr2Int8Slice{Ptr: new([]int8)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "int2arr", in: nil, want: new([]int8)},
 			{typ: "int2arr", in: `{}`, want: &[]int8{}},
 			{typ: "int2arr", in: `{42,127,-10,0}`, want: &[]int8{42, 127, -10, 0}},
@@ -39,11 +38,11 @@ func TestIntArrScanners(t *testing.T) {
 			{typ: "int8arr", in: `{42,128,-10,0}`, want: &[]int8{42, -128, -10, 0}}, // note the integer overflow
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
+		scanner: func() (interface{}, interface{}) {
 			s := IntArr2Int16Slice{Ptr: new([]int16)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "int2arr", in: nil, want: new([]int16)},
 			{typ: "int2arr", in: `{}`, want: &[]int16{}},
 			{typ: "int2arr", in: `{42,32767,-10,0}`, want: &[]int16{42, 32767, -10, 0}},
@@ -55,11 +54,11 @@ func TestIntArrScanners(t *testing.T) {
 			{typ: "int8arr", in: `{42,32767,-10,0}`, want: &[]int16{42, 32767, -10, 0}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
+		scanner: func() (interface{}, interface{}) {
 			s := IntArr2Int32Slice{Ptr: new([]int32)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "int2arr", in: nil, want: new([]int32)},
 			{typ: "int2arr", in: `{}`, want: &[]int32{}},
 			{typ: "int2arr", in: `{42,127,-10,0}`, want: &[]int32{42, 127, -10, 0}},
@@ -71,11 +70,11 @@ func TestIntArrScanners(t *testing.T) {
 			{typ: "int8arr", in: `{42,2147483648,-10,0}`, want: &[]int32{42, -2147483648, -10, 0}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
+		scanner: func() (interface{}, interface{}) {
 			s := IntArr2Int64Slice{Ptr: new([]int64)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "int2arr", in: nil, want: new([]int64)},
 			{typ: "int2arr", in: `{}`, want: &[]int64{}},
 			{typ: "int2arr", in: `{42,127,-10,0}`, want: &[]int64{42, 127, -10, 0}},

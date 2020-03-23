@@ -1,10 +1,10 @@
 package convert
 
-type BitArr2BoolSlice struct {
+type BitArrToBoolSlice struct {
 	Ptr *[]bool
 }
 
-func (s BitArr2BoolSlice) Scan(src interface{}) error {
+func (s BitArrToBoolSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -27,11 +27,11 @@ func (s BitArr2BoolSlice) Scan(src interface{}) error {
 	return nil
 }
 
-type BitArr2Uint8Slice struct {
+type BitArrToUint8Slice struct {
 	Ptr *[]uint8
 }
 
-func (s BitArr2Uint8Slice) Scan(src interface{}) error {
+func (s BitArrToUint8Slice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -54,11 +54,11 @@ func (s BitArr2Uint8Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type BitArr2UintSlice struct {
+type BitArrToUintSlice struct {
 	Ptr *[]uint
 }
 
-func (s BitArr2UintSlice) Scan(src interface{}) error {
+func (s BitArrToUintSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err

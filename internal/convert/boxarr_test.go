@@ -1,17 +1,16 @@
 package convert
 
 import (
-	"database/sql"
 	"testing"
 )
 
 func TestBoxArr2Float64a2a2Slice(t *testing.T) {
-	test_table{{
-		scnr: func() (sql.Scanner, interface{}) {
+	test_scanner{{
+		scanner: func() (interface{}, interface{}) {
 			s := BoxArr2Float64a2a2Slice{Ptr: new([][2][2]float64)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "boxarr", in: nil, want: new([][2][2]float64)},
 			{typ: "boxarr", in: `{}`, want: &[][2][2]float64{}},
 			{typ: "boxarr", in: `{(1,1),(0,0)}`, want: &[][2][2]float64{{{1, 1}, {0, 0}}}},

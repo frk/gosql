@@ -1,17 +1,16 @@
 package convert
 
 import (
-	"database/sql"
 	"testing"
 )
 
 func TestBoolArrScanners(t *testing.T) {
-	test_table{{
-		scnr: func() (sql.Scanner, interface{}) {
+	test_scanner{{
+		scanner: func() (interface{}, interface{}) {
 			s := BoolArr2BoolSlice{Ptr: new([]bool)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "boolarr", in: nil, want: new([]bool)},
 			{typ: "boolarr", in: `{}`, want: &[]bool{}},
 			{typ: "boolarr", in: `{f}`, want: &[]bool{false}},

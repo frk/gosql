@@ -1,17 +1,16 @@
 package convert
 
 import (
-	"database/sql"
 	"testing"
 )
 
 func TestCharArrScanners(t *testing.T) {
-	test_table{{
-		scnr: func() (sql.Scanner, interface{}) {
+	test_scanner{{
+		scanner: func() (interface{}, interface{}) {
 			s := CharArr2ByteSlice{Ptr: new([]byte)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "chararr", in: nil, want: new([]byte)},
 			{typ: "chararr", in: `{}`, want: &[]byte{}},
 			{typ: "chararr", in: `{a,b,c}`, want: &[]byte{'a', 'b', 'c'}},
@@ -25,11 +24,11 @@ func TestCharArrScanners(t *testing.T) {
 			{typ: "chararr", in: "{\"\a\",\"\v\",\"\\\\\"}", want: &[]byte{'\a', '\v', '\\'}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
+		scanner: func() (interface{}, interface{}) {
 			s := CharArr2RuneSlice{Ptr: new([]rune)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "chararr", in: nil, want: new([]rune)},
 			{typ: "chararr", in: `{}`, want: &[]rune{}},
 			{typ: "chararr", in: `{a,b,c}`, want: &[]rune{'a', 'b', 'c'}},
@@ -43,11 +42,11 @@ func TestCharArrScanners(t *testing.T) {
 			{typ: "chararr", in: "{\"\a\",\"\v\",\"\\\\\"}", want: &[]rune{'\a', '\v', '\\'}},
 		},
 	}, {
-		scnr: func() (sql.Scanner, interface{}) {
+		scanner: func() (interface{}, interface{}) {
 			s := CharArr2String{Ptr: new(string)}
 			return s, s.Ptr
 		},
-		rows: []testrow{
+		rows: []test_scanner_row{
 			{typ: "chararr", in: nil, want: new(string)},
 			{typ: "chararr", in: `{}`, want: strptr(``)},
 			{typ: "chararr", in: `{a,b,c}`, want: strptr(`abc`)},
