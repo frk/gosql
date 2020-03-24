@@ -4,10 +4,47 @@ import (
 	"testing"
 )
 
-func TestBitArr_Scanner(t *testing.T) {
+func TestBitArray_Valuer(t *testing.T) {
+	test_valuer{{
+		valuer: func() interface{} {
+			return new(BitArrayFromBoolSlice)
+		},
+		rows: []test_valuer_row{
+			{typ: "bitarr", in: nil, want: nil},
+			{typ: "bitarr", in: []bool{}, want: strptr(`{}`)},
+			{typ: "bitarr", in: []bool{true}, want: strptr(`{1}`)},
+			{typ: "bitarr", in: []bool{false}, want: strptr(`{0}`)},
+			{typ: "bitarr", in: []bool{false, false, false, true, true, false, true, true}, want: strptr(`{0,0,0,1,1,0,1,1}`)},
+		},
+	}, {
+		valuer: func() interface{} {
+			return new(BitArrayFromUint8Slice)
+		},
+		rows: []test_valuer_row{
+			{typ: "bitarr", in: nil, want: nil},
+			{typ: "bitarr", in: []uint8{}, want: strptr(`{}`)},
+			{typ: "bitarr", in: []uint8{1}, want: strptr(`{1}`)},
+			{typ: "bitarr", in: []uint8{0}, want: strptr(`{0}`)},
+			{typ: "bitarr", in: []uint8{0, 0, 0, 1, 1, 0, 1, 1}, want: strptr(`{0,0,0,1,1,0,1,1}`)},
+		},
+	}, {
+		valuer: func() interface{} {
+			return new(BitArrayFromUintSlice)
+		},
+		rows: []test_valuer_row{
+			{typ: "bitarr", in: nil, want: nil},
+			{typ: "bitarr", in: []uint{}, want: strptr(`{}`)},
+			{typ: "bitarr", in: []uint{1}, want: strptr(`{1}`)},
+			{typ: "bitarr", in: []uint{0}, want: strptr(`{0}`)},
+			{typ: "bitarr", in: []uint{0, 0, 0, 1, 1, 0, 1, 1}, want: strptr(`{0,0,0,1,1,0,1,1}`)},
+		},
+	}}.execute(t)
+}
+
+func TestBitArray_Scanner(t *testing.T) {
 	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
-			s := BitArrToBoolSlice{Ptr: new([]bool)}
+			s := BitArrayToBoolSlice{Ptr: new([]bool)}
 			return s, s.Ptr
 		},
 		rows: []test_scanner_row{
@@ -20,7 +57,7 @@ func TestBitArr_Scanner(t *testing.T) {
 		},
 	}, {
 		scanner: func() (interface{}, interface{}) {
-			s := BitArrToUint8Slice{Ptr: new([]uint8)}
+			s := BitArrayToUint8Slice{Ptr: new([]uint8)}
 			return s, s.Ptr
 		},
 		rows: []test_scanner_row{
@@ -33,7 +70,7 @@ func TestBitArr_Scanner(t *testing.T) {
 		},
 	}, {
 		scanner: func() (interface{}, interface{}) {
-			s := BitArrToUintSlice{Ptr: new([]uint)}
+			s := BitArrayToUintSlice{Ptr: new([]uint)}
 			return s, s.Ptr
 		},
 		rows: []test_scanner_row{
@@ -43,35 +80,6 @@ func TestBitArr_Scanner(t *testing.T) {
 			{typ: "bitarr", in: `{1}`, want: &[]uint{1}},
 			{typ: "bitarr", in: `{1,0}`, want: &[]uint{1, 0}},
 			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: &[]uint{0, 1, 1, 1, 0, 1, 0, 0}},
-		},
-	}}.execute(t)
-}
-
-func TestBitArr_NoScanner(t *testing.T) {
-	test_scanner{{
-		scanner: func() (interface{}, interface{}) {
-			d := new([]byte)
-			return d, d
-		},
-		rows: []test_scanner_row{
-			{typ: "bitarr", in: nil, want: new([]byte)},
-			{typ: "bitarr", in: `{}`, want: bytesptr(`{}`)},
-			{typ: "bitarr", in: `{0}`, want: bytesptr(`{0}`)},
-			{typ: "bitarr", in: `{1}`, want: bytesptr(`{1}`)},
-			{typ: "bitarr", in: `{1,0}`, want: bytesptr(`{1,0}`)},
-			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: bytesptr(`{0,1,1,1,0,1,0,0}`)},
-		},
-	}, {
-		scanner: func() (interface{}, interface{}) {
-			d := new(string)
-			return d, d
-		},
-		rows: []test_scanner_row{
-			{typ: "bitarr", in: `{}`, want: strptr(`{}`)},
-			{typ: "bitarr", in: `{0}`, want: strptr(`{0}`)},
-			{typ: "bitarr", in: `{1}`, want: strptr(`{1}`)},
-			{typ: "bitarr", in: `{1,0}`, want: strptr(`{1,0}`)},
-			{typ: "bitarr", in: `{0,1,1,1,0,1,0,0}`, want: strptr(`{0,1,1,1,0,1,0,0}`)},
 		},
 	}}.execute(t)
 }

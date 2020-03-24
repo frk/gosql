@@ -4,10 +4,25 @@ import (
 	"testing"
 )
 
-func TestBoolArrScanners(t *testing.T) {
+func TestBoolArray_Valuer(t *testing.T) {
+	test_valuer{{
+		valuer: func() interface{} {
+			return new(BoolArrayFromBoolSlice)
+		},
+		rows: []test_valuer_row{
+			{typ: "boolarr", in: nil, want: nil},
+			{typ: "boolarr", in: []bool{}, want: strptr(`{}`)},
+			{typ: "boolarr", in: []bool{true}, want: strptr(`{t}`)},
+			{typ: "boolarr", in: []bool{false}, want: strptr(`{f}`)},
+			{typ: "boolarr", in: []bool{false, false, false, true, true, false, true, true}, want: strptr(`{f,f,f,t,t,f,t,t}`)},
+		},
+	}}.execute(t)
+}
+
+func TestBoolArray_Scanner(t *testing.T) {
 	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
-			s := BoolArr2BoolSlice{Ptr: new([]bool)}
+			s := BoolArrayToBoolSlice{Ptr: new([]bool)}
 			return s, s.Ptr
 		},
 		rows: []test_scanner_row{

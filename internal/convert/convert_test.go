@@ -299,3 +299,5 @@ func strptr(s string) *string   { return &s }
 func bytesptr(s string) *[]byte { b := []byte(s); return &b }
 func byteptr(b byte) *byte      { return &b }
 func boolptr(b bool) *bool      { return &b }
+func uptr(u uint) *uint         { return &u }
+func u8ptr(u uint8) *uint8      { return &u }

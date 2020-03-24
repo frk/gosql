@@ -22,15 +22,3 @@ func (j JSON) Value() (driver.Value, error) {
 	}
 	return json.Marshal(j.V)
 }
-
-// DO NOT USE: json can be scanned into `[]byte` directly.
-type JSONToByteSlice NO_TYPE
-
-// DO NOT USE: json can be scanned into `string` directly.
-type JSONToString NO_TYPE
-
-// DO NOT USE: json can be created from `[]byte` directly.
-type JSONFromByteSlice NO_TYPE
-
-// DO NOT USE: json can be created from `string` directly.
-type JSONFromString NO_TYPE

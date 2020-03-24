@@ -1,10 +1,108 @@
 package convert
 
-type BitArrToBoolSlice struct {
+import (
+	"database/sql/driver"
+)
+
+type BitArrayFromBoolSlice struct {
+	S []bool
+}
+
+func (s BitArrayFromBoolSlice) Value() (driver.Value, error) {
+	if s.S == nil {
+		return nil, nil
+	}
+
+	if n := len(s.S); n > 0 {
+		out := make([]byte, 1+(n*2))
+		out[0] = '{'
+
+		j := 1
+		for i := 0; i < n; i++ {
+			if s.S[i] {
+				out[j] = '1'
+			} else {
+				out[j] = '0'
+			}
+			out[j+1] = ','
+			j += 2
+		}
+
+		out[len(out)-1] = '}'
+		return out, nil
+	}
+
+	return []byte{'{', '}'}, nil
+}
+
+type BitArrayFromUint8Slice struct {
+	S []uint8
+}
+
+func (s BitArrayFromUint8Slice) Value() (driver.Value, error) {
+	if s.S == nil {
+		return nil, nil
+	}
+
+	if n := len(s.S); n > 0 {
+		out := make([]byte, 1+(n*2))
+		out[0] = '{'
+
+		j := 1
+		for i := 0; i < n; i++ {
+			if s.S[i] == 0 {
+				out[j] = '0'
+			} else {
+				out[j] = '1'
+			}
+			out[j+1] = ','
+			j += 2
+		}
+
+		out[len(out)-1] = '}'
+		return out, nil
+	}
+
+	return []byte{'{', '}'}, nil
+}
+
+type BitArrayFromUintSlice struct {
+	S []uint
+}
+
+func (s BitArrayFromUintSlice) Value() (driver.Value, error) {
+	if s.S == nil {
+		return nil, nil
+	}
+
+	if n := len(s.S); n > 0 {
+		out := make([]byte, 1+(n*2))
+		out[0] = '{'
+
+		j := 1
+		for i := 0; i < n; i++ {
+			if s.S[i] == 0 {
+				out[j] = '0'
+			} else {
+				out[j] = '1'
+			}
+			out[j+1] = ','
+			j += 2
+		}
+
+		out[len(out)-1] = '}'
+		return out, nil
+	}
+
+	return []byte{'{', '}'}, nil
+	return nil, nil
+}
+
+type BitArrayToBoolSlice struct {
 	Ptr *[]bool
 }
 
-func (s BitArrToBoolSlice) Scan(src interface{}) error {
+func (s BitArrayToBoolSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -27,11 +125,11 @@ func (s BitArrToBoolSlice) Scan(src interface{}) error {
 	return nil
 }
 
-type BitArrToUint8Slice struct {
+type BitArrayToUint8Slice struct {
 	Ptr *[]uint8
 }
 
-func (s BitArrToUint8Slice) Scan(src interface{}) error {
+func (s BitArrayToUint8Slice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -54,11 +152,11 @@ func (s BitArrToUint8Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type BitArrToUintSlice struct {
+type BitArrayToUintSlice struct {
 	Ptr *[]uint
 }
 
-func (s BitArrToUintSlice) Scan(src interface{}) error {
+func (s BitArrayToUintSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
