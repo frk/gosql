@@ -1,19 +1,20 @@
 package convert
 
 import (
+	"database/sql/driver"
 	"strconv"
 )
 
-type BoxArr2Float64a2a2Slice struct {
-	Ptr *[][2][2]float64
+type BoxArrayToFloat64Array2Array2Slice struct {
+	S *[][2][2]float64
 }
 
-func (s BoxArr2Float64a2a2Slice) Scan(src interface{}) error {
+func (s BoxArrayToFloat64Array2Array2Slice) Scan(src interface{}) error {
 	data, err := srcbytes(src)
 	if err != nil {
 		return err
 	} else if data == nil {
-		s.Ptr = nil
+		s.S = nil
 		return nil
 	}
 
@@ -47,6 +48,37 @@ func (s BoxArr2Float64a2a2Slice) Scan(src interface{}) error {
 		boxes[i][1][1] = y2
 	}
 
-	*s.Ptr = boxes
+	*s.S = boxes
 	return nil
+}
+
+type BoxArrayFromFloat64Array2Array2Slice struct {
+	S [][2][2]float64
+}
+
+func (s BoxArrayFromFloat64Array2Array2Slice) Value() (driver.Value, error) {
+	if s.S == nil {
+		return nil, nil
+	} else if len(s.S) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range s.S {
+		out = append(out, '(')
+		out = strconv.AppendFloat(out, a[0][0], 'f', -1, 64)
+		out = append(out, ',')
+		out = strconv.AppendFloat(out, a[0][1], 'f', -1, 64)
+
+		out = append(out, ')', ',', '(')
+
+		out = strconv.AppendFloat(out, a[1][0], 'f', -1, 64)
+		out = append(out, ',')
+		out = strconv.AppendFloat(out, a[1][1], 'f', -1, 64)
+		out = append(out, ')', ';')
+	}
+
+	out[len(out)-1] = '}' // replace last ";" with "}"
+	return out, nil
 }

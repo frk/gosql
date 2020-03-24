@@ -295,9 +295,10 @@ func (table test_valuer) execute(t *testing.T) {
 }
 
 // helper
-func strptr(s string) *string   { return &s }
-func bytesptr(s string) *[]byte { b := []byte(s); return &b }
-func byteptr(b byte) *byte      { return &b }
-func boolptr(b bool) *bool      { return &b }
-func uptr(u uint) *uint         { return &u }
-func u8ptr(u uint8) *uint8      { return &u }
+func strptr(v string) *string   { return &v }
+func bytesptr(v string) *[]byte { vv := []byte(v); return &vv }
+func byteptr(v byte) *byte      { return &v }
+func runeptr(v rune) *rune      { return &v }
+func boolptr(v bool) *bool      { return &v }
+func uptr(v uint) *uint         { return &v }
+func u8ptr(v uint8) *uint8      { return &v }

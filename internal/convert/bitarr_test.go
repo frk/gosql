@@ -44,8 +44,8 @@ func TestBitArray_Valuer(t *testing.T) {
 func TestBitArray_Scanner(t *testing.T) {
 	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
-			s := BitArrayToBoolSlice{Ptr: new([]bool)}
-			return s, s.Ptr
+			s := BitArrayToBoolSlice{S: new([]bool)}
+			return s, s.S
 		},
 		rows: []test_scanner_row{
 			{typ: "bitarr", in: nil, want: new([]bool)},
@@ -57,8 +57,8 @@ func TestBitArray_Scanner(t *testing.T) {
 		},
 	}, {
 		scanner: func() (interface{}, interface{}) {
-			s := BitArrayToUint8Slice{Ptr: new([]uint8)}
-			return s, s.Ptr
+			s := BitArrayToUint8Slice{S: new([]uint8)}
+			return s, s.S
 		},
 		rows: []test_scanner_row{
 			{typ: "bitarr", in: nil, want: new([]uint8)},
@@ -70,8 +70,8 @@ func TestBitArray_Scanner(t *testing.T) {
 		},
 	}, {
 		scanner: func() (interface{}, interface{}) {
-			s := BitArrayToUintSlice{Ptr: new([]uint)}
-			return s, s.Ptr
+			s := BitArrayToUintSlice{S: new([]uint)}
+			return s, s.S
 		},
 		rows: []test_scanner_row{
 			{typ: "bitarr", in: nil, want: new([]uint)},

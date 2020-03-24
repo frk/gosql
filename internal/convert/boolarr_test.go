@@ -22,8 +22,8 @@ func TestBoolArray_Valuer(t *testing.T) {
 func TestBoolArray_Scanner(t *testing.T) {
 	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
-			s := BoolArrayToBoolSlice{Ptr: new([]bool)}
-			return s, s.Ptr
+			s := BoolArrayToBoolSlice{S: new([]bool)}
+			return s, s.S
 		},
 		rows: []test_scanner_row{
 			{typ: "boolarr", in: nil, want: new([]bool)},

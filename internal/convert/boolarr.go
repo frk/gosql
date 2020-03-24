@@ -34,7 +34,7 @@ func (s BoolArrayFromBoolSlice) Value() (driver.Value, error) {
 }
 
 type BoolArrayToBoolSlice struct {
-	Ptr *[]bool
+	S *[]bool
 }
 
 func (s BoolArrayToBoolSlice) Scan(src interface{}) error {
@@ -42,7 +42,7 @@ func (s BoolArrayToBoolSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.Ptr = nil
+		*s.S = nil
 		return nil
 	}
 
@@ -56,6 +56,6 @@ func (s BoolArrayToBoolSlice) Scan(src interface{}) error {
 		}
 	}
 
-	*s.Ptr = bools
+	*s.S = bools
 	return nil
 }
