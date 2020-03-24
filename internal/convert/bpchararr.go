@@ -1,7 +1,14 @@
 package convert
 
-type BPCharArr2ByteSlice = CharArr2ByteSlice
+// alias
+type (
+	BPCharArrayFromString      = CharArrayFromString
+	BPCharArrayFromByteSlice   = CharArrayFromByteSlice
+	BPCharArrayFromRuneSlice   = CharArrayFromRuneSlice
+	BPCharArrayFromStringSlice = CharArrayFromStringSlice
 
-type BPCharArr2RuneSlice = CharArr2RuneSlice
-
-type BPCharArr2String = CharArr2String
+	BPCharArrayToString      = CharArrayToString
+	BPCharArrayToByteSlice   = CharArrayToByteSlice
+	BPCharArrayToRuneSlice   = CharArrayToRuneSlice
+	BPCharArrayToStringSlice = CharArrayToStringSlice
+)

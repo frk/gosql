@@ -16,14 +16,20 @@
 |                | `rune`			 | `BPCharFromRune`                       | `BPCharToRune`                         |
 |                | `string`          | **native**                             | **native**                             |
 |                | `[]byte`          | **native**                             | **native**                             |
-| `_bpchar(1)`   | ???               | ???                                    | ???                                    |
+| `_bpchar(1)`   | `string`          | `BPCharArrayFromString`                | `BPCharArrayToString`                  |
+|                | `[]byte`          | `BPCharArrayFromByteSlice`             | `BPCharArrayToByteSlice`               |
+|                | `[]rune`          | `BPCharArrayFromRuneSlice`             | `BPCharArrayToRuneSlice`               |
+|                | `[]string`        | `BPCharArrayFromStringSlice`           | `BPCharArrayToStringSlice`             |
 | `bytea`        | ???               | ???                                    | ???                                    |
 | `_bytea`       | ???               | ???                                    | ???                                    |
 | `char(1)`      | `byte`            | `CharFromByte`                         | `CharToByte`                           |
 |                | `rune`			 | `CharFromRune`                         | `CharToRune`                           |
 |                | `string`          | **native**                             | **native**                             |
 |                | `[]byte`          | **native**                             | **native**                             |
-| `_char(1)`     | ???               | ???                                    | ???                                    |
+| `_char(1)`     | `string`          | `CharArrayFromString`                  | `CharArrayToString`                    |
+|                | `[]byte`          | `CharArrayFromByteSlice`               | `CharArrayToByteSlice`                 |
+|                | `[]rune`          | `CharArrayFromRuneSlice`               | `CharArrayToRuneSlice`                 |
+|                | `[]string`        | `CharArrayFromStringSlice`             | `CharArrayToStringSlice`               |
 | `cidr`         | ???               | ???                                    | ???                                    |
 | `_cidr`        | ???               | ???                                    | ???                                    |
 | `circle`       | ???               | ???                                    | ???                                    |

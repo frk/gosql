@@ -283,7 +283,7 @@ func (table test_valuer) execute(t *testing.T) {
 				}
 
 				var dest *string
-				row = testdb.db.QueryRow(`select `+col+`::text from coltype_test where id = $1`, id)
+				row = testdb.db.QueryRow(`select `+col+` from coltype_test where id = $1`, id)
 				if err := row.Scan(&dest); err != nil {
 					t.Error(err)
 				} else if e := compare.Compare(dest, r.want); e != nil {
