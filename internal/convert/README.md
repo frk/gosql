@@ -2,113 +2,115 @@
 
 | postgres type  | go type           | Valuer                                 | Scanner                                |
 |----------------|-------------------|----------------------------------------| ---------------------------------------|
-| `bit(1)`       | `bool`            | `BitFromBool`                          | **native**                             |
-|                | `uint8`           | **native**                             | **native**                             |
-|                | `uint`            | **native**                             | **native**                             |
-| `_bit(1)`      | `[]bool`          | `BitArrayFromBoolSlice`                | `BitArrayToBoolSlice`                  |
+| `bit(1)`       | `bool`            | `BitFromBool`                          | *native*                               |
+|                | `uint8`           | *native*                               | *native*                               |
+|                | `uint`            | *native*                               | *native*                               |
+| `bit(1)[]`     | `[]bool`          | `BitArrayFromBoolSlice`                | `BitArrayToBoolSlice`                  |
 |                | `[]uint8`         | `BitArrayFromUint8Slice`               | `BitArrayToUint8Slice`                 |
 |                | `[]uint`          | `BitArrayFromUintSlice`                | `BitArrayToUintSlice`                  |
-| `bool`         | `bool`            | **native**                             | **native**                             |
-| `_bool`        | `[]bool`          | `BoolArrayFromBoolSlice`               | `BoolArrayToBoolSlice`                 |
+| `bool`         | `bool`            | *native*                               | *native*                               |
+| `bool[]`       | `[]bool`          | `BoolArrayFromBoolSlice`               | `BoolArrayToBoolSlice`                 |
 | `box`          | `[2][2]float64`   | `BoxFromFloat64Array2Array2`           | `BoxToFloat64Array2Array2`             |
-| `_box`         | `[][2][2]float64` | `BoxArrayFromFloat64Array2Array2Slice` | `BoxArrayToFloat64Array2Array2Slice`   |
+| `box[]`        | `[][2][2]float64` | `BoxArrayFromFloat64Array2Array2Slice` | `BoxArrayToFloat64Array2Array2Slice`   |
 | `bpchar(1)`    | `byte`            | `BPCharFromByte`                       | `BPCharToByte`                         |
-|                | `rune`			 | `BPCharFromRune`                       | `BPCharToRune`                         |
-|                | `string`          | **native**                             | **native**                             |
-|                | `[]byte`          | **native**                             | **native**                             |
-| `_bpchar(1)`   | `string`          | `BPCharArrayFromString`                | `BPCharArrayToString`                  |
+|                | `rune`		  	 | `BPCharFromRune`                       | `BPCharToRune`                         |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `bpchar(1)[]`  | `string`          | `BPCharArrayFromString`                | `BPCharArrayToString`                  |
 |                | `[]byte`          | `BPCharArrayFromByteSlice`             | `BPCharArrayToByteSlice`               |
 |                | `[]rune`          | `BPCharArrayFromRuneSlice`             | `BPCharArrayToRuneSlice`               |
 |                | `[]string`        | `BPCharArrayFromStringSlice`           | `BPCharArrayToStringSlice`             |
-| `bytea`        | ???               | ???                                    | ???                                    |
-| `_bytea`       | ???               | ???                                    | ???                                    |
+| `bytea`        | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `bytea[]`      | `[]string`        | `ByteaArrayFromStringSlice`            | `ByteaArrayToStringSlice`              |
+|                | `[][]byte`        | `ByteaArrayFromByteSliceSlice`         | `ByteaArrayToByteSliceSlice`           |
 | `char(1)`      | `byte`            | `CharFromByte`                         | `CharToByte`                           |
 |                | `rune`			 | `CharFromRune`                         | `CharToRune`                           |
-|                | `string`          | **native**                             | **native**                             |
-|                | `[]byte`          | **native**                             | **native**                             |
-| `_char(1)`     | `string`          | `CharArrayFromString`                  | `CharArrayToString`                    |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `char(1)[]`    | `string`          | `CharArrayFromString`                  | `CharArrayToString`                    |
 |                | `[]byte`          | `CharArrayFromByteSlice`               | `CharArrayToByteSlice`                 |
 |                | `[]rune`          | `CharArrayFromRuneSlice`               | `CharArrayToRuneSlice`                 |
 |                | `[]string`        | `CharArrayFromStringSlice`             | `CharArrayToStringSlice`               |
 | `cidr`         | ???               | ???                                    | ???                                    |
-| `_cidr`        | ???               | ???                                    | ???                                    |
+| `cidr[]`       | ???               | ???                                    | ???                                    |
 | `circle`       | ???               | ???                                    | ???                                    |
-| `_circle`      | ???               | ???                                    | ???                                    |
+| `circle[]`     | ???               | ???                                    | ???                                    |
 | `date`         | ???               | ???                                    | ???                                    |
-| `_date`        | ???               | ???                                    | ???                                    |
+| `date[]`       | ???               | ???                                    | ???                                    |
 | `daterange`    | ???               | ???                                    | ???                                    |
-| `_daterange`   | ???               | ???                                    | ???                                    |
+| `daterange[]`  | ???               | ???                                    | ???                                    |
 | `float4`       | ???               | ???                                    | ???                                    |
-| `_float4`      | ???               | ???                                    | ???                                    |
+| `float4[]`     | ???               | ???                                    | ???                                    |
 | `float8`       | ???               | ???                                    | ???                                    |
-| `_float8`      | ???               | ???                                    | ???                                    |
+| `float8[]`     | ???               | ???                                    | ???                                    |
 | `inet`         | ???               | ???                                    | ???                                    |
-| `_inet`        | ???               | ???                                    | ???                                    |
+| `inet[]`       | ???               | ???                                    | ???                                    |
 | `int2`         | ???               | ???                                    | ???                                    |
-| `_int2`        | ???               | ???                                    | ???                                    |
+| `int2[]`       | ???               | ???                                    | ???                                    |
 | `int2vector`   | ???               | ???                                    | ???                                    |
-| `_int2vector`  | ???               | ???                                    | ???                                    |
+| `int2vector[]` | ???               | ???                                    | ???                                    |
 | `int4`         | ???               | ???                                    | ???                                    |
-| `_int4`        | ???               | ???                                    | ???                                    |
+| `int4[]`       | ???               | ???                                    | ???                                    |
 | `int4range`    | ???               | ???                                    | ???                                    |
-| `_int4range`   | ???               | ???                                    | ???                                    |
+| `int4range[]`  | ???               | ???                                    | ???                                    |
 | `int8`         | ???               | ???                                    | ???                                    |
-| `_int8`        | ???               | ???                                    | ???                                    |
+| `int8[]`       | ???               | ???                                    | ???                                    |
 | `int8range`    | ???               | ???                                    | ???                                    |
-| `_int8range`   | ???               | ???                                    | ???                                    |
+| `int8range[]`  | ???               | ???                                    | ???                                    |
 | `interval`     | ???               | ???                                    | ???                                    |
-| `_interval`    | ???               | ???                                    | ???                                    |
+| `interval[]`   | ???               | ???                                    | ???                                    |
 | `json`         | `interface{}`     | `JSON`                                 | `JSON`                                 |
-| `json`         | `[]byte`          | **native**                             | **native**                             |
-| `json`         | `string`          | **native**                             | **native**                             |
-| `_json`        | ???               | ???                                    | ???                                    |
+|                | `[]byte`          | *native*                               | *native*                               |
+|                | `string`          | *native*                               | *native*                               |
+| `json[]`       | ???               | ???                                    | ???                                    |
 | `jsonb`        | ???               | ???                                    | ???                                    |
-| `_jsonb`       | ???               | ???                                    | ???                                    |
+| `jsonb[]`      | ???               | ???                                    | ???                                    |
 | `line`         | ???               | ???                                    | ???                                    |
-| `_line`        | ???               | ???                                    | ???                                    |
+| `line[]`       | ???               | ???                                    | ???                                    |
 | `lseg`         | ???               | ???                                    | ???                                    |
-| `_lseg`        | ???               | ???                                    | ???                                    |
+| `lseg[]`       | ???               | ???                                    | ???                                    |
 | `macaddr`      | ???               | ???                                    | ???                                    |
-| `_macaddr`     | ???               | ???                                    | ???                                    |
+| `macaddr[]`    | ???               | ???                                    | ???                                    |
 | `macaddr8`     | ???               | ???                                    | ???                                    |
-| `_macaddr8`    | ???               | ???                                    | ???                                    |
+| `macaddr8[]`   | ???               | ???                                    | ???                                    |
 | `money`        | ???               | ???                                    | ???                                    |
-| `_money`       | ???               | ???                                    | ???                                    |
+| `money[]`      | ???               | ???                                    | ???                                    |
 | `numeric`      | ???               | ???                                    | ???                                    |
-| `_numeric`     | ???               | ???                                    | ???                                    |
+| `numeric[]`    | ???               | ???                                    | ???                                    |
 | `numrange`     | ???               | ???                                    | ???                                    |
-| `_numrange`    | ???               | ???                                    | ???                                    |
+| `numrange[]`   | ???               | ???                                    | ???                                    |
 | `oidvector`    | ???               | ???                                    | ???                                    |
 | `path`         | ???               | ???                                    | ???                                    |
-| `_path`        | ???               | ???                                    | ???                                    |
+| `path[]`       | ???               | ???                                    | ???                                    |
 | `point`        | ???               | ???                                    | ???                                    |
-| `_point`       | ???               | ???                                    | ???                                    |
+| `point[]`      | ???               | ???                                    | ???                                    |
 | `polygon`      | ???               | ???                                    | ???                                    |
-| `_polygon`     | ???               | ???                                    | ???                                    |
+| `polygon[]`    | ???               | ???                                    | ???                                    |
 | `text`         | ???               | ???                                    | ???                                    |
-| `_text`        | ???               | ???                                    | ???                                    |
+| `text[]`       | ???               | ???                                    | ???                                    |
 | `time`         | ???               | ???                                    | ???                                    |
-| `_time`        | ???               | ???                                    | ???                                    |
+| `time[]`       | ???               | ???                                    | ???                                    |
 | `timestamp`    | ???               | ???                                    | ???                                    |
-| `_timestamp`   | ???               | ???                                    | ???                                    |
+| `timestamp[]`  | ???               | ???                                    | ???                                    |
 | `timestamptz`  | ???               | ???                                    | ???                                    |
-| `_timestamptz` | ???               | ???                                    | ???                                    |
+| `timestamptz[]`| ???               | ???                                    | ???                                    |
 | `timetz`       | ???               | ???                                    | ???                                    |
-| `_timetz`      | ???               | ???                                    | ???                                    |
+| `timetz[]`     | ???               | ???                                    | ???                                    |
 | `tsquery`      | ???               | ???                                    | ???                                    |
-| `_tsquery`     | ???               | ???                                    | ???                                    |
+| `tsquery[]`    | ???               | ???                                    | ???                                    |
 | `tsrange`      | ???               | ???                                    | ???                                    |
-| `_tsrange`     | ???               | ???                                    | ???                                    |
+| `tsrange[]`    | ???               | ???                                    | ???                                    |
 | `tstzrange`    | ???               | ???                                    | ???                                    |
-| `_tstzrange`   | ???               | ???                                    | ???                                    |
+| `tstzrange[]`  | ???               | ???                                    | ???                                    |
 | `tsvector`     | ???               | ???                                    | ???                                    |
-| `_tsvector`    | ???               | ???                                    | ???                                    |
+| `tsvector[]`   | ???               | ???                                    | ???                                    |
 | `uuid`         | ???               | ???                                    | ???                                    |
-| `_uuid`        | ???               | ???                                    | ???                                    |
+| `uuid[]`       | ???               | ???                                    | ???                                    |
 | `unknown`      | ???               | ???                                    | ???                                    |
 | `varbit`       | ???               | ???                                    | ???                                    |
-| `_varbit`      | ???               | ???                                    | ???                                    |
+| `varbit[]`     | ???               | ???                                    | ???                                    |
 | `varchar`      | ???               | ???                                    | ???                                    |
-| `_varchar`     | ???               | ???                                    | ???                                    |
+| `varchar[]`    | ???               | ???                                    | ???                                    |
 | `xml`          | ???               | ???                                    | ???                                    |
-| `_xml`         | ???               | ???                                    | ???                                    |
+| `xml[]`        | ???               | ???                                    | ???                                    |

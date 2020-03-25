@@ -4,7 +4,36 @@ import (
 	"testing"
 )
 
-func TestByteaWithoutScanner(t *testing.T) {
+func TestBytea_NoValuer(t *testing.T) {
+	test_valuer{{
+		valuer: func() interface{} {
+			return nil
+		},
+		rows: []test_valuer_row{
+			{typ: "bytea", in: nil, want: nil},
+			{typ: "bytea", in: ``, want: strptr(``)},
+			{typ: "bytea", in: `abc`, want: strptr(`abc`)},
+			{typ: "bytea", in: `\xdeadbeef`, want: strptr(`\xdeadbeef`)},
+			{typ: "bytea", in: `\xDEADBEEF`, want: strptr(`\xDEADBEEF`)},
+			{typ: "bytea", in: "\xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f", want: strptr("\xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f")},
+			{typ: "bytea", in: `\xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f`, want: strptr(`\xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f`)},
+		},
+	}, {
+		valuer: func() interface{} {
+			return nil
+		},
+		rows: []test_valuer_row{
+			{typ: "bytea", in: nil, want: nil},
+			{typ: "bytea", in: []byte(``), want: strptr(``)},
+			{typ: "bytea", in: []byte(`\xdeadbeef`), want: strptr(`\xdeadbeef`)},
+			{typ: "bytea", in: []byte(`\xDEADBEEF`), want: strptr(`\xDEADBEEF`)},
+			{typ: "bytea", in: []byte("\xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f"), want: strptr("\xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f")},
+			{typ: "bytea", in: []byte(`\xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f`), want: strptr(`\xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f`)},
+		},
+	}}.execute(t)
+}
+
+func TestBytea_NoScanner(t *testing.T) {
 	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
 			return nil, new([]byte)
