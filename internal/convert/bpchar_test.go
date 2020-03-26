@@ -53,11 +53,17 @@ func TestBPChar_Scanner(t *testing.T) {
 func TestBPChar_NoValuer(t *testing.T) {
 	test_valuer{{
 		valuer: func() interface{} {
-			return nil
+			return nil // string
 		},
 		rows: []test_valuer_row{
 			{typ: "bpchar", in: `a`, want: strptr(`a`)},
 			{typ: "bpchar", in: `馬`, want: strptr(`馬`)},
+		},
+	}, {
+		valuer: func() interface{} {
+			return nil // []byte
+		},
+		rows: []test_valuer_row{
 			{typ: "bpchar", in: []byte{'a'}, want: strptr(`a`)},
 			{typ: "bpchar", in: []byte{'Z'}, want: strptr(`Z`)},
 		},
@@ -67,21 +73,21 @@ func TestBPChar_NoValuer(t *testing.T) {
 func TestBPChar_NoScanner(t *testing.T) {
 	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
-			d := new([]byte)
-			return d, d
-		},
-		rows: []test_scanner_row{
-			{typ: "bpchar", in: `a`, want: bytesptr(`a`)},
-			{typ: "bpchar", in: `Z`, want: bytesptr(`Z`)},
-		},
-	}, {
-		scanner: func() (interface{}, interface{}) {
 			d := new(string)
 			return d, d
 		},
 		rows: []test_scanner_row{
 			{typ: "bpchar", in: `a`, want: strptr(`a`)},
 			{typ: "bpchar", in: `馬`, want: strptr(`馬`)},
+		},
+	}, {
+		scanner: func() (interface{}, interface{}) {
+			d := new([]byte)
+			return d, d
+		},
+		rows: []test_scanner_row{
+			{typ: "bpchar", in: `a`, want: bytesptr(`a`)},
+			{typ: "bpchar", in: `Z`, want: bytesptr(`Z`)},
 		},
 	}}.execute(t)
 }
