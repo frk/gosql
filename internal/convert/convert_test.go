@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"reflect"
 	"testing"
@@ -302,3 +303,26 @@ func runeptr(v rune) *rune      { return &v }
 func boolptr(v bool) *bool      { return &v }
 func uptr(v uint) *uint         { return &v }
 func u8ptr(v uint8) *uint8      { return &v }
+
+func cidrIPNet(v string) net.IPNet {
+	_, n, _ := net.ParseCIDR(v)
+	return *n
+}
+
+func cidrIPNetp(v string) *net.IPNet {
+	n := cidrIPNet(v)
+	return &n
+}
+
+func cidrIPNetSlice(vv ...string) []net.IPNet {
+	out := make([]net.IPNet, len(vv))
+	for i := 0; i < len(vv); i++ {
+		out[i] = cidrIPNet(vv[i])
+	}
+	return out
+}
+
+func cidrIPNetSlicep(vv ...string) *[]net.IPNet {
+	out := cidrIPNetSlice(vv...)
+	return &out
+}

@@ -44,12 +44,12 @@
 |                | `[]string`        | `CharArrayFromStringSlice` :warning:   | `CharArrayToStringSlice`               |
 |                | `string`          | `CharArrayFromString` :warning:        | `CharArrayToString`                    |
 |                | `[]byte`          | `CharArrayFromByteSlice` :warning:     | `CharArrayToByteSlice`                 |
-| `cidr`         | `net.IPNet`       | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
-| `cidr[]`       | `[]net.IPNet`     | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
+| `cidr`         | `net.IPNet`       | `CIDRFromIPNet`                        | `CIDRToIPNet`                          |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `cidr[]`       | `[]net.IPNet`     | `CIDRArrayFromIPNetSlice`              | `CIDRArrayToIPNetSlice`                |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
 | `circle`       | ???               | ???                                    | ???                                    |
 |                | `string`          | ???                                    | ???                                    |
 |                | `[]byte`          | ???                                    | ???                                    |
