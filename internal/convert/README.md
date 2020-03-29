@@ -68,16 +68,26 @@
 | `daterange[]`  | `[][2]time.Time`  | `DateRangeArrayFromTimeArray2Slice`    | `DateRangeArrayToTimeArray2Slice`      |
 |                | `string`          | *native*                               | *native*                               |
 |                | `[]byte`          | *native*                               | *native*                               |
-| `float4`       | ???               | ???                                    | ???                                    |
+| `float4`       | `float32`         | *native*                               | *native*                               |
+|                | `float64`         | *native*                               | *native*                               |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `float4[]`     | `[]float32`       | `Float4ArrayFromFloat32Slice`          | `Float4ArrayToFloat32Slice`            |
+|                | `[]float64`       | `Float4ArrayFromFloat64Slice`          | `Float4ArrayToFloat64Slice`            |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `float8`       | `float64`         | *native*                               | *native*                               |
+|                | `float32`         | *native*                               | *native*                               |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `float8[]`     | `[]float64`       | `Float8ArrayFromFloat64Slice`          | `Float8ArrayToFloat64Slice`            |
+|                | `[]float32`       | `Float8ArrayFromFloat32Slice`          | `Float8ArrayToFloat32Slice`            |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `hstore`       | ???               | ???                                    | ???                                    |
 |                | `string`          | ???                                    | ???                                    |
 |                | `[]byte`          | ???                                    | ???                                    |
-| `float4[]`     | ???               | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
-| `float8`       | ???               | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
-| `float8[]`     | ???               | ???                                    | ???                                    |
+| `hstore[]`     | ???               | ???                                    | ???                                    |
 |                | `string`          | ???                                    | ???                                    |
 |                | `[]byte`          | ???                                    | ???                                    |
 | `inet`         | `net.IPNet`       | ???                                    | ???                                    |

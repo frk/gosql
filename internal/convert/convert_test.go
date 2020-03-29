@@ -302,8 +302,21 @@ func bytesptr(v string) *[]byte { vv := []byte(v); return &vv }
 func byteptr(v byte) *byte      { return &v }
 func runeptr(v rune) *rune      { return &v }
 func boolptr(v bool) *bool      { return &v }
-func uptr(v uint) *uint         { return &v }
-func u8ptr(v uint8) *uint8      { return &v }
+
+func iptr(v int) *int       { return &v }
+func i8ptr(v int8) *int8    { return &v }
+func i16ptr(v int16) *int16 { return &v }
+func i32ptr(v int32) *int32 { return &v }
+func i64ptr(v int64) *int64 { return &v }
+
+func uptr(v uint) *uint       { return &v }
+func u8ptr(v uint8) *uint8    { return &v }
+func u16ptr(v uint16) *uint16 { return &v }
+func u32ptr(v uint32) *uint32 { return &v }
+func u64ptr(v uint64) *uint64 { return &v }
+
+func f32ptr(v float32) *float32 { return &v }
+func f64ptr(v float64) *float64 { return &v }
 
 func dateval(y, m, d int) time.Time {
 	t := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
