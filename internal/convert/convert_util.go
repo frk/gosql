@@ -1,6 +1,11 @@
 package convert
 
-import "bytes"
+import (
+	"bytes"
+	"time"
+)
+
+const dateLayout = "2006-01-02"
 
 func srcbytes(src interface{}) ([]byte, error) {
 	switch src := src.(type) {
@@ -12,6 +17,28 @@ func srcbytes(src interface{}) ([]byte, error) {
 		return nil, nil
 	}
 	return nil, nil // TODO error
+}
+
+// Expected format: '{S [, ...]}' where S is double quoted string that can contain a comma.
+func pgparsearray0(a []byte) (out [][]byte) {
+	a = a[1 : len(a)-1] // drop curly braces
+
+	n := 0     // start of next elem
+	q := false // in quotes?
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' {
+			q = !q
+		} else if !q && a[i] == ',' {
+			out = append(out, a[n:i])
+			n = i + 1
+		}
+	}
+
+	// append the last element
+	if len(a) > 0 {
+		out = append(out, a[n:])
+	}
+	return out
 }
 
 // Expected format: '{X [, ...]}' where X is anything that doesn't contain a comma.
@@ -140,4 +167,22 @@ func pgparseboxarr(a []byte) (out [][]byte) {
 		out = append(out, a[n:])
 	}
 	return out
+}
+
+func pgparserange(a []byte) (out [2][]byte) {
+	a = a[1 : len(a)-1] // drop range delimiters
+
+	for i := 0; i < len(a); i++ {
+		if a[i] == ',' {
+			out[0] = a[:i]
+			out[1] = a[i+1:]
+			break
+		}
+	}
+
+	return out
+}
+
+func pgparsedate(a []byte) (time.Time, error) {
+	return time.ParseInLocation(dateLayout, string(a), time.UTC)
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/frk/compare"
 	_ "github.com/lib/pq"
@@ -303,6 +304,16 @@ func runeptr(v rune) *rune      { return &v }
 func boolptr(v bool) *bool      { return &v }
 func uptr(v uint) *uint         { return &v }
 func u8ptr(v uint8) *uint8      { return &v }
+
+func dateval(y, m, d int) time.Time {
+	t := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+	return t
+}
+
+func dateptr(y, m, d int) *time.Time {
+	t := dateval(y, m, d)
+	return &t
+}
 
 func cidrIPNet(v string) net.IPNet {
 	_, n, _ := net.ParseCIDR(v)

@@ -50,24 +50,24 @@
 | `cidr[]`       | `[]net.IPNet`     | `CIDRArrayFromIPNetSlice`              | `CIDRArrayToIPNetSlice`                |
 |                | `string`          | *native*                               | *native*                               |
 |                | `[]byte`          | *native*                               | *native*                               |
-| `circle`       | ???               | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
-| `circle[]`     | ???               | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
-| `date`         | ???               | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
-| `date[]`       | ???               | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
-| `daterange`    | ???               | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
-| `daterange[]`  | ???               | ???                                    | ???                                    |
-|                | `string`          | ???                                    | ???                                    |
-|                | `[]byte`          | ???                                    | ???                                    |
+| `circle`       | ---               | ---                                    | ---                                    |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `circle[]`     | ---               | ---                                    | ---                                    |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `date`         | `time.Time`       | *native*                               | `DateToTime`                           |
+|                | `string`          | *native*                               | `DateToString`                         |
+|                | `[]byte`          | *native*                               | `DateToByteSlice`                      |
+| `date[]`       | `[]time.Time`     | `DateArrayFromTimeSlice`               | `DateArrayToTimeSlice`                 |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `daterange`    | `[2]time.Time`    | `DateRangeFromTimeArray2`              | `DateRangeToTimeArray2`                |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
+| `daterange[]`  | `[][2]time.Time`  | `DateRangeArrayFromTimeArray2Slice`    | `DateRangeArrayToTimeArray2Slice`      |
+|                | `string`          | *native*                               | *native*                               |
+|                | `[]byte`          | *native*                               | *native*                               |
 | `float4`       | ???               | ???                                    | ???                                    |
 |                | `string`          | ???                                    | ???                                    |
 |                | `[]byte`          | ???                                    | ???                                    |
