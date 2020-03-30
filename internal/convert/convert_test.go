@@ -296,6 +296,56 @@ func (table test_valuer) execute(t *testing.T) {
 	}
 }
 
+type test_valuer_with_scanner []struct {
+	valuer  func() interface{}
+	scanner func() (scanner, result interface{})
+	rows    []test_valuer_with_scanner_row
+}
+
+type test_valuer_with_scanner_row struct {
+	typ    string
+	input  interface{}
+	output interface{}
+}
+
+func (table test_valuer_with_scanner) execute(t *testing.T) {
+	for _, tt := range table {
+		for _, r := range tt.rows {
+			valuer := tt.valuer()
+			if valuer != nil {
+				rv := reflect.ValueOf(valuer).Elem()
+				if fv := reflect.ValueOf(r.input); fv.IsValid() {
+					rv.Field(0).Set(fv)
+				}
+			} else {
+				valuer = r.input
+			}
+
+			scanner, got := tt.scanner()
+			if scanner == nil {
+				scanner = got
+			}
+
+			name := fmt.Sprintf("%T->%T::<%s>_FROM_<%T>_TO_<%T>_USING_%v", valuer, scanner, r.typ, r.input, r.output, r.input)
+			t.Run(name, func(t *testing.T) {
+				var id int
+				var col = "col_" + r.typ
+				row := testdb.db.QueryRow(`INSERT INTO coltype_test (`+col+`) VALUES ($1) RETURNING id`, valuer)
+				if err := row.Scan(&id); err != nil {
+					t.Fatal(err)
+				}
+
+				row = testdb.db.QueryRow(`SELECT `+col+` FROM coltype_test WHERE id = $1`, id)
+				if err := row.Scan(scanner); err != nil {
+					t.Error(err)
+				} else if e := compare.Compare(got, r.output); e != nil {
+					t.Error(e)
+				}
+			})
+		}
+	}
+}
+
 // helper
 func strptr(v string) *string   { return &v }
 func bytesptr(v string) *[]byte { vv := []byte(v); return &vv }

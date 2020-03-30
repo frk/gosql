@@ -56,8 +56,8 @@ func TestFloat8Array_Scanner(t *testing.T) {
 		},
 	}, {
 		scanner: func() (interface{}, interface{}) {
-			s := FloatArr2Float64Slice{Ptr: new([]float64)}
-			return s, s.Ptr
+			s := Float8ArrayToFloat64Slice{V: new([]float64)}
+			return s, s.V
 		},
 		rows: []test_scanner_row{
 			{typ: "float8arr", in: nil, want: new([]float64)},

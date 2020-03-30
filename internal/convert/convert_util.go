@@ -169,6 +169,175 @@ func pgparseboxarr(a []byte) (out [][]byte) {
 	return out
 }
 
+func pgparsehstore(a []byte) (out [][2][]byte) {
+	if len(a) == 0 {
+		return out // nothing to do if empty
+	}
+
+	var (
+		idx  uint8     // pair index 0=key 1=val
+		pair [2][]byte // current pair
+	)
+
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' { // start of key or value?
+			for j := i + 1; j < len(a); j++ {
+				if a[j] == '\\' {
+					j++ // skip escaped char
+					pair[idx] = append(pair[idx], a[j])
+					continue
+				}
+
+				if a[j] == '"' { // end of key or value?
+					i = j
+					break
+				}
+
+				pair[idx] = append(pair[idx], a[j])
+			}
+
+			if idx == 1 { // is the pair done?
+				out = append(out, pair)
+				pair = [2][]byte{} // next pair
+			}
+
+			// flip the index
+			idx ^= 1
+		}
+
+		if a[i] == 'N' {
+			i += 4
+			idx = 0
+			out = append(out, pair)
+			pair = [2][]byte{}
+		}
+	}
+	return out
+}
+
+func pgparsehstorearr(a []byte) (out [][][2][]byte) {
+	if len(a) == 0 {
+		return out // nothing to do if empty
+	}
+	a = a[1 : len(a)-1] // drop array delimiters
+
+	var (
+		idx  uint8     // pair index 0=key 1=val
+		pair [2][]byte // current pair
+	)
+
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' { // start of hstore in array?
+			hstore := [][2][]byte{}
+
+			for j := i + 1; j < len(a); j++ {
+
+				if a[j] == '\\' && a[j+1] == '"' { // start of key or value?
+					for k := j + 2; k < len(a); k++ {
+						if a[k] == '\\' {
+							if a[k+1] == '\\' { // escape??
+								k += 3 // skip escaped char
+								pair[idx] = append(pair[idx], a[k])
+								continue
+							}
+
+							if a[k+1] == '"' { // key or value ending quote?
+								j = k + 2
+								break
+							}
+						}
+
+						pair[idx] = append(pair[idx], a[k])
+					}
+
+					if idx == 1 { // is the pair done?
+						hstore = append(hstore, pair)
+						pair = [2][]byte{} // next pair
+					}
+
+					// flip the index
+					idx ^= 1
+				}
+
+				// handle NULL value in pair
+				if a[j] == 'N' {
+					j += 4
+					idx = 0
+					hstore = append(hstore, pair)
+					pair = [2][]byte{} // next pair
+				}
+
+				if a[j] == '"' { // end of hstore in array?
+					out = append(out, hstore)
+					i = j
+					break
+				}
+			}
+		}
+
+		// handle NULL hstore
+		if a[i] == 'N' {
+			out = append(out, nil)
+			i += 4
+		}
+	}
+	return out
+}
+
+func pgAppendQuote1(buf, elem []byte) []byte {
+	buf = append(buf, '"')
+	for i := 0; i < len(elem); i++ {
+		switch elem[i] {
+		case '"', '\\':
+			buf = append(buf, '\\', elem[i])
+		case '\a':
+			buf = append(buf, '\\', '\a')
+		case '\b':
+			buf = append(buf, '\\', '\b')
+		case '\f':
+			buf = append(buf, '\\', '\f')
+		case '\n':
+			buf = append(buf, '\\', '\n')
+		case '\r':
+			buf = append(buf, '\\', '\r')
+		case '\t':
+			buf = append(buf, '\\', '\t')
+		case '\v':
+			buf = append(buf, '\\', '\v')
+		default:
+			buf = append(buf, elem[i])
+		}
+	}
+	return append(buf, '"')
+}
+
+func pgAppendQuote2(buf, elem []byte) []byte {
+	buf = append(buf, '\\', '"')
+	for i := 0; i < len(elem); i++ {
+		switch elem[i] {
+		case '"', '\\':
+			buf = append(buf, '\\', '\\', '\\', elem[i])
+		case '\a':
+			buf = append(buf, '\\', '\\', '\\', '\a')
+		case '\b':
+			buf = append(buf, '\\', '\\', '\\', '\b')
+		case '\f':
+			buf = append(buf, '\\', '\\', '\\', '\f')
+		case '\n':
+			buf = append(buf, '\\', '\\', '\\', '\n')
+		case '\r':
+			buf = append(buf, '\\', '\\', '\\', '\r')
+		case '\t':
+			buf = append(buf, '\\', '\\', '\\', '\t')
+		case '\v':
+			buf = append(buf, '\\', '\\', '\\', '\v')
+		default:
+			buf = append(buf, elem[i])
+		}
+	}
+	return append(buf, '\\', '"')
+}
+
 func pgparserange(a []byte) (out [2][]byte) {
 	a = a[1 : len(a)-1] // drop range delimiters
 
