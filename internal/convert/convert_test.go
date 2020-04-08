@@ -378,25 +378,47 @@ func dateptr(y, m, d int) *time.Time {
 	return &t
 }
 
-func cidrIPNet(v string) net.IPNet {
+func netCIDR(v string) net.IPNet {
 	_, n, _ := net.ParseCIDR(v)
 	return *n
 }
 
-func cidrIPNetp(v string) *net.IPNet {
-	n := cidrIPNet(v)
+func netCIDRptr(v string) *net.IPNet {
+	n := netCIDR(v)
 	return &n
 }
 
-func cidrIPNetSlice(vv ...string) []net.IPNet {
+func netCIDRSlice(vv ...string) []net.IPNet {
 	out := make([]net.IPNet, len(vv))
 	for i := 0; i < len(vv); i++ {
-		out[i] = cidrIPNet(vv[i])
+		out[i] = netCIDR(vv[i])
 	}
 	return out
 }
 
-func cidrIPNetSlicep(vv ...string) *[]net.IPNet {
-	out := cidrIPNetSlice(vv...)
+func netCIDRSliceptr(vv ...string) *[]net.IPNet {
+	out := netCIDRSlice(vv...)
+	return &out
+}
+
+func netIP(v string) net.IP {
+	return net.ParseIP(v)
+}
+
+func netIPptr(v string) *net.IP {
+	ip := netIP(v)
+	return &ip
+}
+
+func netIPSlice(vv ...string) []net.IP {
+	out := make([]net.IP, len(vv))
+	for i := 0; i < len(vv); i++ {
+		out[i] = netIP(vv[i])
+	}
+	return out
+}
+
+func netIPSliceptr(vv ...string) *[]net.IP {
+	out := netIPSlice(vv...)
 	return &out
 }

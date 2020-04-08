@@ -94,14 +94,14 @@
 |                | `[]map[string]sql.NullString`  | `HStoreArrayFromNullStringMapSlice`    | `HStoreArrayToNullStringMapSlice`      |
 |                | `string`                       | *native*                               | *native*                               |
 |                | `[]byte`                       | *native*                               | *native*                               |
-| `inet`         | `net.IPNet`                    | ???                                    | ???                                    |
-|                | `net.IP`                       | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `inet[]`       | `[]net.IPNet`                  | ???                                    | ???                                    |
-|                | `[]net.IP`                     | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `inet`         | `net.IPNet`                    | `InetFromIPNet`                        | `InetToIPNet`                          |
+|                | `net.IP`                       | `InetFromIP`                           | `InetToIP`                             |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `inet[]`       | `[]net.IPNet`                  | `InetArrayFromIPNetSlice`              | `InetArrayToIPNetSlice`                |
+|                | `[]net.IP`                     | `InetArrayFromIPSlice`                 | `InetArrayToIPSlice`                   |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `int2`         | ???                            | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
