@@ -1,4 +1,7 @@
 package convert
 
-// No conversion required: pg `bool` can be read/written with Go `bool` directly.
-type _ NO_TYPE
+// PostgreSQL `boolean` read/write natively supported with:
+// `bool`
+// `string`
+// `[]byte`
+type _ native

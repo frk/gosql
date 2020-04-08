@@ -102,9 +102,20 @@
 |                | `[]net.IP`                     | `InetArrayFromIPSlice`                 | `InetArrayToIPSlice`                   |
 |                | `string`                       | *native*                               | *native*                               |
 |                | `[]byte`                       | *native*                               | *native*                               |
-| `int2`         | ???                            | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `int2`         | `int`                          | *native*                               | *native*                               |
+|                | `int8`                         | *native*                               | *native*                               |
+|                | `int16`                        | *native*                               | *native*                               |
+|                | `int32`                        | *native*                               | *native*                               |
+|                | `int64`                        | *native*                               | *native*                               |
+|                | `uint`                         | *native*                               | *native*                               |
+|                | `uint8`                        | *native*                               | *native*                               |
+|                | `uint16`                       | *native*                               | *native*                               |
+|                | `uint32`                       | *native*                               | *native*                               |
+|                | `uint64`                       | *native*                               | *native*                               |
+|                | `float32`                      | *native*                               | *native*                               |
+|                | `float64`                      | *native*                               | *native*                               |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `int2[]`       | ???                            | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
@@ -114,9 +125,20 @@
 | `int2vector[]` | ???                            | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
-| `int4`         | ???                            | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `int4`         | `int`                          | *native*                               | *native*                               |
+|                | `int8`                         | *native*                               | *native*                               |
+|                | `int16`                        | *native*                               | *native*                               |
+|                | `int32`                        | *native*                               | *native*                               |
+|                | `int64`                        | *native*                               | *native*                               |
+|                | `uint`                         | *native*                               | *native*                               |
+|                | `uint8`                        | *native*                               | *native*                               |
+|                | `uint16`                       | *native*                               | *native*                               |
+|                | `uint32`                       | *native*                               | *native*                               |
+|                | `uint64`                       | *native*                               | *native*                               |
+|                | `float32`                      | *native*                               | *native*                               |
+|                | `float64`                      | *native*                               | *native*                               |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `int4[]`       | ???                            | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
@@ -126,9 +148,20 @@
 | `int4range[]`  | ???                            | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
-| `int8`         | ???                            | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `int8`         | `int`                          | *native*                               | *native*                               |
+|                | `int8`                         | *native*                               | *native*                               |
+|                | `int16`                        | *native*                               | *native*                               |
+|                | `int32`                        | *native*                               | *native*                               |
+|                | `int64`                        | *native*                               | *native*                               |
+|                | `uint`                         | *native*                               | *native*                               |
+|                | `uint8`                        | *native*                               | *native*                               |
+|                | `uint16`                       | *native*                               | *native*                               |
+|                | `uint32`                       | *native*                               | *native*                               |
+|                | `uint64`                       | *native*                               | *native*                               |
+|                | `float32`                      | *native*                               | *native*                               |
+|                | `float64`                      | *native*                               | *native*                               |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `int8[]`       | ???                            | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |

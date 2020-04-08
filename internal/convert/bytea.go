@@ -1,6 +1,6 @@
 package convert
 
-// native support for:
+// PostgreSQL `bytea` read/write natively supported with:
 // - string
 // - []byte
-type _ NO_TYPE
+type _ native
