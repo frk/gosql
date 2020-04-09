@@ -215,6 +215,49 @@ func pgparsehstore(a []byte) (out [][2][]byte) {
 	return out
 }
 
+func pgParseVector(a []byte) (out [][]byte) {
+	var j int
+	for i := 0; i < len(a); i++ {
+		if a[i] == ' ' {
+			out = append(out, a[j:i])
+			j = i + 1
+		}
+	}
+	out = append(out, a[j:]) // last
+	return out
+}
+
+func pgParseVectorArray(a []byte) (out [][][]byte) {
+	if len(a) == 0 {
+		return out // nothing to do if empty
+	}
+	a = a[1 : len(a)-1] // drop array delimiters
+
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' {
+
+			k := i + 1 // vector start
+			vector := [][]byte{}
+
+			for j := k; j < len(a); j++ {
+				if a[j] == '"' { // vector end
+					vector = append(vector, a[k:j])
+					i = j
+					break
+				}
+				if a[j] == ' ' {
+					vector = append(vector, a[k:j])
+					k = j + 1
+				}
+			}
+
+			out = append(out, vector)
+		}
+	}
+
+	return out
+}
+
 func pgparsehstorearr(a []byte) (out [][][2][]byte) {
 	if len(a) == 0 {
 		return out // nothing to do if empty

@@ -130,12 +130,34 @@
 |                | `[]float64`                    | `Int2ArrayFromFloat64Slice`            | `Int2ArrayToFloat64Slice`              |
 |                | `string`                       | *native*                               | *native*                               |
 |                | `[]byte`                       | *native*                               | *native*                               |
-| `int2vector`   | ???                            | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `int2vector[]` | ???                            | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `int2vector`   | `[]int`                        | `Int2VectorFromIntSlice`               | `Int2VectorToIntSlice`                 |
+|                | `[]int8`                       | `Int2VectorFromInt8Slice`              | `Int2VectorToInt8Slice`                |
+|                | `[]int16`                      | `Int2VectorFromInt16Slice`             | `Int2VectorToInt16Slice`               |
+|                | `[]int32`                      | `Int2VectorFromInt32Slice`             | `Int2VectorToInt32Slice`               |
+|                | `[]int64`                      | `Int2VectorFromInt64Slice`             | `Int2VectorToInt64Slice`               |
+|                | `[]uint`                       | `Int2VectorFromUintSlice`              | `Int2VectorToUintSlice`                |
+|                | `[]uint8`                      | `Int2VectorFromUint8Slice`             | `Int2VectorToUint8Slice`               |
+|                | `[]uint16`                     | `Int2VectorFromUint16Slice`            | `Int2VectorToUint16Slice`              |
+|                | `[]uint32`                     | `Int2VectorFromUint32Slice`            | `Int2VectorToUint32Slice`              |
+|                | `[]uint64`                     | `Int2VectorFromUint64Slice`            | `Int2VectorToUint64Slice`              |
+|                | `[]float32`                    | `Int2VectorFromFloat32Slice`           | `Int2VectorToFloat32Slice`             |
+|                | `[]float64`                    | `Int2VectorFromFloat64Slice`           | `Int2VectorToFloat64Slice`             |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `int2vector[]` | `[][]int`                      | `Int2VectorArrayFromIntSlice`          | `Int2VectorArrayToIntSlice`            |
+|                | `[][]int8`                     | `Int2VectorArrayFromInt8Slice`         | `Int2VectorArrayToInt8Slice`           |
+|                | `[][]int16`                    | `Int2VectorArrayFromInt16Slice`        | `Int2VectorArrayToInt16Slice`          |
+|                | `[][]int32`                    | `Int2VectorArrayFromInt32Slice`        | `Int2VectorArrayToInt32Slice`          |
+|                | `[][]int64`                    | `Int2VectorArrayFromInt64Slice`        | `Int2VectorArrayToInt64Slice`          |
+|                | `[][]uint`                     | `Int2VectorArrayFromUintSlice`         | `Int2VectorArrayToUintSlice`           |
+|                | `[][]uint8`                    | `Int2VectorArrayFromUint8Slice`        | `Int2VectorArrayToUint8Slice`          |
+|                | `[][]uint16`                   | `Int2VectorArrayFromUint16Slice`       | `Int2VectorArrayToUint16Slice`         |
+|                | `[][]uint32`                   | `Int2VectorArrayFromUint32Slice`       | `Int2VectorArrayToUint32Slice`         |
+|                | `[][]uint64`                   | `Int2VectorArrayFromUint64Slice`       | `Int2VectorArrayToUint64Slice`         |
+|                | `[][]float32`                  | `Int2VectorArrayFromFloat32Slice`      | `Int2VectorArrayToFloat32Slice`        |
+|                | `[][]float64`                  | `Int2VectorArrayFromFloat64Slice`      | `Int2VectorArrayToFloat64Slice`        |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `int4`         | `int`                          | *native*                               | *native*                               |
 |                | `int8`                         | *native*                               | *native*                               |
 |                | `int16`                        | *native*                               | *native*                               |
