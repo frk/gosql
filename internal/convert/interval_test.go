@@ -15,11 +15,11 @@ func TestInterval(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  `1 day`,
-				output: strptr(`1 day`)},
+				input:  string(`1 day`),
+				output: string(`1 day`)},
 			{
-				input:  `-5 years -4 mons -00:34:00`,
-				output: strptr(`-5 years -4 mons -00:34:00`)},
+				input:  string(`-5 years -4 mons -00:34:00`),
+				output: string(`-5 years -4 mons -00:34:00`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -32,10 +32,10 @@ func TestInterval(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte(`1 day`),
-				output: bytesptr(`1 day`)},
+				output: []byte(`1 day`)},
 			{
 				input:  []byte(`-5 years -4 mons -00:34:00`),
-				output: bytesptr(`-5 years -4 mons -00:34:00`)},
+				output: []byte(`-5 years -4 mons -00:34:00`)},
 		},
 	}}.execute(t, "interval")
 }

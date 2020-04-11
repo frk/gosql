@@ -14,8 +14,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: int(-2147483648), output: iptr(-2147483648)},
-			{input: int(2147483647), output: iptr(2147483647)},
+			{input: int(-2147483648), output: int(-2147483648)},
+			{input: int(2147483647), output: int(2147483647)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -26,8 +26,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: int8(-128), output: i8ptr(-128)},
-			{input: int8(127), output: i8ptr(127)},
+			{input: int8(-128), output: int8(-128)},
+			{input: int8(127), output: int8(127)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -38,8 +38,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: int16(-32768), output: i16ptr(-32768)},
-			{input: int16(32767), output: i16ptr(32767)},
+			{input: int16(-32768), output: int16(-32768)},
+			{input: int16(32767), output: int16(32767)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -50,8 +50,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: int32(-2147483648), output: i32ptr(-2147483648)},
-			{input: int32(2147483647), output: i32ptr(2147483647)},
+			{input: int32(-2147483648), output: int32(-2147483648)},
+			{input: int32(2147483647), output: int32(2147483647)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -62,8 +62,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: int64(-2147483648), output: i64ptr(-2147483648)},
-			{input: int64(2147483647), output: i64ptr(2147483647)},
+			{input: int64(-2147483648), output: int64(-2147483648)},
+			{input: int64(2147483647), output: int64(2147483647)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -74,8 +74,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: uint(0), output: uptr(0)},
-			{input: uint(2147483647), output: uptr(2147483647)},
+			{input: uint(0), output: uint(0)},
+			{input: uint(2147483647), output: uint(2147483647)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -86,8 +86,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: uint8(0), output: u8ptr(0)},
-			{input: uint8(255), output: u8ptr(255)},
+			{input: uint8(0), output: uint8(0)},
+			{input: uint8(255), output: uint8(255)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -98,8 +98,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: uint16(0), output: u16ptr(0)},
-			{input: uint16(65535), output: u16ptr(65535)},
+			{input: uint16(0), output: uint16(0)},
+			{input: uint16(65535), output: uint16(65535)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -110,8 +110,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: uint32(0), output: u32ptr(0)},
-			{input: uint32(2147483647), output: u32ptr(2147483647)},
+			{input: uint32(0), output: uint32(0)},
+			{input: uint32(2147483647), output: uint32(2147483647)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -122,8 +122,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: uint64(0), output: u64ptr(0)},
-			{input: uint64(2147483647), output: u64ptr(2147483647)},
+			{input: uint64(0), output: uint64(0)},
+			{input: uint64(2147483647), output: uint64(2147483647)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -134,9 +134,9 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: float32(-2147483648.0), output: f32ptr(-2147483648.0)},
+			{input: float32(-2147483648.0), output: float32(-2147483648.0)},
 			// XXX float32(2147483647.0) gets turned into 2147483648 which is outside int4 range
-			{input: float32(214748364.0), output: f32ptr(214748364.0)},
+			{input: float32(214748364.0), output: float32(214748364.0)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -147,8 +147,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: float64(-2147483648.0), output: f64ptr(-2147483648.0)},
-			{input: float64(2147483647.0), output: f64ptr(2147483647.0)},
+			{input: float64(-2147483648.0), output: float64(-2147483648.0)},
+			{input: float64(2147483647.0), output: float64(2147483647.0)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -159,8 +159,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: string("-2147483648"), output: strptr(`-2147483648`)},
-			{input: string("2147483647"), output: strptr(`2147483647`)},
+			{input: string("-2147483648"), output: string(`-2147483648`)},
+			{input: string("2147483647"), output: string(`2147483647`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -171,8 +171,8 @@ func TestInt4(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: []byte("-2147483648"), output: bytesptr(`-2147483648`)},
-			{input: []byte("2147483647"), output: bytesptr(`2147483647`)},
+			{input: []byte("-2147483648"), output: []byte(`-2147483648`)},
+			{input: []byte("2147483647"), output: []byte(`2147483647`)},
 		},
 	}}.execute(t, "int4")
 }

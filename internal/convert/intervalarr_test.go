@@ -15,8 +15,8 @@ func TestIntervalArray(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  `{"1 day","-5 years -4 mons -00:34:00"}`,
-				output: strptr(`{"1 day","-5 years -4 mons -00:34:00"}`)},
+				input:  string(`{"1 day","-5 years -4 mons -00:34:00"}`),
+				output: string(`{"1 day","-5 years -4 mons -00:34:00"}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -29,7 +29,7 @@ func TestIntervalArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte(`{"1 day","-5 years -4 mons -00:34:00"}`),
-				output: bytesptr(`{"1 day","-5 years -4 mons -00:34:00"}`)},
+				output: []byte(`{"1 day","-5 years -4 mons -00:34:00"}`)},
 		},
 	}}.execute(t, "intervalarr")
 }

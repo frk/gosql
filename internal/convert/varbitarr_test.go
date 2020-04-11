@@ -14,11 +14,11 @@ func TestVarBitArray(t *testing.T) {
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: nil, output: new([]string)},
-			{input: string(`{}`), output: &[]string{}},
+			{input: nil, output: []string(nil)},
+			{input: string(`{}`), output: []string{}},
 			{
 				input:  string(`{101010,01,10,1111100}`),
-				output: &[]string{"101010", "01", "10", "1111100"}},
+				output: []string{"101010", "01", "10", "1111100"}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -29,11 +29,11 @@ func TestVarBitArray(t *testing.T) {
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: nil, output: new([]int64)},
-			{input: string(`{}`), output: &[]int64{}},
+			{input: nil, output: []int64(nil)},
+			{input: string(`{}`), output: []int64{}},
 			{
 				input:  string(`{101010,01,10,1111100}`),
-				output: &[]int64{42, 1, 2, 124}},
+				output: []int64{42, 1, 2, 124}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -44,10 +44,10 @@ func TestVarBitArray(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: string(`{}`), output: strptr(`{}`)},
+			{input: string(`{}`), output: string(`{}`)},
 			{
 				input:  string(`{101010,01,10,1111100}`),
-				output: strptr(`{101010,01,10,1111100}`)},
+				output: string(`{101010,01,10,1111100}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -58,10 +58,10 @@ func TestVarBitArray(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: []byte(`{}`), output: bytesptr(`{}`)},
+			{input: []byte(`{}`), output: []byte(`{}`)},
 			{
 				input:  []byte(`{101010,01,10,1111100}`),
-				output: bytesptr(`{101010,01,10,1111100}`)},
+				output: []byte(`{101010,01,10,1111100}`)},
 		},
 	}}.execute(t, "varbitarr")
 }

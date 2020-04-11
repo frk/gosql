@@ -11,21 +11,21 @@ func TestDateArray(t *testing.T) {
 			return new(DateArrayFromTimeSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := &DateArrayToTimeSlice{Val: new([]time.Time)}
+			s := DateArrayToTimeSlice{Val: new([]time.Time)}
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: nil, output: new([]time.Time)},
-			{input: []time.Time{}, output: &[]time.Time{}},
+			{input: nil, output: []time.Time(nil)},
+			{input: []time.Time{}, output: []time.Time{}},
 			{
 				input:  []time.Time{dateval(1999, 1, 8)},
-				output: &[]time.Time{dateval(1999, 1, 8)}},
+				output: []time.Time{dateval(1999, 1, 8)}},
 			{
 				input:  []time.Time{dateval(1999, 1, 8), dateval(2001, 5, 5)},
-				output: &[]time.Time{dateval(1999, 1, 8), dateval(2001, 5, 5)}},
+				output: []time.Time{dateval(1999, 1, 8), dateval(2001, 5, 5)}},
 			{
 				input:  []time.Time{dateval(2020, 3, 28), dateval(2001, 5, 5)},
-				output: &[]time.Time{dateval(2020, 3, 28), dateval(2001, 5, 5)}},
+				output: []time.Time{dateval(2020, 3, 28), dateval(2001, 5, 5)}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -36,10 +36,10 @@ func TestDateArray(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: string(`{}`), output: strptr(`{}`)},
-			{input: string(`{1999-01-08}`), output: strptr(`{1999-01-08}`)},
-			{input: string(`{1999-01-08,2001-05-05}`), output: strptr(`{1999-01-08,2001-05-05}`)},
-			{input: string(`{2020-03-28,2001-05-05}`), output: strptr(`{2020-03-28,2001-05-05}`)},
+			{input: string(`{}`), output: string(`{}`)},
+			{input: string(`{1999-01-08}`), output: string(`{1999-01-08}`)},
+			{input: string(`{1999-01-08,2001-05-05}`), output: string(`{1999-01-08,2001-05-05}`)},
+			{input: string(`{2020-03-28,2001-05-05}`), output: string(`{2020-03-28,2001-05-05}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -50,9 +50,9 @@ func TestDateArray(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: []byte(`{1999-01-08}`), output: bytesptr(`{1999-01-08}`)},
-			{input: []byte(`{1999-01-08,2001-05-05}`), output: bytesptr(`{1999-01-08,2001-05-05}`)},
-			{input: []byte(`{2020-03-28,2001-05-05}`), output: bytesptr(`{2020-03-28,2001-05-05}`)},
+			{input: []byte(`{1999-01-08}`), output: []byte(`{1999-01-08}`)},
+			{input: []byte(`{1999-01-08,2001-05-05}`), output: []byte(`{1999-01-08,2001-05-05}`)},
+			{input: []byte(`{2020-03-28,2001-05-05}`), output: []byte(`{2020-03-28,2001-05-05}`)},
 		},
 	}}.execute(t, "datearr")
 }

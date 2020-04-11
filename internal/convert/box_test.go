@@ -16,16 +16,16 @@ func TestBox(t *testing.T) {
 		data: []testdata{
 			{
 				input:  nil,
-				output: new([2][2]float64)},
+				output: [2][2]float64{}},
 			{
 				input:  [2][2]float64{{1, 1}, {0, 0}},
-				output: &[2][2]float64{{1, 1}, {0, 0}}},
+				output: [2][2]float64{{1, 1}, {0, 0}}},
 			{
 				input:  [2][2]float64{{0, 0}, {1, 1}},
-				output: &[2][2]float64{{1, 1}, {0, 0}}},
+				output: [2][2]float64{{1, 1}, {0, 0}}},
 			{
 				input:  [2][2]float64{{4.5203, 0.79322}, {3.2, 5.63333}},
-				output: &[2][2]float64{{4.5203, 5.63333}, {3.2, 0.79322}}},
+				output: [2][2]float64{{4.5203, 5.63333}, {3.2, 0.79322}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -36,12 +36,12 @@ func TestBox(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: string("(0,0),(0,0)"), output: strptr(`(0,0),(0,0)`)},
-			{input: string("(1,1),(0,0)"), output: strptr(`(1,1),(0,0)`)},
-			{input: string("(0,0),(1,1)"), output: strptr(`(1,1),(0,0)`)},
+			{input: string("(0,0),(0,0)"), output: string(`(0,0),(0,0)`)},
+			{input: string("(1,1),(0,0)"), output: string(`(1,1),(0,0)`)},
+			{input: string("(0,0),(1,1)"), output: string(`(1,1),(0,0)`)},
 			{
 				input: string("(4.5203,0.79322),(3.2,5.63333)"),
-				output: strptr(`(4.5202999999999998,5.6333299999999999),` +
+				output: string(`(4.5202999999999998,5.6333299999999999),` +
 					`(3.2000000000000002,0.79322000000000004)`)},
 		},
 	}, {
@@ -53,13 +53,13 @@ func TestBox(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: nil, output: new([]byte)},
-			{input: []byte("(0,0),(0,0)"), output: bytesptr(`(0,0),(0,0)`)},
-			{input: []byte("(1,1),(0,0)"), output: bytesptr(`(1,1),(0,0)`)},
-			{input: []byte("(0,0),(1,1)"), output: bytesptr(`(1,1),(0,0)`)},
+			{input: nil, output: []byte(nil)},
+			{input: []byte("(0,0),(0,0)"), output: []byte(`(0,0),(0,0)`)},
+			{input: []byte("(1,1),(0,0)"), output: []byte(`(1,1),(0,0)`)},
+			{input: []byte("(0,0),(1,1)"), output: []byte(`(1,1),(0,0)`)},
 			{
 				input: []byte("(4.5203,0.79322),(3.2,5.63333)"),
-				output: bytesptr(`(4.5202999999999998,5.6333299999999999),` +
+				output: []byte(`(4.5202999999999998,5.6333299999999999),` +
 					`(3.2000000000000002,0.79322000000000004)`)},
 		},
 	}}.execute(t, "box")

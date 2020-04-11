@@ -14,8 +14,8 @@ func TestBit(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: bool(true), output: boolptr(true)},
-			{input: bool(false), output: boolptr(false)},
+			{input: bool(true), output: bool(true)},
+			{input: bool(false), output: bool(false)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -26,8 +26,8 @@ func TestBit(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: uint8(1), output: u8ptr(1)},
-			{input: uint8(0), output: u8ptr(0)},
+			{input: uint8(1), output: uint8(1)},
+			{input: uint8(0), output: uint8(0)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -38,8 +38,8 @@ func TestBit(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: uint(0), output: uptr(0)},
-			{input: uint(1), output: uptr(1)},
+			{input: uint(0), output: uint(0)},
+			{input: uint(1), output: uint(1)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -50,8 +50,8 @@ func TestBit(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: string("0"), output: strptr(`0`)},
-			{input: string("1"), output: strptr(`1`)},
+			{input: string("0"), output: string(`0`)},
+			{input: string("1"), output: string(`1`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -62,8 +62,8 @@ func TestBit(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: []byte(`0`), output: bytesptr(`0`)},
-			{input: []byte(`1`), output: bytesptr(`1`)},
+			{input: []byte(`0`), output: []byte(`0`)},
+			{input: []byte(`1`), output: []byte(`1`)},
 		},
 	}}.execute(t, "bit")
 }

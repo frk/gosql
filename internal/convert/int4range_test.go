@@ -16,7 +16,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]int{-2147483648, 2147483647},
-				output: &[2]int{-2147483648, 2147483647}},
+				output: [2]int{-2147483648, 2147483647}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -29,7 +29,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]int8{-128, 127},
-				output: &[2]int8{-128, 127}},
+				output: [2]int8{-128, 127}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -42,7 +42,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]int16{-32768, 32767},
-				output: &[2]int16{-32768, 32767}},
+				output: [2]int16{-32768, 32767}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -55,7 +55,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]int32{-2147483648, 2147483647},
-				output: &[2]int32{-2147483648, 2147483647}},
+				output: [2]int32{-2147483648, 2147483647}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -68,7 +68,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]int64{-2147483648, 2147483647},
-				output: &[2]int64{-2147483648, 2147483647}},
+				output: [2]int64{-2147483648, 2147483647}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -81,7 +81,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]uint{0, 2147483647},
-				output: &[2]uint{0, 2147483647}},
+				output: [2]uint{0, 2147483647}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -94,7 +94,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]uint8{0, 255},
-				output: &[2]uint8{0, 255}},
+				output: [2]uint8{0, 255}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -107,7 +107,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]uint16{0, 65535},
-				output: &[2]uint16{0, 65535}},
+				output: [2]uint16{0, 65535}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -120,7 +120,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]uint32{0, 2147483647},
-				output: &[2]uint32{0, 2147483647}},
+				output: [2]uint32{0, 2147483647}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -133,7 +133,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]uint64{0, 2147483647},
-				output: &[2]uint64{0, 2147483647}},
+				output: [2]uint64{0, 2147483647}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -146,7 +146,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]float32{-2147483648.0, 214748364.0},
-				output: &[2]float32{-2147483648.0, 214748364.0}},
+				output: [2]float32{-2147483648.0, 214748364.0}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -159,7 +159,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [2]float64{-2147483648.0, 2147483647.0},
-				output: &[2]float64{-2147483648.0, 2147483647.0}},
+				output: [2]float64{-2147483648.0, 2147483647.0}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -171,8 +171,8 @@ func TestInt4Range(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  "[-2147483648,2147483647)",
-				output: strptr(`[-2147483648,2147483647)`)},
+				input:  string("[-2147483648,2147483647)"),
+				output: string(`[-2147483648,2147483647)`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -185,7 +185,7 @@ func TestInt4Range(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte("[-2147483648,2147483647)"),
-				output: bytesptr(`[-2147483648,2147483647)`)},
+				output: []byte(`[-2147483648,2147483647)`)},
 		},
 	}}.execute(t, "int4range")
 }

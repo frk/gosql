@@ -14,8 +14,8 @@ func TestBool(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: true, output: boolptr(true)},
-			{input: false, output: boolptr(false)},
+			{input: true, output: bool(true)},
+			{input: false, output: bool(false)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -26,8 +26,8 @@ func TestBool(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: string("true"), output: strptr(`true`)},
-			{input: string("false"), output: strptr(`false`)},
+			{input: string("true"), output: string(`true`)},
+			{input: string("false"), output: string(`false`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -38,8 +38,8 @@ func TestBool(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: []byte("true"), output: bytesptr(`true`)},
-			{input: []byte("false"), output: bytesptr(`false`)},
+			{input: []byte("true"), output: []byte(`true`)},
+			{input: []byte("false"), output: []byte(`false`)},
 		},
 	}}.execute(t, "bool")
 }

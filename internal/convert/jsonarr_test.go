@@ -15,8 +15,8 @@ func TestJSONArray(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  `{"{\"foo\":[\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`,
-				output: strptr(`{"{\"foo\":[\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`)},
+				input:  string(`{"{\"foo\":[\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`),
+				output: string(`{"{\"foo\":[\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -29,7 +29,7 @@ func TestJSONArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte(`{"{\"foo\":[\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`),
-				output: bytesptr(`{"{\"foo\":[\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`)},
+				output: []byte(`{"{\"foo\":[\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`)},
 		},
 	}}.execute(t, "jsonarr")
 }
@@ -46,7 +46,7 @@ func TestJSONBArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  string(`{"{\"foo\":[\"bar\",\"baz\",123]}","[\"foo\",123]"}`),
-				output: strptr(`{"{\"foo\": [\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`)},
+				output: string(`{"{\"foo\": [\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -59,7 +59,7 @@ func TestJSONBArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte(`{"{\"foo\":[\"bar\",\"baz\",123]}","[\"foo\",123]"}`),
-				output: bytesptr(`{"{\"foo\": [\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`)},
+				output: []byte(`{"{\"foo\": [\"bar\", \"baz\", 123]}","[\"foo\", 123]"}`)},
 		},
 	}}.execute(t, "jsonbarr")
 }

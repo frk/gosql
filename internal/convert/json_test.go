@@ -20,13 +20,13 @@ func TestJSON(t *testing.T) {
 		data: []testdata{
 			{
 				input:  data{},
-				output: new(data)},
+				output: data{}},
 			{
 				input:  data{[]interface{}{"bar", "baz", float64(123)}},
-				output: &data{[]interface{}{"bar", "baz", float64(123)}}},
+				output: data{[]interface{}{"bar", "baz", float64(123)}}},
 			{
 				input:  data{[]interface{}{float64(123), "baz", "bar"}},
-				output: &data{[]interface{}{float64(123), "baz", "bar"}}},
+				output: data{[]interface{}{float64(123), "baz", "bar"}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -38,14 +38,14 @@ func TestJSON(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  `{}`,
-				output: strptr(`{}`)},
+				input:  string(`{}`),
+				output: string(`{}`)},
 			{
-				input:  `{"foo":["bar", "baz", 123]}`,
-				output: strptr(`{"foo":["bar", "baz", 123]}`)},
+				input:  string(`{"foo":["bar", "baz", 123]}`),
+				output: string(`{"foo":["bar", "baz", 123]}`)},
 			{
-				input:  `{"foo":[123, "baz", "bar"]}`,
-				output: strptr(`{"foo":[123, "baz", "bar"]}`)},
+				input:  string(`{"foo":[123, "baz", "bar"]}`),
+				output: string(`{"foo":[123, "baz", "bar"]}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -58,13 +58,13 @@ func TestJSON(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte(`{}`),
-				output: bytesptr(`{}`)},
+				output: []byte(`{}`)},
 			{
 				input:  []byte(`{"foo":["bar", "baz", 123]}`),
-				output: bytesptr(`{"foo":["bar", "baz", 123]}`)},
+				output: []byte(`{"foo":["bar", "baz", 123]}`)},
 			{
 				input:  []byte(`{"foo":[123, "baz", "bar"]}`),
-				output: bytesptr(`{"foo":[123, "baz", "bar"]}`)},
+				output: []byte(`{"foo":[123, "baz", "bar"]}`)},
 		},
 	}}.execute(t, "json")
 }
@@ -85,13 +85,13 @@ func TestJSONB(t *testing.T) {
 		data: []testdata{
 			{
 				input:  data{},
-				output: new(data)},
+				output: data{}},
 			{
 				input:  data{[]interface{}{"bar", "baz", float64(123)}},
-				output: &data{[]interface{}{"bar", "baz", float64(123)}}},
+				output: data{[]interface{}{"bar", "baz", float64(123)}}},
 			{
 				input:  data{[]interface{}{float64(123), "baz", "bar"}},
-				output: &data{[]interface{}{float64(123), "baz", "bar"}}},
+				output: data{[]interface{}{float64(123), "baz", "bar"}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -103,14 +103,14 @@ func TestJSONB(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  `{}`,
-				output: strptr(`{}`)},
+				input:  string(`{}`),
+				output: string(`{}`)},
 			{
-				input:  `{"foo": ["bar", "baz", 123]}`,
-				output: strptr(`{"foo": ["bar", "baz", 123]}`)},
+				input:  string(`{"foo": ["bar", "baz", 123]}`),
+				output: string(`{"foo": ["bar", "baz", 123]}`)},
 			{
-				input:  `{"foo": [123, "baz", "bar"]}`,
-				output: strptr(`{"foo": [123, "baz", "bar"]}`)},
+				input:  string(`{"foo": [123, "baz", "bar"]}`),
+				output: string(`{"foo": [123, "baz", "bar"]}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -123,13 +123,13 @@ func TestJSONB(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte(`{}`),
-				output: bytesptr(`{}`)},
+				output: []byte(`{}`)},
 			{
 				input:  []byte(`{"foo": ["bar", "baz", 123]}`),
-				output: bytesptr(`{"foo": ["bar", "baz", 123]}`)},
+				output: []byte(`{"foo": ["bar", "baz", 123]}`)},
 			{
 				input:  []byte(`{"foo": [123, "baz", "bar"]}`),
-				output: bytesptr(`{"foo": [123, "baz", "bar"]}`)},
+				output: []byte(`{"foo": [123, "baz", "bar"]}`)},
 		},
 	}}.execute(t, "jsonb")
 }

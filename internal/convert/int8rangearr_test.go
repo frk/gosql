@@ -16,7 +16,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]int{{-9223372036854775808, 9223372036854775807}, {0, 21}},
-				output: &[][2]int{{-9223372036854775808, 9223372036854775807}, {0, 21}}},
+				output: [][2]int{{-9223372036854775808, 9223372036854775807}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -29,7 +29,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]int8{{-128, 127}, {0, 21}},
-				output: &[][2]int8{{-128, 127}, {0, 21}}},
+				output: [][2]int8{{-128, 127}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -42,7 +42,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]int16{{-32768, 32767}, {0, 21}},
-				output: &[][2]int16{{-32768, 32767}, {0, 21}}},
+				output: [][2]int16{{-32768, 32767}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -55,7 +55,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]int32{{-2147483648, 2147483647}, {0, 21}},
-				output: &[][2]int32{{-2147483648, 2147483647}, {0, 21}}},
+				output: [][2]int32{{-2147483648, 2147483647}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -68,7 +68,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]int64{{-9223372036854775808, 9223372036854775807}, {0, 21}},
-				output: &[][2]int64{{-9223372036854775808, 9223372036854775807}, {0, 21}}},
+				output: [][2]int64{{-9223372036854775808, 9223372036854775807}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -81,7 +81,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]uint{{0, 9223372036854775807}, {0, 21}},
-				output: &[][2]uint{{0, 9223372036854775807}, {0, 21}}},
+				output: [][2]uint{{0, 9223372036854775807}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -94,7 +94,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]uint8{{0, 255}, {0, 21}},
-				output: &[][2]uint8{{0, 255}, {0, 21}}},
+				output: [][2]uint8{{0, 255}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -107,7 +107,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]uint16{{0, 65535}, {0, 21}},
-				output: &[][2]uint16{{0, 65535}, {0, 21}}},
+				output: [][2]uint16{{0, 65535}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -120,7 +120,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]uint32{{0, 4294967295}, {0, 21}},
-				output: &[][2]uint32{{0, 4294967295}, {0, 21}}},
+				output: [][2]uint32{{0, 4294967295}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -133,7 +133,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]uint64{{0, 9223372036854775807}, {0, 21}},
-				output: &[][2]uint64{{0, 9223372036854775807}, {0, 21}}},
+				output: [][2]uint64{{0, 9223372036854775807}, {0, 21}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -146,7 +146,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]float32{{-2147483648.0, 214748364.0}, {0.0, 21.0}},
-				output: &[][2]float32{{-2147483648.0, 214748364.0}, {0.0, 21.0}}},
+				output: [][2]float32{{-2147483648.0, 214748364.0}, {0.0, 21.0}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -159,7 +159,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  [][2]float64{{-9223372036854775808.0, 922337203685477580.0}, {0.0, 21.0}},
-				output: &[][2]float64{{-9223372036854775808.0, 922337203685477580.0}, {0.0, 21.0}}},
+				output: [][2]float64{{-9223372036854775808.0, 922337203685477580.0}, {0.0, 21.0}}},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -171,8 +171,8 @@ func TestInt8RangeArray(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  `{"[-9223372036854775808,9223372036854775807)","[0,21)"}`,
-				output: strptr(`{"[-9223372036854775808,9223372036854775807)","[0,21)"}`)},
+				input:  string(`{"[-9223372036854775808,9223372036854775807)","[0,21)"}`),
+				output: string(`{"[-9223372036854775808,9223372036854775807)","[0,21)"}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -185,7 +185,7 @@ func TestInt8RangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte(`{"[-9223372036854775808,9223372036854775807)","[0,21)"}`),
-				output: bytesptr(`{"[-9223372036854775808,9223372036854775807)","[0,21)"}`)},
+				output: []byte(`{"[-9223372036854775808,9223372036854775807)","[0,21)"}`)},
 		},
 	}}.execute(t, "int8rangearr")
 }

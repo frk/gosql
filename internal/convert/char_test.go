@@ -14,9 +14,9 @@ func TestChar(t *testing.T) {
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: byte('A'), output: byteptr('A')},
-			{input: byte('b'), output: byteptr('b')},
-			{input: byte('X'), output: byteptr('X')},
+			{input: byte('A'), output: byte('A')},
+			{input: byte('b'), output: byte('b')},
+			{input: byte('X'), output: byte('X')},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -27,10 +27,10 @@ func TestChar(t *testing.T) {
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: rune('A'), output: runeptr('A')},
-			{input: rune('z'), output: runeptr('z')},
-			{input: rune('馬'), output: runeptr('馬')},
-			{input: rune('駮'), output: runeptr('駮')},
+			{input: rune('A'), output: rune('A')},
+			{input: rune('z'), output: rune('z')},
+			{input: rune('馬'), output: rune('馬')},
+			{input: rune('駮'), output: rune('駮')},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -41,10 +41,10 @@ func TestChar(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: string("A"), output: strptr("A")},
-			{input: string("z"), output: strptr("z")},
-			{input: string("馬"), output: strptr("馬")},
-			{input: string("駮"), output: strptr("駮")},
+			{input: string("A"), output: string("A")},
+			{input: string("z"), output: string("z")},
+			{input: string("馬"), output: string("馬")},
+			{input: string("駮"), output: string("駮")},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -55,8 +55,8 @@ func TestChar(t *testing.T) {
 			return s, s
 		},
 		data: []testdata{
-			{input: []byte("A"), output: bytesptr("A")},
-			{input: []byte("z"), output: bytesptr("z")},
+			{input: []byte("A"), output: []byte("A")},
+			{input: []byte("z"), output: []byte("z")},
 		},
 	}}.execute(t, "char")
 }

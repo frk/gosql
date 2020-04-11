@@ -15,20 +15,20 @@ func TestDateRangeArray(t *testing.T) {
 			return v, v.Val
 		},
 		data: []testdata{
-			{input: nil, output: new([][2]time.Time)},
+			{input: nil, output: [][2]time.Time(nil)},
 			{
 				input:  [][2]time.Time{{}, {}, {}},
-				output: &[][2]time.Time{{}, {}, {}}},
+				output: [][2]time.Time{{}, {}, {}}},
 			{
 				input:  [][2]time.Time{{dateval(1999, 1, 8), dateval(2001, 5, 5)}},
-				output: &[][2]time.Time{{dateval(1999, 1, 8), dateval(2001, 5, 5)}}},
+				output: [][2]time.Time{{dateval(1999, 1, 8), dateval(2001, 5, 5)}}},
 			{
 				input: [][2]time.Time{
 					{{}, dateval(2001, 5, 5)},
 					{dateval(1999, 1, 8), {}},
 					{dateval(1999, 1, 8), dateval(2001, 5, 5)},
 				},
-				output: &[][2]time.Time{
+				output: [][2]time.Time{
 					{{}, dateval(2001, 5, 5)},
 					{dateval(1999, 1, 8), {}},
 					{dateval(1999, 1, 8), dateval(2001, 5, 5)}}},
@@ -44,13 +44,13 @@ func TestDateRangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  string(`{"(,)","(,)","(,)"}`),
-				output: strptr(`{"(,)","(,)","(,)"}`)},
+				output: string(`{"(,)","(,)","(,)"}`)},
 			{
 				input:  string(`{"[1999-01-08,2001-05-05)"}`),
-				output: strptr(`{"[1999-01-08,2001-05-05)"}`)},
+				output: string(`{"[1999-01-08,2001-05-05)"}`)},
 			{
 				input:  string(`{"(,2001-05-05)","[1999-01-08,)","[1999-01-08,2001-05-05)"}`),
-				output: strptr(`{"(,2001-05-05)","[1999-01-08,)","[1999-01-08,2001-05-05)"}`)},
+				output: string(`{"(,2001-05-05)","[1999-01-08,)","[1999-01-08,2001-05-05)"}`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -63,13 +63,13 @@ func TestDateRangeArray(t *testing.T) {
 		data: []testdata{
 			{
 				input:  []byte(`{"(,)","(,)","(,)"}`),
-				output: bytesptr(`{"(,)","(,)","(,)"}`)},
+				output: []byte(`{"(,)","(,)","(,)"}`)},
 			{
 				input:  []byte(`{"[1999-01-08,2001-05-05)"}`),
-				output: bytesptr(`{"[1999-01-08,2001-05-05)"}`)},
+				output: []byte(`{"[1999-01-08,2001-05-05)"}`)},
 			{
 				input:  []byte(`{"(,2001-05-05)","[1999-01-08,)","[1999-01-08,2001-05-05)"}`),
-				output: bytesptr(`{"(,2001-05-05)","[1999-01-08,)","[1999-01-08,2001-05-05)"}`)},
+				output: []byte(`{"(,2001-05-05)","[1999-01-08,)","[1999-01-08,2001-05-05)"}`)},
 		},
 	}}.execute(t, "daterangearr")
 }

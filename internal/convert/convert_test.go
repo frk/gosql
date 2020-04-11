@@ -236,9 +236,9 @@ func (list testlist) execute(t *testing.T, coltype string) {
 				valuer = td.input
 			}
 
-			scanner, got := tt.scanner()
+			scanner, dest := tt.scanner()
 			if scanner == nil {
-				scanner = got
+				scanner = dest
 			}
 
 			name := fmt.Sprintf("%T->%T::<%s>_FROM_<%T>_TO_<%T>_USING_%v", valuer, scanner, coltype, td.input, td.output, td.input)
@@ -253,8 +253,14 @@ func (list testlist) execute(t *testing.T, coltype string) {
 				row = testdb.db.QueryRow(`SELECT `+col+` FROM coltype_test WHERE id = $1`, id)
 				if err := row.Scan(scanner); err != nil {
 					t.Error(err)
-				} else if e := compare.Compare(got, td.output); e != nil {
-					t.Error(e)
+				} else {
+					got := reflect.ValueOf(dest).Elem().Interface()
+					_ = got
+
+					//if e := compare.Compare(dest, td.output); e != nil {
+					if e := compare.Compare(got, td.output); e != nil {
+						t.Error(e)
+					}
 				}
 			})
 		}
