@@ -4,26 +4,64 @@ import (
 	"testing"
 )
 
-func TestVarBitArrScanners(t *testing.T) {
-	test_scanner{{
-		scanner: func() (interface{}, interface{}) {
-			s := VarBitArr2StringSlice{Ptr: new([]string)}
-			return s, s.Ptr
+func TestVarBitArray(t *testing.T) {
+	testlist{{
+		valuer: func() interface{} {
+			return nil // TODO
 		},
-		rows: []test_scanner_row{
-			{typ: "varbitarr", in: nil, want: new([]string)},
-			{typ: "varbitarr", in: `{}`, want: &[]string{}},
-			{typ: "varbitarr", in: `{101010,01,10,1111100}`, want: &[]string{"101010", "01", "10", "1111100"}},
+		scanner: func() (interface{}, interface{}) {
+			s := VarBitArr2StringSlice{Val: new([]string)}
+			return s, s.Val
+		},
+		data: []testdata{
+			{input: nil, output: new([]string)},
+			{input: string(`{}`), output: &[]string{}},
+			{
+				input:  string(`{101010,01,10,1111100}`),
+				output: &[]string{"101010", "01", "10", "1111100"}},
 		},
 	}, {
+		valuer: func() interface{} {
+			return nil // TODO
+		},
 		scanner: func() (interface{}, interface{}) {
-			s := VarBitArr2Int64Slice{Ptr: new([]int64)}
-			return s, s.Ptr
+			s := VarBitArr2Int64Slice{Val: new([]int64)}
+			return s, s.Val
 		},
-		rows: []test_scanner_row{
-			{typ: "varbitarr", in: nil, want: new([]int64)},
-			{typ: "varbitarr", in: `{}`, want: &[]int64{}},
-			{typ: "varbitarr", in: `{101010,01,10,1111100}`, want: &[]int64{42, 1, 2, 124}},
+		data: []testdata{
+			{input: nil, output: new([]int64)},
+			{input: string(`{}`), output: &[]int64{}},
+			{
+				input:  string(`{101010,01,10,1111100}`),
+				output: &[]int64{42, 1, 2, 124}},
 		},
-	}}.execute(t)
+	}, {
+		valuer: func() interface{} {
+			return nil // string
+		},
+		scanner: func() (interface{}, interface{}) {
+			s := new(string)
+			return s, s
+		},
+		data: []testdata{
+			{input: string(`{}`), output: strptr(`{}`)},
+			{
+				input:  string(`{101010,01,10,1111100}`),
+				output: strptr(`{101010,01,10,1111100}`)},
+		},
+	}, {
+		valuer: func() interface{} {
+			return nil // []byte
+		},
+		scanner: func() (interface{}, interface{}) {
+			s := new([]byte)
+			return s, s
+		},
+		data: []testdata{
+			{input: []byte(`{}`), output: bytesptr(`{}`)},
+			{
+				input:  []byte(`{101010,01,10,1111100}`),
+				output: bytesptr(`{101010,01,10,1111100}`)},
+		},
+	}}.execute(t, "varbitarr")
 }

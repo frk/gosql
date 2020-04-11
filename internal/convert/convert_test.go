@@ -206,119 +206,34 @@ func (t *convtest) close() {
 	}
 }
 
-type test_scanner []struct {
-	// scnr is called per each row in the rows slice and returns dest and result:
-	// - dest - is used by the test runner as the destination to scan the
+type testlist []struct {
+	valuer func() interface{}
+	// scanner is called per each row in the rows slice and returns scanner and result:
+	// - scanner - is used by the test runner as the destination to scan the
 	//   selected row's column.
 	// - result - is the the pointer that points to the value that the scanner
 	//   populates with the data of the column, it is then used to compare
 	//   against the value specified into a row's want field.
 	scanner func() (scanner, result interface{})
-	rows    []test_scanner_row
+	data    []testdata
 }
 
-type test_scanner_row struct {
-	typ  string
-	in   interface{}
-	want interface{}
-}
-
-func (table test_scanner) execute(t *testing.T) {
-	for _, tt := range table {
-		for _, r := range tt.rows {
-			scanner, got := tt.scanner()
-			if scanner == nil {
-				scanner = got
-			}
-
-			name := fmt.Sprintf("%T::<%s>_to_<%T>_using_%v", scanner, r.typ, r.want, r.in)
-			t.Run(name, func(t *testing.T) {
-				var id int
-				var col = "col_" + r.typ
-				row := testdb.db.QueryRow(`insert into coltype_test (`+col+`) values ($1) returning id`, r.in)
-				if err := row.Scan(&id); err != nil {
-					t.Fatal(err)
-				}
-
-				row = testdb.db.QueryRow(`select `+col+` from coltype_test where id = $1`, id)
-				if err := row.Scan(scanner); err != nil {
-					t.Error(err)
-				} else if e := compare.Compare(got, r.want); e != nil {
-					t.Error(e)
-				}
-			})
-		}
-	}
-}
-
-type test_valuer []struct {
-	valuer func() interface{}
-	rows   []test_valuer_row
-}
-
-type test_valuer_row struct {
-	typ  string
-	in   interface{}
-	want *string
-}
-
-func (table test_valuer) execute(t *testing.T) {
-	for _, tt := range table {
-		for _, r := range tt.rows {
-			valuer := tt.valuer()
-			if valuer != nil {
-				rv := reflect.ValueOf(valuer).Elem()
-				if fv := reflect.ValueOf(r.in); fv.IsValid() {
-					rv.Field(0).Set(fv)
-				}
-			} else {
-				valuer = r.in
-			}
-
-			name := fmt.Sprintf("%T::<%s>_from_<%T>_using_%v", valuer, r.typ, r.in, r.in)
-			t.Run(name, func(t *testing.T) {
-				var id int
-				var col = "col_" + r.typ
-				row := testdb.db.QueryRow(`insert into coltype_test (`+col+`) values ($1) returning id`, valuer)
-				if err := row.Scan(&id); err != nil {
-					t.Fatal(err)
-				}
-
-				var dest *string
-				row = testdb.db.QueryRow(`select `+col+` from coltype_test where id = $1`, id)
-				if err := row.Scan(&dest); err != nil {
-					t.Error(err)
-				} else if e := compare.Compare(dest, r.want); e != nil {
-					t.Error(e)
-				}
-			})
-		}
-	}
-}
-
-type test_valuer_with_scanner []struct {
-	valuer  func() interface{}
-	scanner func() (scanner, result interface{})
-	rows    []test_valuer_with_scanner_row
-}
-
-type test_valuer_with_scanner_row struct {
-	typ    string
+type testdata struct {
 	input  interface{}
 	output interface{}
 }
 
-func (table test_valuer_with_scanner) execute(t *testing.T) {
-	for _, tt := range table {
-		for _, r := range tt.rows {
+func (list testlist) execute(t *testing.T, coltype string) {
+	for _, tt := range list {
+		for _, td := range tt.data {
 			valuer := tt.valuer()
 			if valuer != nil {
 				rv := reflect.ValueOf(valuer).Elem()
-				if fv := reflect.ValueOf(r.input); fv.IsValid() {
+				if fv := reflect.ValueOf(td.input); fv.IsValid() {
 					rv.Field(0).Set(fv)
 				}
 			} else {
-				valuer = r.input
+				valuer = td.input
 			}
 
 			scanner, got := tt.scanner()
@@ -326,10 +241,10 @@ func (table test_valuer_with_scanner) execute(t *testing.T) {
 				scanner = got
 			}
 
-			name := fmt.Sprintf("%T->%T::<%s>_FROM_<%T>_TO_<%T>_USING_%v", valuer, scanner, r.typ, r.input, r.output, r.input)
+			name := fmt.Sprintf("%T->%T::<%s>_FROM_<%T>_TO_<%T>_USING_%v", valuer, scanner, coltype, td.input, td.output, td.input)
 			t.Run(name, func(t *testing.T) {
 				var id int
-				var col = "col_" + r.typ
+				var col = "col_" + coltype
 				row := testdb.db.QueryRow(`INSERT INTO coltype_test (`+col+`) VALUES ($1) RETURNING id`, valuer)
 				if err := row.Scan(&id); err != nil {
 					t.Fatal(err)
@@ -338,7 +253,7 @@ func (table test_valuer_with_scanner) execute(t *testing.T) {
 				row = testdb.db.QueryRow(`SELECT `+col+` FROM coltype_test WHERE id = $1`, id)
 				if err := row.Scan(scanner); err != nil {
 					t.Error(err)
-				} else if e := compare.Compare(got, r.output); e != nil {
+				} else if e := compare.Compare(got, td.output); e != nil {
 					t.Error(e)
 				}
 			})

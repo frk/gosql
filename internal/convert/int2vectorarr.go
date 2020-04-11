@@ -5,11 +5,11 @@ import (
 	"strconv"
 )
 
-type Int2VectorArrayFromIntSlice struct {
+type Int2VectorArrayFromIntSliceSlice struct {
 	Val [][]int
 }
 
-func (v Int2VectorArrayFromIntSlice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromIntSliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -32,11 +32,11 @@ func (v Int2VectorArrayFromIntSlice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToIntSlice struct {
+type Int2VectorArrayToIntSliceSlice struct {
 	Val *[][]int
 }
 
-func (v Int2VectorArrayToIntSlice) Scan(src interface{}) error {
+func (v Int2VectorArrayToIntSliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -63,11 +63,11 @@ func (v Int2VectorArrayToIntSlice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromInt8Slice struct {
+type Int2VectorArrayFromInt8SliceSlice struct {
 	Val [][]int8
 }
 
-func (v Int2VectorArrayFromInt8Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromInt8SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -90,11 +90,11 @@ func (v Int2VectorArrayFromInt8Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToInt8Slice struct {
+type Int2VectorArrayToInt8SliceSlice struct {
 	Val *[][]int8
 }
 
-func (v Int2VectorArrayToInt8Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToInt8SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -121,11 +121,11 @@ func (v Int2VectorArrayToInt8Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromInt16Slice struct {
+type Int2VectorArrayFromInt16SliceSlice struct {
 	Val [][]int16
 }
 
-func (v Int2VectorArrayFromInt16Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromInt16SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -148,11 +148,11 @@ func (v Int2VectorArrayFromInt16Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToInt16Slice struct {
+type Int2VectorArrayToInt16SliceSlice struct {
 	Val *[][]int16
 }
 
-func (v Int2VectorArrayToInt16Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToInt16SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -179,11 +179,11 @@ func (v Int2VectorArrayToInt16Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromInt32Slice struct {
+type Int2VectorArrayFromInt32SliceSlice struct {
 	Val [][]int32
 }
 
-func (v Int2VectorArrayFromInt32Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromInt32SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -206,11 +206,11 @@ func (v Int2VectorArrayFromInt32Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToInt32Slice struct {
+type Int2VectorArrayToInt32SliceSlice struct {
 	Val *[][]int32
 }
 
-func (v Int2VectorArrayToInt32Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToInt32SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -237,11 +237,11 @@ func (v Int2VectorArrayToInt32Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromInt64Slice struct {
+type Int2VectorArrayFromInt64SliceSlice struct {
 	Val [][]int64
 }
 
-func (v Int2VectorArrayFromInt64Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromInt64SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -264,11 +264,11 @@ func (v Int2VectorArrayFromInt64Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToInt64Slice struct {
+type Int2VectorArrayToInt64SliceSlice struct {
 	Val *[][]int64
 }
 
-func (v Int2VectorArrayToInt64Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToInt64SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -295,11 +295,11 @@ func (v Int2VectorArrayToInt64Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromUintSlice struct {
+type Int2VectorArrayFromUintSliceSlice struct {
 	Val [][]uint
 }
 
-func (v Int2VectorArrayFromUintSlice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromUintSliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -322,11 +322,11 @@ func (v Int2VectorArrayFromUintSlice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToUintSlice struct {
+type Int2VectorArrayToUintSliceSlice struct {
 	Val *[][]uint
 }
 
-func (v Int2VectorArrayToUintSlice) Scan(src interface{}) error {
+func (v Int2VectorArrayToUintSliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -353,11 +353,11 @@ func (v Int2VectorArrayToUintSlice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromUint8Slice struct {
+type Int2VectorArrayFromUint8SliceSlice struct {
 	Val [][]uint8
 }
 
-func (v Int2VectorArrayFromUint8Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromUint8SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -380,11 +380,11 @@ func (v Int2VectorArrayFromUint8Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToUint8Slice struct {
+type Int2VectorArrayToUint8SliceSlice struct {
 	Val *[][]uint8
 }
 
-func (v Int2VectorArrayToUint8Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToUint8SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -411,11 +411,11 @@ func (v Int2VectorArrayToUint8Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromUint16Slice struct {
+type Int2VectorArrayFromUint16SliceSlice struct {
 	Val [][]uint16
 }
 
-func (v Int2VectorArrayFromUint16Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromUint16SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -438,11 +438,11 @@ func (v Int2VectorArrayFromUint16Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToUint16Slice struct {
+type Int2VectorArrayToUint16SliceSlice struct {
 	Val *[][]uint16
 }
 
-func (v Int2VectorArrayToUint16Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToUint16SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -469,11 +469,11 @@ func (v Int2VectorArrayToUint16Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromUint32Slice struct {
+type Int2VectorArrayFromUint32SliceSlice struct {
 	Val [][]uint32
 }
 
-func (v Int2VectorArrayFromUint32Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromUint32SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -496,11 +496,11 @@ func (v Int2VectorArrayFromUint32Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToUint32Slice struct {
+type Int2VectorArrayToUint32SliceSlice struct {
 	Val *[][]uint32
 }
 
-func (v Int2VectorArrayToUint32Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToUint32SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -527,11 +527,11 @@ func (v Int2VectorArrayToUint32Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromUint64Slice struct {
+type Int2VectorArrayFromUint64SliceSlice struct {
 	Val [][]uint64
 }
 
-func (v Int2VectorArrayFromUint64Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromUint64SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -554,11 +554,11 @@ func (v Int2VectorArrayFromUint64Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToUint64Slice struct {
+type Int2VectorArrayToUint64SliceSlice struct {
 	Val *[][]uint64
 }
 
-func (v Int2VectorArrayToUint64Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToUint64SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -585,11 +585,11 @@ func (v Int2VectorArrayToUint64Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromFloat32Slice struct {
+type Int2VectorArrayFromFloat32SliceSlice struct {
 	Val [][]float32
 }
 
-func (v Int2VectorArrayFromFloat32Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromFloat32SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -612,11 +612,11 @@ func (v Int2VectorArrayFromFloat32Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToFloat32Slice struct {
+type Int2VectorArrayToFloat32SliceSlice struct {
 	Val *[][]float32
 }
 
-func (v Int2VectorArrayToFloat32Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToFloat32SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -643,11 +643,11 @@ func (v Int2VectorArrayToFloat32Slice) Scan(src interface{}) error {
 	return nil
 }
 
-type Int2VectorArrayFromFloat64Slice struct {
+type Int2VectorArrayFromFloat64SliceSlice struct {
 	Val [][]float64
 }
 
-func (v Int2VectorArrayFromFloat64Slice) Value() (driver.Value, error) {
+func (v Int2VectorArrayFromFloat64SliceSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
@@ -670,11 +670,11 @@ func (v Int2VectorArrayFromFloat64Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type Int2VectorArrayToFloat64Slice struct {
+type Int2VectorArrayToFloat64SliceSlice struct {
 	Val *[][]float64
 }
 
-func (v Int2VectorArrayToFloat64Slice) Scan(src interface{}) error {
+func (v Int2VectorArrayToFloat64SliceSlice) Scan(src interface{}) error {
 	arr, err := srcbytes(src)
 	if err != nil {
 		return err

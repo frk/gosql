@@ -6,19 +6,19 @@ import (
 )
 
 type Float4ArrayFromFloat32Slice struct {
-	V []float32
+	Val []float32
 }
 
 func (v Float4ArrayFromFloat32Slice) Value() (driver.Value, error) {
-	if v.V == nil {
+	if v.Val == nil {
 		return nil, nil
-	} else if len(v.V) == 0 {
+	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
 	out := []byte{'{'}
 
-	for _, f := range v.V {
+	for _, f := range v.Val {
 		out = strconv.AppendFloat(out, float64(f), 'f', -1, 32)
 		out = append(out, ',')
 	}
@@ -28,7 +28,7 @@ func (v Float4ArrayFromFloat32Slice) Value() (driver.Value, error) {
 }
 
 type Float4ArrayToFloat32Slice struct {
-	V *[]float32
+	Val *[]float32
 }
 
 func (v Float4ArrayToFloat32Slice) Scan(src interface{}) error {
@@ -36,7 +36,7 @@ func (v Float4ArrayToFloat32Slice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*v.V = nil
+		*v.Val = nil
 		return nil
 	}
 
@@ -50,24 +50,24 @@ func (v Float4ArrayToFloat32Slice) Scan(src interface{}) error {
 		float32s[i] = float32(f32)
 	}
 
-	*v.V = float32s
+	*v.Val = float32s
 	return nil
 }
 
 type Float4ArrayFromFloat64Slice struct {
-	V []float64
+	Val []float64
 }
 
 func (v Float4ArrayFromFloat64Slice) Value() (driver.Value, error) {
-	if v.V == nil {
+	if v.Val == nil {
 		return nil, nil
-	} else if len(v.V) == 0 {
+	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
 	out := []byte{'{'}
 
-	for _, f := range v.V {
+	for _, f := range v.Val {
 		out = strconv.AppendFloat(out, f, 'f', -1, 64)
 		out = append(out, ',')
 	}
@@ -77,7 +77,7 @@ func (v Float4ArrayFromFloat64Slice) Value() (driver.Value, error) {
 }
 
 type Float4ArrayToFloat64Slice struct {
-	V *[]float64
+	Val *[]float64
 }
 
 func (v Float4ArrayToFloat64Slice) Scan(src interface{}) error {
@@ -85,7 +85,7 @@ func (v Float4ArrayToFloat64Slice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*v.V = nil
+		*v.Val = nil
 		return nil
 	}
 
@@ -99,6 +99,6 @@ func (v Float4ArrayToFloat64Slice) Scan(src interface{}) error {
 		float64s[i] = float64(f64)
 	}
 
-	*v.V = float64s
+	*v.Val = float64s
 	return nil
 }

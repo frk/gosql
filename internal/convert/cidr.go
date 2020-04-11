@@ -6,19 +6,19 @@ import (
 )
 
 type CIDRFromIPNet struct {
-	V net.IPNet
+	Val net.IPNet
 }
 
 func (v CIDRFromIPNet) Value() (driver.Value, error) {
-	if len(v.V.IP) == 0 && len(v.V.Mask) == 0 {
+	if len(v.Val.IP) == 0 && len(v.Val.Mask) == 0 {
 		return nil, nil
 	}
-	out := v.V.String()
+	out := v.Val.String()
 	return []byte(out), nil
 }
 
 type CIDRToIPNet struct {
-	V *net.IPNet
+	Val *net.IPNet
 }
 
 func (v CIDRToIPNet) Scan(src interface{}) error {
@@ -36,6 +36,6 @@ func (v CIDRToIPNet) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	}
-	*v.V = *ipnet
+	*v.Val = *ipnet
 	return nil
 }

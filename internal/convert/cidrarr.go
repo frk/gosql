@@ -6,19 +6,19 @@ import (
 )
 
 type CIDRArrayFromIPNetSlice struct {
-	V []net.IPNet
+	Val []net.IPNet
 }
 
 func (v CIDRArrayFromIPNetSlice) Value() (driver.Value, error) {
-	if v.V == nil {
+	if v.Val == nil {
 		return nil, nil
-	} else if len(v.V) == 0 {
+	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
 	out := []byte{'{'}
 
-	for _, ipnet := range v.V {
+	for _, ipnet := range v.Val {
 		out = append(out, []byte(ipnet.String())...)
 		out = append(out, ',')
 	}
@@ -28,7 +28,7 @@ func (v CIDRArrayFromIPNetSlice) Value() (driver.Value, error) {
 }
 
 type CIDRArrayToIPNetSlice struct {
-	V *[]net.IPNet
+	Val *[]net.IPNet
 }
 
 func (v CIDRArrayToIPNetSlice) Scan(src interface{}) error {
@@ -36,7 +36,7 @@ func (v CIDRArrayToIPNetSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if data == nil {
-		*v.V = nil
+		*v.Val = nil
 		return nil
 	}
 
@@ -50,6 +50,6 @@ func (v CIDRArrayToIPNetSlice) Scan(src interface{}) error {
 		ipnets[i] = *ipnet
 	}
 
-	*v.V = ipnets
+	*v.Val = ipnets
 	return nil
 }

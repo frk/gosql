@@ -4,74 +4,88 @@ import (
 	"testing"
 )
 
-func TestByteaArray_Valuer(t *testing.T) {
-	test_valuer{{
+func TestByteaArray(t *testing.T) {
+	testlist{{
 		valuer: func() interface{} {
 			return new(ByteaArrayFromStringSlice)
 		},
-		rows: []test_valuer_row{
-			{typ: "byteaarr", in: nil, want: nil},
-			{typ: "byteaarr", in: []string{}, want: strptr(`{}`)},
-			{typ: "byteaarr", in: []string{"", ""}, want: strptr(`{"\\x","\\x"}`)},
-			{typ: "byteaarr", in: []string{"abc", "def"}, want: strptr(`{"\\x616263","\\x646566"}`)},
+		scanner: func() (interface{}, interface{}) {
+			s := &ByteaArrayToStringSlice{Val: new([]string)}
+			return s, s.Val
+		},
+		data: []testdata{
+			{input: nil, output: new([]string)},
+			{input: []string{}, output: &[]string{}},
 			{
-				typ:  "byteaarr",
-				in:   []string{`\xdeadbeef`, `\xDEADBEEF`},
-				want: strptr(`{"\\x5c786465616462656566","\\x5c784445414442454546"}`)},
+				input:  []string{"", ""},
+				output: &[]string{"", ""}},
+			{
+				input:  []string{"abc", "def"},
+				output: &[]string{"abc", "def"}},
+			{
+				input:  []string{`\xdeadbeef`, `\xDEADBEEF`},
+				output: &[]string{`\xdeadbeef`, `\xDEADBEEF`}},
 		},
 	}, {
 		valuer: func() interface{} {
 			return new(ByteaArrayFromByteSliceSlice)
 		},
-		rows: []test_valuer_row{
-			{typ: "byteaarr", in: nil, want: nil},
-			{typ: "byteaarr", in: [][]byte{}, want: strptr(`{}`)},
-			{typ: "byteaarr", in: [][]byte{{}, {}}, want: strptr(`{"\\x","\\x"}`)},
-			{
-				typ:  "byteaarr",
-				in:   [][]byte{[]byte("abc"), []byte("def")},
-				want: strptr(`{"\\x616263","\\x646566"}`)},
-			{
-				typ:  "byteaarr",
-				in:   [][]byte{[]byte(`\xdeadbeef`), []byte(`\xDEADBEEF`)},
-				want: strptr(`{"\\x5c786465616462656566","\\x5c784445414442454546"}`)},
-		},
-	}}.execute(t)
-}
-
-func TestByteaArray_Scanner(t *testing.T) {
-	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
-			s := &ByteaArrayToStringSlice{S: new([]string)}
-			return s, s.S
+			s := &ByteaArrayToByteSliceSlice{Val: new([][]byte)}
+			return s, s.Val
 		},
-		rows: []test_scanner_row{
-			{typ: "byteaarr", in: nil, want: new([]string)},
-			{typ: "byteaarr", in: `{}`, want: &[]string{}},
-			{typ: "byteaarr", in: `{"\\x","\\x"}`, want: &[]string{"", ""}},
-			{typ: "byteaarr", in: `{"\\x616263","\\x646566"}`, want: &[]string{"abc", "def"}},
+		data: []testdata{
+			{input: nil, output: new([][]byte)},
+			{input: [][]byte{}, output: &[][]byte{}},
 			{
-				typ:  "byteaarr",
-				in:   `{"\\x5c786465616462656566","\\x5c784445414442454546"}`,
-				want: &[]string{`\xdeadbeef`, `\xDEADBEEF`}},
+				input:  [][]byte{{}, {}},
+				output: &[][]byte{{}, {}}},
+			{
+				input:  [][]byte{[]byte("abc"), []byte("def")},
+				output: &[][]byte{[]byte("abc"), []byte("def")}},
+			{
+				input:  [][]byte{[]byte(`\xdeadbeef`), []byte(`\xDEADBEEF`)},
+				output: &[][]byte{[]byte(`\xdeadbeef`), []byte(`\xDEADBEEF`)}},
 		},
 	}, {
+		valuer: func() interface{} {
+			return nil // string
+		},
 		scanner: func() (interface{}, interface{}) {
-			s := &ByteaArrayToByteSliceSlice{S: new([][]byte)}
-			return s, s.S
+			s := new(string)
+			return s, s
 		},
-		rows: []test_scanner_row{
-			{typ: "byteaarr", in: nil, want: new([][]byte)},
-			{typ: "byteaarr", in: `{}`, want: &[][]byte{}},
-			{typ: "byteaarr", in: `{"\\x","\\x"}`, want: &[][]byte{{}, {}}},
+		data: []testdata{
+			{input: string(`{}`), output: strptr(`{}`)},
 			{
-				typ:  "byteaarr",
-				in:   `{"\\x616263","\\x646566"}`,
-				want: &[][]byte{[]byte("abc"), []byte("def")}},
+				input:  string(`{"\\x","\\x"}`),
+				output: strptr(`{"\\x","\\x"}`)},
 			{
-				typ:  "byteaarr",
-				in:   `{"\\x5c786465616462656566","\\x5c784445414442454546"}`,
-				want: &[][]byte{[]byte(`\xdeadbeef`), []byte(`\xDEADBEEF`)}},
+				input:  string(`{"\\x616263","\\x646566"}`),
+				output: strptr(`{"\\x616263","\\x646566"}`)},
+			{
+				input:  string(`{"\\x5c786465616462656566","\\x5c784445414442454546"}`),
+				output: strptr(`{"\\x5c786465616462656566","\\x5c784445414442454546"}`)},
 		},
-	}}.execute(t)
+	}, {
+		valuer: func() interface{} {
+			return nil // []byte
+		},
+		scanner: func() (interface{}, interface{}) {
+			s := new([]byte)
+			return s, s
+		},
+		data: []testdata{
+			{input: []byte(`{}`), output: bytesptr(`{}`)},
+			{
+				input:  []byte(`{"\\x","\\x"}`),
+				output: bytesptr(`{"\\x","\\x"}`)},
+			{
+				input:  []byte(`{"\\x616263","\\x646566"}`),
+				output: bytesptr(`{"\\x616263","\\x646566"}`)},
+			{
+				input:  []byte(`{"\\x5c786465616462656566","\\x5c784445414442454546"}`),
+				output: bytesptr(`{"\\x5c786465616462656566","\\x5c784445414442454546"}`)},
+		},
+	}}.execute(t, "byteaarr")
 }

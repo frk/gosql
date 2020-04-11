@@ -5,21 +5,21 @@ import (
 )
 
 type BitArrayFromBoolSlice struct {
-	S []bool
+	Val []bool
 }
 
 func (s BitArrayFromBoolSlice) Value() (driver.Value, error) {
-	if s.S == nil {
+	if s.Val == nil {
 		return nil, nil
 	}
 
-	if n := len(s.S); n > 0 {
+	if n := len(s.Val); n > 0 {
 		out := make([]byte, 1+(n*2))
 		out[0] = '{'
 
 		j := 1
 		for i := 0; i < n; i++ {
-			if s.S[i] {
+			if s.Val[i] {
 				out[j] = '1'
 			} else {
 				out[j] = '0'
@@ -36,21 +36,21 @@ func (s BitArrayFromBoolSlice) Value() (driver.Value, error) {
 }
 
 type BitArrayFromUint8Slice struct {
-	S []uint8
+	Val []uint8
 }
 
 func (s BitArrayFromUint8Slice) Value() (driver.Value, error) {
-	if s.S == nil {
+	if s.Val == nil {
 		return nil, nil
 	}
 
-	if n := len(s.S); n > 0 {
+	if n := len(s.Val); n > 0 {
 		out := make([]byte, 1+(n*2))
 		out[0] = '{'
 
 		j := 1
 		for i := 0; i < n; i++ {
-			if s.S[i] == 0 {
+			if s.Val[i] == 0 {
 				out[j] = '0'
 			} else {
 				out[j] = '1'
@@ -67,21 +67,21 @@ func (s BitArrayFromUint8Slice) Value() (driver.Value, error) {
 }
 
 type BitArrayFromUintSlice struct {
-	S []uint
+	Val []uint
 }
 
 func (s BitArrayFromUintSlice) Value() (driver.Value, error) {
-	if s.S == nil {
+	if s.Val == nil {
 		return nil, nil
 	}
 
-	if n := len(s.S); n > 0 {
+	if n := len(s.Val); n > 0 {
 		out := make([]byte, 1+(n*2))
 		out[0] = '{'
 
 		j := 1
 		for i := 0; i < n; i++ {
-			if s.S[i] == 0 {
+			if s.Val[i] == 0 {
 				out[j] = '0'
 			} else {
 				out[j] = '1'
@@ -99,7 +99,7 @@ func (s BitArrayFromUintSlice) Value() (driver.Value, error) {
 }
 
 type BitArrayToBoolSlice struct {
-	S *[]bool
+	Val *[]bool
 }
 
 func (s BitArrayToBoolSlice) Scan(src interface{}) error {
@@ -107,7 +107,7 @@ func (s BitArrayToBoolSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.S = nil
+		*s.Val = nil
 		return nil
 	}
 
@@ -121,12 +121,12 @@ func (s BitArrayToBoolSlice) Scan(src interface{}) error {
 		}
 	}
 
-	*s.S = bools
+	*s.Val = bools
 	return nil
 }
 
 type BitArrayToUint8Slice struct {
-	S *[]uint8
+	Val *[]uint8
 }
 
 func (s BitArrayToUint8Slice) Scan(src interface{}) error {
@@ -134,7 +134,7 @@ func (s BitArrayToUint8Slice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.S = nil
+		*s.Val = nil
 		return nil
 	}
 
@@ -148,12 +148,12 @@ func (s BitArrayToUint8Slice) Scan(src interface{}) error {
 		}
 	}
 
-	*s.S = uint8s
+	*s.Val = uint8s
 	return nil
 }
 
 type BitArrayToUintSlice struct {
-	S *[]uint
+	Val *[]uint
 }
 
 func (s BitArrayToUintSlice) Scan(src interface{}) error {
@@ -161,7 +161,7 @@ func (s BitArrayToUintSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.S = nil
+		*s.Val = nil
 		return nil
 	}
 
@@ -175,6 +175,6 @@ func (s BitArrayToUintSlice) Scan(src interface{}) error {
 		}
 	}
 
-	*s.S = uints
+	*s.Val = uints
 	return nil
 }

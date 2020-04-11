@@ -5,171 +5,159 @@ import (
 )
 
 func TestInt2VectorArray(t *testing.T) {
-	test_valuer_with_scanner{{
+	testlist{{
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromIntSlice)
+			return new(Int2VectorArrayFromIntSliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToIntSlice{Val: new([][]int)}
+			s := Int2VectorArrayToIntSliceSlice{Val: new([][]int)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]int{{-32768, 32767}, {0, 1, 2, 3}},
 				output: &[][]int{{-32768, 32767}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromInt8Slice)
+			return new(Int2VectorArrayFromInt8SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToInt8Slice{Val: new([][]int8)}
+			s := Int2VectorArrayToInt8SliceSlice{Val: new([][]int8)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]int8{{-128, 127}, {0, 1, 2, 3}},
 				output: &[][]int8{{-128, 127}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromInt16Slice)
+			return new(Int2VectorArrayFromInt16SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToInt16Slice{Val: new([][]int16)}
+			s := Int2VectorArrayToInt16SliceSlice{Val: new([][]int16)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]int16{{-32768, 32767}, {0, 1, 2, 3}},
 				output: &[][]int16{{-32768, 32767}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromInt32Slice)
+			return new(Int2VectorArrayFromInt32SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToInt32Slice{Val: new([][]int32)}
+			s := Int2VectorArrayToInt32SliceSlice{Val: new([][]int32)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]int32{{-32768, 32767}, {0, 1, 2, 3}},
 				output: &[][]int32{{-32768, 32767}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromInt64Slice)
+			return new(Int2VectorArrayFromInt64SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToInt64Slice{Val: new([][]int64)}
+			s := Int2VectorArrayToInt64SliceSlice{Val: new([][]int64)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]int64{{-32768, 32767}, {0, 1, 2, 3}},
 				output: &[][]int64{{-32768, 32767}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromUintSlice)
+			return new(Int2VectorArrayFromUintSliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToUintSlice{Val: new([][]uint)}
+			s := Int2VectorArrayToUintSliceSlice{Val: new([][]uint)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]uint{{0, 32767}, {0, 1, 2, 3}},
 				output: &[][]uint{{0, 32767}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromUint8Slice)
+			return new(Int2VectorArrayFromUint8SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToUint8Slice{Val: new([][]uint8)}
+			s := Int2VectorArrayToUint8SliceSlice{Val: new([][]uint8)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]uint8{{0, 255}, {0, 1, 2, 3}},
 				output: &[][]uint8{{0, 255}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromUint16Slice)
+			return new(Int2VectorArrayFromUint16SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToUint16Slice{Val: new([][]uint16)}
+			s := Int2VectorArrayToUint16SliceSlice{Val: new([][]uint16)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]uint16{{0, 32767}, {0, 1, 2, 3}},
 				output: &[][]uint16{{0, 32767}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromUint32Slice)
+			return new(Int2VectorArrayFromUint32SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToUint32Slice{Val: new([][]uint32)}
+			s := Int2VectorArrayToUint32SliceSlice{Val: new([][]uint32)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]uint32{{0, 32767}, {0, 1, 2, 3}},
 				output: &[][]uint32{{0, 32767}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromUint64Slice)
+			return new(Int2VectorArrayFromUint64SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToUint64Slice{Val: new([][]uint64)}
+			s := Int2VectorArrayToUint64SliceSlice{Val: new([][]uint64)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]uint64{{0, 32767}, {0, 1, 2, 3}},
 				output: &[][]uint64{{0, 32767}, {0, 1, 2, 3}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromFloat32Slice)
+			return new(Int2VectorArrayFromFloat32SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToFloat32Slice{Val: new([][]float32)}
+			s := Int2VectorArrayToFloat32SliceSlice{Val: new([][]float32)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]float32{{-32768.0, 32767.0}, {0.0, 1.0, 2.0, 3.0}},
 				output: &[][]float32{{-32768.0, 32767.0}, {0.0, 1.0, 2.0, 3.0}}},
 		},
 	}, {
 		valuer: func() interface{} {
-			return new(Int2VectorArrayFromFloat64Slice)
+			return new(Int2VectorArrayFromFloat64SliceSlice)
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := Int2VectorArrayToFloat64Slice{Val: new([][]float64)}
+			s := Int2VectorArrayToFloat64SliceSlice{Val: new([][]float64)}
 			return s, s.Val
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  [][]float64{{-32768.0, 32767.0}, {0.0, 1.0, 2.0, 3.0}},
 				output: &[][]float64{{-32768.0, 32767.0}, {0.0, 1.0, 2.0, 3.0}}},
 		},
@@ -181,9 +169,8 @@ func TestInt2VectorArray(t *testing.T) {
 			s := new(string)
 			return s, s
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  `{"-32768 32767","0 1 2 3"}`,
 				output: strptr(`{"-32768 32767","0 1 2 3"}`)},
 		},
@@ -195,11 +182,10 @@ func TestInt2VectorArray(t *testing.T) {
 			s := new([]byte)
 			return s, s
 		},
-		rows: []test_valuer_with_scanner_row{
+		data: []testdata{
 			{
-				typ:    "int2vectorarr",
 				input:  []byte(`{"-32768 32767","0 1 2 3"}`),
 				output: bytesptr(`{"-32768 32767","0 1 2 3"}`)},
 		},
-	}}.execute(t)
+	}}.execute(t, "int2vectorarr")
 }

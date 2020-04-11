@@ -4,80 +4,62 @@ import (
 	"testing"
 )
 
-func TestBoxArray_Valuer(t *testing.T) {
-	test_valuer{{
+func TestBoxArray(t *testing.T) {
+	testlist{{
 		valuer: func() interface{} {
 			return new(BoxArrayFromFloat64Array2Array2Slice)
 		},
-		rows: []test_valuer_row{
-			{typ: "boxarr", in: nil, want: nil},
-			{typ: "boxarr", in: [][2][2]float64{}, want: strptr(`{}`)},
-			{typ: "boxarr", in: [][2][2]float64{{{1, 1}, {0, 0}}}, want: strptr(`{(1,1),(0,0)}`)},
+		scanner: func() (interface{}, interface{}) {
+			s := BoxArrayToFloat64Array2Array2Slice{Val: new([][2][2]float64)}
+			return s, s.Val
+		},
+		data: []testdata{
 			{
-				typ:  "boxarr",
-				in:   [][2][2]float64{{{1, 1}, {0, 0}}, {{0, 0}, {1, 1}}},
-				want: strptr(`{(1,1),(0,0);(1,1),(0,0)}`),
-			}, {
-				typ: "boxarr",
-				in: [][2][2]float64{
+				input:  nil,
+				output: new([][2][2]float64)},
+			{
+				input:  [][2][2]float64{},
+				output: &[][2][2]float64{}},
+			{
+				input:  [][2][2]float64{{{1, 1}, {0, 0}}},
+				output: &[][2][2]float64{{{1, 1}, {0, 0}}}},
+			{
+				input:  [][2][2]float64{{{1, 1}, {0, 0}}, {{0, 0}, {1, 1}}},
+				output: &[][2][2]float64{{{1, 1}, {0, 0}}, {{1, 1}, {0, 0}}}},
+			{
+				input: [][2][2]float64{
 					{{4.5, 0.79}, {3.2, 5.63}},
 					{{43.57, 2.12}, {4.99, 0.22}},
 					{{0.22, 0.31}, {4, 1.07}},
 				},
-				// TODO(mkopriva) figure out whether postgres can be made to return
-				// a string exactly matching the input Go input ...
-				want: strptr(`{(4.5,5.6299999999999999),(3.2000000000000002,0.79000000000000004);` +
-					`(43.57,2.1200000000000001),(4.9900000000000002,0.22);` +
-					`(4,1.0700000000000001),(0.22,0.31)}`),
-			},
-		},
-	}}.execute(t)
-}
-
-func TestBoxArray_Scanner(t *testing.T) {
-	test_scanner{{
-		scanner: func() (interface{}, interface{}) {
-			s := BoxArrayToFloat64Array2Array2Slice{S: new([][2][2]float64)}
-			return s, s.S
-		},
-		rows: []test_scanner_row{
-			{typ: "boxarr", in: nil, want: new([][2][2]float64)},
-			{typ: "boxarr", in: `{}`, want: &[][2][2]float64{}},
-			{typ: "boxarr", in: `{(1,1),(0,0)}`, want: &[][2][2]float64{{{1, 1}, {0, 0}}}},
-			{
-				typ:  "boxarr",
-				in:   `{(1,1),(0,0);(0,0),(1,1)}`,
-				want: &[][2][2]float64{{{1, 1}, {0, 0}}, {{1, 1}, {0, 0}}},
-			}, {
-				typ: "boxarr",
-				in:  `{(4.5,0.79),(3.2,5.63);(43.57,2.12),(4.99,0.22);(0.22,0.31),(4,1.07)}`,
-				want: &[][2][2]float64{
+				output: &[][2][2]float64{
 					{{4.5, 5.63}, {3.2, 0.79}},
 					{{43.57, 2.12}, {4.99, 0.22}},
 					{{4, 1.07}, {0.22, 0.31}},
 				},
 			},
 		},
-	}}.execute(t)
-}
-
-func TestBoxArray_NoValuer(t *testing.T) {
-	test_valuer{{
+	}, {
 		valuer: func() interface{} {
 			return nil // string
 		},
-		rows: []test_valuer_row{
-			{typ: "boxarr", in: nil, want: nil},
-			{typ: "boxarr", in: "{}", want: strptr(`{}`)},
-			{typ: "boxarr", in: "{(0,0),(0,0)}", want: strptr(`{(0,0),(0,0)}`)},
+		scanner: func() (interface{}, interface{}) {
+			d := new(string)
+			return d, d
+		},
+		data: []testdata{
 			{
-				typ:  "boxarr",
-				in:   "{(1,1),(0,0);(0,0),(1,1)}",
-				want: strptr(`{(1,1),(0,0);(1,1),(0,0)}`)},
+				input:  string("{}"),
+				output: strptr(`{}`)},
 			{
-				typ: "boxarr",
-				in:  `{(4.5,0.79),(3.2,5.63);(43.57,2.12),(4.99,0.22);(0.22,0.31),(4,1.07)}`,
-				want: strptr(`{(4.5,5.6299999999999999),(3.2000000000000002,0.79000000000000004);` +
+				input:  string("{(0,0),(0,0)}"),
+				output: strptr(`{(0,0),(0,0)}`)},
+			{
+				input:  string("{(1,1),(0,0);(0,0),(1,1)}"),
+				output: strptr(`{(1,1),(0,0);(1,1),(0,0)}`)},
+			{
+				input: string(`{(4.5,0.79),(3.2,5.63);(43.57,2.12),(4.99,0.22);(0.22,0.31),(4,1.07)}`),
+				output: strptr(`{(4.5,5.6299999999999999),(3.2000000000000002,0.79000000000000004);` +
 					`(43.57,2.1200000000000001),(4.9900000000000002,0.22);` +
 					`(4,1.0700000000000001),(0.22,0.31)}`)},
 		},
@@ -85,62 +67,28 @@ func TestBoxArray_NoValuer(t *testing.T) {
 		valuer: func() interface{} {
 			return nil // []byte
 		},
-		rows: []test_valuer_row{
-			{typ: "boxarr", in: nil, want: nil},
-			{typ: "boxarr", in: []byte("{}"), want: strptr(`{}`)},
-			{typ: "boxarr", in: []byte("{(0,0),(0,0)}"), want: strptr(`{(0,0),(0,0)}`)},
-			{
-				typ:  "boxarr",
-				in:   []byte("{(1,1),(0,0);(0,0),(1,1)}"),
-				want: strptr(`{(1,1),(0,0);(1,1),(0,0)}`)},
-			{
-				typ: "boxarr",
-				in:  []byte(`{(4.5,0.79),(3.2,5.63);(43.57,2.12),(4.99,0.22);(0.22,0.31),(4,1.07)}`),
-				want: strptr(`{(4.5,5.6299999999999999),(3.2000000000000002,0.79000000000000004);` +
-					`(43.57,2.1200000000000001),(4.9900000000000002,0.22);` +
-					`(4,1.0700000000000001),(0.22,0.31)}`)},
-		},
-	}}.execute(t)
-}
-
-func TestBoxArray_NoScanner(t *testing.T) {
-	test_scanner{{
-		scanner: func() (interface{}, interface{}) {
-			d := new(string)
-			return d, d
-		},
-		rows: []test_scanner_row{
-			{typ: "boxarr", in: `{}`, want: strptr("{}")},
-			{typ: "boxarr", in: `{(1,1),(0,0)}`, want: strptr("{(1,1),(0,0)}")},
-			{
-				typ:  "boxarr",
-				in:   `{(1,1),(0,0);(0,0),(1,1)}`,
-				want: strptr("{(1,1),(0,0);(1,1),(0,0)}")},
-			{
-				typ: "boxarr",
-				in:  `{(4.5,0.79),(3.2,5.63);(43.57,2.12),(4.99,0.22);(0.22,0.31),(4,1.07)}`,
-				want: strptr(`{(4.5,5.6299999999999999),(3.2000000000000002,0.79000000000000004);` +
-					`(43.57,2.1200000000000001),(4.9900000000000002,0.22);` +
-					`(4,1.0700000000000001),(0.22,0.31)}`)},
-		},
-	}, {
 		scanner: func() (interface{}, interface{}) {
 			d := new([]byte)
 			return d, d
 		},
-		rows: []test_scanner_row{
-			{typ: "boxarr", in: `{}`, want: bytesptr("{}")},
-			{typ: "boxarr", in: `{(1,1),(0,0)}`, want: bytesptr("{(1,1),(0,0)}")},
+		data: []testdata{
 			{
-				typ:  "boxarr",
-				in:   `{(1,1),(0,0);(0,0),(1,1)}`,
-				want: bytesptr("{(1,1),(0,0);(1,1),(0,0)}")},
+				input:  nil,
+				output: new([]byte)},
 			{
-				typ: "boxarr",
-				in:  `{(4.5,0.79),(3.2,5.63);(43.57,2.12),(4.99,0.22);(0.22,0.31),(4,1.07)}`,
-				want: bytesptr(`{(4.5,5.6299999999999999),(3.2000000000000002,0.79000000000000004);` +
+				input:  []byte("{}"),
+				output: bytesptr(`{}`)},
+			{
+				input:  []byte("{(0,0),(0,0)}"),
+				output: bytesptr(`{(0,0),(0,0)}`)},
+			{
+				input:  []byte("{(1,1),(0,0);(0,0),(1,1)}"),
+				output: bytesptr(`{(1,1),(0,0);(1,1),(0,0)}`)},
+			{
+				input: []byte(`{(4.5,0.79),(3.2,5.63);(43.57,2.12),(4.99,0.22);(0.22,0.31),(4,1.07)}`),
+				output: bytesptr(`{(4.5,5.6299999999999999),(3.2000000000000002,0.79000000000000004);` +
 					`(43.57,2.1200000000000001),(4.9900000000000002,0.22);` +
 					`(4,1.0700000000000001),(0.22,0.31)}`)},
 		},
-	}}.execute(t)
+	}}.execute(t, "boxarr")
 }

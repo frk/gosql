@@ -4,74 +4,44 @@ import (
 	"testing"
 )
 
-func TestCircleArray_NoValuer(t *testing.T) {
-	test_valuer{{
+func TestCircleArray(t *testing.T) {
+	testlist{{
 		valuer: func() interface{} {
 			return nil // string
 		},
-		rows: []test_valuer_row{
-			{typ: "circlearr", in: nil, want: nil},
-			{typ: "circlearr", in: `{"<(0,0),3.5>"}`, want: strptr(`{"<(0,0),3.5>"}`)},
+		scanner: func() (interface{}, interface{}) {
+			s := new(string)
+			return s, s
+		},
+		data: []testdata{
 			{
-				typ:  "circlearr",
-				in:   `{"<(0,0),3.5>","<(0.5,1),5>"}`,
-				want: strptr(`{"<(0,0),3.5>","<(0.5,1),5>"}`)},
+				input:  string(`{"<(0,0),3.5>"}`),
+				output: strptr(`{"<(0,0),3.5>"}`)},
 			{
-				typ:  "circlearr",
-				in:   `{"<(0.5,1),5>","<(0,0),3.5>"}`,
-				want: strptr(`{"<(0.5,1),5>","<(0,0),3.5>"}`)},
+				input:  string(`{"<(0,0),3.5>","<(0.5,1),5>"}`),
+				output: strptr(`{"<(0,0),3.5>","<(0.5,1),5>"}`)},
+			{
+				input:  string(`{"<(0.5,1),5>","<(0,0),3.5>"}`),
+				output: strptr(`{"<(0.5,1),5>","<(0,0),3.5>"}`)},
 		},
 	}, {
 		valuer: func() interface{} {
 			return nil // []byte
 		},
-		rows: []test_valuer_row{
-			{typ: "circlearr", in: nil, want: nil},
-			{typ: "circlearr", in: []byte(`{"<(0,0),3.5>"}`), want: strptr(`{"<(0,0),3.5>"}`)},
-			{
-				typ:  "circlearr",
-				in:   []byte(`{"<(0,0),3.5>","<(0.5,1),5>"}`),
-				want: strptr(`{"<(0,0),3.5>","<(0.5,1),5>"}`)},
-			{
-				typ:  "circlearr",
-				in:   []byte(`{"<(0.5,1),5>","<(0,0),3.5>"}`),
-				want: strptr(`{"<(0.5,1),5>","<(0,0),3.5>"}`)},
-		},
-	}}.execute(t)
-}
-
-func TestCircleArray_NoScanner(t *testing.T) {
-	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
-			d := new(string)
-			return d, d
+			s := new([]byte)
+			return s, s
 		},
-		rows: []test_scanner_row{
-			{typ: "circlearr", in: `{"<(0,0),3.5>"}`, want: strptr(`{"<(0,0),3.5>"}`)},
+		data: []testdata{
 			{
-				typ:  "circlearr",
-				in:   `{"<(0,0),3.5>","<(0.5,1),5>"}`,
-				want: strptr(`{"<(0,0),3.5>","<(0.5,1),5>"}`)},
+				input:  []byte(`{"<(0,0),3.5>"}`),
+				output: bytesptr(`{"<(0,0),3.5>"}`)},
 			{
-				typ:  "circlearr",
-				in:   `{"<(0.5,1),5>","<(0,0),3.5>"}`,
-				want: strptr(`{"<(0.5,1),5>","<(0,0),3.5>"}`)},
+				input:  []byte(`{"<(0,0),3.5>","<(0.5,1),5>"}`),
+				output: bytesptr(`{"<(0,0),3.5>","<(0.5,1),5>"}`)},
+			{
+				input:  []byte(`{"<(0.5,1),5>","<(0,0),3.5>"}`),
+				output: bytesptr(`{"<(0.5,1),5>","<(0,0),3.5>"}`)},
 		},
-	}, {
-		scanner: func() (interface{}, interface{}) {
-			d := new([]byte)
-			return d, d
-		},
-		rows: []test_scanner_row{
-			{typ: "circlearr", in: `{"<(0,0),3.5>"}`, want: bytesptr(`{"<(0,0),3.5>"}`)},
-			{
-				typ:  "circlearr",
-				in:   `{"<(0,0),3.5>","<(0.5,1),5>"}`,
-				want: bytesptr(`{"<(0,0),3.5>","<(0.5,1),5>"}`)},
-			{
-				typ:  "circlearr",
-				in:   `{"<(0.5,1),5>","<(0,0),3.5>"}`,
-				want: bytesptr(`{"<(0.5,1),5>","<(0,0),3.5>"}`)},
-		},
-	}}.execute(t)
+	}}.execute(t, "circlearr")
 }

@@ -5,7 +5,7 @@ import (
 )
 
 type VarBitArr2StringSlice struct {
-	Ptr *[]string
+	Val *[]string
 }
 
 func (s VarBitArr2StringSlice) Scan(src interface{}) error {
@@ -13,7 +13,7 @@ func (s VarBitArr2StringSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.Ptr = nil
+		*s.Val = nil
 		return nil
 	}
 
@@ -23,12 +23,12 @@ func (s VarBitArr2StringSlice) Scan(src interface{}) error {
 		strings[i] = string(elems[i])
 	}
 
-	*s.Ptr = strings
+	*s.Val = strings
 	return nil
 }
 
 type VarBitArr2Int64Slice struct {
-	Ptr *[]int64
+	Val *[]int64
 }
 
 func (s VarBitArr2Int64Slice) Scan(src interface{}) error {
@@ -36,7 +36,7 @@ func (s VarBitArr2Int64Slice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.Ptr = nil
+		*s.Val = nil
 		return nil
 	}
 
@@ -50,6 +50,6 @@ func (s VarBitArr2Int64Slice) Scan(src interface{}) error {
 		int64s[i] = i64
 	}
 
-	*s.Ptr = int64s
+	*s.Val = int64s
 	return nil
 }

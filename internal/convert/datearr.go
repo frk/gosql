@@ -6,19 +6,19 @@ import (
 )
 
 type DateArrayFromTimeSlice struct {
-	V []time.Time
+	Val []time.Time
 }
 
 func (v DateArrayFromTimeSlice) Value() (driver.Value, error) {
-	if v.V == nil {
+	if v.Val == nil {
 		return nil, nil
-	} else if len(v.V) == 0 {
+	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
 	out := []byte{'{'}
 
-	for _, t := range v.V {
+	for _, t := range v.Val {
 		out = append(out, []byte(t.Format(dateLayout))...)
 		out = append(out, ',')
 	}
@@ -28,7 +28,7 @@ func (v DateArrayFromTimeSlice) Value() (driver.Value, error) {
 }
 
 type DateArrayToTimeSlice struct {
-	V *[]time.Time
+	Val *[]time.Time
 }
 
 func (v DateArrayToTimeSlice) Scan(src interface{}) error {
@@ -36,7 +36,7 @@ func (v DateArrayToTimeSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if data == nil {
-		*v.V = nil
+		*v.Val = nil
 		return nil
 	}
 
@@ -50,6 +50,6 @@ func (v DateArrayToTimeSlice) Scan(src interface{}) error {
 		dates[i] = t
 	}
 
-	*v.V = dates
+	*v.Val = dates
 	return nil
 }

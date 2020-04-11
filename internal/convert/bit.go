@@ -5,11 +5,11 @@ import (
 )
 
 type BitFromBool struct {
-	V bool
+	Val bool
 }
 
 func (v BitFromBool) Value() (driver.Value, error) {
-	if v.V {
+	if v.Val {
 		return []byte(`1`), nil
 	}
 	return []byte(`0`), nil

@@ -6,19 +6,19 @@ import (
 )
 
 type BoxArrayFromFloat64Array2Array2Slice struct {
-	S [][2][2]float64
+	Val [][2][2]float64
 }
 
 func (s BoxArrayFromFloat64Array2Array2Slice) Value() (driver.Value, error) {
-	if s.S == nil {
+	if s.Val == nil {
 		return nil, nil
-	} else if len(s.S) == 0 {
+	} else if len(s.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
 	out := []byte{'{'}
 
-	for _, a := range s.S {
+	for _, a := range s.Val {
 		out = append(out, '(')
 		out = strconv.AppendFloat(out, a[0][0], 'f', -1, 64)
 		out = append(out, ',')
@@ -37,7 +37,7 @@ func (s BoxArrayFromFloat64Array2Array2Slice) Value() (driver.Value, error) {
 }
 
 type BoxArrayToFloat64Array2Array2Slice struct {
-	S *[][2][2]float64
+	Val *[][2][2]float64
 }
 
 func (s BoxArrayToFloat64Array2Array2Slice) Scan(src interface{}) error {
@@ -45,7 +45,7 @@ func (s BoxArrayToFloat64Array2Array2Slice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if data == nil {
-		s.S = nil
+		s.Val = nil
 		return nil
 	}
 
@@ -79,6 +79,6 @@ func (s BoxArrayToFloat64Array2Array2Slice) Scan(src interface{}) error {
 		boxes[i][1][1] = y2
 	}
 
-	*s.S = boxes
+	*s.Val = boxes
 	return nil
 }

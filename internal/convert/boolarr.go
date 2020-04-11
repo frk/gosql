@@ -5,20 +5,20 @@ import (
 )
 
 type BoolArrayFromBoolSlice struct {
-	S []bool
+	Val []bool
 }
 
 func (s BoolArrayFromBoolSlice) Value() (driver.Value, error) {
-	if s.S == nil {
+	if s.Val == nil {
 		return nil, nil
 	}
-	if n := len(s.S); n > 0 {
+	if n := len(s.Val); n > 0 {
 		out := make([]byte, 1+(n*2))
 		out[0] = '{'
 
 		j := 1
 		for i := 0; i < n; i++ {
-			if s.S[i] {
+			if s.Val[i] {
 				out[j] = 't'
 			} else {
 				out[j] = 'f'
@@ -34,7 +34,7 @@ func (s BoolArrayFromBoolSlice) Value() (driver.Value, error) {
 }
 
 type BoolArrayToBoolSlice struct {
-	S *[]bool
+	Val *[]bool
 }
 
 func (s BoolArrayToBoolSlice) Scan(src interface{}) error {
@@ -42,7 +42,7 @@ func (s BoolArrayToBoolSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.S = nil
+		*s.Val = nil
 		return nil
 	}
 
@@ -56,6 +56,6 @@ func (s BoolArrayToBoolSlice) Scan(src interface{}) error {
 		}
 	}
 
-	*s.S = bools
+	*s.Val = bools
 	return nil
 }

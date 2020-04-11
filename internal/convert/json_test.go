@@ -4,38 +4,132 @@ import (
 	"testing"
 )
 
-func TestJSON_Scanner(t *testing.T) {
+func TestJSON(t *testing.T) {
 	type data struct {
 		Foo []interface{} `json:"foo"`
 	}
 
-	test_scanner{{
-		scanner: func() (interface{}, interface{}) {
-			s := JSON{V: new(data)}
-			return s, s.V
-		},
-		rows: []test_scanner_row{
-			{typ: "json", in: nil, want: new(data)},
-			{typ: "json", in: `{}`, want: new(data)},
-			{typ: "json", in: `{"foo":["bar", "baz", 123]}`, want: &data{[]interface{}{"bar", "baz", float64(123)}}},
-			{typ: "json", in: `{"foo":[123, "baz", "bar"]}`, want: &data{[]interface{}{float64(123), "baz", "bar"}}},
-		},
-	}}.execute(t)
-}
-
-func TestJSON_Valuer(t *testing.T) {
-	type data struct {
-		Foo []interface{} `json:"foo"`
-		Bar string        `json:"bar"`
-	}
-
-	test_valuer{{
+	testlist{{
 		valuer: func() interface{} {
 			return new(JSON)
 		},
-		rows: []test_valuer_row{
-			{typ: "json", in: nil, want: nil},
-			{typ: "json", in: data{[]interface{}{1, 8}, "abcdef"}, want: strptr(`{"foo":[1,8],"bar":"abcdef"}`)},
+		scanner: func() (interface{}, interface{}) {
+			s := JSON{Val: new(data)}
+			return s, s.Val
 		},
-	}}.execute(t)
+		data: []testdata{
+			{
+				input:  data{},
+				output: new(data)},
+			{
+				input:  data{[]interface{}{"bar", "baz", float64(123)}},
+				output: &data{[]interface{}{"bar", "baz", float64(123)}}},
+			{
+				input:  data{[]interface{}{float64(123), "baz", "bar"}},
+				output: &data{[]interface{}{float64(123), "baz", "bar"}}},
+		},
+	}, {
+		valuer: func() interface{} {
+			return nil // string
+		},
+		scanner: func() (interface{}, interface{}) {
+			s := new(string)
+			return s, s
+		},
+		data: []testdata{
+			{
+				input:  `{}`,
+				output: strptr(`{}`)},
+			{
+				input:  `{"foo":["bar", "baz", 123]}`,
+				output: strptr(`{"foo":["bar", "baz", 123]}`)},
+			{
+				input:  `{"foo":[123, "baz", "bar"]}`,
+				output: strptr(`{"foo":[123, "baz", "bar"]}`)},
+		},
+	}, {
+		valuer: func() interface{} {
+			return nil // []byte
+		},
+		scanner: func() (interface{}, interface{}) {
+			s := new([]byte)
+			return s, s
+		},
+		data: []testdata{
+			{
+				input:  []byte(`{}`),
+				output: bytesptr(`{}`)},
+			{
+				input:  []byte(`{"foo":["bar", "baz", 123]}`),
+				output: bytesptr(`{"foo":["bar", "baz", 123]}`)},
+			{
+				input:  []byte(`{"foo":[123, "baz", "bar"]}`),
+				output: bytesptr(`{"foo":[123, "baz", "bar"]}`)},
+		},
+	}}.execute(t, "json")
+}
+
+func TestJSONB(t *testing.T) {
+	type data struct {
+		Foo []interface{} `json:"foo"`
+	}
+
+	testlist{{
+		valuer: func() interface{} {
+			return new(JSON)
+		},
+		scanner: func() (interface{}, interface{}) {
+			s := JSON{Val: new(data)}
+			return s, s.Val
+		},
+		data: []testdata{
+			{
+				input:  data{},
+				output: new(data)},
+			{
+				input:  data{[]interface{}{"bar", "baz", float64(123)}},
+				output: &data{[]interface{}{"bar", "baz", float64(123)}}},
+			{
+				input:  data{[]interface{}{float64(123), "baz", "bar"}},
+				output: &data{[]interface{}{float64(123), "baz", "bar"}}},
+		},
+	}, {
+		valuer: func() interface{} {
+			return nil // string
+		},
+		scanner: func() (interface{}, interface{}) {
+			s := new(string)
+			return s, s
+		},
+		data: []testdata{
+			{
+				input:  `{}`,
+				output: strptr(`{}`)},
+			{
+				input:  `{"foo": ["bar", "baz", 123]}`,
+				output: strptr(`{"foo": ["bar", "baz", 123]}`)},
+			{
+				input:  `{"foo": [123, "baz", "bar"]}`,
+				output: strptr(`{"foo": [123, "baz", "bar"]}`)},
+		},
+	}, {
+		valuer: func() interface{} {
+			return nil // []byte
+		},
+		scanner: func() (interface{}, interface{}) {
+			s := new([]byte)
+			return s, s
+		},
+		data: []testdata{
+			{
+				input:  []byte(`{}`),
+				output: bytesptr(`{}`)},
+			{
+				input:  []byte(`{"foo": ["bar", "baz", 123]}`),
+				output: bytesptr(`{"foo": ["bar", "baz", 123]}`)},
+			{
+				input:  []byte(`{"foo": [123, "baz", "bar"]}`),
+				output: bytesptr(`{"foo": [123, "baz", "bar"]}`)},
+		},
+	}}.execute(t, "jsonb")
 }

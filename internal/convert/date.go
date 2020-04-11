@@ -5,40 +5,40 @@ import (
 )
 
 type DateToTime struct {
-	V *time.Time
+	Val *time.Time
 }
 
 func (v DateToTime) Scan(src interface{}) error {
 	if t, ok := src.(time.Time); ok {
-		*v.V = t.In(time.UTC)
+		*v.Val = t.In(time.UTC)
 	} else {
-		*v.V = time.Time{}
+		*v.Val = time.Time{}
 	}
 	return nil
 }
 
 type DateToString struct {
-	V *string
+	Val *string
 }
 
 func (v DateToString) Scan(src interface{}) error {
 	if t, ok := src.(time.Time); ok {
-		*v.V = t.Format(dateLayout)
+		*v.Val = t.Format(dateLayout)
 	} else {
-		*v.V = ""
+		*v.Val = ""
 	}
 	return nil
 }
 
 type DateToByteSlice struct {
-	V *[]byte
+	Val *[]byte
 }
 
 func (v DateToByteSlice) Scan(src interface{}) error {
 	if t, ok := src.(time.Time); ok {
-		*v.V = []byte(t.Format(dateLayout))
+		*v.Val = []byte(t.Format(dateLayout))
 	} else {
-		*v.V = nil
+		*v.Val = nil
 	}
 	return nil
 }

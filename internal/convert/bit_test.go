@@ -4,99 +4,66 @@ import (
 	"testing"
 )
 
-func TestBit_Valuer(t *testing.T) {
-	test_valuer{{
+func TestBit(t *testing.T) {
+	testlist{{
 		valuer: func() interface{} {
 			return new(BitFromBool)
 		},
-		rows: []test_valuer_row{
-			{typ: "bit", in: bool(true), want: strptr(`1`)},
-			{typ: "bit", in: bool(false), want: strptr(`0`)},
-		},
-	}}.execute(t)
-}
-
-func TestBit_NoValuer(t *testing.T) {
-	test_valuer{{
-		valuer: func() interface{} {
-			return nil
-		},
-		rows: []test_valuer_row{
-			{typ: "bit", in: uint8(0), want: strptr(`0`)},
-			{typ: "bit", in: uint8(1), want: strptr(`1`)},
-		},
-	}, {
-		valuer: func() interface{} {
-			return nil
-		},
-		rows: []test_valuer_row{
-			{typ: "bit", in: uint(0), want: strptr(`0`)},
-			{typ: "bit", in: uint(1), want: strptr(`1`)},
-		},
-	}, {
-		valuer: func() interface{} {
-			return nil
-		},
-		rows: []test_valuer_row{
-			{typ: "bit", in: "0", want: strptr(`0`)},
-			{typ: "bit", in: "1", want: strptr(`1`)},
-		},
-	}, {
-		valuer: func() interface{} {
-			return nil
-		},
-		rows: []test_valuer_row{
-			{typ: "bit", in: []byte{'0'}, want: strptr(`0`)},
-			{typ: "bit", in: []byte{'1'}, want: strptr(`1`)},
-		},
-	}}.execute(t)
-}
-
-func TestBit_NoScanner(t *testing.T) {
-	test_scanner{{
 		scanner: func() (interface{}, interface{}) {
 			d := new(bool)
 			return d, d
 		},
-		rows: []test_scanner_row{
-			{typ: "bit", in: `1`, want: boolptr(true)},
-			{typ: "bit", in: `0`, want: boolptr(false)},
+		data: []testdata{
+			{input: bool(true), output: boolptr(true)},
+			{input: bool(false), output: boolptr(false)},
 		},
 	}, {
+		valuer: func() interface{} {
+			return nil // uint8
+		},
 		scanner: func() (interface{}, interface{}) {
 			d := new(uint8)
 			return d, d
 		},
-		rows: []test_scanner_row{
-			{typ: "bit", in: `1`, want: u8ptr(1)},
-			{typ: "bit", in: `0`, want: u8ptr(0)},
+		data: []testdata{
+			{input: uint8(1), output: u8ptr(1)},
+			{input: uint8(0), output: u8ptr(0)},
 		},
 	}, {
+		valuer: func() interface{} {
+			return nil // uint
+		},
 		scanner: func() (interface{}, interface{}) {
 			d := new(uint)
 			return d, d
 		},
-		rows: []test_scanner_row{
-			{typ: "bit", in: `1`, want: uptr(1)},
-			{typ: "bit", in: `0`, want: uptr(0)},
+		data: []testdata{
+			{input: uint(0), output: uptr(0)},
+			{input: uint(1), output: uptr(1)},
 		},
 	}, {
+		valuer: func() interface{} {
+			return nil // string
+		},
 		scanner: func() (interface{}, interface{}) {
 			d := new(string)
 			return d, d
 		},
-		rows: []test_scanner_row{
-			{typ: "bit", in: `1`, want: strptr("1")},
-			{typ: "bit", in: `0`, want: strptr("0")},
+		data: []testdata{
+			{input: string("0"), output: strptr(`0`)},
+			{input: string("1"), output: strptr(`1`)},
 		},
 	}, {
+		valuer: func() interface{} {
+			return nil // []byte
+		},
 		scanner: func() (interface{}, interface{}) {
 			d := new([]byte)
 			return d, d
 		},
-		rows: []test_scanner_row{
-			{typ: "bit", in: `1`, want: &[]byte{'1'}},
-			{typ: "bit", in: `0`, want: &[]byte{'0'}},
+		data: []testdata{
+			{input: []byte(`0`), output: bytesptr(`0`)},
+			{input: []byte(`1`), output: bytesptr(`1`)},
 		},
-	}}.execute(t)
+	}}.execute(t, "bit")
 }

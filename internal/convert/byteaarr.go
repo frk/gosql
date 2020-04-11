@@ -6,20 +6,20 @@ import (
 )
 
 type ByteaArrayFromByteSliceSlice struct {
-	S [][]byte
+	Val [][]byte
 }
 
 func (v ByteaArrayFromByteSliceSlice) Value() (driver.Value, error) {
-	if v.S == nil {
+	if v.Val == nil {
 		return nil, nil
-	} else if len(v.S) == 0 {
+	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
-	out := make([]byte, 1, (len(v.S)*3)+1)
+	out := make([]byte, 1, (len(v.Val)*3)+1)
 	out[0] = '{'
 
-	for _, src := range v.S {
+	for _, src := range v.Val {
 		out = append(out, '"', '\\', '\\', 'x')
 
 		dst := make([]byte, hex.EncodedLen(len(src)))
@@ -34,20 +34,20 @@ func (v ByteaArrayFromByteSliceSlice) Value() (driver.Value, error) {
 }
 
 type ByteaArrayFromStringSlice struct {
-	S []string
+	Val []string
 }
 
 func (v ByteaArrayFromStringSlice) Value() (driver.Value, error) {
-	if v.S == nil {
+	if v.Val == nil {
 		return nil, nil
-	} else if len(v.S) == 0 {
+	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
-	out := make([]byte, 1, (len(v.S)*3)+1)
+	out := make([]byte, 1, (len(v.Val)*3)+1)
 	out[0] = '{'
 
-	for _, s := range v.S {
+	for _, s := range v.Val {
 		out = append(out, '"', '\\', '\\', 'x')
 
 		src := []byte(s)
@@ -63,7 +63,7 @@ func (v ByteaArrayFromStringSlice) Value() (driver.Value, error) {
 }
 
 type ByteaArrayToByteSliceSlice struct {
-	S *[][]byte
+	Val *[][]byte
 }
 
 func (s ByteaArrayToByteSliceSlice) Scan(src interface{}) error {
@@ -71,7 +71,7 @@ func (s ByteaArrayToByteSliceSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.S = nil
+		*s.Val = nil
 		return nil
 	}
 
@@ -91,12 +91,12 @@ func (s ByteaArrayToByteSliceSlice) Scan(src interface{}) error {
 		out[i] = dst
 	}
 
-	*s.S = out
+	*s.Val = out
 	return nil
 }
 
 type ByteaArrayToStringSlice struct {
-	S *[]string
+	Val *[]string
 }
 
 func (s ByteaArrayToStringSlice) Scan(src interface{}) error {
@@ -104,7 +104,7 @@ func (s ByteaArrayToStringSlice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if arr == nil {
-		*s.S = nil
+		*s.Val = nil
 		return nil
 	}
 
@@ -124,6 +124,6 @@ func (s ByteaArrayToStringSlice) Scan(src interface{}) error {
 		out[i] = string(dst)
 	}
 
-	*s.S = out
+	*s.Val = out
 	return nil
 }

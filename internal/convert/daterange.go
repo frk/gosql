@@ -29,22 +29,22 @@ import (
 // reusults.
 
 type DateRangeFromTimeArray2 struct {
-	V [2]time.Time
+	Val [2]time.Time
 }
 
 func (v DateRangeFromTimeArray2) Value() (driver.Value, error) {
 	out := make([]byte, 1)
-	if !v.V[0].IsZero() {
+	if !v.Val[0].IsZero() {
 		out[0] = '['
-		out = append(out, []byte(v.V[0].Format(dateLayout))...)
+		out = append(out, []byte(v.Val[0].Format(dateLayout))...)
 	} else {
 		out[0] = '('
 	}
 
 	out = append(out, ',')
 
-	if !v.V[1].IsZero() {
-		out = append(out, []byte(v.V[1].Format(dateLayout))...)
+	if !v.Val[1].IsZero() {
+		out = append(out, []byte(v.Val[1].Format(dateLayout))...)
 	}
 
 	out = append(out, ')')
@@ -53,7 +53,7 @@ func (v DateRangeFromTimeArray2) Value() (driver.Value, error) {
 }
 
 type DateRangeToTimeArray2 struct {
-	V *[2]time.Time
+	Val *[2]time.Time
 }
 
 func (v DateRangeToTimeArray2) Scan(src interface{}) error {
@@ -65,7 +65,7 @@ func (v DateRangeToTimeArray2) Scan(src interface{}) error {
 	}
 
 	var t0, t1 time.Time
-	elems := pgparserange(data)
+	elems := pgParseRange(data)
 	if len(elems[0]) > 0 {
 		if t0, err = pgparsedate(elems[0]); err != nil {
 			return err
@@ -77,7 +77,7 @@ func (v DateRangeToTimeArray2) Scan(src interface{}) error {
 		}
 	}
 
-	v.V[0] = t0
-	v.V[1] = t1
+	v.Val[0] = t0
+	v.Val[1] = t1
 	return nil
 }

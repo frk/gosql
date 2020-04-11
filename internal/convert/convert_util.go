@@ -19,28 +19,6 @@ func srcbytes(src interface{}) ([]byte, error) {
 	return nil, nil // TODO error
 }
 
-// Expected format: '{S [, ...]}' where S is double quoted string that can contain a comma.
-func pgparsearray0(a []byte) (out [][]byte) {
-	a = a[1 : len(a)-1] // drop curly braces
-
-	n := 0     // start of next elem
-	q := false // in quotes?
-	for i := 0; i < len(a); i++ {
-		if a[i] == '"' {
-			q = !q
-		} else if !q && a[i] == ',' {
-			out = append(out, a[n:i])
-			n = i + 1
-		}
-	}
-
-	// append the last element
-	if len(a) > 0 {
-		out = append(out, a[n:])
-	}
-	return out
-}
-
 // Expected format: '{X [, ...]}' where X is anything that doesn't contain a comma.
 func pgparsearray1(a []byte) (out [][]byte) {
 	a = a[1 : len(a)-1] // drop curly braces
@@ -381,7 +359,7 @@ func pgAppendQuote2(buf, elem []byte) []byte {
 	return append(buf, '\\', '"')
 }
 
-func pgparserange(a []byte) (out [2][]byte) {
+func pgParseRange(a []byte) (out [2][]byte) {
 	a = a[1 : len(a)-1] // drop range delimiters
 
 	for i := 0; i < len(a); i++ {
@@ -397,4 +375,34 @@ func pgparserange(a []byte) (out [2][]byte) {
 
 func pgparsedate(a []byte) (time.Time, error) {
 	return time.ParseInLocation(dateLayout, string(a), time.UTC)
+}
+
+// Expected format: '{S [, ...]}' where S is double quoted string that can contain a comma.
+func pgParseStringArray(a []byte) (out [][]byte) {
+	a = a[1 : len(a)-1] // drop curly braces
+
+mainloop:
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' { // start of string
+			for j := i + 1; j < len(a); j++ {
+				if a[j] == '\\' {
+					j++ // skip escaped char
+					continue
+				}
+
+				if a[j] == '"' { // end of string
+					out = append(out, a[i:j+1])
+					i = j + 1
+					continue mainloop
+				}
+			}
+		}
+
+		if a[i] == 'N' { // NULL?
+			i += 4
+			out = append(out, []byte(nil))
+		}
+	}
+
+	return out
 }
