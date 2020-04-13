@@ -40,7 +40,7 @@ func (v Int8ArrayToIntSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	ints := make([]int, len(elems))
 	for i := 0; i < len(elems); i++ {
 		i64, err := strconv.ParseInt(string(elems[i]), 10, 64)
@@ -89,7 +89,7 @@ func (v Int8ArrayToInt8Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	int8s := make([]int8, len(elems))
 	for i := 0; i < len(elems); i++ {
 		i64, err := strconv.ParseInt(string(elems[i]), 10, 8)
@@ -138,7 +138,7 @@ func (v Int8ArrayToInt16Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	int16s := make([]int16, len(elems))
 	for i := 0; i < len(elems); i++ {
 		i64, err := strconv.ParseInt(string(elems[i]), 10, 16)
@@ -187,7 +187,7 @@ func (v Int8ArrayToInt32Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	int32s := make([]int32, len(elems))
 	for i := 0; i < len(elems); i++ {
 		i64, err := strconv.ParseInt(string(elems[i]), 10, 32)
@@ -236,7 +236,7 @@ func (v Int8ArrayToInt64Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	int64s := make([]int64, len(elems))
 	for i := 0; i < len(elems); i++ {
 		i64, err := strconv.ParseInt(string(elems[i]), 10, 64)
@@ -287,7 +287,7 @@ func (v Int8ArrayToUintSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	uints := make([]uint, len(elems))
 	for i := 0; i < len(elems); i++ {
 		u64, err := strconv.ParseUint(string(elems[i]), 10, 32)
@@ -336,7 +336,7 @@ func (v Int8ArrayToUint8Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	uint8s := make([]uint8, len(elems))
 	for i := 0; i < len(elems); i++ {
 		u64, err := strconv.ParseUint(string(elems[i]), 10, 8)
@@ -385,7 +385,7 @@ func (v Int8ArrayToUint16Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	uint16s := make([]uint16, len(elems))
 	for i := 0; i < len(elems); i++ {
 		u64, err := strconv.ParseUint(string(elems[i]), 10, 16)
@@ -434,7 +434,7 @@ func (v Int8ArrayToUint32Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	uint32s := make([]uint32, len(elems))
 	for i := 0; i < len(elems); i++ {
 		u64, err := strconv.ParseUint(string(elems[i]), 10, 32)
@@ -483,7 +483,7 @@ func (v Int8ArrayToUint64Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	uint64s := make([]uint64, len(elems))
 	for i := 0; i < len(elems); i++ {
 		u64, err := strconv.ParseUint(string(elems[i]), 10, 64)
@@ -532,7 +532,7 @@ func (v Int8ArrayToFloat32Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	float32s := make([]float32, len(elems))
 	for i := 0; i < len(elems); i++ {
 		i64, err := strconv.ParseInt(string(elems[i]), 10, 64)
@@ -581,7 +581,7 @@ func (v Int8ArrayToFloat64Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	float64s := make([]float64, len(elems))
 	for i := 0; i < len(elems); i++ {
 		i64, err := strconv.ParseInt(string(elems[i]), 10, 64)

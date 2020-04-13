@@ -40,7 +40,7 @@ func (v DateArrayToTimeSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(data)
+	elems := pgParseCommaArray(data)
 	dates := make([]time.Time, len(elems))
 	for i := 0; i < len(elems); i++ {
 		t, err := pgparsedate(elems[i])

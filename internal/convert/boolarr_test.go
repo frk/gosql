@@ -14,7 +14,7 @@ func TestBoolArray(t *testing.T) {
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: nil, output: []bool(nil)},
+			{input: []bool(nil), output: []bool(nil)},
 			{input: []bool{}, output: []bool{}},
 			{input: []bool{true}, output: []bool{true}},
 			{input: []bool{false}, output: []bool{false}},

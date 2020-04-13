@@ -1,5 +1,8 @@
 ## convert
 
+TODO - ensure that scanners that are scanning the source into a slice of bytes do copy the source since the driver own its memory
+and will reuse it for subsequent scans.
+
 | postgres type  | go type                        | Valuer                                 | Scanner                                |
 |----------------|--------------------------------|----------------------------------------| ---------------------------------------|
 | `bit(1)`       | `bool`                         | `BitFromBool`                          | *native*                               |
@@ -405,12 +408,13 @@
 | `polygon[]`    | `[][][2]float64`               | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
-| `text`         | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `text[]`       | `[]string`                     | ???                                    | ???                                    |
-|                | `[][]byte`                     | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `text`         | ---                            | ---                                    | ---                                    |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `text[]`       | `[]string`                     | `TextArrayFromStringSlice`             | `TextArrayToStringSlice`               |
+|                | `[][]byte`                     | `TextArrayFromByteSliceSlice`          | `TextArrayToByteSliceSlice`            |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `time`         | `time.Time`                    | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
@@ -453,43 +457,43 @@
 | `tstzrange[]`  | `[][2]time.Time`               | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
-| `tsvector`     | `[]string`                     | ???                                    | ???                                    |
-|                | `[][]byte`                     | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `tsvector[]`   | `[][]string`                   | ???                                    | ???                                    |
-|                | `[][][]byte`                   | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `uuid`         | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `uuid[]`       | `[]string`                     | ???                                    | ???                                    |
-|                | `[][]byte`                     | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `unknown`      | ---                            | ---                                    | ---                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `varbit`       | `[]bool`                       | ???                                    | ???                                    |
-|                | `[]uint8`                      | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `varbit[]`     | `[][]bool`                     | ???                                    | ???                                    |
-|                | `[][]uint8`                    | ???                                    | ???                                    |
-|                | `[]string`                     | ???                                    | ???                                    |
-|                | `[][]byte`                     | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `varchar`      | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `varchar[]`    | `[]string`                     | ???                                    | ???                                    |
-|                | `[][]byte`                     | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `xml`          | `interface{}`                  | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `tsvector`     | `[]string`                     | `TSVectorFromStringSlice`              | `TSVectorToStringSlice`                |
+|                | `[][]byte`                     | `TSVectorFromByteSliceSlice`           | `TSVectorToByteSliceSlice`             |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `tsvector[]`   | `[][]string`                   | `TSVectorArrayFromStringSliceSlice`    | `TSVectorArrayToStringSliceSlice`      |
+|                | `[][][]byte`                   | `TSVectorArrayFromByteSliceSliceSlice` | `TSVectorArrayToByteSliceSliceSlice`   |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `uuid`         | `[16]byte`                     | `UUIDFromByteArray16`                  | `UUIDToByteArray16`                    |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `uuid[]`       | `[][16]byte`                   | `UUIDArrayFromByteArray16Slice`        | `UUIDArrayToByteArray16Slice`          |
+|                | `[]string`                     | `UUIDArrayFromStringSlice`             | `UUIDArrayToStringSlice`               |
+|                | `[][]byte`                     | `UUIDArrayFromByteSliceSlice`          | `UUIDArrayToByteSliceSlice`            |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `varbit`       | `int64`                        | `VarBitFromInt64`                      | `VarBitToInt64`                        |
+|                | `[]bool`                       | `VarBitFromBoolSlice`                  | `VarBitToBoolSlice`                    |
+|                | `[]uint8`                      | `VarBitFromUint8Slice`                 | `VarBitToUint8Slice`                   |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `varbit[]`     | `[][]bool`                     | `VarBitArrayFromBoolSliceSlice`        | `VarBitArrayToBoolSliceSlice`          |
+|                | `[][]uint8`                    | `VarBitArrayFromUint8SliceSlice`       | `VarBitArrayToUint8SliceSlice`         |
+|                | `[]string`                     | `VarBitArrayFromStringSlice`           | `VarBitArrayToStringSlice`             |
+|                | `[]int64`                      | `VarBitArrayFromInt64Slice`            | `VarBitArrayToInt64Slice`              |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `varchar`      | ---                            | ---                                    | ---                                    |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `varchar[]`    | `[]string`                     | `VarCharArrayFromStringSlice`          | `VarCharArrayToStringSlice`            |
+|                | `[][]byte`                     | `VarCharArrayFromByteSliceSlice`       | `VarCharArrayToByteSliceSlice`         |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `xml`          | `interface{}`                  | `XML`                                  | `XML`                                  |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `xml[]`        | ---                            | ---                                    | ---                                    |
-|                | `[][]byte`                     | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |

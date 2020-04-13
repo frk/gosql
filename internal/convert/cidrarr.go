@@ -40,7 +40,7 @@ func (v CIDRArrayToIPNetSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(data)
+	elems := pgParseCommaArray(data)
 	ipnets := make([]net.IPNet, len(elems))
 	for i := 0; i < len(elems); i++ {
 		_, ipnet, err := net.ParseCIDR(string(elems[i]))

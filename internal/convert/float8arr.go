@@ -40,7 +40,7 @@ func (v Float8ArrayToFloat32Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	float32s := make([]float32, len(elems))
 	for i := 0; i < len(elems); i++ {
 		f32, err := strconv.ParseFloat(string(elems[i]), 32)
@@ -89,7 +89,7 @@ func (v Float8ArrayToFloat64Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	float64s := make([]float64, len(elems))
 	for i := 0; i < len(elems); i++ {
 		f64, err := strconv.ParseFloat(string(elems[i]), 64)

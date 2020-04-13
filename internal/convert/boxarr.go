@@ -45,11 +45,11 @@ func (s BoxArrayToFloat64Array2Array2Slice) Scan(src interface{}) error {
 	if err != nil {
 		return err
 	} else if data == nil {
-		s.Val = nil
+		*s.Val = nil
 		return nil
 	}
 
-	elems := pgparseboxarr(data)
+	elems := pgParseBoxArray(data)
 
 	n := len(elems) / 4
 	boxes := make([][2][2]float64, n)

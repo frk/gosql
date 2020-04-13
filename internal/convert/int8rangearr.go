@@ -43,12 +43,10 @@ func (v Int8RangeArrayToIntArray2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]int, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi int64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -108,12 +106,10 @@ func (v Int8RangeArrayToInt8Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]int8, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi int64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -173,12 +169,10 @@ func (v Int8RangeArrayToInt16Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]int16, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi int64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -238,12 +232,10 @@ func (v Int8RangeArrayToInt32Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]int32, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi int64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -303,12 +295,10 @@ func (v Int8RangeArrayToInt64Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]int64, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi int64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -368,12 +358,10 @@ func (v Int8RangeArrayToUintArray2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]uint, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi uint64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -433,12 +421,10 @@ func (v Int8RangeArrayToUint8Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]uint8, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi uint64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -498,12 +484,10 @@ func (v Int8RangeArrayToUint16Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]uint16, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi uint64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -563,12 +547,10 @@ func (v Int8RangeArrayToUint32Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]uint32, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi uint64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -628,12 +610,10 @@ func (v Int8RangeArrayToUint64Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]uint64, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi uint64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -693,12 +673,10 @@ func (v Int8RangeArrayToFloat32Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]float32, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi int64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {
@@ -758,12 +736,10 @@ func (v Int8RangeArrayToFloat64Array2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]float64, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var lo, hi int64
 		arr := pgParseRange(elem)
 		if len(arr[0]) > 0 {

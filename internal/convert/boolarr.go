@@ -46,7 +46,7 @@ func (s BoolArrayToBoolSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	bools := make([]bool, len(elems))
 	for i := 0; i < len(elems); i++ {
 		if elems[i][0] == 't' {

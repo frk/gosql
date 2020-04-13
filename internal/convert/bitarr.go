@@ -111,7 +111,7 @@ func (s BitArrayToBoolSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	bools := make([]bool, len(elems))
 	for i := 0; i < len(elems); i++ {
 		if elems[i][0] == '1' {
@@ -138,7 +138,7 @@ func (s BitArrayToUint8Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	uint8s := make([]uint8, len(elems))
 	for i := 0; i < len(elems); i++ {
 		if elems[i][0] == '1' {
@@ -165,7 +165,7 @@ func (s BitArrayToUintSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	uints := make([]uint, len(elems))
 	for i := 0; i < len(elems); i++ {
 		if elems[i][0] == '1' {

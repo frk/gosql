@@ -37,7 +37,7 @@ func (s BoxToFloat64Array2Array2) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsebox(data)
+	elems := pgParseBox(data)
 
 	var box [2][2]float64
 	x1, err := strconv.ParseFloat(string(elems[0]), 64)

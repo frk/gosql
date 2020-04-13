@@ -14,8 +14,8 @@ func TestBool(t *testing.T) {
 			return d, d
 		},
 		data: []testdata{
-			{input: true, output: bool(true)},
-			{input: false, output: bool(false)},
+			{input: bool(true), output: bool(true)},
+			{input: bool(false), output: bool(false)},
 		},
 	}, {
 		valuer: func() interface{} {

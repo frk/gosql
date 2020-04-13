@@ -15,7 +15,7 @@ func TestBoxArray(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  nil,
+				input:  [][2][2]float64(nil),
 				output: [][2][2]float64(nil)},
 			{
 				input:  [][2][2]float64{},

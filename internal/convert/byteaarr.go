@@ -75,7 +75,7 @@ func (s ByteaArrayToByteSliceSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	out := make([][]byte, len(elems))
 	for i := 0; i < len(elems); i++ {
 		src := elems[i]
@@ -108,7 +108,7 @@ func (s ByteaArrayToStringSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(arr)
+	elems := pgParseCommaArray(arr)
 	out := make([]string, len(elems))
 	for i := 0; i < len(elems); i++ {
 		src := elems[i]

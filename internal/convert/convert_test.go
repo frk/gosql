@@ -289,6 +289,11 @@ func u64ptr(v uint64) *uint64 { return &v }
 func f32ptr(v float32) *float32 { return &v }
 func f64ptr(v float64) *float64 { return &v }
 
+func uuid16bytes(v string) [16]byte {
+	u, _ := pgParseUUID([]byte(v))
+	return u
+}
+
 func dateval(y, m, d int) time.Time {
 	t := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
 	return t

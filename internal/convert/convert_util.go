@@ -2,6 +2,7 @@ package convert
 
 import (
 	"bytes"
+	"encoding/hex"
 	"time"
 )
 
@@ -17,25 +18,6 @@ func srcbytes(src interface{}) ([]byte, error) {
 		return nil, nil
 	}
 	return nil, nil // TODO error
-}
-
-// Expected format: '{X [, ...]}' where X is anything that doesn't contain a comma.
-func pgparsearray1(a []byte) (out [][]byte) {
-	a = a[1 : len(a)-1] // drop curly braces
-
-	n := 0 // start of next elem
-	for i := 0; i < len(a); i++ {
-		if a[i] == ',' {
-			out = append(out, a[n:i])
-			n = i + 1
-		}
-	}
-
-	// append the last element
-	if len(a) > 0 {
-		out = append(out, a[n:])
-	}
-	return out
 }
 
 // parse as single bytes
@@ -93,60 +75,6 @@ func pgparsearray3(a []byte) (out []rune) {
 	return out
 }
 
-// Expected format: '(X1,Y1),(X2,Y2)' where X and Y are numbers.
-func pgparsebox(a []byte) (out [][]byte) {
-	a = a[1 : len(a)-1] // drop the first '(' and last ')'
-
-	n := 0 // start of next elem
-	for i := 0; i < len(a); i++ {
-		if a[i] == ',' {
-			out = append(out, a[n:i])
-			n = i + 1
-		}
-
-		if a[i] == ')' {
-			out = append(out, a[n:i])
-			i += 2 // skip over ",("
-			n = i + 1
-		}
-	}
-
-	// append the last element
-	if n > 0 {
-		out = append(out, a[n:])
-	}
-	return out
-}
-
-// Expected format: '{(X1,Y1),(X2,Y2)[; ...]}' where X and Y are numbers.
-func pgparseboxarr(a []byte) (out [][]byte) {
-	if len(a) == 2 {
-		return out // nothing to do if empty "{}"
-	}
-
-	a = a[2 : len(a)-2] // drop the first "{(" and last ")}"
-
-	n := 0 // start of next elem
-	for i := 0; i < len(a); i++ {
-		if a[i] == ',' {
-			out = append(out, a[n:i])
-			n = i + 1
-		}
-
-		if a[i] == ')' {
-			out = append(out, a[n:i])
-			i += 2 // skip over ",(" or ";("
-			n = i + 1
-		}
-	}
-
-	// append the last element
-	if n > 0 {
-		out = append(out, a[n:])
-	}
-	return out
-}
-
 func pgparsehstore(a []byte) (out [][2][]byte) {
 	if len(a) == 0 {
 		return out // nothing to do if empty
@@ -190,49 +118,6 @@ func pgparsehstore(a []byte) (out [][2][]byte) {
 			pair = [2][]byte{}
 		}
 	}
-	return out
-}
-
-func pgParseVector(a []byte) (out [][]byte) {
-	var j int
-	for i := 0; i < len(a); i++ {
-		if a[i] == ' ' {
-			out = append(out, a[j:i])
-			j = i + 1
-		}
-	}
-	out = append(out, a[j:]) // last
-	return out
-}
-
-func pgParseVectorArray(a []byte) (out [][][]byte) {
-	if len(a) == 0 {
-		return out // nothing to do if empty
-	}
-	a = a[1 : len(a)-1] // drop array delimiters
-
-	for i := 0; i < len(a); i++ {
-		if a[i] == '"' {
-
-			k := i + 1 // vector start
-			vector := [][]byte{}
-
-			for j := k; j < len(a); j++ {
-				if a[j] == '"' { // vector end
-					vector = append(vector, a[k:j])
-					i = j
-					break
-				}
-				if a[j] == ' ' {
-					vector = append(vector, a[k:j])
-					k = j + 1
-				}
-			}
-
-			out = append(out, vector)
-		}
-	}
-
 	return out
 }
 
@@ -377,8 +262,8 @@ func pgparsedate(a []byte) (time.Time, error) {
 	return time.ParseInLocation(dateLayout, string(a), time.UTC)
 }
 
-// Expected format: '{S [, ...]}' where S is double quoted string that can contain a comma.
-func pgParseStringArray(a []byte) (out [][]byte) {
+// Expected format: '{STRING [, ...]}' where STRING is a double quoted string.
+func pgParseQuotedStringArray(a []byte) (out [][]byte) {
 	a = a[1 : len(a)-1] // drop curly braces
 
 mainloop:
@@ -391,7 +276,7 @@ mainloop:
 				}
 
 				if a[j] == '"' { // end of string
-					out = append(out, a[i:j+1])
+					out = append(out, a[i+1:j])
 					i = j + 1
 					continue mainloop
 				}
@@ -399,10 +284,233 @@ mainloop:
 		}
 
 		if a[i] == 'N' { // NULL?
-			i += 4
 			out = append(out, []byte(nil))
+			i += 4
 		}
 	}
+
+	return out
+}
+
+// Expected format: '{STRING [, ...]}' where STRING is either an unquoted or a double quoted string.
+func pgParseStringArray(a []byte) (out [][]byte) {
+	a = a[1 : len(a)-1] // drop curly braces
+
+mainloop:
+	for i := 0; i < len(a); i++ {
+		switch a[i] {
+		case ',': // element separator?
+			continue mainloop
+		case '"': // start of double quoted string
+			str := []byte{}
+			for j := i + 1; j < len(a); j++ {
+				if a[j] == '\\' { // escape sequence
+					str = append(str, a[i+1:j]...)
+					i = j
+					j++
+					continue
+				}
+
+				if a[j] == '"' { // end of string
+					str = append(str, a[i+1:j]...)
+					out = append(out, str)
+					i = j
+					continue mainloop
+				}
+			}
+		case 'N': // NULL?
+			if len(a) > i+3 && string(a[i:i+4]) == `NULL` {
+				out = append(out, []byte(nil))
+				i = i + 3
+				continue mainloop
+			}
+			fallthrough
+		default: // start of unquoted string
+			var j int
+			for j = i + 1; j < len(a); j++ {
+				if a[j] == ',' { // end of string
+					out = append(out, a[i:j])
+					i = j
+					continue mainloop
+				}
+			}
+
+			// end of the last element
+			out = append(out, a[i:j])
+			i = j
+		}
+	}
+
+	return out
+}
+
+// Expected format: '(X1,Y1),(X2,Y2)' where X and Y are numbers.
+func pgParseBox(a []byte) (out [][]byte) {
+	a = a[1 : len(a)-1] // drop the first '(' and last ')'
+
+	n := 0 // start of next elem
+	for i := 0; i < len(a); i++ {
+		if a[i] == ',' {
+			out = append(out, a[n:i])
+			n = i + 1
+		}
+
+		if a[i] == ')' {
+			out = append(out, a[n:i])
+			i += 2 // skip over ",("
+			n = i + 1
+		}
+	}
+
+	// append the last element
+	if n > 0 {
+		out = append(out, a[n:])
+	}
+	return out
+}
+
+// Expected format: '{(X1,Y1),(X2,Y2)[; ...]}' where X and Y are numbers.
+func pgParseBoxArray(a []byte) (out [][]byte) {
+	if len(a) == 2 {
+		return out // nothing to do if empty "{}"
+	}
+
+	a = a[2 : len(a)-2] // drop the first "{(" and last ")}"
+
+	n := 0 // start of next elem
+	for i := 0; i < len(a); i++ {
+		if a[i] == ',' {
+			out = append(out, a[n:i])
+			n = i + 1
+		}
+
+		if a[i] == ')' {
+			out = append(out, a[n:i])
+			i += 2 // skip over ",(" or ";("
+			n = i + 1
+		}
+	}
+
+	// append the last element
+	if n > 0 {
+		out = append(out, a[n:])
+	}
+	return out
+}
+
+// Expected format: '{X [, ...]}' where X is anything that doesn't contain a comma.
+func pgParseCommaArray(a []byte) (out [][]byte) {
+	a = a[1 : len(a)-1] // drop curly braces
+
+	n := 0 // start of next elem
+	for i := 0; i < len(a); i++ {
+		if a[i] == ',' {
+			out = append(out, a[n:i])
+			n = i + 1
+		}
+	}
+
+	// append the last element
+	if len(a) > 0 {
+		out = append(out, a[n:])
+	}
+	return out
+}
+
+func pgParseVector(a []byte) (out [][]byte) {
+	var j int
+	for i := 0; i < len(a); i++ {
+		if a[i] == ' ' {
+			out = append(out, a[j:i])
+			j = i + 1
+		}
+	}
+	if len(a) > 0 {
+		out = append(out, a[j:]) // last
+	}
+	return out
+}
+
+// Expected format: '{VEC [, ...]}' where VEC is a space separated list of elements,
+// the list being enclosed in double quotes, or a single unquoted element, or NULL.
+func pgParseVectorArray(a []byte) (out [][][]byte) {
+	if len(a) == 0 {
+		return out // nothing to do if empty
+	}
+	a = a[1 : len(a)-1] // drop array delimiters
+
+	for i := 0; i < len(a); i++ {
+		switch a[i] {
+		case '"': // quoted element
+			vector := [][]byte{}
+
+			k := i + 1 // vector start
+			for j := k; j < len(a); j++ {
+				if a[j] == '"' { // vector end
+					vector = append(vector, a[k:j])
+					i = j + 1
+					break
+				}
+				if a[j] == ' ' {
+					vector = append(vector, a[k:j])
+					k = j + 1
+				}
+			}
+
+			out = append(out, vector)
+		case 'N': // NULL element?
+			if len(a) > i+3 && string(a[i:i+4]) == `NULL` {
+				out = append(out, [][]byte(nil))
+				i = i + 3
+			}
+		default: // unquoted element
+			k, j := i, i // elem start
+			for ; j < len(a); j++ {
+				if a[j] == ',' { // elem end
+					i = j
+					break
+				}
+			}
+			out = append(out, [][]byte{a[k:j]})
+		}
+	}
+
+	return out
+}
+
+// Expected format: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'.
+func pgParseUUID(a []byte) (uuid [16]byte, err error) {
+	if _, err = hex.Decode(uuid[0:4], a[0:8]); err != nil {
+		return uuid, err
+	}
+	if _, err = hex.Decode(uuid[4:6], a[9:13]); err != nil {
+		return uuid, err
+	}
+	if _, err = hex.Decode(uuid[6:8], a[14:18]); err != nil {
+		return uuid, err
+	}
+	if _, err = hex.Decode(uuid[8:10], a[19:23]); err != nil {
+		return uuid, err
+	}
+	if _, err = hex.Decode(uuid[10:], a[24:]); err != nil {
+		return uuid, err
+	}
+	return uuid, nil
+}
+
+func pgFormatUUID(uuid [16]byte) (out []byte) {
+	out = make([]byte, 36)
+
+	_ = hex.Encode(out[0:8], uuid[0:4])
+	_ = hex.Encode(out[9:13], uuid[4:6])
+	_ = hex.Encode(out[14:18], uuid[6:8])
+	_ = hex.Encode(out[19:23], uuid[8:10])
+	_ = hex.Encode(out[24:], uuid[10:])
+
+	out[8] = '-'
+	out[13] = '-'
+	out[18] = '-'
+	out[23] = '-'
 
 	return out
 }

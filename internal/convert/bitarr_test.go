@@ -14,7 +14,7 @@ func TestBitArray(t *testing.T) {
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: nil, output: []bool(nil)},
+			{input: []bool(nil), output: []bool(nil)},
 			{input: []bool{}, output: []bool{}},
 			{input: []bool{true}, output: []bool{true}},
 			{input: []bool{false}, output: []bool{false}},
@@ -31,7 +31,7 @@ func TestBitArray(t *testing.T) {
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: nil, output: []uint8(nil)},
+			{input: []uint8(nil), output: []uint8(nil)},
 			{input: []uint8{}, output: []uint8{}},
 			{input: []uint8{1}, output: []uint8{1}},
 			{input: []uint8{0}, output: []uint8{0}},
@@ -48,7 +48,7 @@ func TestBitArray(t *testing.T) {
 			return s, s.Val
 		},
 		data: []testdata{
-			{input: nil, output: []uint(nil)},
+			{input: []uint(nil), output: []uint(nil)},
 			{input: []uint{}, output: []uint{}},
 			{input: []uint{1}, output: []uint{1}},
 			{input: []uint{0}, output: []uint{0}},

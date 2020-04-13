@@ -40,7 +40,7 @@ func (v InetArrayToIPNetSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(data)
+	elems := pgParseCommaArray(data)
 	ipnets := make([]net.IPNet, len(elems))
 	for i := 0; i < len(elems); i++ {
 		_, ipnet, err := net.ParseCIDR(string(elems[i]))
@@ -89,7 +89,7 @@ func (v InetArrayToIPSlice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgparsearray1(data)
+	elems := pgParseCommaArray(data)
 	ips := make([]net.IP, len(elems))
 	for i := 0; i < len(elems); i++ {
 		ips[i] = net.ParseIP(string(elems[i]))

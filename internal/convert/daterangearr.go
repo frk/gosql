@@ -52,12 +52,10 @@ func (v DateRangeArrayToTimeArray2Slice) Scan(src interface{}) error {
 		return nil
 	}
 
-	elems := pgParseStringArray(data)
+	elems := pgParseQuotedStringArray(data)
 	ranges := make([][2]time.Time, len(elems))
 
 	for i, elem := range elems {
-		elem = elem[1 : len(elem)-1] // drop surrounding double quotes
-
 		var t0, t1 time.Time
 		arr := pgParseRange(elem)
 
