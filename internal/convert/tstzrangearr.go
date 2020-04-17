@@ -5,18 +5,18 @@ import (
 	"time"
 )
 
-type TsRangeArrayFromTimeArray2Slice struct {
+type TstzRangeArrayFromTimeArray2Slice struct {
 	Val [][2]time.Time
 }
 
-func (v TsRangeArrayFromTimeArray2Slice) Value() (driver.Value, error) {
+func (v TstzRangeArrayFromTimeArray2Slice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
-	size := (len(v.Val) * 51) + // len(`"[\"yyyy-mm-dd hh:mm:ss\",\"yyyy-mm-dd hh:mm:ss\")"`) == 51
+	size := (len(v.Val) * 57) + // len(`"[\"yyyy-mm-dd hh:mm:ss-hh\",\"yyyy-mm-dd hh:mm:ss-hh\")"`) == 57
 		(len(v.Val) - 1) + // number of commas between array elements
 		2 // surrounding curly braces
 
@@ -25,9 +25,9 @@ func (v TsRangeArrayFromTimeArray2Slice) Value() (driver.Value, error) {
 
 	for _, a := range v.Val {
 		out = append(out, '"', '[', '\\', '"')
-		out = append(out, a[0].Format(timestampLayout)...)
+		out = append(out, a[0].Format(timestamptzLayout)...)
 		out = append(out, '\\', '"', ',', '\\', '"')
-		out = append(out, a[1].Format(timestampLayout)...)
+		out = append(out, a[1].Format(timestamptzLayout)...)
 		out = append(out, '\\', '"', ')', '"', ',')
 	}
 
@@ -35,11 +35,11 @@ func (v TsRangeArrayFromTimeArray2Slice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type TsRangeArrayToTimeArray2Slice struct {
+type TstzRangeArrayToTimeArray2Slice struct {
 	Val *[][2]time.Time
 }
 
-func (v TsRangeArrayToTimeArray2Slice) Scan(src interface{}) error {
+func (v TstzRangeArrayToTimeArray2Slice) Scan(src interface{}) error {
 	data, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -58,11 +58,11 @@ func (v TsRangeArrayToTimeArray2Slice) Scan(src interface{}) error {
 		a[1] = a[1][2 : len(a[1])-2]
 
 		var t0, t1 time.Time
-		t0, err = time.ParseInLocation(timestampLayout, string(a[0]), noZone)
+		t0, err = time.ParseInLocation(timestamptzLayout, string(a[0]), noZone)
 		if err != nil {
 			return err
 		}
-		t1, err = time.ParseInLocation(timestampLayout, string(a[1]), noZone)
+		t1, err = time.ParseInLocation(timestamptzLayout, string(a[1]), noZone)
 		if err != nil {
 			return err
 		}

@@ -299,6 +299,24 @@ func dateval(y, m, d int) time.Time {
 	return t
 }
 
+func timeval(h, m, s, ms int) time.Time {
+	t := time.Date(0, 1, 1, h, m, s, ms*1000*1000, time.UTC)
+	return t
+}
+
+func timetzval(h, m, s, ms int, loc *time.Location) time.Time {
+	t := time.Date(0, 1, 1, h, m, s, ms*1000*1000, loc)
+	return t
+}
+
+func timestamp(y, m, d, hh, mm, ss, ms int) time.Time {
+	return time.Date(y, time.Month(m), d, hh, mm, ss, ms*1000*1000, noZone)
+}
+
+func timestamptz(y, m, d, hh, mm, ss, ms int, loc *time.Location) time.Time {
+	return time.Date(y, time.Month(m), d, hh, mm, ss, ms*1000*1000, loc)
+}
+
 func dateptr(y, m, d int) *time.Time {
 	t := dateval(y, m, d)
 	return &t

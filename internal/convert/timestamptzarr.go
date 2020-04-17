@@ -5,26 +5,27 @@ import (
 	"time"
 )
 
-type TimestampArrayFromTimeSlice struct {
+type TimestamptzArrayFromTimeSlice struct {
 	Val []time.Time
 }
 
-func (v TimestampArrayFromTimeSlice) Value() (driver.Value, error) {
+func (v TimestamptzArrayFromTimeSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
-	// len(`"yyyy-mm-dd hh:mm:ss"`) == 21
-	size := (len(v.Val) * 21) + len(v.Val) - 1
+	size := (len(v.Val) * 24) + // len(`"yyyy-mm-dd hh:mm:ss-tz"`) == 24
+		(len(v.Val) - 1) + // number of commas between array elements
+		2 // surrounding curly braces
 
 	out := make([]byte, 1, size)
 	out[0] = '{'
 
 	for _, ts := range v.Val {
 		out = append(out, '"')
-		out = append(out, ts.Format(timestampLayout)...)
+		out = append(out, ts.Format(timestamptzLayout)...)
 		out = append(out, '"', ',')
 	}
 
@@ -32,11 +33,11 @@ func (v TimestampArrayFromTimeSlice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type TimestampArrayToTimeSlice struct {
+type TimestamptzArrayToTimeSlice struct {
 	Val *[]time.Time
 }
 
-func (v TimestampArrayToTimeSlice) Scan(src interface{}) error {
+func (v TimestamptzArrayToTimeSlice) Scan(src interface{}) error {
 	data, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -54,7 +55,7 @@ func (v TimestampArrayToTimeSlice) Scan(src interface{}) error {
 		}
 
 		ts = ts[1 : len(ts)-1] // drop surrounding double quotes
-		t, err := time.ParseInLocation(timestampLayout, string(ts), noZone)
+		t, err := time.Parse(timestamptzLayout, string(ts))
 		if err != nil {
 			return err
 		}

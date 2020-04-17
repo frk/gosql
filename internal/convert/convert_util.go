@@ -6,7 +6,15 @@ import (
 	"time"
 )
 
-const dateLayout = "2006-01-02"
+const (
+	dateLayout        = "2006-01-02"
+	timeLayout        = "15:04:05.999"
+	timetzLayout      = "15:04:05.999-07:00"
+	timestampLayout   = "2006-01-02 15:04:05.999"
+	timestamptzLayout = "2006-01-02 15:04:05.999-07"
+)
+
+var noZone = time.FixedZone("", 0)
 
 func srcbytes(src interface{}) ([]byte, error) {
 	switch src := src.(type) {
@@ -190,58 +198,8 @@ func pgparsehstorearr(a []byte) (out [][][2][]byte) {
 	return out
 }
 
-func pgAppendQuote1(buf, elem []byte) []byte {
-	buf = append(buf, '"')
-	for i := 0; i < len(elem); i++ {
-		switch elem[i] {
-		case '"', '\\':
-			buf = append(buf, '\\', elem[i])
-		case '\a':
-			buf = append(buf, '\\', '\a')
-		case '\b':
-			buf = append(buf, '\\', '\b')
-		case '\f':
-			buf = append(buf, '\\', '\f')
-		case '\n':
-			buf = append(buf, '\\', '\n')
-		case '\r':
-			buf = append(buf, '\\', '\r')
-		case '\t':
-			buf = append(buf, '\\', '\t')
-		case '\v':
-			buf = append(buf, '\\', '\v')
-		default:
-			buf = append(buf, elem[i])
-		}
-	}
-	return append(buf, '"')
-}
-
-func pgAppendQuote2(buf, elem []byte) []byte {
-	buf = append(buf, '\\', '"')
-	for i := 0; i < len(elem); i++ {
-		switch elem[i] {
-		case '"', '\\':
-			buf = append(buf, '\\', '\\', '\\', elem[i])
-		case '\a':
-			buf = append(buf, '\\', '\\', '\\', '\a')
-		case '\b':
-			buf = append(buf, '\\', '\\', '\\', '\b')
-		case '\f':
-			buf = append(buf, '\\', '\\', '\\', '\f')
-		case '\n':
-			buf = append(buf, '\\', '\\', '\\', '\n')
-		case '\r':
-			buf = append(buf, '\\', '\\', '\\', '\r')
-		case '\t':
-			buf = append(buf, '\\', '\\', '\\', '\t')
-		case '\v':
-			buf = append(buf, '\\', '\\', '\\', '\v')
-		default:
-			buf = append(buf, elem[i])
-		}
-	}
-	return append(buf, '\\', '"')
+func pgparsedate(a []byte) (time.Time, error) {
+	return time.ParseInLocation(dateLayout, string(a), time.UTC)
 }
 
 func pgParseRange(a []byte) (out [2][]byte) {
@@ -256,10 +214,6 @@ func pgParseRange(a []byte) (out [2][]byte) {
 	}
 
 	return out
-}
-
-func pgparsedate(a []byte) (time.Time, error) {
-	return time.ParseInLocation(dateLayout, string(a), time.UTC)
 }
 
 // Expected format: '{STRING [, ...]}' where STRING is a double quoted string.
@@ -417,6 +371,7 @@ func pgParseCommaArray(a []byte) (out [][]byte) {
 	return out
 }
 
+// Expected format: 'E[ ...]' (space separated list of elements).
 func pgParseVector(a []byte) (out [][]byte) {
 	var j int
 	for i := 0; i < len(a); i++ {
@@ -479,33 +434,35 @@ func pgParseVectorArray(a []byte) (out [][][]byte) {
 }
 
 // Expected format: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'.
-func pgParseUUID(a []byte) (uuid [16]byte, err error) {
-	if _, err = hex.Decode(uuid[0:4], a[0:8]); err != nil {
-		return uuid, err
+func pgParseUUID(data []byte) (arr [16]byte, err error) {
+	if _, err = hex.Decode(arr[0:4], data[0:8]); err != nil {
+		return arr, err
 	}
-	if _, err = hex.Decode(uuid[4:6], a[9:13]); err != nil {
-		return uuid, err
+	if _, err = hex.Decode(arr[4:6], data[9:13]); err != nil {
+		return arr, err
 	}
-	if _, err = hex.Decode(uuid[6:8], a[14:18]); err != nil {
-		return uuid, err
+	if _, err = hex.Decode(arr[6:8], data[14:18]); err != nil {
+		return arr, err
 	}
-	if _, err = hex.Decode(uuid[8:10], a[19:23]); err != nil {
-		return uuid, err
+	if _, err = hex.Decode(arr[8:10], data[19:23]); err != nil {
+		return arr, err
 	}
-	if _, err = hex.Decode(uuid[10:], a[24:]); err != nil {
-		return uuid, err
+	if _, err = hex.Decode(arr[10:], data[24:]); err != nil {
+		return arr, err
 	}
-	return uuid, nil
+	return arr, nil
 }
 
-func pgFormatUUID(uuid [16]byte) (out []byte) {
+// pgFormatUUID converts the given array to a slice of bytes in the following
+// format "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" representing a uuid.
+func pgFormatUUID(arr [16]byte) (out []byte) {
 	out = make([]byte, 36)
 
-	_ = hex.Encode(out[0:8], uuid[0:4])
-	_ = hex.Encode(out[9:13], uuid[4:6])
-	_ = hex.Encode(out[14:18], uuid[6:8])
-	_ = hex.Encode(out[19:23], uuid[8:10])
-	_ = hex.Encode(out[24:], uuid[10:])
+	_ = hex.Encode(out[0:8], arr[0:4])
+	_ = hex.Encode(out[9:13], arr[4:6])
+	_ = hex.Encode(out[14:18], arr[6:8])
+	_ = hex.Encode(out[19:23], arr[8:10])
+	_ = hex.Encode(out[24:], arr[10:])
 
 	out[8] = '-'
 	out[13] = '-'
@@ -513,4 +470,60 @@ func pgFormatUUID(uuid [16]byte) (out []byte) {
 	out[23] = '-'
 
 	return out
+}
+
+// pgAppendQuote1
+func pgAppendQuote1(buf, elem []byte) []byte {
+	buf = append(buf, '"')
+	for i := 0; i < len(elem); i++ {
+		switch elem[i] {
+		case '"', '\\':
+			buf = append(buf, '\\', elem[i])
+		case '\a':
+			buf = append(buf, '\\', '\a')
+		case '\b':
+			buf = append(buf, '\\', '\b')
+		case '\f':
+			buf = append(buf, '\\', '\f')
+		case '\n':
+			buf = append(buf, '\\', '\n')
+		case '\r':
+			buf = append(buf, '\\', '\r')
+		case '\t':
+			buf = append(buf, '\\', '\t')
+		case '\v':
+			buf = append(buf, '\\', '\v')
+		default:
+			buf = append(buf, elem[i])
+		}
+	}
+	return append(buf, '"')
+}
+
+// pgAppendQuote2
+func pgAppendQuote2(buf, elem []byte) []byte {
+	buf = append(buf, '\\', '"')
+	for i := 0; i < len(elem); i++ {
+		switch elem[i] {
+		case '"', '\\':
+			buf = append(buf, '\\', '\\', '\\', elem[i])
+		case '\a':
+			buf = append(buf, '\\', '\\', '\\', '\a')
+		case '\b':
+			buf = append(buf, '\\', '\\', '\\', '\b')
+		case '\f':
+			buf = append(buf, '\\', '\\', '\\', '\f')
+		case '\n':
+			buf = append(buf, '\\', '\\', '\\', '\n')
+		case '\r':
+			buf = append(buf, '\\', '\\', '\\', '\r')
+		case '\t':
+			buf = append(buf, '\\', '\\', '\\', '\t')
+		case '\v':
+			buf = append(buf, '\\', '\\', '\\', '\v')
+		default:
+			buf = append(buf, elem[i])
+		}
+	}
+	return append(buf, '\\', '"')
 }

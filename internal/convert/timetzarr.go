@@ -5,24 +5,24 @@ import (
 	"time"
 )
 
-type TimeArrayFromTimeSlice struct {
+type TimetzArrayFromTimeSlice struct {
 	Val []time.Time
 }
 
-func (v TimeArrayFromTimeSlice) Value() (driver.Value, error) {
+func (v TimetzArrayFromTimeSlice) Value() (driver.Value, error) {
 	if v.Val == nil {
 		return nil, nil
 	} else if len(v.Val) == 0 {
 		return []byte{'{', '}'}, nil
 	}
 
-	size := 2 + (len(v.Val) - 1) + (len(v.Val) * 8) // len("hh:mm:ss") == 8
+	size := 2 + (len(v.Val) - 1) + (len(v.Val) * 14) // len("hh:mm:ss-hh:ss") == 14
 
 	out := make([]byte, 1, size)
 	out[0] = '{'
 
 	for _, t := range v.Val {
-		out = append(out, t.Format(timeLayout)...)
+		out = append(out, t.Format(timetzLayout)...)
 		out = append(out, ',')
 	}
 
@@ -30,11 +30,11 @@ func (v TimeArrayFromTimeSlice) Value() (driver.Value, error) {
 	return out, nil
 }
 
-type TimeArrayToTimeSlice struct {
+type TimetzArrayToTimeSlice struct {
 	Val *[]time.Time
 }
 
-func (v TimeArrayToTimeSlice) Scan(src interface{}) error {
+func (v TimetzArrayToTimeSlice) Scan(src interface{}) error {
 	data, err := srcbytes(src)
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func (v TimeArrayToTimeSlice) Scan(src interface{}) error {
 	elems := pgParseCommaArray(data)
 	times := make([]time.Time, len(elems))
 	for i := 0; i < len(elems); i++ {
-		t, err := time.Parse(timeLayout, string(elems[i]))
+		t, err := time.Parse(timetzLayout, string(elems[i]))
 		if err != nil {
 			return err
 		}

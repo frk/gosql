@@ -415,48 +415,48 @@ and will reuse it for subsequent scans.
 |                | `[][]byte`                     | `TextArrayFromByteSliceSlice`          | `TextArrayToByteSliceSlice`            |
 |                | `string`                       | *native*                               | *native*                               |
 |                | `[]byte`                       | *native*                               | *native*                               |
-| `time`         | `time.Time`                    | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `time[]`       | `[]time.Time`                  | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `timestamp`    | `time.Time`                    | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `timestamp[]`  | `[]time.Time`                  | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `timestamptz`  | `time.Time`                    | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `timestamptz[]`| `[]time.Time`                  | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `timetz`       | `time.Time`                    | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `timetz[]`     | `[]time.Time`                  | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `time`         | `time.Time`                    | *native*                               | *native*                               |
+|                | `string`                       | *native*                               | `TimeToString`                         |
+|                | `[]byte`                       | *native*                               | `TimeToByteSlice`                      |
+| `time[]`       | `[]time.Time`                  | `TimeArrayFromTimeSlice`               | `TimeArrayToTimeSlice`                 |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `timestamp`    | `time.Time`                    | *native*                               | *native*                               |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `timestamp[]`  | `[]time.Time`                  | `TimestampArrayFromTimeSlice`          | `TimestampArrayToTimeSlice`            |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `timestamptz`  | `time.Time`                    | *native*                               | *native*                               |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `timestamptz[]`| `[]time.Time`                  | `TimestamptzArrayFromTimeSlice`        | `TimestamptzArrayToTimeSlice`          |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `timetz`       | `time.Time`                    | *native*                               | *native*                               |
+|                | `string`                       | *native*                               | `TimetzToString`                       |
+|                | `[]byte`                       | *native*                               | `TimetzToByteSlice`                    |
+| `timetz[]`     | `[]time.Time`                  | `TimetzArrayFromTimeSlice`             | `TimetzArrayToTimeSlice`               |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `tsquery`      | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
 | `tsquery[]`    | `[]string`                     | ???                                    | ???                                    |
 |                | `[][]byte`                     | ???                                    | ???                                    |
 |                | `string`                       | ???                                    | ???                                    |
 |                | `[]byte`                       | ???                                    | ???                                    |
-| `tsrange`      | `[2]time.Time`                 | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `tsrange[]`    | `[][2]time.Time`               | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `tstzrange`    | `[2]time.Time`                 | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
-| `tstzrange[]`  | `[][2]time.Time`               | ???                                    | ???                                    |
-|                | `string`                       | ???                                    | ???                                    |
-|                | `[]byte`                       | ???                                    | ???                                    |
+| `tsrange`      | `[2]time.Time`                 | `TsRangeFromTimeArray2`                | `TsRangeToTimeArray2`                  |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `tsrange[]`    | `[][2]time.Time`               | `TsRangeArrayFromTimeArray2Slice`      | `TsRangeArrayToTimeArray2Slice`        |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `tstzrange`    | `[2]time.Time`                 | `TstzRangeFromTimeArray2`              | `TstzRangeToTimeArray2`                |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
+| `tstzrange[]`  | `[][2]time.Time`               | `TstzRangeArrayFromTimeArray2Slice`    | `TstzRangeArrayToTimeArray2Slice`      |
+|                | `string`                       | *native*                               | *native*                               |
+|                | `[]byte`                       | *native*                               | *native*                               |
 | `tsvector`     | `[]string`                     | `TSVectorFromStringSlice`              | `TSVectorToStringSlice`                |
 |                | `[][]byte`                     | `TSVectorFromByteSliceSlice`           | `TSVectorToByteSliceSlice`             |
 |                | `string`                       | *native*                               | *native*                               |
