@@ -298,6 +298,149 @@ mainloop:
 	return out
 }
 
+// Expected format: '(X,Y)' where X and Y are numbers.
+func pgParsePoint(a []byte) (out [2][]byte) {
+	a = a[1 : len(a)-1] // drop the surrounding parentheses
+	for i := 0; i < len(a); i++ {
+		if a[i] == ',' {
+			out[0] = a[:i]
+			out[1] = a[i+1:]
+			break
+		}
+	}
+	return out
+}
+
+// Expected format: '{"(X,Y)"[, ...]}' where X and Y are numbers.
+func pgParsePointArray(a []byte) (out [][2][]byte) {
+	a = a[1 : len(a)-1] // drop the surrounding curlies
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' { // point start
+			var point [2][]byte
+			for j := i + 2; j < len(a); j++ {
+				if a[j] == ',' {
+					point[0] = a[i+2 : j]
+					i = j
+				} else if a[j] == ')' {
+					point[1] = a[i+1 : j]
+					i = j
+					break
+				}
+			}
+			out = append(out, point)
+			i += 2 // skip closing `"` and `,` separator
+		} else if a[i] == 'N' { // handle NULL
+			out = append(out, [2][]byte{})
+			i += 4
+		}
+	}
+	return out
+}
+
+// Expected format: '(X,Y)[, ...]' where X and Y are numbers.
+func pgParsePointList(a []byte) (out [][2][]byte) {
+	for i := 0; i < len(a); i++ {
+		if a[i] == '(' {
+			var point [2][]byte
+			for j := i + 1; j < len(a); j++ {
+				if a[j] == ',' {
+					point[0] = a[i+1 : j]
+					i = j
+				} else if a[j] == ')' {
+					point[1] = a[i+1 : j]
+					i = j
+					break
+				}
+			}
+			out = append(out, point)
+		}
+	}
+	return out
+}
+
+// Expected format: '((X,Y)[, ...])' where X and Y are numbers.
+func pgParsePolygon(a []byte) (out [][2][]byte) {
+	a = a[1 : len(a)-1] // drop the first `(` and last `)`
+	return pgParsePointList(a)
+}
+
+// Expected format: '{"((X,Y)[, ...])"[, ...]}' where X and Y are numbers.
+func pgParsePolygonArray(a []byte) (out [][][2][]byte) {
+	a = a[1 : len(a)-1] // drop the first `{` and last `}`
+
+	for i := 0; i < len(a); i++ {
+		var polygon [][2][]byte
+		if a[i] == '"' { // polygon start
+			for j := i + 2; j < len(a); j++ {
+				if a[j] == '(' {
+					var point [2][]byte
+					for k := j + 1; k < len(a); k++ {
+						if a[k] == ',' {
+							point[0] = a[j+1 : k]
+							j = k
+						} else if a[k] == ')' {
+							point[1] = a[j+1 : k]
+							j = k
+							break
+						}
+					}
+					polygon = append(polygon, point)
+				} else if a[j] == '"' { // polygon end
+					out = append(out, polygon)
+					i = j
+					break
+				}
+			}
+		} else if a[i] == 'N' { // handle NULL
+			out = append(out, [][2][]byte(nil))
+			i += 4
+		}
+	}
+	return out
+}
+
+// Expected format: '((X,Y)[, ...]) | `[`(X,Y)[, ...]`]`' where X and Y are numbers.
+func pgParsePath(a []byte) (out [][2][]byte, closed bool) {
+	closed = (a[0] == '(')
+	a = a[1 : len(a)-1] // drop the surrounding parentheses or square brackets
+	return pgParsePointList(a), closed
+}
+
+// Expected format: '{"((X,Y)[, ...])" | "`[`(X,Y)[, ...]`]`" [, ...]}' where X and Y are numbers.
+func pgParsePathArray(a []byte) (out [][][2][]byte) {
+	a = a[1 : len(a)-1] // drop the first `{` and last `}`
+
+	for i := 0; i < len(a); i++ {
+		var path [][2][]byte
+		if a[i] == '"' { // path start
+			for j := i + 2; j < len(a); j++ {
+				if a[j] == '(' || a[j] == '[' {
+					var point [2][]byte
+					for k := j + 1; k < len(a); k++ {
+						if a[k] == ',' {
+							point[0] = a[j+1 : k]
+							j = k
+						} else if a[k] == ']' || a[k] == ')' {
+							point[1] = a[j+1 : k]
+							j = k
+							break
+						}
+					}
+					path = append(path, point)
+				} else if a[j] == '"' { // path end
+					out = append(out, path)
+					i = j
+					break
+				}
+			}
+		} else if a[i] == 'N' { // handle NULL
+			out = append(out, [][2][]byte(nil))
+			i += 4
+		}
+	}
+	return out
+}
+
 // Expected format: '(X1,Y1),(X2,Y2)' where X and Y are numbers.
 func pgParseBox(a []byte) (out [][]byte) {
 	a = a[1 : len(a)-1] // drop the first '(' and last ')'
