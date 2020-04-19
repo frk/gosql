@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestMACAddr(t *testing.T) {
+func TestMACAddr8(t *testing.T) {
 	testlist{{
 		valuer: func() interface{} {
 			return new(MACAddrFromHardwareAddr)
@@ -16,11 +16,11 @@ func TestMACAddr(t *testing.T) {
 		},
 		data: []testdata{
 			{
-				input:  netMAC(`08:00:2b:01:02:03`),
-				output: netMAC(`08:00:2b:01:02:03`)},
+				input:  netMAC(`08:00:2b:01:02:03:04:05`),
+				output: netMAC(`08:00:2b:01:02:03:04:05`)},
 			{
-				input:  netMAC(`00:00:5e:00:53:01`),
-				output: netMAC(`00:00:5e:00:53:01`)},
+				input:  netMAC(`02:00:5e:10:00:00:00:01`),
+				output: netMAC(`02:00:5e:10:00:00:00:01`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -31,8 +31,8 @@ func TestMACAddr(t *testing.T) {
 			return v, v
 		},
 		data: []testdata{
-			{input: string(`08:00:2b:01:02:03`), output: string(`08:00:2b:01:02:03`)},
-			{input: string(`00:00:5e:00:53:01`), output: string(`00:00:5e:00:53:01`)},
+			{input: string(`08:00:2b:01:02:03:04:05`), output: string(`08:00:2b:01:02:03:04:05`)},
+			{input: string(`02:00:5e:10:00:00:00:01`), output: string(`02:00:5e:10:00:00:00:01`)},
 		},
 	}, {
 		valuer: func() interface{} {
@@ -43,8 +43,8 @@ func TestMACAddr(t *testing.T) {
 			return v, v
 		},
 		data: []testdata{
-			{input: []byte(`08:00:2b:01:02:03`), output: []byte(`08:00:2b:01:02:03`)},
-			{input: []byte(`00:00:5e:00:53:01`), output: []byte(`00:00:5e:00:53:01`)},
+			{input: []byte(`08:00:2b:01:02:03:04:05`), output: []byte(`08:00:2b:01:02:03:04:05`)},
+			{input: []byte(`02:00:5e:10:00:00:00:01`), output: []byte(`02:00:5e:10:00:00:00:01`)},
 		},
-	}}.execute(t, "macaddr")
+	}}.execute(t, "macaddr8")
 }

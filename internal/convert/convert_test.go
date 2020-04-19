@@ -366,3 +366,19 @@ func netIPSliceptr(vv ...string) *[]net.IP {
 	out := netIPSlice(vv...)
 	return &out
 }
+
+func netMAC(v string) net.HardwareAddr {
+	mac, err := net.ParseMAC(v)
+	if err != nil {
+		panic(err)
+	}
+	return mac
+}
+
+func netMACSlice(vv ...string) []net.HardwareAddr {
+	out := make([]net.HardwareAddr, len(vv))
+	for i := 0; i < len(vv); i++ {
+		out[i] = netMAC(vv[i])
+	}
+	return out
+}

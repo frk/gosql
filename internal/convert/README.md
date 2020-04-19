@@ -273,123 +273,118 @@ and will reuse it for subsequent scans.
 |                | `[][2]float64`                 | `Int8RangeArrayFromFloat64Array2Slice`     | `Int8RangeArrayToFloat64Array2Slice`     |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
-| `interval`     | ---                            | ---                                        | ---                                      |
+| `interval`     | **TODO**                       | **TODO**                                   | **TODO**                                 |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
-| `interval[]`   | ---                            | ---                                        | ---                                      |
+| `interval[]`   | **TODO**                       | **TODO**                                   | **TODO**                                 |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
 | `json`         | `interface{}`                  | `JSON`                                     | `JSON`                                   |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
 |                | `string`                       | *native*                                   | *native*                                 |
-| `json[]`       | ---                            | ---                                        | ---                                      |
-|                | `[][]byte`                     | ???                                        | ???                                      |
+| `json[]`       | `[][]byte`                     | `JSONArrayFromByteSliceSlice`              | `JSONArrayToByteSliceSlice`              |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
 | `jsonb`        | `interface{}`                  | `JSON`                                     | `JSON`                                   |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
-| `jsonb[]`      | ---                            | ---                                        | ---                                      |
-|                | `[][]byte`                     | ???                                        | ???                                      |
+| `jsonb[]`      | `[][]byte`                     | `JSONArrayFromByteSliceSlice`              | `JSONArrayToByteSliceSlice`              |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
-| `line`         | `[3]float64`                   | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `line[]`       | `[][3]float64`                 | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `lseg`         | `[2][2]float64`                | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `lseg[]`       | `[][2][2]float64`              | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `macaddr`      | `net.HardwareAddr`             | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `macaddr[]`    | `[]net.HardwareAddr`           | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `macaddr8`     | `net.HardwareAddr`             | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `macaddr8[]`   | `[]net.HardwareAddr`           | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `money`        | `int64`                        | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `money[]`      | `int64`                        | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `numeric`      | `int`                          | ???                                        | ???                                      |
-|                | `int8`                         | ???                                        | ???                                      |
-|                | `int16`                        | ???                                        | ???                                      |
-|                | `int32`                        | ???                                        | ???                                      |
-|                | `int64`                        | ???                                        | ???                                      |
-|                | `uint`                         | ???                                        | ???                                      |
-|                | `uint8`                        | ???                                        | ???                                      |
-|                | `uint16`                       | ???                                        | ???                                      |
-|                | `uint32`                       | ???                                        | ???                                      |
-|                | `uint64`                       | ???                                        | ???                                      |
-|                | `float32`                      | ???                                        | ???                                      |
-|                | `float64`                      | ???                                        | ???                                      |
-|                | `big.Int`                      | ???                                        | ???                                      |
-|                | `big.Float`                    | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `numeric[]`    | `[]int`                        | ???                                        | ???                                      |
-|                | `[]int8`                       | ???                                        | ???                                      |
-|                | `[]int16`                      | ???                                        | ???                                      |
-|                | `[]int32`                      | ???                                        | ???                                      |
-|                | `[]int64`                      | ???                                        | ???                                      |
-|                | `[]uint`                       | ???                                        | ???                                      |
-|                | `[]uint8`                      | ???                                        | ???                                      |
-|                | `[]uint16`                     | ???                                        | ???                                      |
-|                | `[]uint32`                     | ???                                        | ???                                      |
-|                | `[]uint64`                     | ???                                        | ???                                      |
-|                | `[]float32`                    | ???                                        | ???                                      |
-|                | `[]float64`                    | ???                                        | ???                                      |
-|                | `[]big.Int`                    | ???                                        | ???                                      |
-|                | `[]big.Float`                  | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `numrange`     | `[2]int`                       | ???                                        | ???                                      |
-|                | `[2]int8`                      | ???                                        | ???                                      |
-|                | `[2]int16`                     | ???                                        | ???                                      |
-|                | `[2]int32`                     | ???                                        | ???                                      |
-|                | `[2]int64`                     | ???                                        | ???                                      |
-|                | `[2]uint`                      | ???                                        | ???                                      |
-|                | `[2]uint8`                     | ???                                        | ???                                      |
-|                | `[2]uint16`                    | ???                                        | ???                                      |
-|                | `[2]uint32`                    | ???                                        | ???                                      |
-|                | `[2]uint64`                    | ???                                        | ???                                      |
-|                | `[2]float32`                   | ???                                        | ???                                      |
-|                | `[2]float64`                   | ???                                        | ???                                      |
-|                | `[2]big.Int`                   | ???                                        | ???                                      |
-|                | `[2]big.Float`                 | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `numrange[]`   | `[][2]int`                     | ???                                        | ???                                      |
-|                | `[][2]int8`                    | ???                                        | ???                                      |
-|                | `[][2]int16`                   | ???                                        | ???                                      |
-|                | `[][2]int32`                   | ???                                        | ???                                      |
-|                | `[][2]int64`                   | ???                                        | ???                                      |
-|                | `[][2]uint`                    | ???                                        | ???                                      |
-|                | `[][2]uint8`                   | ???                                        | ???                                      |
-|                | `[][2]uint16`                  | ???                                        | ???                                      |
-|                | `[][2]uint32`                  | ???                                        | ???                                      |
-|                | `[][2]uint64`                  | ???                                        | ???                                      |
-|                | `[][2]float32`                 | ???                                        | ???                                      |
-|                | `[][2]float64`                 | ???                                        | ???                                      |
-|                | `[][2]big.Int`                 | ???                                        | ???                                      |
-|                | `[][2]big.Float`               | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
-| `oidvector`    | `[]uint32`                     | ???                                        | ???                                      |
-|                | `string`                       | ???                                        | ???                                      |
-|                | `[]byte`                       | ???                                        | ???                                      |
+| `line`         | `[3]float64`                   | `LineFromFloat64Array3`                    | `LineToFloat64Array3`                    |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `line[]`       | `[][3]float64`                 | `LineArrayFromFloat64Array3Slice`          | `LineArrayToFloat64Array3Slice`          |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `lseg`         | `[2][2]float64`                | `LsegFromFloat64Array2Array2`              | `LsegToFloat64Array2Array2`              |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `lseg[]`       | `[][2][2]float64`              | `LsegArrayFromFloat64Array2Array2Slice`    | `LsegArrayToFloat64Array2Array2Slice`    |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `macaddr`      | `net.HardwareAddr`             | `MACAddrFromHardwareAddr`                  | `MACAddrToHardwareAddr`                  |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `macaddr[]`    | `[]net.HardwareAddr`           | `MACAddrArrayFromHardwareAddrSlice`        | `MACAddrArrayToHardwareAddrSlice`        |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `macaddr8`     | `net.HardwareAddr`             | `MACAddr8FromHardwareAddr`                 | `MACAddr8ToHardwareAddr`                 |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `macaddr8[]`   | `[]net.HardwareAddr`           | `MACAddr8ArrayFromHardwareAddrSlice`       | `MACAddr8ArrayToHardwareAddrSlice`       |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `money`        | `int64`                        | `MoneyFromInt64`                           | `MoneyToInt64`                           |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `money[]`      | `[]int64`                      | `MoneyArrayFromInt64Slice`                 | `MoneyArrayToInt64Slice`                 |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `numeric`      | `int`                          | *native*                                   | *native*                                 |
+|                | `int8`                         | *native*                                   | *native*                                 |
+|                | `int16`                        | *native*                                   | *native*                                 |
+|                | `int32`                        | *native*                                   | *native*                                 |
+|                | `int64`                        | *native*                                   | *native*                                 |
+|                | `uint`                         | *native*                                   | *native*                                 |
+|                | `uint8`                        | *native*                                   | *native*                                 |
+|                | `uint16`                       | *native*                                   | *native*                                 |
+|                | `uint32`                       | *native*                                   | *native*                                 |
+|                | `uint64`                       | *native*                                   | *native*                                 |
+|                | `float32`                      | *native*                                   | *native*                                 |
+|                | `float64`                      | *native*                                   | *native*                                 |
+|                | `big.Int`                      | **TODO**                                   | **TODO**                                 |
+|                | `big.Float`                    | **TODO**                                   | **TODO**                                 |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `numeric[]`    | `[]int`                        | `NumericArrayFromIntSlice`                 | `NumericArrayToIntSlice`                 |
+|                | `[]int8`                       | `NumericArrayFromInt8Slice`                | `NumericArrayToInt8Slice`                |
+|                | `[]int16`                      | `NumericArrayFromInt16Slice`               | `NumericArrayToInt16Slice`               |
+|                | `[]int32`                      | `NumericArrayFromInt32Slice`               | `NumericArrayToInt32Slice`               |
+|                | `[]int64`                      | `NumericArrayFromInt64Slice`               | `NumericArrayToInt64Slice`               |
+|                | `[]uint`                       | `NumericArrayFromUintSlice`                | `NumericArrayToUintSlice`                |
+|                | `[]uint8`                      | `NumericArrayFromUint8Slice`               | `NumericArrayToUint8Slice`               |
+|                | `[]uint16`                     | `NumericArrayFromUint16Slice`              | `NumericArrayToUint16Slice`              |
+|                | `[]uint32`                     | `NumericArrayFromUint32Slice`              | `NumericArrayToUint32Slice`              |
+|                | `[]uint64`                     | `NumericArrayFromUint64Slice`              | `NumericArrayToUint64Slice`              |
+|                | `[]float32`                    | `NumericArrayFromFloat32Slice`             | `NumericArrayToFloat32Slice`             |
+|                | `[]float64`                    | `NumericArrayFromFloat64Slice`             | `NumericArrayToFloat64Slice`             |
+|                | `[]big.Int`                    | **TODO**                                   | **TODO**                                 |
+|                | `[]big.Float`                  | **TODO**                                   | **TODO**                                 |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `numrange`     | `[2]int`                       | `NumRangeFromIntArray2`                    | `NumRangeToIntArray2`                    |
+|                | `[2]int8`                      | `NumRangeFromInt8Array2`                   | `NumRangeToInt8Array2`                   |
+|                | `[2]int16`                     | `NumRangeFromInt16Array2`                  | `NumRangeToInt16Array2`                  |
+|                | `[2]int32`                     | `NumRangeFromInt32Array2`                  | `NumRangeToInt32Array2`                  |
+|                | `[2]int64`                     | `NumRangeFromInt64Array2`                  | `NumRangeToInt64Array2`                  |
+|                | `[2]uint`                      | `NumRangeFromUintArray2`                   | `NumRangeToUintArray2`                   |
+|                | `[2]uint8`                     | `NumRangeFromUint8Array2`                  | `NumRangeToUint8Array2`                  |
+|                | `[2]uint16`                    | `NumRangeFromUint16Array2`                 | `NumRangeToUint16Array2`                 |
+|                | `[2]uint32`                    | `NumRangeFromUint32Array2`                 | `NumRangeToUint32Array2`                 |
+|                | `[2]uint64`                    | `NumRangeFromUint64Array2`                 | `NumRangeToUint64Array2`                 |
+|                | `[2]float32`                   | `NumRangeFromFloat32Array2`                | `NumRangeToFloat32Array2`                |
+|                | `[2]float64`                   | `NumRangeFromFloat64Array2`                | `NumRangeToFloat64Array2`                |
+|                | `[2]big.Int`                   | **TODO**                                   | **TODO**                                 |
+|                | `[2]big.Float`                 | **TODO**                                   | **TODO**                                 |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
+| `numrange[]`   | `[][2]int`                     | `NumRangeArrayFromIntArray2Slice`          | `NumRangeArrayToIntArray2Slice`          |
+|                | `[][2]int8`                    | `NumRangeArrayFromInt8Array2Slice`         | `NumRangeArrayToInt8Array2Slice`         |
+|                | `[][2]int16`                   | `NumRangeArrayFromInt16Array2Slice`        | `NumRangeArrayToInt16Array2Slice`        |
+|                | `[][2]int32`                   | `NumRangeArrayFromInt32Array2Slice`        | `NumRangeArrayToInt32Array2Slice`        |
+|                | `[][2]int64`                   | `NumRangeArrayFromInt64Array2Slice`        | `NumRangeArrayToInt64Array2Slice`        |
+|                | `[][2]uint`                    | `NumRangeArrayFromUintArray2Slice`         | `NumRangeArrayToUintArray2Slice`         |
+|                | `[][2]uint8`                   | `NumRangeArrayFromUint8Array2Slice`        | `NumRangeArrayToUint8Array2Slice`        |
+|                | `[][2]uint16`                  | `NumRangeArrayFromUint16Array2Slice`       | `NumRangeArrayToUint16Array2Slice`       |
+|                | `[][2]uint32`                  | `NumRangeArrayFromUint32Array2Slice`       | `NumRangeArrayToUint32Array2Slice`       |
+|                | `[][2]uint64`                  | `NumRangeArrayFromUint64Array2Slice`       | `NumRangeArrayToUint64Array2Slice`       |
+|                | `[][2]float32`                 | `NumRangeArrayFromFloat32Array2Slice`      | `NumRangeArrayToFloat32Array2Slice`      |
+|                | `[][2]float64`                 | `NumRangeArrayFromFloat64Array2Slice`      | `NumRangeArrayToFloat64Array2Slice`      |
+|                | `[][2]big.Int`                 | **TODO**                                   | **TODO**                                 |
+|                | `[][2]big.Float`               | **TODO**                                   | **TODO**                                 |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
 | `path`         | `[][2]float64`                 | `PathFromFloat64Array2Slice`               | `PathToFloat64Array2Slice`               |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
@@ -408,8 +403,7 @@ and will reuse it for subsequent scans.
 | `polygon[]`    | `[][][2]float64`               | `PolygonArrayFromFloat64Array2SliceSlice`  | `PolygonArrayToFloat64Array2SliceSlice`  |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
-| `text`         | ---                            | ---                                        | ---                                      |
-|                | `string`                       | *native*                                   | *native*                                 |
+| `text`         | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
 | `text[]`       | `[]string`                     | `TextArrayFromStringSlice`                 | `TextArrayToStringSlice`                 |
 |                | `[][]byte`                     | `TextArrayFromByteSliceSlice`              | `TextArrayToByteSliceSlice`              |
@@ -484,8 +478,7 @@ and will reuse it for subsequent scans.
 |                | `[]int64`                      | `VarBitArrayFromInt64Slice`                | `VarBitArrayToInt64Slice`                |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
-| `varchar`      | ---                            | ---                                        | ---                                      |
-|                | `string`                       | *native*                                   | *native*                                 |
+| `varchar`      | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
 | `varchar[]`    | `[]string`                     | `VarCharArrayFromStringSlice`              | `VarCharArrayToStringSlice`              |
 |                | `[][]byte`                     | `VarCharArrayFromByteSliceSlice`           | `VarCharArrayToByteSliceSlice`           |
@@ -494,6 +487,6 @@ and will reuse it for subsequent scans.
 | `xml`          | `interface{}`                  | `XML`                                      | `XML`                                    |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |
-| `xml[]`        | ---                            | ---                                        | ---                                      |
+| `xml[]`        | `[][]byte`                     | `XMLArrayFromByteSliceSlice`               | `XMLArrayToByteSliceSlice`               |
 |                | `string`                       | *native*                                   | *native*                                 |
 |                | `[]byte`                       | *native*                                   | *native*                                 |

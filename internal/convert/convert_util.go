@@ -298,6 +298,115 @@ mainloop:
 	return out
 }
 
+// Expected format: '`[`(X1,Y1),(X2,Y2)`]`' where Xn and Yn are numbers.
+func pgParseLseg(a []byte) (out [2][2][]byte) {
+	a = a[1 : len(a)-1] // drop the surrounding brackets
+
+	n := 0
+	for i := 0; i < len(a); i++ {
+		if a[i] == '(' {
+			var point [2][]byte
+			for j := i + 1; j < len(a); j++ {
+				if a[j] == ',' {
+					point[0] = a[i+1 : j]
+					i = j
+				} else if a[j] == ')' {
+					point[1] = a[i+1 : j]
+					i = j
+					break
+				}
+			}
+			out[n] = point
+			n += 1
+		}
+	}
+	return out
+}
+
+// Expected format: '{"[(X1,Y1),(X2,Y2)]"[, ...]}' where Xn and Yn are numbers.
+func pgParseLsegArray(a []byte) (out [][2][2][]byte) {
+	a = a[1 : len(a)-1] // drop the surrounding curlies
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' { // lseg start
+			var lseg [2][2][]byte
+
+			i += 3 // len(`"[(`) == 3
+			n := 0
+			for j := i; j < len(a); j++ {
+				if a[j] == ',' {
+					lseg[n][0] = a[i:j]
+					i = j + 1
+				} else if a[j] == ')' {
+					lseg[n][1] = a[i:j]
+					if n == 0 {
+						j += 3 // len(`),(`) == 3
+						n = 1
+					}
+					i = j
+				} else if a[j] == ']' {
+					i = j
+					break
+				}
+			}
+			out = append(out, lseg)
+			i += 2 // skip closing `"` and `,` separator
+		} else if a[i] == 'N' { // handle NULL
+			out = append(out, [2][2][]byte{})
+			i += 4
+		}
+	}
+	return out
+}
+
+// Expected format: '{A,B,C}' where A, B, and C are numbers.
+func pgParseLine(a []byte) (out [3][]byte) {
+	a = a[1 : len(a)-1] // drop the surrounding curly braces
+	for i := 0; i < len(a); i++ {
+		if a[i] == ',' {
+			out[0] = a[:i]
+			for j := i + 1; j < len(a); j++ {
+				if a[j] == ',' {
+					out[1] = a[i+1 : j]
+					out[2] = a[j+1:]
+					break
+				}
+			}
+			break
+		}
+	}
+	return out
+}
+
+// Expected format: '{"{A,B,C}"[, ...]}' where A, B, and C are numbers.
+func pgParseLineArray(a []byte) (out [][3][]byte) {
+	a = a[1 : len(a)-1] // drop the surrounding curlies
+	for i := 0; i < len(a); i++ {
+		if a[i] == '"' { // line start
+			var line [3][]byte
+
+			i += 2 // len(`"{`) == 2
+			n := 0
+			for j := i; j < len(a); j++ {
+				if a[j] == ',' {
+					line[n] = a[i:j]
+					i = j + 1
+					n += 1
+				} else if a[j] == '}' {
+					line[2] = a[i:j]
+					i = j
+					break
+				}
+			}
+			out = append(out, line)
+			i += 2 // skip closing `"` and `,` separator
+		} else if a[i] == 'N' { // handle NULL
+			out = append(out, [3][]byte{})
+			i += 4
+		}
+	}
+	return out
+}
+
 // Expected format: '(X,Y)' where X and Y are numbers.
 func pgParsePoint(a []byte) (out [2][]byte) {
 	a = a[1 : len(a)-1] // drop the surrounding parentheses

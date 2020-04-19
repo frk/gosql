@@ -5,13 +5,33 @@ import (
 )
 
 func TestXMLArray(t *testing.T) {
+	B := func(s string) []byte { return []byte(s) }
+
 	testlist{{
+		valuer: func() interface{} {
+			return new(XMLArrayFromByteSliceSlice)
+		},
+		scanner: func() (interface{}, interface{}) {
+			v := XMLArrayToByteSliceSlice{Val: new([][]byte)}
+			return v, v.Val
+		},
+		data: []testdata{
+			{input: [][]byte(nil), output: [][]byte(nil)},
+			{input: [][]byte{}, output: [][]byte{}},
+			{
+				input:  [][]byte{B(`<foo>bar</foo>`), B(`<bar>hello, world</bar>`)},
+				output: [][]byte{B(`<foo>bar</foo>`), B(`<bar>hello, world</bar>`)}},
+			{
+				input:  [][]byte{B(`<foo>bar</foo>`), nil},
+				output: [][]byte{B(`<foo>bar</foo>`), nil}},
+		},
+	}, {
 		valuer: func() interface{} {
 			return nil // string
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := new(string)
-			return s, s
+			v := new(string)
+			return v, v
 		},
 		data: []testdata{
 			{
@@ -29,8 +49,8 @@ func TestXMLArray(t *testing.T) {
 			return nil // []byte
 		},
 		scanner: func() (interface{}, interface{}) {
-			s := new([]byte)
-			return s, s
+			v := new([]byte)
+			return v, v
 		},
 		data: []testdata{
 			{
