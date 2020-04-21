@@ -2,12 +2,8 @@ package gosql
 
 import (
 	"database/sql"
-	"database/sql/driver"
-	"encoding/json"
 	"strconv"
 	"strings"
-
-	"github.com/frk/gosql/internal/convert"
 )
 
 type Conn interface {
@@ -59,39 +55,3 @@ var OrdinalParameters = func() (a [65535]string) {
 	}
 	return a
 }()
-
-func IntSliceToIntArray(s []int) driver.Valuer {
-	return convert.IntSlice2IntArray{S: s}
-}
-
-func StringSliceToTextArray(s []string) driver.Valuer {
-	return nil // TODO
-}
-
-type scannervaluer interface {
-	driver.Valuer
-	sql.Scanner
-}
-
-func JSON(v interface{}) scannervaluer {
-	return jsontype{v: v}
-}
-
-type jsontype struct {
-	v interface{}
-}
-
-func (j jsontype) Value() (driver.Value, error) {
-	b, err := json.Marshal(j.v)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
-func (j jsontype) Scan(src interface{}) error {
-	if b, ok := src.([]byte); ok {
-		return json.Unmarshal(b, j.v)
-	}
-	return nil
-}

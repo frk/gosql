@@ -19,19 +19,19 @@ func runAnalysis(name string, t *testing.T) (*targetInfo, error) {
 		return nil, nil
 	}
 
-	ti := new(targetInfo)
-	if err := analyze(named, ti); err != nil {
+	a := &analyzer{named: named}
+	if err := a.run(); err != nil {
 		return nil, err
 	}
 
-	return ti, nil
+	return a.targetInfo(), nil
 }
 
 func TestAnalysis_queryStruct(t *testing.T) {
 	// for reuse, analyzed common.User typeInfo
 	commonUserTypeinfo := typeInfo{
 		name:       "User",
-		kind:       kindStruct,
+		kind:       typeKindStruct,
 		pkgPath:    "github.com/frk/gosql/testdata/common",
 		pkgName:    "common",
 		pkgLocal:   "common",
@@ -40,19 +40,19 @@ func TestAnalysis_queryStruct(t *testing.T) {
 
 	commonUserFields := []*fieldInfo{{
 		name:       "Id",
-		typ:        typeInfo{kind: kindInt},
+		typ:        typeInfo{kind: typeKindInt},
 		isExported: true,
 		colId:      colId{name: "id"},
 		tag:        tagutil.Tag{"sql": {"id"}},
 	}, {
 		name:       "Email",
-		typ:        typeInfo{kind: kindString},
+		typ:        typeInfo{kind: typeKindString},
 		isExported: true,
 		colId:      colId{name: "email"},
 		tag:        tagutil.Tag{"sql": {"email"}},
 	}, {
 		name:       "FullName",
-		typ:        typeInfo{kind: kindString},
+		typ:        typeInfo{kind: typeKindString},
 		isExported: true,
 		colId:      colId{name: "full_name"},
 		tag:        tagutil.Tag{"sql": {"full_name"}},
@@ -60,7 +60,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		name: "CreatedAt",
 		typ: typeInfo{
 			name:              "Time",
-			kind:              kindStruct,
+			kind:              typeKindStruct,
 			pkgPath:           "time",
 			pkgName:           "time",
 			pkgLocal:          "time",
@@ -80,14 +80,14 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		data: dataType{
 			typeInfo: typeInfo{
 				name:     "T",
-				kind:     kindStruct,
+				kind:     typeKindStruct,
 				pkgPath:  "path/to/test",
 				pkgName:  "testdata",
 				pkgLocal: "testdata",
 			},
 			isSlice: true,
 			fields: []*fieldInfo{{
-				typ:        typeInfo{kind: kindString},
+				typ:        typeInfo{kind: typeKindString},
 				name:       "F",
 				isExported: true,
 				tag:        tagutil.Tag{"sql": {"f"}},
@@ -99,13 +99,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 	dummyrecord := dataType{
 		typeInfo: typeInfo{
 			name:     "T",
-			kind:     kindStruct,
+			kind:     typeKindStruct,
 			pkgPath:  "path/to/test",
 			pkgName:  "testdata",
 			pkgLocal: "testdata",
 		},
 		fields: []*fieldInfo{{
-			typ:        typeInfo{kind: kindString},
+			typ:        typeInfo{kind: typeKindString},
 			name:       "F",
 			isExported: true,
 			tag:        tagutil.Tag{"sql": {"f"}},
@@ -436,11 +436,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "users_table"},
 				data: dataType{
 					typeInfo: typeInfo{
-						kind: kindStruct,
+						kind: typeKindStruct,
 					},
 					fields: []*fieldInfo{{
 						name:       "Name3",
-						typ:        typeInfo{kind: kindString},
+						typ:        typeInfo{kind: typeKindString},
 						isExported: true,
 						colId:      colId{name: "name"},
 						tag:        tagutil.Tag{"sql": {"name"}},
@@ -524,48 +524,48 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data: dataType{
 					typeInfo: typeInfo{
-						kind: kindStruct,
+						kind: typeKindStruct,
 					},
 					fields: []*fieldInfo{{
 						name:   "a",
-						typ:    typeInfo{kind: kindInt},
+						typ:    typeInfo{kind: typeKindInt},
 						colId:  colId{name: "a"},
 						tag:    tagutil.Tag{"sql": {"a", "pk"}},
 						isPKey: true,
 					}, {
 						name:      "b",
-						typ:       typeInfo{kind: kindInt},
+						typ:       typeInfo{kind: typeKindInt},
 						colId:     colId{name: "b"},
 						tag:       tagutil.Tag{"sql": {"b", "nullempty"}},
 						nullEmpty: true,
 					}, {
 						name:     "c",
-						typ:      typeInfo{kind: kindInt},
+						typ:      typeInfo{kind: typeKindInt},
 						colId:    colId{name: "c"},
 						tag:      tagutil.Tag{"sql": {"c", "ro", "json"}},
 						readOnly: true,
 						useJSON:  true,
 					}, {
 						name:      "d",
-						typ:       typeInfo{kind: kindInt},
+						typ:       typeInfo{kind: typeKindInt},
 						colId:     colId{name: "d"},
 						tag:       tagutil.Tag{"sql": {"d", "wo"}},
 						writeOnly: true,
 					}, {
 						name:   "e",
-						typ:    typeInfo{kind: kindInt},
+						typ:    typeInfo{kind: typeKindInt},
 						colId:  colId{name: "e"},
 						tag:    tagutil.Tag{"sql": {"e", "add"}},
 						useAdd: true,
 					}, {
 						name:        "f",
-						typ:         typeInfo{kind: kindInt},
+						typ:         typeInfo{kind: typeKindInt},
 						colId:       colId{name: "f"},
 						tag:         tagutil.Tag{"sql": {"f", "coalesce"}},
 						useCoalesce: true,
 					}, {
 						name:          "g",
-						typ:           typeInfo{kind: kindInt},
+						typ:           typeInfo{kind: typeKindInt},
 						colId:         colId{name: "g"},
 						tag:           tagutil.Tag{"sql": {"g", "coalesce(-1)"}},
 						useCoalesce:   true,
@@ -584,7 +584,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data: dataType{
 					typeInfo: typeInfo{
-						kind: kindStruct,
+						kind: typeKindStruct,
 					},
 					fields: []*fieldInfo{{
 						name: "Val",
@@ -622,7 +622,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 							},
 						},
 						isExported: true,
-						typ:        typeInfo{kind: kindString},
+						typ:        typeInfo{kind: typeKindString},
 						colId:      colId{name: "foo_bar_baz_val"},
 						tag:        tagutil.Tag{"sql": {"val"}},
 					}, {
@@ -649,7 +649,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 							isPointer:    true,
 						}},
 						isExported: true,
-						typ:        typeInfo{kind: kindString},
+						typ:        typeInfo{kind: typeKindString},
 						colId:      colId{name: "foo_baz_val"},
 						tag:        tagutil.Tag{"sql": {"val"}},
 					}},
@@ -664,12 +664,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{{
 				cond: &searchConditionField{
 					name:  "ID",
-					typ:   typeInfo{kind: kindInt},
+					typ:   typeInfo{kind: typeKindInt},
 					colId: colId{name: "id"},
 					pred:  isEQ,
 				},
@@ -683,7 +683,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionColumn{colId: colId{name: "column_a"}, pred: notNull}},
@@ -705,13 +705,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionNested{name: "x", conds: []*searchCondition{
 					{cond: &searchConditionField{
 						name:  "foo",
-						typ:   typeInfo{kind: kindInt},
+						typ:   typeInfo{kind: typeKindInt},
 						colId: colId{name: "column_foo"},
 						pred:  isEQ,
 					}},
@@ -721,20 +721,20 @@ func TestAnalysis_queryStruct(t *testing.T) {
 					{cond: &searchConditionColumn{colId: colId{name: "column_b"}, pred: notTrue}},
 					{bool: boolOr, cond: &searchConditionField{
 						name:  "bar",
-						typ:   typeInfo{kind: kindString},
+						typ:   typeInfo{kind: typeKindString},
 						colId: colId{name: "column_bar"},
 						pred:  isEQ,
 					}},
 					{bool: boolAnd, cond: &searchConditionNested{name: "z", conds: []*searchCondition{
 						{cond: &searchConditionField{
 							name:  "baz",
-							typ:   typeInfo{kind: kindBool},
+							typ:   typeInfo{kind: typeKindBool},
 							colId: colId{name: "column_baz"},
 							pred:  isEQ,
 						}},
 						{bool: boolAnd, cond: &searchConditionField{
 							name:  "quux",
-							typ:   typeInfo{kind: kindString},
+							typ:   typeInfo{kind: typeKindString},
 							colId: colId{name: "column_quux"},
 							pred:  isEQ,
 						}},
@@ -745,7 +745,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_e"}, pred: isFalse}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "foo",
-					typ:   typeInfo{kind: kindInt},
+					typ:   typeInfo{kind: typeKindInt},
 					colId: colId{name: "column_foo"},
 					pred:  isEQ,
 				}},
@@ -759,16 +759,16 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
-				{cond: &searchConditionField{name: "a", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_a"}, pred: isLT}},
-				{bool: boolAnd, cond: &searchConditionField{name: "b", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_b"}, pred: isGT}},
-				{bool: boolAnd, cond: &searchConditionField{name: "c", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_c"}, pred: isLTE}},
-				{bool: boolAnd, cond: &searchConditionField{name: "d", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_d"}, pred: isGTE}},
-				{bool: boolAnd, cond: &searchConditionField{name: "e", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_e"}, pred: isEQ}},
-				{bool: boolAnd, cond: &searchConditionField{name: "f", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_f"}, pred: notEQ}},
-				{bool: boolAnd, cond: &searchConditionField{name: "g", typ: typeInfo{kind: kindInt}, colId: colId{name: "column_g"}, pred: isEQ}},
+				{cond: &searchConditionField{name: "a", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_a"}, pred: isLT}},
+				{bool: boolAnd, cond: &searchConditionField{name: "b", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_b"}, pred: isGT}},
+				{bool: boolAnd, cond: &searchConditionField{name: "c", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_c"}, pred: isLTE}},
+				{bool: boolAnd, cond: &searchConditionField{name: "d", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_d"}, pred: isGTE}},
+				{bool: boolAnd, cond: &searchConditionField{name: "e", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_e"}, pred: isEQ}},
+				{bool: boolAnd, cond: &searchConditionField{name: "f", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_f"}, pred: notEQ}},
+				{bool: boolAnd, cond: &searchConditionField{name: "g", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_g"}, pred: isEQ}},
 			}},
 		},
 	}, {
@@ -779,7 +779,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionColumn{colId: colId{name: "column_a"}, pred: notEQ, colId2: colId{name: "column_b"}}},
@@ -797,15 +797,15 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionBetween{
 					name:  "a",
 					colId: colId{name: "column_a"},
 					pred:  isBetween,
-					x:     &fieldDatum{name: "x", typ: typeInfo{kind: kindInt}},
-					y:     &fieldDatum{name: "y", typ: typeInfo{kind: kindInt}},
+					x:     &fieldDatum{name: "x", typ: typeInfo{kind: typeKindInt}},
+					y:     &fieldDatum{name: "y", typ: typeInfo{kind: typeKindInt}},
 				}},
 				{bool: boolAnd, cond: &searchConditionBetween{
 					name:  "b",
@@ -819,13 +819,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 					colId: colId{name: "column_c"},
 					pred:  notBetweenSym,
 					x:     colId{name: "column_z"},
-					y:     &fieldDatum{name: "z", typ: typeInfo{kind: kindInt}},
+					y:     &fieldDatum{name: "z", typ: typeInfo{kind: typeKindInt}},
 				}},
 				{bool: boolAnd, cond: &searchConditionBetween{
 					name:  "d",
 					colId: colId{name: "column_d"},
 					pred:  notBetween,
-					x:     &fieldDatum{name: "z", typ: typeInfo{kind: kindInt}},
+					x:     &fieldDatum{name: "z", typ: typeInfo{kind: typeKindInt}},
 					y:     colId{name: "column_z"},
 				}},
 			}},
@@ -838,18 +838,18 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionField{
 					name:  "a",
-					typ:   typeInfo{kind: kindInt},
+					typ:   typeInfo{kind: typeKindInt},
 					colId: colId{name: "column_a"},
 					pred:  isDistinct,
 				}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "b",
-					typ:   typeInfo{kind: kindInt},
+					typ:   typeInfo{kind: typeKindInt},
 					colId: colId{name: "column_b"},
 					pred:  notDistinct,
 				}},
@@ -865,15 +865,15 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionField{
 					name: "a",
 					typ: typeInfo{
-						kind: kindSlice,
+						kind: typeKindSlice,
 						elem: &typeInfo{
-							kind: kindInt,
+							kind: typeKindInt,
 						},
 					},
 					colId: colId{name: "column_a"},
@@ -882,9 +882,9 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				{bool: boolAnd, cond: &searchConditionField{
 					name: "b",
 					typ: typeInfo{
-						kind: kindArray,
+						kind: typeKindArray,
 						elem: &typeInfo{
-							kind: kindInt,
+							kind: typeKindInt,
 						},
 						arrayLen: 5,
 					},
@@ -894,9 +894,9 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				{bool: boolAnd, cond: &searchConditionField{
 					name: "c",
 					typ: typeInfo{
-						kind: kindSlice,
+						kind: typeKindSlice,
 						elem: &typeInfo{
-							kind: kindInt,
+							kind: typeKindInt,
 						},
 					},
 					colId: colId{name: "column_c"},
@@ -906,9 +906,9 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				{bool: boolAnd, cond: &searchConditionField{
 					name: "d",
 					typ: typeInfo{
-						kind: kindArray,
+						kind: typeKindArray,
 						elem: &typeInfo{
-							kind: kindInt,
+							kind: typeKindInt,
 						},
 						arrayLen: 10,
 					},
@@ -919,9 +919,9 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				{bool: boolAnd, cond: &searchConditionField{
 					name: "e",
 					typ: typeInfo{
-						kind: kindSlice,
+						kind: typeKindSlice,
 						elem: &typeInfo{
-							kind: kindInt,
+							kind: typeKindInt,
 						},
 					},
 					colId: colId{name: "column_e"},
@@ -938,54 +938,54 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionField{
 					name:  "a",
-					typ:   typeInfo{kind: kindString},
+					typ:   typeInfo{kind: typeKindString},
 					colId: colId{name: "column_a"},
 					pred:  isLike,
 				}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "b",
-					typ:   typeInfo{kind: kindString},
+					typ:   typeInfo{kind: typeKindString},
 					colId: colId{name: "column_b"},
 					pred:  notLike,
 				}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "c",
-					typ:   typeInfo{kind: kindString},
+					typ:   typeInfo{kind: typeKindString},
 					colId: colId{name: "column_c"},
 					pred:  isSimilar,
 				}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "d",
-					typ:   typeInfo{kind: kindString},
+					typ:   typeInfo{kind: typeKindString},
 					colId: colId{name: "column_d"},
 					pred:  notSimilar,
 				}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "e",
-					typ:   typeInfo{kind: kindString},
+					typ:   typeInfo{kind: typeKindString},
 					colId: colId{name: "column_e"},
 					pred:  isMatch,
 				}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "f",
-					typ:   typeInfo{kind: kindString},
+					typ:   typeInfo{kind: typeKindString},
 					colId: colId{name: "column_f"},
 					pred:  isMatchi,
 				}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "g",
-					typ:   typeInfo{kind: kindString},
+					typ:   typeInfo{kind: typeKindString},
 					colId: colId{name: "column_g"},
 					pred:  notMatch,
 				}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "h",
-					typ:   typeInfo{kind: kindString},
+					typ:   typeInfo{kind: typeKindString},
 					colId: colId{name: "column_h"},
 					pred:  notMatchi,
 				}},
@@ -999,7 +999,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			joinBlock: &joinBlock{relId: relId{name: "relation_b", alias: "b"}, items: []*joinItem{
 				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, conds: []*searchCondition{{
@@ -1053,7 +1053,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			joinBlock: &joinBlock{relId: relId{name: "relation_b", alias: "b"}, items: []*joinItem{
 				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, conds: []*searchCondition{{
@@ -1108,7 +1108,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			joinBlock: &joinBlock{items: []*joinItem{
 				{joinType: joinLeft, relId: relId{name: "relation_b", alias: "b"}, conds: []*searchCondition{{
@@ -1170,7 +1170,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			all: true,
 		},
@@ -1182,7 +1182,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			all: true,
 		},
@@ -1236,7 +1236,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			defaultList: &colIdList{all: true},
 		},
@@ -1248,7 +1248,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			defaultList: &colIdList{items: []colId{
 				{qual: "a", name: "foo"},
@@ -1263,7 +1263,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			forceList: &colIdList{all: true},
 		},
@@ -1275,7 +1275,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			forceList: &colIdList{items: []colId{
 				{qual: "a", name: "foo"},
@@ -1290,7 +1290,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			errorHandlerField: &errorHandlerField{name: "eh"},
 		},
@@ -1302,7 +1302,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			errorHandlerField: &errorHandlerField{name: "myerrorhandler"},
 		},
@@ -1314,7 +1314,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			errorHandlerField: &errorHandlerField{name: "eh", isInfo: true},
 		},
@@ -1326,7 +1326,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			dataField: &dataField{
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
-				data:  dataType{typeInfo: typeInfo{kind: kindStruct}},
+				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
 			errorHandlerField: &errorHandlerField{name: "myerrorinfohandler", isInfo: true},
 		},
@@ -1502,7 +1502,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			}},
 			rowsAffectedField: &rowsAffectedField{
 				name: "RowsAffected",
-				kind: kindInt,
+				kind: typeKindInt,
 			},
 		},
 	}, {
@@ -1522,81 +1522,81 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
 				data: dataType{
-					typeInfo: typeInfo{kind: kindStruct},
+					typeInfo: typeInfo{kind: typeKindStruct},
 					fields: []*fieldInfo{{
-						name: "f1", typ: typeInfo{kind: kindBool},
+						name: "f1", typ: typeInfo{kind: typeKindBool},
 						colId: colId{name: "c1"},
 						tag:   tagutil.Tag{"sql": {"c1"}},
 					}, {
-						name: "f2", typ: typeInfo{kind: kindUint8, isByte: true},
+						name: "f2", typ: typeInfo{kind: typeKindUint8, isByte: true},
 						colId: colId{name: "c2"},
 						tag:   tagutil.Tag{"sql": {"c2"}},
 					}, {
-						name: "f3", typ: typeInfo{kind: kindInt32, isRune: true},
+						name: "f3", typ: typeInfo{kind: typeKindInt32, isRune: true},
 						colId: colId{name: "c3"},
 						tag:   tagutil.Tag{"sql": {"c3"}},
 					}, {
-						name: "f4", typ: typeInfo{kind: kindInt8},
+						name: "f4", typ: typeInfo{kind: typeKindInt8},
 						colId: colId{name: "c4"},
 						tag:   tagutil.Tag{"sql": {"c4"}},
 					}, {
-						name: "f5", typ: typeInfo{kind: kindInt16},
+						name: "f5", typ: typeInfo{kind: typeKindInt16},
 						colId: colId{name: "c5"},
 						tag:   tagutil.Tag{"sql": {"c5"}},
 					}, {
-						name: "f6", typ: typeInfo{kind: kindInt32},
+						name: "f6", typ: typeInfo{kind: typeKindInt32},
 						colId: colId{name: "c6"},
 						tag:   tagutil.Tag{"sql": {"c6"}},
 					}, {
-						name: "f7", typ: typeInfo{kind: kindInt64},
+						name: "f7", typ: typeInfo{kind: typeKindInt64},
 						colId: colId{name: "c7"},
 						tag:   tagutil.Tag{"sql": {"c7"}},
 					}, {
-						name: "f8", typ: typeInfo{kind: kindInt},
+						name: "f8", typ: typeInfo{kind: typeKindInt},
 						colId: colId{name: "c8"},
 						tag:   tagutil.Tag{"sql": {"c8"}},
 					}, {
-						name: "f9", typ: typeInfo{kind: kindUint8},
+						name: "f9", typ: typeInfo{kind: typeKindUint8},
 						colId: colId{name: "c9"},
 						tag:   tagutil.Tag{"sql": {"c9"}},
 					}, {
-						name: "f10", typ: typeInfo{kind: kindUint16},
+						name: "f10", typ: typeInfo{kind: typeKindUint16},
 						colId: colId{name: "c10"},
 						tag:   tagutil.Tag{"sql": {"c10"}},
 					}, {
-						name: "f11", typ: typeInfo{kind: kindUint32},
+						name: "f11", typ: typeInfo{kind: typeKindUint32},
 						colId: colId{name: "c11"},
 						tag:   tagutil.Tag{"sql": {"c11"}},
 					}, {
-						name: "f12", typ: typeInfo{kind: kindUint64},
+						name: "f12", typ: typeInfo{kind: typeKindUint64},
 						colId: colId{name: "c12"},
 						tag:   tagutil.Tag{"sql": {"c12"}},
 					}, {
-						name: "f13", typ: typeInfo{kind: kindUint},
+						name: "f13", typ: typeInfo{kind: typeKindUint},
 						colId: colId{name: "c13"},
 						tag:   tagutil.Tag{"sql": {"c13"}},
 					}, {
-						name: "f14", typ: typeInfo{kind: kindUintptr},
+						name: "f14", typ: typeInfo{kind: typeKindUintptr},
 						colId: colId{name: "c14"},
 						tag:   tagutil.Tag{"sql": {"c14"}},
 					}, {
-						name: "f15", typ: typeInfo{kind: kindFloat32},
+						name: "f15", typ: typeInfo{kind: typeKindFloat32},
 						colId: colId{name: "c15"},
 						tag:   tagutil.Tag{"sql": {"c15"}},
 					}, {
-						name: "f16", typ: typeInfo{kind: kindFloat64},
+						name: "f16", typ: typeInfo{kind: typeKindFloat64},
 						colId: colId{name: "c16"},
 						tag:   tagutil.Tag{"sql": {"c16"}},
 					}, {
-						name: "f17", typ: typeInfo{kind: kindComplex64},
+						name: "f17", typ: typeInfo{kind: typeKindComplex64},
 						colId: colId{name: "c17"},
 						tag:   tagutil.Tag{"sql": {"c17"}},
 					}, {
-						name: "f18", typ: typeInfo{kind: kindComplex128},
+						name: "f18", typ: typeInfo{kind: typeKindComplex128},
 						colId: colId{name: "c18"},
 						tag:   tagutil.Tag{"sql": {"c18"}},
 					}, {
-						name: "f19", typ: typeInfo{kind: kindString},
+						name: "f19", typ: typeInfo{kind: typeKindString},
 						colId: colId{name: "c19"},
 						tag:   tagutil.Tag{"sql": {"c19"}},
 					}},
@@ -1612,60 +1612,60 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
 				data: dataType{
-					typeInfo: typeInfo{kind: kindStruct},
+					typeInfo: typeInfo{kind: typeKindStruct},
 					fields: []*fieldInfo{{
 						name: "f1", typ: typeInfo{
-							kind: kindSlice,
-							elem: &typeInfo{kind: kindBool},
+							kind: typeKindSlice,
+							elem: &typeInfo{kind: typeKindBool},
 						},
 						colId: colId{name: "c1"},
 						tag:   tagutil.Tag{"sql": {"c1"}},
 					}, {
 						name: "f2", typ: typeInfo{
-							kind: kindSlice,
-							elem: &typeInfo{kind: kindUint8, isByte: true},
+							kind: typeKindSlice,
+							elem: &typeInfo{kind: typeKindUint8, isByte: true},
 						},
 						colId: colId{name: "c2"},
 						tag:   tagutil.Tag{"sql": {"c2"}},
 					}, {
 						name: "f3", typ: typeInfo{
-							kind: kindSlice,
-							elem: &typeInfo{kind: kindInt32, isRune: true},
+							kind: typeKindSlice,
+							elem: &typeInfo{kind: typeKindInt32, isRune: true},
 						},
 						colId: colId{name: "c3"},
 						tag:   tagutil.Tag{"sql": {"c3"}},
 					}, {
 						name: "f4", typ: typeInfo{
 							name:       "HardwareAddr",
-							kind:       kindSlice,
+							kind:       typeKindSlice,
 							pkgPath:    "net",
 							pkgName:    "net",
 							pkgLocal:   "net",
 							isImported: true,
-							elem:       &typeInfo{kind: kindUint8, isByte: true},
+							elem:       &typeInfo{kind: typeKindUint8, isByte: true},
 						},
 						colId: colId{name: "c4"},
 						tag:   tagutil.Tag{"sql": {"c4"}},
 					}, {
 						name: "f5", typ: typeInfo{
 							name:              "RawMessage",
-							kind:              kindSlice,
+							kind:              typeKindSlice,
 							pkgPath:           "encoding/json",
 							pkgName:           "json",
 							pkgLocal:          "json",
 							isImported:        true,
 							isJSONMarshaler:   true,
 							isJSONUnmarshaler: true,
-							elem:              &typeInfo{kind: kindUint8, isByte: true},
+							elem:              &typeInfo{kind: typeKindUint8, isByte: true},
 						},
 						colId: colId{name: "c5"},
 						tag:   tagutil.Tag{"sql": {"c5"}},
 					}, {
 						name: "f6", typ: typeInfo{
-							kind: kindSlice,
+							kind: typeKindSlice,
 							elem: &typeInfo{
 								name:            "Marshaler",
-								kind:            kindInterface,
+								kind:            typeKindInterface,
 								pkgPath:         "encoding/json",
 								pkgName:         "json",
 								pkgLocal:        "json",
@@ -1677,41 +1677,41 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						tag:   tagutil.Tag{"sql": {"c6"}},
 					}, {
 						name: "f7", typ: typeInfo{
-							kind: kindSlice,
+							kind: typeKindSlice,
 							elem: &typeInfo{
 								name:              "RawMessage",
-								kind:              kindSlice,
+								kind:              typeKindSlice,
 								pkgPath:           "encoding/json",
 								pkgName:           "json",
 								pkgLocal:          "json",
 								isImported:        true,
 								isJSONMarshaler:   true,
 								isJSONUnmarshaler: true,
-								elem:              &typeInfo{kind: kindUint8, isByte: true},
+								elem:              &typeInfo{kind: typeKindUint8, isByte: true},
 							},
 						},
 						colId: colId{name: "c7"},
 						tag:   tagutil.Tag{"sql": {"c7"}},
 					}, {
 						name: "f8", typ: typeInfo{
-							kind: kindSlice,
+							kind: typeKindSlice,
 							elem: &typeInfo{
-								kind: kindSlice,
-								elem: &typeInfo{kind: kindUint8, isByte: true},
+								kind: typeKindSlice,
+								elem: &typeInfo{kind: typeKindUint8, isByte: true},
 							},
 						},
 						colId: colId{name: "c8"},
 						tag:   tagutil.Tag{"sql": {"c8"}},
 					}, {
 						name: "f9", typ: typeInfo{
-							kind: kindSlice,
+							kind: typeKindSlice,
 							elem: &typeInfo{
-								kind:     kindArray,
+								kind:     typeKindArray,
 								arrayLen: 2,
 								elem: &typeInfo{
-									kind:     kindArray,
+									kind:     typeKindArray,
 									arrayLen: 2,
-									elem:     &typeInfo{kind: kindFloat64},
+									elem:     &typeInfo{kind: typeKindFloat64},
 								},
 							},
 						},
@@ -1719,13 +1719,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						tag:   tagutil.Tag{"sql": {"c9"}},
 					}, {
 						name: "f10", typ: typeInfo{
-							kind: kindSlice,
+							kind: typeKindSlice,
 							elem: &typeInfo{
-								kind: kindSlice,
+								kind: typeKindSlice,
 								elem: &typeInfo{
-									kind:     kindArray,
+									kind:     typeKindArray,
 									arrayLen: 2,
-									elem:     &typeInfo{kind: kindFloat64},
+									elem:     &typeInfo{kind: typeKindFloat64},
 								},
 							},
 						},
@@ -1733,11 +1733,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						tag:   tagutil.Tag{"sql": {"c10"}},
 					}, {
 						name: "f11", typ: typeInfo{
-							kind: kindMap,
-							key:  &typeInfo{kind: kindString},
+							kind: typeKindMap,
+							key:  &typeInfo{kind: typeKindString},
 							elem: &typeInfo{
 								name:       "NullString",
-								kind:       kindStruct,
+								kind:       typeKindStruct,
 								pkgPath:    "database/sql",
 								pkgName:    "sql",
 								pkgLocal:   "sql",
@@ -1750,13 +1750,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						tag:   tagutil.Tag{"sql": {"c11"}},
 					}, {
 						name: "f12", typ: typeInfo{
-							kind: kindSlice,
+							kind: typeKindSlice,
 							elem: &typeInfo{
-								kind: kindMap,
-								key:  &typeInfo{kind: kindString},
+								kind: typeKindMap,
+								key:  &typeInfo{kind: typeKindString},
 								elem: &typeInfo{
-									kind: kindPtr,
-									elem: &typeInfo{kind: kindString},
+									kind: typeKindPtr,
+									elem: &typeInfo{kind: typeKindString},
 								},
 							},
 						},
@@ -1764,15 +1764,15 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						tag:   tagutil.Tag{"sql": {"c12"}},
 					}, {
 						name: "f13", typ: typeInfo{
-							kind: kindSlice,
+							kind: typeKindSlice,
 							elem: &typeInfo{
-								kind:     kindArray,
+								kind:     typeKindArray,
 								arrayLen: 2,
 								elem: &typeInfo{
-									kind: kindPtr,
+									kind: typeKindPtr,
 									elem: &typeInfo{
 										name:              "Int",
-										kind:              kindStruct,
+										kind:              typeKindStruct,
 										pkgPath:           "math/big",
 										pkgName:           "big",
 										pkgLocal:          "big",
@@ -1798,11 +1798,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				name:  "Rel",
 				relId: relId{name: "relation_a", alias: "a"},
 				data: dataType{
-					typeInfo: typeInfo{kind: kindStruct},
+					typeInfo: typeInfo{kind: typeKindStruct},
 					fields: []*fieldInfo{{
 						name: "f1", typ: typeInfo{
 							name:            "Marshaler",
-							kind:            kindInterface,
+							kind:            typeKindInterface,
 							pkgPath:         "encoding/json",
 							pkgName:         "json",
 							pkgLocal:        "json",
@@ -1814,7 +1814,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 					}, {
 						name: "f2", typ: typeInfo{
 							name:              "Unmarshaler",
-							kind:              kindInterface,
+							kind:              typeKindInterface,
 							pkgPath:           "encoding/json",
 							pkgName:           "json",
 							pkgLocal:          "json",
@@ -1825,7 +1825,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						tag:   tagutil.Tag{"sql": {"c2"}},
 					}, {
 						name: "f3", typ: typeInfo{
-							kind:              kindInterface,
+							kind:              typeKindInterface,
 							isJSONMarshaler:   true,
 							isJSONUnmarshaler: true,
 						},
@@ -1859,13 +1859,13 @@ func TestAnalysis_filterStruct(t *testing.T) {
 	dummyrecord := dataType{
 		typeInfo: typeInfo{
 			name:     "T",
-			kind:     kindStruct,
+			kind:     typeKindStruct,
 			pkgPath:  "path/to/test",
 			pkgName:  "testdata",
 			pkgLocal: "testdata",
 		},
 		fields: []*fieldInfo{{
-			typ:        typeInfo{kind: kindString},
+			typ:        typeInfo{kind: typeKindString},
 			name:       "F",
 			isExported: true,
 			tag:        tagutil.Tag{"sql": {"f"}},

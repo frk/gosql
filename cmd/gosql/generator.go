@@ -1073,7 +1073,7 @@ func (g *generator) queryexec(ti *targetInfo) (stmt GO.StmtNode) {
 				//
 				asn3 := GO.AssignStmt{Token: GO.Assign}
 				asn3.Lhs = GO.SelectorExpr{X: idrecv, Sel: GO.Ident{rafield.name}}
-				if rafield.kind == kindInt64 {
+				if rafield.kind == typeKindInt64 {
 					asn3.Rhs = idi64
 				} else {
 					args := GO.ArgsList{List: idi64}

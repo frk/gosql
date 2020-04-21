@@ -39,45 +39,60 @@ var (
 	rxCoalesce = regexp.MustCompile(`(?i)^coalesce$|^coalesce\((.*)\)$`)
 )
 
+// analyzer holds the state of the analysis.
+type analyzer struct {
+	named   *types.Named  // the types.Named of the type under analysis
+	target  *types.Struct // the types.Struct of the type under analysis
+	pkgPath string        // the package path of the type under analysis
+
+	// the results
+	query  *queryStruct
+	filter *filterStruct
+}
+
+// targetInfo returns the result of the analysis.
+func (a *analyzer) targetInfo() *targetInfo {
+	info := new(targetInfo)
+	if a.query != nil {
+		info.query = a.query
+		info.dataField = a.query.dataField
+	} else {
+		info.filter = a.filter
+		info.dataField = a.filter.dataField
+	}
+	return info
+}
+
 // TODO(mkopriva): to provide more detailed error messages either pass in the
 // details about the file under analysis, or make sure that the caller has that
 // information and appends it to the error.
 //
-// The analyze function runs the analysis on the given named type.
-// The result of the analysis is stored in the targetInfo struct.
-func analyze(named *types.Named, ti *targetInfo) error {
-	structType, ok := named.Underlying().(*types.Struct)
+// The run method runs the analysis of the analyzer's types.Named value.
+// The result of the analysis can be retrieved with the targetInfo method.
+func (a *analyzer) run() (err error) {
+	structType, ok := a.named.Underlying().(*types.Struct)
 	if !ok {
-		panic(named.Obj().Name() + " must be a struct type.") // this shouldn't happen
+		panic(a.named.Obj().Name() + " must be a struct type.") // this shouldn't happen
 	}
 
-	name := named.Obj().Name()
+	name := a.named.Obj().Name()
 	key := strings.ToLower(name)
 	if len(key) > 5 {
 		key = key[:6]
 	}
 
 	if key == "filter" {
-		a := new(analyzer)
-		a.pkgPath = named.Obj().Pkg().Path()
-		a.named = named
 		a.target = structType
+		a.pkgPath = a.named.Obj().Pkg().Path()
 		a.filter = new(filterStruct)
-		a.filter.name = named.Obj().Name()
-		if err := a.run(); err != nil {
-			return err
-		}
-		ti.filter = a.filter
-		ti.dataField = a.filter.dataField
-		return nil
+		a.filter.name = a.named.Obj().Name()
+		return a.filterStruct()
 	}
 
-	a := new(analyzer)
-	a.pkgPath = named.Obj().Pkg().Path()
-	a.named = named
 	a.target = structType
+	a.pkgPath = a.named.Obj().Pkg().Path()
 	a.query = new(queryStruct)
-	a.query.name = named.Obj().Name()
+	a.query.name = a.named.Obj().Name()
 
 	switch key {
 	case "insert":
@@ -91,35 +106,7 @@ func analyze(named *types.Named, ti *targetInfo) error {
 	default:
 		panic(a.query.name + " queryStruct kind has unsupported name prefix.") // this shouldn't happen
 	}
-	if err := a.run(); err != nil {
-		return err
-	}
-	ti.query = a.query
-	ti.dataField = a.query.dataField
-	return nil
-}
-
-// analyzer holds the state of the analysis
-type analyzer struct {
-	target  *types.Struct // the types.Struct of the type under analysis
-	named   *types.Named  // the types.Named of the type under analysis
-	pkgPath string        // the package path of the type under analysis
-
-	// the results
-	query  *queryStruct
-	filter *filterStruct
-}
-
-func (a *analyzer) run() (err error) {
-	if a.query != nil {
-		return a.queryStruct()
-	}
-	if a.filter != nil {
-		return a.filterStruct()
-	}
-
-	panic("nothing to analyze")
-	return nil
+	return a.queryStruct()
 }
 
 // queryStruct runs the analysis of a queryStruct.
@@ -468,7 +455,7 @@ func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 	}
 
 	data.typeInfo.kind = a.typeKind(ftyp)
-	if data.typeInfo.kind != kindStruct {
+	if data.typeInfo.kind != typeKindStruct {
 		return errors.BadDataFieldTypeError
 	}
 
@@ -536,7 +523,7 @@ stackloop:
 			// value starts with the ">" (descend) marker, then it is
 			// considered to be a "parent" field element whose child
 			// fields need to be analyzed as well.
-			if f.typ.is(kindStruct) && strings.HasPrefix(sqltag, ">") {
+			if f.typ.is(typeKindStruct) && strings.HasPrefix(sqltag, ">") {
 				loop2 := new(loopstate)
 				loop2.styp = ftyp.(*types.Struct)
 				loop2.typ = &f.typ
@@ -549,7 +536,7 @@ stackloop:
 				// If the parent node is a pointer to a struct,
 				// get the struct type info.
 				typ := f.typ
-				if typ.kind == kindPtr {
+				if typ.kind == typeKindPtr {
 					typ = *typ.elem
 				}
 
@@ -563,7 +550,7 @@ stackloop:
 				fe.typePkgName = typ.pkgName
 				fe.typePkgLocal = typ.pkgLocal
 				fe.isImported = typ.isImported
-				fe.isPointer = (f.typ.kind == kindPtr)
+				fe.isPointer = (f.typ.kind == typeKindPtr)
 				loop2.path = append(loop2.path, fe)
 
 				stack = append(stack, loop2)
@@ -713,21 +700,21 @@ func (a *analyzer) typeKind(typ types.Type) typeKind {
 	case *types.Basic:
 		return basicKindToTypeKind[x.Kind()]
 	case *types.Array:
-		return kindArray
+		return typeKindArray
 	case *types.Chan:
-		return kindChan
+		return typeKindChan
 	case *types.Signature:
-		return kindFunc
+		return typeKindFunc
 	case *types.Interface:
-		return kindInterface
+		return typeKindInterface
 	case *types.Map:
-		return kindMap
+		return typeKindMap
 	case *types.Pointer:
-		return kindPtr
+		return typeKindPtr
 	case *types.Slice:
-		return kindSlice
+		return typeKindSlice
 	case *types.Struct:
-		return kindStruct
+		return typeKindStruct
 	}
 	return 0 // unsupported / unknown
 }
@@ -1002,7 +989,7 @@ stackloop:
 			cond.qua = qua
 			cond.modFunc = a.funcName(tag["sql"][1:])
 
-			if cond.qua > 0 && cond.typ.kind != kindSlice && cond.typ.kind != kindArray {
+			if cond.qua > 0 && cond.typ.kind != typeKindSlice && cond.typ.kind != typeKindArray {
 				return errors.BadQuantifierFieldTypeError
 			}
 
@@ -1595,6 +1582,7 @@ func (k queryKind) isNonFromSelect() bool {
 		k == queryKindSelectNotExists
 }
 
+// String returns the string form of the queryKind.
 func (k queryKind) String() string {
 	switch k {
 	case queryKindInsert:
@@ -1609,12 +1597,17 @@ func (k queryKind) String() string {
 	return "<unknown queryKind>"
 }
 
+// queryStruct
 type queryStruct struct {
-	name string    // name of the struct type
-	kind queryKind // the kind of the queryStruct
+	// Name of the query struct type.
+	name string
+	// The kind of the queryStruct.
+	kind queryKind
+	// The primary field that holds the queryStruct's data.
+	dataField *dataField
+	// The optional secondary field that holds the queryStruct's result data.
+	resultField *resultField
 
-	dataField         *dataField
-	resultField       *resultField
 	joinBlock         *joinBlock
 	whereBlock        *whereBlock
 	onConflictBlock   *onConflictBlock
@@ -1627,6 +1620,7 @@ type queryStruct struct {
 	returnList        *colIdList
 	errorHandlerField *errorHandlerField
 	overridingKind    overridingKind
+
 	// The name of the Filter type field, if any.
 	filterField string
 	// Indicates that the query to be generated should be executed
@@ -1634,121 +1628,98 @@ type queryStruct struct {
 	all bool
 }
 
+// filterStruct
 type filterStruct struct {
-	name            string // name of the struct type
-	dataField       *dataField
+	// Name of the filter struct type.
+	name string
+	// The field that holds the data type information.
+	dataField *dataField
+	// If set, the column identifier to be used for text search.
 	textSearchColId *colId
 }
 
-// dataField represents the field that holds the information about the target dataType.
+// dataField represents a field used to hold the data of a query.
 type dataField struct {
-	name        string // name of the field
-	data        dataType
-	relId       relId // the relation id as extracted from the field's tag
-	isDirective bool  // indicates that the gosql.Relation directive was used
-}
-
-type resultField struct {
-	name string // name of the field that declares the result of the queryStruct
+	// Name of the field.
+	name string
+	// The data type information of the field.
 	data dataType
+	// The identifier of the associated relation.
+	relId relId
+	// Indicates whether or not the gosql.Relation directive was used.
+	isDirective bool
 }
 
-type relId struct {
-	qual  string
-	name  string
-	alias string
-}
-
-type colId struct {
-	qual string
+// resultField represents a field used to hold the result of a query.
+type resultField struct {
+	// Name of the field.
 	name string
-}
-
-func (id colId) isEmpty() bool {
-	return id == colId{}
-}
-
-func (id colId) string() string {
-	if len(id.qual) > 0 {
-		return id.qual + "." + id.name
-	}
-	return id.name
-}
-
-func (id colId) quoted() string {
-	if len(id.qual) > 0 {
-		return id.qual + `."` + id.name + `"`
-	}
-	return `"` + id.name + `"`
-}
-
-type colIdList struct {
-	all   bool
-	items []colId
-}
-
-func (cl *colIdList) contains(cid colId) bool {
-	for i := 0; i < len(cl.items); i++ {
-		if cl.items[i] == cid {
-			return true
-		}
-	}
-	return false
-}
-
-type rowsAffectedField struct {
-	name string // name of the rowsAffectedField field
-	kind typeKind
-}
-
-type errorHandlerField struct {
-	// name of the error handler field
-	name string
-	// indicates whether or not the field's type implements the ErrorInfoHandler interface.
-	isInfo bool
+	// The data type information of the field.
+	data dataType
 }
 
 // dataType holds information on the type of record a queryStruct should read from,
 // or write to, the associated database relation.
 type dataType struct {
-	typeInfo  typeInfo // information on the record's base type
-	isPointer bool     // indicates whether or not the base type's a pointer type
-	isSlice   bool     // indicates whether or not the base type's a slice type
-	isArray   bool     // indicates whether or not the base type's an array type
-	arrayLen  int64    // if the base type's an array type, this field will hold the array's length
-	// if set, indicates that the dataType is handled by an iterator
+	// Information on the record's base type.
+	typeInfo typeInfo
+	// Indicates whether or not the base type's a pointer type.
+	isPointer bool
+	// Indicates whether or not the base type's a slice type.
+	isSlice bool
+	// Indicates whether or not the base type's an array type.
+	isArray bool
+	// If the base type's an array type, this field will hold the array's length.
+	arrayLen int64
+	// If set, indicates that the dataType is handled by an iterator.
 	isIter bool
-	// if set the value will hold the method name of the iterator interface
+	// If set the value will hold the method name of the iterator interface.
 	iterMethod string
-	// indicates whether or not the type implements the gosql.AfterScanner interface
+	// Indicates whether or not the type implements the gosql.AfterScanner interface.
 	isAfterScanner bool
-	// fields will hold the info on the dataType's fields
+	// Fields will hold the info on the dataType's fields.
 	fields []*fieldInfo
 }
 
+// typeInfo holds detailed information about a Go type.
 type typeInfo struct {
-	name              string   // the name of a named type or empty string for unnamed types
-	kind              typeKind // the kind of the go type
-	pkgPath           string   // the package import path
-	pkgName           string   // the package's name
-	pkgLocal          string   // the local package name (including ".")
-	isImported        bool     // indicates whether or not the package is imported
-	isScanner         bool     // indicates whether or not the type implements the sql.Scanner interface
-	isValuer          bool     // indicates whether or not the type implements the driver.Valuer interface
-	isJSONMarshaler   bool     // indicates whether or not the type implements the json.Marshaler interface
-	isJSONUnmarshaler bool     // indicates whether or not the type implements the json.Unmarshaler interface
-	isXMLMarshaler    bool     // indicates whether or not the type implements the xml.Marshaler interface
-	isXMLUnmarshaler  bool     // indicates whether or not the type implements the xml.Unmarshaler interface
-	isTime            bool     // indicates whether or not the type is time.Time or a type that embeds time.Time
-	isByte            bool     // indicates whether or not the type is the "byte" alias type
-	isRune            bool     // indicates whether or not the type is the "rune" alias type
-	// if kind is map, key will hold the info on the map's key type
+	// The name of a named type or empty string for unnamed types
+	name string
+	// The kind of the go type.
+	kind typeKind
+	// The package import path.
+	pkgPath string
+	// The package's name.
+	pkgName string
+	// The local package name (including ".").
+	pkgLocal string
+	// Indicates whether or not the package is imported.
+	isImported bool
+	// Indicates whether or not the type implements the sql.Scanner interface.
+	isScanner bool
+	// Indicates whether or not the type implements the driver.Valuer interface.
+	isValuer bool
+	// Indicates whether or not the type implements the json.Marshaler interface.
+	isJSONMarshaler bool
+	// Indicates whether or not the type implements the json.Unmarshaler interface.
+	isJSONUnmarshaler bool
+	// Indicates whether or not the type implements the xml.Marshaler interface.
+	isXMLMarshaler bool
+	// Indicates whether or not the type implements the xml.Unmarshaler interface.
+	isXMLUnmarshaler bool
+	// Indicates whether or not the type is time.Time or a type that embeds time.Time.
+	isTime bool
+	// Indicates whether or not the type is the "byte" alias type.
+	isByte bool
+	// Indicates whether or not the type is the "rune" alias type.
+	isRune bool
+	// If kind is map, key will hold the info on the map's key type.
 	key *typeInfo
-	// if kind is map, elem will hold the info on the map's value type
-	// if kind is ptr, elem will hold the info on pointed-to type
-	// if kind is slice/array, elem will hold the info on slice/array element type
+	// If kind is map, elem will hold the info on the map's value type.
+	// If kind is ptr, elem will hold the info on pointed-to type.
+	// If kind is slice/array, elem will hold the info on slice/array element type.
 	elem *typeInfo
-	// if kind is array, arrayLen will hold the array's length
+	// If kind is array, arrayLen will hold the array's length.
 	arrayLen int64
 }
 
@@ -1760,41 +1731,41 @@ func (t *typeInfo) string(elideptr bool) string {
 	}
 
 	switch t.kind {
-	case kindArray:
+	case typeKindArray:
 		return "[" + strconv.FormatInt(t.arrayLen, 10) + "]" + t.elem.string(elideptr)
-	case kindSlice:
+	case typeKindSlice:
 		return "[]" + t.elem.string(elideptr)
-	case kindMap:
+	case typeKindMap:
 		return "map[" + t.key.string(elideptr) + "]" + t.elem.string(elideptr)
-	case kindPtr:
+	case typeKindPtr:
 		if elideptr {
 			return t.elem.string(elideptr)
 		} else {
 			return "*" + t.elem.string(elideptr)
 		}
-	case kindUint8:
+	case typeKindUint8:
 		if t.isByte {
 			return "byte"
 		}
 		return "uint8"
-	case kindInt32:
+	case typeKindInt32:
 		if t.isRune {
 			return "rune"
 		}
 		return "int32"
-	case kindStruct:
+	case typeKindStruct:
 		if len(t.name) > 0 {
 			return t.pkgName + "." + t.name
 		}
 		return "struct{}"
-	case kindInterface:
+	case typeKindInterface:
 		if len(t.name) > 0 {
 			return t.pkgName + "." + t.name
 		}
 		return "interface{}"
-	case kindChan:
+	case typeKindChan:
 		return "chan"
-	case kindFunc:
+	case typeKindFunc:
 		return "func()"
 	default:
 		// assume builtin basic
@@ -1815,25 +1786,25 @@ func (t *typeInfo) nameOrLiteral(pkglocal bool) string {
 	}
 
 	switch t.kind {
-	case kindArray:
+	case typeKindArray:
 		return "[" + strconv.FormatInt(t.arrayLen, 10) + "]" + t.elem.nameOrLiteral(pkglocal)
-	case kindSlice:
+	case typeKindSlice:
 		return "[]" + t.elem.nameOrLiteral(pkglocal)
-	case kindMap:
+	case typeKindMap:
 		return "map[" + t.key.nameOrLiteral(pkglocal) + "]" + t.elem.nameOrLiteral(pkglocal)
-	case kindPtr:
+	case typeKindPtr:
 		return "*" + t.elem.nameOrLiteral(pkglocal)
-	case kindUint8:
+	case typeKindUint8:
 		if t.isByte {
 			return "byte"
 		}
 		return "uint8"
-	case kindInt32:
+	case typeKindInt32:
 		if t.isRune {
 			return "rune"
 		}
 		return "int32"
-	case kindStruct, kindInterface, kindChan, kindFunc:
+	case typeKindStruct, typeKindInterface, typeKindChan, typeKindFunc:
 		return "<unsupported>"
 	default:
 		// assume builtin basic
@@ -1846,7 +1817,7 @@ func (t *typeInfo) nameOrLiteral(pkglocal bool) string {
 // the provided typeKinds or a pointer to one of the provided typeKinds.
 func (t *typeInfo) is(kk ...typeKind) bool {
 	for _, k := range kk {
-		if t.kind == k || (t.kind == kindPtr && t.elem.kind == k) {
+		if t.kind == k || (t.kind == typeKindPtr && t.elem.kind == k) {
 			return true
 		}
 	}
@@ -1856,7 +1827,7 @@ func (t *typeInfo) is(kk ...typeKind) bool {
 // isSlice reports whether or not t represents a slice type whose elem type
 // is one of the provided typeKinds.
 func (t *typeInfo) isSlice(kk ...typeKind) bool {
-	if t.kind == kindSlice {
+	if t.kind == typeKindSlice {
 		for _, k := range kk {
 			if t.elem.kind == k {
 				return true
@@ -1868,31 +1839,31 @@ func (t *typeInfo) isSlice(kk ...typeKind) bool {
 
 // isNilable reports whether or not t represents a type that can be nil.
 func (t *typeInfo) isNilable() bool {
-	return t.is(kindPtr, kindSlice, kindArray, kindMap, kindInterface)
+	return t.is(typeKindPtr, typeKindSlice, typeKindArray, typeKindMap, typeKindInterface)
 }
 
 // canJSONMarshal reports whether or not the MarshalJSON method can be invoked
 // on an instance of the type represented by t.
 func (t *typeInfo) canJSONMarshal() bool {
-	return t.isJSONMarshaler || (t.kind == kindPtr && t.elem.isJSONMarshaler)
+	return t.isJSONMarshaler || (t.kind == typeKindPtr && t.elem.isJSONMarshaler)
 }
 
 // canJSONUnmarshal reports whether or not the UnmarshalJSON method can
 // be invoked on an instance of the type represented by t.
 func (t *typeInfo) canJSONUnmarshal() bool {
-	return t.isJSONUnmarshaler || (t.kind == kindPtr && t.elem.isJSONUnmarshaler)
+	return t.isJSONUnmarshaler || (t.kind == typeKindPtr && t.elem.isJSONUnmarshaler)
 }
 
 // canXMLMarshal reports whether or not the MarshalXML method can be invoked
 // on an instance of the type represented by t.
 func (t *typeInfo) canXMLMarshal() bool {
-	return t.isXMLMarshaler || (t.kind == kindPtr && t.elem.isXMLMarshaler)
+	return t.isXMLMarshaler || (t.kind == typeKindPtr && t.elem.isXMLMarshaler)
 }
 
 // canXMLUnmarshal reports whether or not the UnmarshalXML method can be
 // invoked on an instance of the type represented by t.
 func (t *typeInfo) canXMLUnmarshal() bool {
-	return t.isXMLUnmarshaler || (t.kind == kindPtr && t.elem.isXMLUnmarshaler)
+	return t.isXMLUnmarshaler || (t.kind == typeKindPtr && t.elem.isXMLUnmarshaler)
 }
 
 // fieldInfo holds information about a dataType's field.
@@ -2116,6 +2087,25 @@ type onConflictBlock struct {
 	update *colIdList
 }
 
+// orderByList represents the result of the analysis of a gosql.OrderBy directive.
+// The orderByList is used by the generator to produce the ORDER BY clause.
+type orderByList struct {
+	// The list of individual orderByItems as parsed from the directive's tag.
+	items []*orderByItem
+}
+
+// orderByItem represents a single item parsed from the tag of a gosql.OrderBy
+// directive. The orderByItem is used by the generator to produce a single
+// item in the "sort specification list" of an ORDER BY clause.
+type orderByItem struct {
+	// The identifier of the column to order by.
+	colId colId
+	// The direction of the sort order.
+	direction orderDirection
+	// The position of nulls in the sort order.
+	nulls nullsPosition
+}
+
 // The limitField holds the information extracted from a queryStruct's gosql.Limit
 // directive or a valid "limit" field. The information is then used by the generator
 // to produce a LIMIT clause in a SELECT query.
@@ -2148,23 +2138,74 @@ type offsetField struct {
 	value uint64
 }
 
-// orderByList represents the result of the analysis of a gosql.OrderBy directive.
-// The orderByList is used by the generator to produce the ORDER BY clause.
-type orderByList struct {
-	// The list of individual orderByItems as parsed from the directive's tag.
-	items []*orderByItem
+// rowsAffectedField represents the result of the analysis of a queryStruct's "rowsaffected" field.
+type rowsAffectedField struct {
+	// Name of the field with case preserved.
+	name string
+	kind typeKind
 }
 
-// orderByItem represents a single item parsed from the tag of a gosql.OrderBy
-// directive. The orderByItem is used by the generator to produce a single
-// item in the "sort specification list" of an ORDER BY clause.
-type orderByItem struct {
-	// The identifier of the column to order by.
-	colId colId
-	// The direction of the sort order.
-	direction orderDirection
-	// The position of nulls in the sort order.
-	nulls nullsPosition
+// errorHandlerField represents the result of the analysis of a queryStruct's field
+// whose type implements the gosql.ErrorHandler or gosql.ErrorInfoHandler interface.
+type errorHandlerField struct {
+	// Name of the error handler field with case preserved.
+	name string
+	// Indicates whether or not the field's type implements the gosql.ErrorInfoHandler interface.
+	isInfo bool
+}
+
+type relId struct {
+	qual  string
+	name  string
+	alias string
+}
+
+// colId represents a column identifier as parsed from a struct tag.
+type colId struct {
+	// The table or table alias qualifier of the column.
+	qual string
+	// The name of the column.
+	name string
+}
+
+// isEmpty reports whether or not the column identifier is empty.
+func (id colId) isEmpty() bool {
+	return id == colId{}
+}
+
+// string returns the string form of the column identifier.
+func (id colId) string() string {
+	if len(id.qual) > 0 {
+		return id.qual + "." + id.name
+	}
+	return id.name
+}
+
+// quoted returns the string form of the column identifier with the name enclosed in double quotes.
+func (id colId) quoted() string {
+	if len(id.qual) > 0 {
+		return id.qual + `."` + id.name + `"`
+	}
+	return `"` + id.name + `"`
+}
+
+// colIdList represents the result of parsing a list of column identifiers from a struct tag.
+type colIdList struct {
+	// If set to true indicates that *all* columns of the associated relation
+	// should be considered by the generator.
+	all bool
+	// The individual column identifiers that belong to the list.
+	items []colId
+}
+
+// containts reports whether or not the list contains the given column identifier.
+func (cl *colIdList) contains(cid colId) bool {
+	for i := 0; i < len(cl.items); i++ {
+		if cl.items[i] == cid {
+			return true
+		}
+	}
+	return false
 }
 
 // orderDirection is used to specify the order direction in an ORDER BY clause.
@@ -2369,7 +2410,7 @@ var stringToQuantifier = map[string]quantifier{
 	"all":  quantAll,
 }
 
-// overridingKind represents the kind of the optional OVERRIDING clause in an INSERT query.
+// overridingKind indicates the option used with the gosql.Override directive.
 type overridingKind uint8
 
 const (
@@ -2382,7 +2423,7 @@ const (
 // a value, like lower, upper, etc. or a function that can be used as an aggregate.
 type funcName string
 
-// joinType represents the type of an SQL JOIN clause.
+// joinType indicates the gosql.XxxJoin directive used in a query struct.
 type joinType uint
 
 const (
@@ -2403,46 +2444,47 @@ var stringToJoinType = map[string]joinType{
 	"fulljoin":  joinFull,
 }
 
-// typeKind indicate the specific kind of a Go type.
+// typeKind indicates the specific kind of a Go type.
 type typeKind uint
 
 const (
 	// basic
-	kindInvalid typeKind = iota
-	kindBool
-	kindInt
-	kindInt8
-	kindInt16
-	kindInt32
-	kindInt64
-	kindUint
-	kindUint8
-	kindUint16
-	kindUint32
-	kindUint64
-	kindUintptr
-	kindFloat32
-	kindFloat64
-	kindComplex64
-	kindComplex128
-	kindString
-	kindUnsafeptr
+	typeKindInvalid typeKind = iota
+	typeKindBool
+	typeKindInt
+	typeKindInt8
+	typeKindInt16
+	typeKindInt32
+	typeKindInt64
+	typeKindUint
+	typeKindUint8
+	typeKindUint16
+	typeKindUint32
+	typeKindUint64
+	typeKindUintptr
+	typeKindFloat32
+	typeKindFloat64
+	typeKindComplex64
+	typeKindComplex128
+	typeKindString
+	typeKindUnsafeptr
 
 	// non-basic
-	kindArray
-	kindInterface
-	kindMap
-	kindPtr
-	kindSlice
-	kindStruct
-	kindChan
-	kindFunc
+	typeKindArray
+	typeKindInterface
+	typeKindMap
+	typeKindPtr
+	typeKindSlice
+	typeKindStruct
+	typeKindChan
+	typeKindFunc
 
 	// alisases
-	kindByte = kindUint8
-	kindRune = kindInt32
+	typeKindByte = typeKindUint8
+	typeKindRune = typeKindInt32
 )
 
+// String returns a string representation of k.
 func (k typeKind) String() string {
 	if s, ok := typeKindToString[k]; ok {
 		return s
@@ -2453,56 +2495,56 @@ func (k typeKind) String() string {
 // basicKindToTypeKind maps basic kinds, as declared in go/types, to typeKind values.
 // Used for resolving a type's kind.
 var basicKindToTypeKind = map[types.BasicKind]typeKind{
-	types.Invalid:       kindInvalid,
-	types.Bool:          kindBool,
-	types.Int:           kindInt,
-	types.Int8:          kindInt8,
-	types.Int16:         kindInt16,
-	types.Int32:         kindInt32,
-	types.Int64:         kindInt64,
-	types.Uint:          kindUint,
-	types.Uint8:         kindUint8,
-	types.Uint16:        kindUint16,
-	types.Uint32:        kindUint32,
-	types.Uint64:        kindUint64,
-	types.Uintptr:       kindUintptr,
-	types.Float32:       kindFloat32,
-	types.Float64:       kindFloat64,
-	types.Complex64:     kindComplex64,
-	types.Complex128:    kindComplex128,
-	types.String:        kindString,
-	types.UnsafePointer: kindUnsafeptr,
+	types.Invalid:       typeKindInvalid,
+	types.Bool:          typeKindBool,
+	types.Int:           typeKindInt,
+	types.Int8:          typeKindInt8,
+	types.Int16:         typeKindInt16,
+	types.Int32:         typeKindInt32,
+	types.Int64:         typeKindInt64,
+	types.Uint:          typeKindUint,
+	types.Uint8:         typeKindUint8,
+	types.Uint16:        typeKindUint16,
+	types.Uint32:        typeKindUint32,
+	types.Uint64:        typeKindUint64,
+	types.Uintptr:       typeKindUintptr,
+	types.Float32:       typeKindFloat32,
+	types.Float64:       typeKindFloat64,
+	types.Complex64:     typeKindComplex64,
+	types.Complex128:    typeKindComplex128,
+	types.String:        typeKindString,
+	types.UnsafePointer: typeKindUnsafeptr,
 }
 
 var typeKindToString = map[typeKind]string{
 	// builtin basic
-	kindBool:       "bool",
-	kindInt:        "int",
-	kindInt8:       "int8",
-	kindInt16:      "int16",
-	kindInt32:      "int32",
-	kindInt64:      "int64",
-	kindUint:       "uint",
-	kindUint8:      "uint8",
-	kindUint16:     "uint16",
-	kindUint32:     "uint32",
-	kindUint64:     "uint64",
-	kindUintptr:    "uintptr",
-	kindFloat32:    "float32",
-	kindFloat64:    "float64",
-	kindComplex64:  "complex64",
-	kindComplex128: "complex128",
-	kindString:     "string",
+	typeKindBool:       "bool",
+	typeKindInt:        "int",
+	typeKindInt8:       "int8",
+	typeKindInt16:      "int16",
+	typeKindInt32:      "int32",
+	typeKindInt64:      "int64",
+	typeKindUint:       "uint",
+	typeKindUint8:      "uint8",
+	typeKindUint16:     "uint16",
+	typeKindUint32:     "uint32",
+	typeKindUint64:     "uint64",
+	typeKindUintptr:    "uintptr",
+	typeKindFloat32:    "float32",
+	typeKindFloat64:    "float64",
+	typeKindComplex64:  "complex64",
+	typeKindComplex128: "complex128",
+	typeKindString:     "string",
 
 	// non-basic
-	kindArray:     "<array>",
-	kindChan:      "<chan>",
-	kindFunc:      "<func>",
-	kindInterface: "<interface>",
-	kindMap:       "<map>",
-	kindPtr:       "<pointer>",
-	kindSlice:     "<slice>",
-	kindStruct:    "<struct>",
+	typeKindArray:     "<array>",
+	typeKindChan:      "<chan>",
+	typeKindFunc:      "<func>",
+	typeKindInterface: "<interface>",
+	typeKindMap:       "<map>",
+	typeKindPtr:       "<pointer>",
+	typeKindSlice:     "<slice>",
+	typeKindStruct:    "<struct>",
 }
 
 const (

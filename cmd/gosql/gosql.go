@@ -102,11 +102,11 @@ func (cmd *command) run(f *file) (*bytes.Buffer, error) {
 
 	// analyze named types
 	for _, typ := range f.types {
-		ti := new(targetInfo)
-		if err := analyze(typ, ti); err != nil {
+		a := &analyzer{named: typ}
+		if err := a.run(); err != nil {
 			return nil, err
 		}
-		infos = append(infos, ti)
+		infos = append(infos, a.targetInfo())
 	}
 
 	// type-check specs against the db
@@ -130,9 +130,9 @@ func (cmd *command) run(f *file) (*bytes.Buffer, error) {
 
 // parsedir parses and type-checks the directory at its given path.
 func (cmd *command) parsedir(path string) (*directory, error) {
-	directorycache.RLock()
-	dir := directorycache.m[path]
-	directorycache.RUnlock()
+	directoryCache.RLock()
+	dir := directoryCache.m[path]
+	directoryCache.RUnlock()
 	if dir != nil {
 		return dir, nil
 	}
@@ -174,17 +174,17 @@ func (cmd *command) parsedir(path string) (*directory, error) {
 		return nil, err
 	}
 
-	directorycache.Lock()
-	directorycache.m[dir.path] = dir
-	directorycache.Unlock()
+	directoryCache.Lock()
+	directoryCache.m[dir.path] = dir
+	directoryCache.Unlock()
 	return dir, nil
 }
 
 // aggtypes aggregates *types.Named instances of all of the target types declared in the file.
 func (cmd *command) aggtypes(dir *directory, path string) *file {
-	filecache.RLock()
-	f := filecache.m[path]
-	filecache.RUnlock()
+	fileCache.RLock()
+	f := fileCache.m[path]
+	fileCache.RUnlock()
 	if f != nil {
 		return f
 	}
@@ -215,9 +215,9 @@ func (cmd *command) aggtypes(dir *directory, path string) *file {
 		}
 	}
 
-	filecache.Lock()
-	filecache.m[f.path] = f
-	filecache.Unlock()
+	fileCache.Lock()
+	fileCache.m[f.path] = f
+	fileCache.Unlock()
 	return f
 }
 
@@ -227,12 +227,12 @@ func (cmd *command) notestfiles(fi os.FileInfo) bool {
 	return !strings.HasSuffix(fi.Name(), "_test.go")
 }
 
-var directorycache = struct {
+var directoryCache = struct {
 	sync.RWMutex
 	m map[string]*directory
 }{m: make(map[string]*directory)}
 
-var filecache = struct {
+var fileCache = struct {
 	sync.RWMutex
 	m map[string]*file
 }{m: make(map[string]*file)}

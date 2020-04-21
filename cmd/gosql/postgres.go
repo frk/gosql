@@ -630,7 +630,7 @@ stackloop:
 				// If the column cannot be set to NULL, then make
 				// sure that the field's not a pointer.
 				if col.hasnotnull {
-					if cond.typ.kind == kindPtr {
+					if cond.typ.kind == typeKindPtr {
 						return errors.IllegalPtrFieldForNotNullColumnError
 					}
 				}
@@ -643,7 +643,7 @@ stackloop:
 				// the column's type can be compared to the element type
 				// of the slice / array.
 				if cond.qua > 0 || cond.pred.isQuantified() {
-					if cond.typ.kind != kindSlice && cond.typ.kind != kindArray {
+					if cond.typ.kind != typeKindSlice && cond.typ.kind != typeKindArray {
 						return errors.IllegalFieldTypeForQuantifierError
 					}
 					fieldoids = c.typeoids(*cond.typ.elem)
@@ -824,8 +824,8 @@ func (c *pgchecker) canassign(col *pgcolumn, field *fieldInfo, dataOp dataOperat
 	// If the column's type is json(b) array and the field's type is a slice
 	// whose element type implements json.Marshaler/json.Unmarshaler, accept.
 	if col.typ.oid == pgtyp_jsonarr || col.typ.oid == pgtyp_jsonbarr {
-		if (dataOp == dataWrite && field.typ.kind == kindSlice && field.typ.elem.canJSONMarshal()) ||
-			(dataOp == dataRead && field.typ.kind == kindSlice && field.typ.elem.canJSONUnmarshal()) {
+		if (dataOp == dataWrite && field.typ.kind == typeKindSlice && field.typ.elem.canJSONMarshal()) ||
+			(dataOp == dataRead && field.typ.kind == typeKindSlice && field.typ.elem.canJSONUnmarshal()) {
 			return true
 		}
 	}
@@ -842,8 +842,8 @@ func (c *pgchecker) canassign(col *pgcolumn, field *fieldInfo, dataOp dataOperat
 	// If the column's type is xml array and the field's type is a slice
 	// whose element type implements xml.Marshaler/xml.Unmarshaler, accept.
 	if col.typ.oid == pgtyp_xmlarr {
-		if (dataOp == dataWrite && field.typ.kind == kindSlice && field.typ.elem.canXMLMarshal()) ||
-			(dataOp == dataRead && field.typ.kind == kindSlice && field.typ.elem.canXMLUnmarshal()) {
+		if (dataOp == dataWrite && field.typ.kind == typeKindSlice && field.typ.elem.canXMLMarshal()) ||
+			(dataOp == dataRead && field.typ.kind == typeKindSlice && field.typ.elem.canXMLUnmarshal()) {
 			return true
 		}
 	}
@@ -888,7 +888,7 @@ func (c *pgchecker) cancoerce(col *pgcolumn, field *fieldInfo) bool {
 	}
 	// if the target type is of the array category with an element type of
 	// the string category, and the source type is a slice or an array, accept.
-	if col.typ.category == pgtypcategory_array && (field.typ.kind == kindSlice || field.typ.kind == kindArray) {
+	if col.typ.category == pgtypcategory_array && (field.typ.kind == typeKindSlice || field.typ.kind == typeKindArray) {
 		elemtyp := c.pg.cat.types[col.typ.elem]
 		if elemtyp != nil && elemtyp.category == pgtypcategory_string {
 			return true
