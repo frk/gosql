@@ -1,0 +1,883 @@
+package pgsql
+
+import (
+	"database/sql"
+	"database/sql/driver"
+	"strconv"
+)
+
+// Int4RangeArrayFromIntArray2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]int.
+func Int4RangeArrayFromIntArray2Slice(val [][2]int) driver.Valuer {
+	return int4RangeArrayFromIntArray2Slice{val: val}
+}
+
+// Int4RangeArrayToIntArray2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]int and sets it to val.
+func Int4RangeArrayToIntArray2Slice(val *[][2]int) sql.Scanner {
+	return int4RangeArrayToIntArray2Slice{val: val}
+}
+
+// Int4RangeArrayFromInt8Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]int8.
+func Int4RangeArrayFromInt8Array2Slice(val [][2]int8) driver.Valuer {
+	return int4RangeArrayFromInt8Array2Slice{val: val}
+}
+
+// Int4RangeArrayToInt8Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]int8 and sets it to val.
+func Int4RangeArrayToInt8Array2Slice(val *[][2]int8) sql.Scanner {
+	return int4RangeArrayToInt8Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromInt16Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]int16.
+func Int4RangeArrayFromInt16Array2Slice(val [][2]int16) driver.Valuer {
+	return int4RangeArrayFromInt16Array2Slice{val: val}
+}
+
+// Int4RangeArrayToInt16Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]int16 and sets it to val.
+func Int4RangeArrayToInt16Array2Slice(val *[][2]int16) sql.Scanner {
+	return int4RangeArrayToInt16Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromInt32Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]int32.
+func Int4RangeArrayFromInt32Array2Slice(val [][2]int32) driver.Valuer {
+	return int4RangeArrayFromInt32Array2Slice{val: val}
+}
+
+// Int4RangeArrayToInt32Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]int32 and sets it to val.
+func Int4RangeArrayToInt32Array2Slice(val *[][2]int32) sql.Scanner {
+	return int4RangeArrayToInt32Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromInt64Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]int64.
+func Int4RangeArrayFromInt64Array2Slice(val [][2]int64) driver.Valuer {
+	return int4RangeArrayFromInt64Array2Slice{val: val}
+}
+
+// Int4RangeArrayToInt64Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]int64 and sets it to val.
+func Int4RangeArrayToInt64Array2Slice(val *[][2]int64) sql.Scanner {
+	return int4RangeArrayToInt64Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromUintArray2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]uint.
+func Int4RangeArrayFromUintArray2Slice(val [][2]uint) driver.Valuer {
+	return int4RangeArrayFromUintArray2Slice{val: val}
+}
+
+// Int4RangeArrayToUintArray2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]uint and sets it to val.
+func Int4RangeArrayToUintArray2Slice(val *[][2]uint) sql.Scanner {
+	return int4RangeArrayToUintArray2Slice{val: val}
+}
+
+// Int4RangeArrayFromUint8Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]uint8.
+func Int4RangeArrayFromUint8Array2Slice(val [][2]uint8) driver.Valuer {
+	return int4RangeArrayFromUint8Array2Slice{val: val}
+}
+
+// Int4RangeArrayToUint8Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]uint8 and sets it to val.
+func Int4RangeArrayToUint8Array2Slice(val *[][2]uint8) sql.Scanner {
+	return int4RangeArrayToUint8Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromUint16Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]uint16.
+func Int4RangeArrayFromUint16Array2Slice(val [][2]uint16) driver.Valuer {
+	return int4RangeArrayFromUint16Array2Slice{val: val}
+}
+
+// Int4RangeArrayToUint16Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]uint16 and sets it to val.
+func Int4RangeArrayToUint16Array2Slice(val *[][2]uint16) sql.Scanner {
+	return int4RangeArrayToUint16Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromUint32Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]uint32.
+func Int4RangeArrayFromUint32Array2Slice(val [][2]uint32) driver.Valuer {
+	return int4RangeArrayFromUint32Array2Slice{val: val}
+}
+
+// Int4RangeArrayToUint32Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]uint32 and sets it to val.
+func Int4RangeArrayToUint32Array2Slice(val *[][2]uint32) sql.Scanner {
+	return int4RangeArrayToUint32Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromUint64Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]uint64.
+func Int4RangeArrayFromUint64Array2Slice(val [][2]uint64) driver.Valuer {
+	return int4RangeArrayFromUint64Array2Slice{val: val}
+}
+
+// Int4RangeArrayToUint64Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]uint64 and sets it to val.
+func Int4RangeArrayToUint64Array2Slice(val *[][2]uint64) sql.Scanner {
+	return int4RangeArrayToUint64Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromFloat32Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]float32.
+func Int4RangeArrayFromFloat32Array2Slice(val [][2]float32) driver.Valuer {
+	return int4RangeArrayFromFloat32Array2Slice{val: val}
+}
+
+// Int4RangeArrayToFloat32Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]float32 and sets it to val.
+func Int4RangeArrayToFloat32Array2Slice(val *[][2]float32) sql.Scanner {
+	return int4RangeArrayToFloat32Array2Slice{val: val}
+}
+
+// Int4RangeArrayFromFloat64Array2Slice returns a driver.Valuer that produces a PostgreSQL int4range[] from the given Go [][2]float64.
+func Int4RangeArrayFromFloat64Array2Slice(val [][2]float64) driver.Valuer {
+	return int4RangeArrayFromFloat64Array2Slice{val: val}
+}
+
+// Int4RangeArrayToFloat64Array2Slice returns an sql.Scanner that converts a PostgreSQL int4range[] into a Go [][2]float64 and sets it to val.
+func Int4RangeArrayToFloat64Array2Slice(val *[][2]float64) sql.Scanner {
+	return int4RangeArrayToFloat64Array2Slice{val: val}
+}
+
+type int4RangeArrayFromIntArray2Slice struct {
+	val [][2]int
+}
+
+func (v int4RangeArrayFromIntArray2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendInt(out, int64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendInt(out, int64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToIntArray2Slice struct {
+	val *[][2]int
+}
+
+func (v int4RangeArrayToIntArray2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]int, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi int64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseInt(string(arr[0]), 10, 32); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseInt(string(arr[1]), 10, 32); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = int(lo)
+		ranges[i][1] = int(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromInt8Array2Slice struct {
+	val [][2]int8
+}
+
+func (v int4RangeArrayFromInt8Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendInt(out, int64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendInt(out, int64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToInt8Array2Slice struct {
+	val *[][2]int8
+}
+
+func (v int4RangeArrayToInt8Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]int8, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi int64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseInt(string(arr[0]), 10, 8); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseInt(string(arr[1]), 10, 8); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = int8(lo)
+		ranges[i][1] = int8(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromInt16Array2Slice struct {
+	val [][2]int16
+}
+
+func (v int4RangeArrayFromInt16Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendInt(out, int64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendInt(out, int64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToInt16Array2Slice struct {
+	val *[][2]int16
+}
+
+func (v int4RangeArrayToInt16Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]int16, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi int64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseInt(string(arr[0]), 10, 16); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseInt(string(arr[1]), 10, 16); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = int16(lo)
+		ranges[i][1] = int16(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromInt32Array2Slice struct {
+	val [][2]int32
+}
+
+func (v int4RangeArrayFromInt32Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendInt(out, int64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendInt(out, int64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToInt32Array2Slice struct {
+	val *[][2]int32
+}
+
+func (v int4RangeArrayToInt32Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]int32, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi int64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseInt(string(arr[0]), 10, 32); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseInt(string(arr[1]), 10, 32); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = int32(lo)
+		ranges[i][1] = int32(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromInt64Array2Slice struct {
+	val [][2]int64
+}
+
+func (v int4RangeArrayFromInt64Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendInt(out, int64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendInt(out, int64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToInt64Array2Slice struct {
+	val *[][2]int64
+}
+
+func (v int4RangeArrayToInt64Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]int64, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi int64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseInt(string(arr[0]), 10, 32); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseInt(string(arr[1]), 10, 32); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = lo
+		ranges[i][1] = hi
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromUintArray2Slice struct {
+	val [][2]uint
+}
+
+func (v int4RangeArrayFromUintArray2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendUint(out, uint64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendUint(out, uint64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToUintArray2Slice struct {
+	val *[][2]uint
+}
+
+func (v int4RangeArrayToUintArray2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]uint, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi uint64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseUint(string(arr[0]), 10, 32); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseUint(string(arr[1]), 10, 32); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = uint(lo)
+		ranges[i][1] = uint(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromUint8Array2Slice struct {
+	val [][2]uint8
+}
+
+func (v int4RangeArrayFromUint8Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendUint(out, uint64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendUint(out, uint64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToUint8Array2Slice struct {
+	val *[][2]uint8
+}
+
+func (v int4RangeArrayToUint8Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]uint8, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi uint64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseUint(string(arr[0]), 10, 8); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseUint(string(arr[1]), 10, 8); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = uint8(lo)
+		ranges[i][1] = uint8(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromUint16Array2Slice struct {
+	val [][2]uint16
+}
+
+func (v int4RangeArrayFromUint16Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendUint(out, uint64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendUint(out, uint64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToUint16Array2Slice struct {
+	val *[][2]uint16
+}
+
+func (v int4RangeArrayToUint16Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]uint16, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi uint64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseUint(string(arr[0]), 10, 16); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseUint(string(arr[1]), 10, 16); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = uint16(lo)
+		ranges[i][1] = uint16(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromUint32Array2Slice struct {
+	val [][2]uint32
+}
+
+func (v int4RangeArrayFromUint32Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendUint(out, uint64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendUint(out, uint64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToUint32Array2Slice struct {
+	val *[][2]uint32
+}
+
+func (v int4RangeArrayToUint32Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]uint32, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi uint64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseUint(string(arr[0]), 10, 32); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseUint(string(arr[1]), 10, 32); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = uint32(lo)
+		ranges[i][1] = uint32(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromUint64Array2Slice struct {
+	val [][2]uint64
+}
+
+func (v int4RangeArrayFromUint64Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendUint(out, uint64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendUint(out, uint64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToUint64Array2Slice struct {
+	val *[][2]uint64
+}
+
+func (v int4RangeArrayToUint64Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]uint64, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi uint64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseUint(string(arr[0]), 10, 32); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseUint(string(arr[1]), 10, 32); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = lo
+		ranges[i][1] = hi
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromFloat32Array2Slice struct {
+	val [][2]float32
+}
+
+func (v int4RangeArrayFromFloat32Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendInt(out, int64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendInt(out, int64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToFloat32Array2Slice struct {
+	val *[][2]float32
+}
+
+func (v int4RangeArrayToFloat32Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]float32, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi int64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseInt(string(arr[0]), 10, 32); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseInt(string(arr[1]), 10, 32); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = float32(lo)
+		ranges[i][1] = float32(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
+
+type int4RangeArrayFromFloat64Array2Slice struct {
+	val [][2]float64
+}
+
+func (v int4RangeArrayFromFloat64Array2Slice) Value() (driver.Value, error) {
+	if v.val == nil {
+		return nil, nil
+	} else if len(v.val) == 0 {
+		return []byte{'{', '}'}, nil
+	}
+
+	out := []byte{'{'}
+
+	for _, a := range v.val {
+		out = append(out, '"', '[')
+		out = strconv.AppendInt(out, int64(a[0]), 10)
+		out = append(out, ',')
+		out = strconv.AppendInt(out, int64(a[1]), 10)
+		out = append(out, ')', '"', ',')
+	}
+
+	out[len(out)-1] = '}' // replace last "," with "}"
+	return out, nil
+}
+
+type int4RangeArrayToFloat64Array2Slice struct {
+	val *[][2]float64
+}
+
+func (v int4RangeArrayToFloat64Array2Slice) Scan(src interface{}) error {
+	data, err := srcbytes(src)
+	if err != nil {
+		return err
+	} else if data == nil {
+		v.val = nil
+		return nil
+	}
+
+	elems := pgParseQuotedStringArray(data)
+	ranges := make([][2]float64, len(elems))
+
+	for i, elem := range elems {
+		var lo, hi int64
+		arr := pgParseRange(elem)
+		if len(arr[0]) > 0 {
+			if lo, err = strconv.ParseInt(string(arr[0]), 10, 32); err != nil {
+				return err
+			}
+		}
+		if len(arr[1]) > 0 {
+			if hi, err = strconv.ParseInt(string(arr[1]), 10, 32); err != nil {
+				return err
+			}
+		}
+
+		ranges[i][0] = float64(lo)
+		ranges[i][1] = float64(hi)
+	}
+
+	*v.val = ranges
+	return nil
+}
