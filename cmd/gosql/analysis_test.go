@@ -59,15 +59,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 	}, {
 		name: "CreatedAt",
 		typ: typeInfo{
-			name:              "Time",
-			kind:              typeKindStruct,
-			pkgPath:           "time",
-			pkgName:           "time",
-			pkgLocal:          "time",
-			isImported:        true,
-			isTime:            true,
-			isJSONMarshaler:   true,
-			isJSONUnmarshaler: true,
+			name:       "Time",
+			kind:       typeKindStruct,
+			pkgPath:    "time",
+			pkgName:    "time",
+			pkgLocal:   "time",
+			isImported: true,
 		},
 		isExported: true,
 		colId:      colId{name: "created_at"},
@@ -527,11 +524,10 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						kind: typeKindStruct,
 					},
 					fields: []*fieldInfo{{
-						name:   "a",
-						typ:    typeInfo{kind: typeKindInt},
-						colId:  colId{name: "a"},
-						tag:    tagutil.Tag{"sql": {"a", "pk"}},
-						isPKey: true,
+						name:  "a",
+						typ:   typeInfo{kind: typeKindInt},
+						colId: colId{name: "a"},
+						tag:   tagutil.Tag{"sql": {"a", "pk"}},
 					}, {
 						name:      "b",
 						typ:       typeInfo{kind: typeKindInt},
@@ -544,7 +540,6 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						colId:    colId{name: "c"},
 						tag:      tagutil.Tag{"sql": {"c", "ro", "json"}},
 						readOnly: true,
-						useJSON:  true,
 					}, {
 						name:      "d",
 						typ:       typeInfo{kind: typeKindInt},
@@ -1648,15 +1643,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						tag:   tagutil.Tag{"sql": {"c4"}},
 					}, {
 						name: "f5", typ: typeInfo{
-							name:              "RawMessage",
-							kind:              typeKindSlice,
-							pkgPath:           "encoding/json",
-							pkgName:           "json",
-							pkgLocal:          "json",
-							isImported:        true,
-							isJSONMarshaler:   true,
-							isJSONUnmarshaler: true,
-							elem:              &typeInfo{kind: typeKindUint8, isByte: true},
+							name:       "RawMessage",
+							kind:       typeKindSlice,
+							pkgPath:    "encoding/json",
+							pkgName:    "json",
+							pkgLocal:   "json",
+							isImported: true,
+							elem:       &typeInfo{kind: typeKindUint8, isByte: true},
 						},
 						colId: colId{name: "c5"},
 						tag:   tagutil.Tag{"sql": {"c5"}},
@@ -1664,13 +1657,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						name: "f6", typ: typeInfo{
 							kind: typeKindSlice,
 							elem: &typeInfo{
-								name:            "Marshaler",
-								kind:            typeKindInterface,
-								pkgPath:         "encoding/json",
-								pkgName:         "json",
-								pkgLocal:        "json",
-								isImported:      true,
-								isJSONMarshaler: true,
+								name:       "Marshaler",
+								kind:       typeKindInterface,
+								pkgPath:    "encoding/json",
+								pkgName:    "json",
+								pkgLocal:   "json",
+								isImported: true,
 							},
 						},
 						colId: colId{name: "c6"},
@@ -1679,15 +1671,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						name: "f7", typ: typeInfo{
 							kind: typeKindSlice,
 							elem: &typeInfo{
-								name:              "RawMessage",
-								kind:              typeKindSlice,
-								pkgPath:           "encoding/json",
-								pkgName:           "json",
-								pkgLocal:          "json",
-								isImported:        true,
-								isJSONMarshaler:   true,
-								isJSONUnmarshaler: true,
-								elem:              &typeInfo{kind: typeKindUint8, isByte: true},
+								name:       "RawMessage",
+								kind:       typeKindSlice,
+								pkgPath:    "encoding/json",
+								pkgName:    "json",
+								pkgLocal:   "json",
+								isImported: true,
+								elem:       &typeInfo{kind: typeKindUint8, isByte: true},
 							},
 						},
 						colId: colId{name: "c7"},
@@ -1771,14 +1761,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 								elem: &typeInfo{
 									kind: typeKindPtr,
 									elem: &typeInfo{
-										name:              "Int",
-										kind:              typeKindStruct,
-										pkgPath:           "math/big",
-										pkgName:           "big",
-										pkgLocal:          "big",
-										isImported:        true,
-										isJSONMarshaler:   true,
-										isJSONUnmarshaler: true,
+										name:       "Int",
+										kind:       typeKindStruct,
+										pkgPath:    "math/big",
+										pkgName:    "big",
+										pkgLocal:   "big",
+										isImported: true,
 									},
 								},
 							},
@@ -1801,33 +1789,29 @@ func TestAnalysis_queryStruct(t *testing.T) {
 					typeInfo: typeInfo{kind: typeKindStruct},
 					fields: []*fieldInfo{{
 						name: "f1", typ: typeInfo{
-							name:            "Marshaler",
-							kind:            typeKindInterface,
-							pkgPath:         "encoding/json",
-							pkgName:         "json",
-							pkgLocal:        "json",
-							isImported:      true,
-							isJSONMarshaler: true,
+							name:       "Marshaler",
+							kind:       typeKindInterface,
+							pkgPath:    "encoding/json",
+							pkgName:    "json",
+							pkgLocal:   "json",
+							isImported: true,
 						},
 						colId: colId{name: "c1"},
 						tag:   tagutil.Tag{"sql": {"c1"}},
 					}, {
 						name: "f2", typ: typeInfo{
-							name:              "Unmarshaler",
-							kind:              typeKindInterface,
-							pkgPath:           "encoding/json",
-							pkgName:           "json",
-							pkgLocal:          "json",
-							isImported:        true,
-							isJSONUnmarshaler: true,
+							name:       "Unmarshaler",
+							kind:       typeKindInterface,
+							pkgPath:    "encoding/json",
+							pkgName:    "json",
+							pkgLocal:   "json",
+							isImported: true,
 						},
 						colId: colId{name: "c2"},
 						tag:   tagutil.Tag{"sql": {"c2"}},
 					}, {
 						name: "f3", typ: typeInfo{
-							kind:              typeKindInterface,
-							isJSONMarshaler:   true,
-							isJSONUnmarshaler: true,
+							kind: typeKindInterface,
 						},
 						colId: colId{name: "c3"},
 						tag:   tagutil.Tag{"sql": {"c3"}},
@@ -1917,7 +1901,7 @@ func TestAnalysis_filterStruct(t *testing.T) {
 func TestTypeinfo_string(t *testing.T) {
 	tests := []struct {
 		name string
-		want string
+		want goTypeId
 	}{
 		{"f01", goTypeBool},
 		{"f02", goTypeBool},
@@ -1927,9 +1911,9 @@ func TestTypeinfo_string(t *testing.T) {
 		{"f06", goTypeStringSlice},
 		{"f07", goTypeStringSliceSlice},
 		{"f08", goTypeStringMap},
-		{"f09", goTypeStringMap},
+		{"f09", goTypeStringPtrMap},
 		{"f10", goTypeStringMapSlice},
-		{"f11", goTypeStringMapSlice},
+		{"f11", goTypeStringPtrMapSlice},
 		{"f12", goTypeByte},
 		{"f13", goTypeByte},
 		{"f14", goTypeByteSlice},
@@ -1972,26 +1956,26 @@ func TestTypeinfo_string(t *testing.T) {
 		{"f51", goTypeFloat64Array3},
 		{"f52", goTypeFloat64Array3Slice},
 		{"f53", goTypeIPNet},
-		{"f54", goTypeIPNetSlice},
+		{"f54", "[]*net.IPNet"},
 		{"f55", goTypeTime},
 		{"f56", goTypeTime},
 		{"f57", goTypeTimeSlice},
-		{"f58", goTypeTimeSlice},
+		{"f58", "[]*time.Time"},
 		{"f59", goTypeTimeArray2},
 		{"f60", goTypeTimeArray2Slice},
-		{"f61", goTypeByteSlice},
-		{"f62", goTypeByteSliceSlice},
+		{"f61", goTypeHardwareAddr},
+		{"f62", goTypeHardwareAddrSlice},
 		{"f63", goTypeBigInt},
 		{"f64", goTypeBigInt},
 		{"f65", goTypeBigIntSlice},
-		{"f66", goTypeBigIntSlice},
+		{"f66", "[]*big.Int"},
 		{"f67", goTypeBigIntArray2},
-		{"f68", goTypeBigIntArray2},
-		{"f69", goTypeBigIntArray2Slice},
+		{"f68", "[2]*big.Int"},
+		{"f69", "[][2]*big.Int"},
 		{"f70", goTypeNullStringMap},
 		{"f71", goTypeNullStringMapSlice},
-		{"f72", goTypeByteSlice},
-		{"f73", goTypeByteSliceSlice},
+		{"f72", "json.RawMessage"},
+		{"f73", "[]json.RawMessage"},
 	}
 
 	ti, err := runAnalysis("SelectAnalysisTestOK_typeinfo_string", t)
@@ -2003,7 +1987,8 @@ func TestTypeinfo_string(t *testing.T) {
 		ff := fields[i]
 		tt := tests[i]
 
-		got := ff.typ.string(true)
+		//got := goTypeId(ff.typ.string(true))
+		got := ff.typ.goTypeId(false, false, true)
 		if ff.name != tt.name || got != tt.want {
 			t.Errorf("got %s::%s, want %s::%s", ff.name, got, tt.name, tt.want)
 		}

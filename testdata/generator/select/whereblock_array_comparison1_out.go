@@ -6,6 +6,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 
 	"github.com/frk/gosql"
+	"github.com/frk/gosql/pgsql"
 )
 
 func (q *SelectWithWhereBlockArrayComparisonPredicate1Query) Exec(c gosql.Conn) error {
@@ -17,7 +18,7 @@ func (q *SelectWithWhereBlockArrayComparisonPredicate1Query) Exec(c gosql.Conn) 
 	FROM "test_user" AS u
 	WHERE u."id" = ANY($1::integer[])` // `
 
-	rows, err := c.Query(queryString, gosql.IntSliceToIntArray(q.Where.IDs))
+	rows, err := c.Query(queryString, pgsql.Int4ArrayFromIntSlice(q.Where.IDs))
 	if err != nil {
 		return err
 	}

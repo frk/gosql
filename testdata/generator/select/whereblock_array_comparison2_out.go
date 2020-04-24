@@ -6,6 +6,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 
 	"github.com/frk/gosql"
+	"github.com/frk/gosql/pgsql"
 )
 
 func (q *SelectWithWhereBlockArrayComparisonPredicate2Query) Exec(c gosql.Conn) error {
@@ -21,7 +22,7 @@ func (q *SelectWithWhereBlockArrayComparisonPredicate2Query) Exec(c gosql.Conn) 
 	rows, err := c.Query(queryString,
 		q.Where.CreatedAt.After,
 		q.Where.CreatedAt.Before,
-		gosql.IntSliceToIntArray(q.Where.Or.IDs),
+		pgsql.Int4ArrayFromIntSlice(q.Where.Or.IDs),
 		q.Where.Or.CreatedBefore,
 	)
 	if err != nil {

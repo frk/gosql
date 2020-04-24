@@ -4,6 +4,7 @@ package testdata
 
 import (
 	"github.com/frk/gosql"
+	"github.com/frk/gosql/pgsql"
 )
 
 func (q *InsertJSONSliceQuery) Exec(c gosql.Conn) error {
@@ -24,8 +25,8 @@ func (q *InsertJSONSliceQuery) Exec(c gosql.Conn) error {
 		params[pos+0] = v.Email
 		params[pos+1] = v.FullName
 		params[pos+2] = v.IsActive
-		params[pos+3] = gosql.JSON(v.Metadata1)
-		params[pos+4] = gosql.JSON(v.Metadata2)
+		params[pos+3] = pgsql.JSON(v.Metadata1)
+		params[pos+4] = pgsql.JSON(v.Metadata2)
 		params[pos+5] = v.CreatedAt
 		params[pos+6] = v.UpdatedAt
 

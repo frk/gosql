@@ -100,13 +100,14 @@ const (
 	BadColumnToLiteralComparisonError          errnum = 82
 	BadColumnToColumnTypeComparisonError       errnum = 83
 	BadTargetTableForDefaultError              errnum = 84
-	BadUseJSONTargetColumnError                errnum = 85
-	BadUseXMLTargetColumnError                 errnum = 86
-	NoColumnDefaultSetError                    errnum = 87
-	ReturnDirectiveWithNoDataFieldError        errnum = 88
-	NoFieldColumnError                         errnum = 89
-	MultipleDataFieldsError                    errnum = 90
-	IllegalIteratorRecordError                 errnum = 91
-	IllegalSliceUpdateQueryModifierError       errnum = 92
-	UnsupportedFieldDataNopError               errnum = 93
+	_
+	_
+	NoColumnDefaultSetError              errnum = 87
+	ReturnDirectiveWithNoDataFieldError  errnum = 88
+	NoFieldColumnError                   errnum = 89
+	MultipleDataFieldsError              errnum = 90
+	IllegalIteratorRecordError           errnum = 91
+	IllegalSliceUpdateQueryModifierError errnum = 92
+	UnsupportedFieldDataNopError         errnum = 93
+	NoColumnFieldError                   errnum = 94
 )

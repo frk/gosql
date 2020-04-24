@@ -8,6 +8,16 @@ import (
 	"github.com/frk/gosql/internal/errors"
 )
 
+// --- FAIL: Test_pgchecker_run (0.09s)
+// --- FAIL: Test_pgchecker_run/UpdatePostgresTestBAD_ReturnRelationNotFound (0.00s)
+//     postgres_test.go:214: - (errors.errnum): Validity mismatch; got=INVALID, want=VALID - <nil> <nil>
+// --- FAIL: Test_pgchecker_run/SelectPostgresTestBAD_RelationColumnNotFound (0.00s)
+//     postgres_test.go:214: - (errors.errnum): Validity mismatch; got=INVALID, want=VALID - <nil> <nil>
+// --- FAIL: Test_pgchecker_run/SelectPostgresTestBAD_RelationColumnAliasNotFound (0.00s)
+//     postgres_test.go:214: - (errors.errnum): Validity mismatch; got=INVALID, want=VALID - <nil> <nil>
+// --- FAIL: Test_pgchecker_run/InsertPostgresTestBAD_RelationColumnNotFound (0.00s)
+//     postgres_test.go:214: - (errors.errnum): Validity mismatch; got=INVALID, want=VALID - <nil> <nil>
+
 func Test_pgchecker_run(t *testing.T) {
 	tests := []struct {
 		name string
@@ -174,12 +184,6 @@ func Test_pgchecker_run(t *testing.T) {
 	}, {
 		name: "InsertPostgresTestBAD_RelationColumnNotFound",
 		err:  errors.NoDBColumnError,
-	}, {
-		name: "InsertPostgresTestBAD_BadJSONOption",
-		err:  errors.BadUseJSONTargetColumnError,
-	}, {
-		name: "InsertPostgresTestBAD_BadXMLOption",
-		err:  errors.BadUseXMLTargetColumnError,
 	}, {
 		name: "InsertPostgresTestBAD_BadFieldToColumnType",
 		err:  errors.BadFieldToColumnTypeError,

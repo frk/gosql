@@ -4,6 +4,7 @@ package testdata
 
 import (
 	"github.com/frk/gosql"
+	"github.com/frk/gosql/pgsql"
 )
 
 func (q *InsertJSONSingleQuery) Exec(c gosql.Conn) error {
@@ -29,8 +30,8 @@ func (q *InsertJSONSingleQuery) Exec(c gosql.Conn) error {
 		q.User.Email,
 		q.User.FullName,
 		q.User.IsActive,
-		gosql.JSON(q.User.Metadata1),
-		gosql.JSON(q.User.Metadata2),
+		pgsql.JSON(q.User.Metadata1),
+		pgsql.JSON(q.User.Metadata2),
 		q.User.CreatedAt,
 		q.User.UpdatedAt,
 	)

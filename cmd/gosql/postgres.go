@@ -176,7 +176,7 @@ type pgchecker struct {
 func (c *pgchecker) run() (err error) {
 	c.relmap = make(map[string]*pgrelation)
 	c.ti.searchConditionFieldColumns = make(map[*searchConditionField]*pgcolumn)
-	if c.rel, err = c.loadrelation(c.ti.dataField.relId); err != nil {
+	if c.rel, err = c.loadRelation(c.ti.dataField.relId); err != nil {
 		return err
 	}
 
@@ -198,17 +198,17 @@ func (c *pgchecker) run() (err error) {
 
 func (c *pgchecker) checkQueryStruct() (err error) {
 	if join := c.ti.query.joinBlock; join != nil {
-		if err := c.checkjoin(join); err != nil {
+		if err := c.checkJoinBlock(join); err != nil {
 			return err
 		}
 	}
 	if onconf := c.ti.query.onConflictBlock; onconf != nil {
-		if err := c.checkonconflict(onconf); err != nil {
+		if err := c.checkOnConflictBlock(onconf); err != nil {
 			return err
 		}
 	}
 	if where := c.ti.query.whereBlock; where != nil {
-		if err := c.checkwhere(where); err != nil {
+		if err := c.checkWhereBlock(where); err != nil {
 			return err
 		}
 	}
@@ -217,7 +217,7 @@ func (c *pgchecker) checkQueryStruct() (err error) {
 	// columns are present in the loaded relations.
 	if c.ti.query.orderByList != nil {
 		for _, item := range c.ti.query.orderByList.items {
-			if _, err := c.column(item.colId); err != nil {
+			if _, err := c.findColumnByColId(item.colId); err != nil {
 				return err
 			}
 		}
@@ -232,7 +232,7 @@ func (c *pgchecker) checkQueryStruct() (err error) {
 				return errors.BadTargetTableForDefaultError
 			}
 
-			if col := c.rel.column(item.name); col == nil {
+			if col := c.rel.findColumn(item.name); col == nil {
 				return errors.NoDBColumnError
 			} else if !col.hasdefault {
 				return errors.NoColumnDefaultSetError
@@ -244,7 +244,7 @@ func (c *pgchecker) checkQueryStruct() (err error) {
 	// columns are present in the loaded relations.
 	if c.ti.query.forceList != nil {
 		for _, item := range c.ti.query.forceList.items {
-			if _, err := c.column(item); err != nil {
+			if _, err := c.findColumnByColId(item); err != nil {
 				return err
 			}
 		}
@@ -252,57 +252,38 @@ func (c *pgchecker) checkQueryStruct() (err error) {
 
 	// If a Return directive was provided, make sure that the specified
 	// columns are present in the loaded relations.
-	if c.ti.query.returnList != nil {
+	var strict bool
+	var outputfields []*fieldInfo
+	if res := c.ti.query.resultField; res != nil {
+		strict = true
+		outputfields = res.data.fields
+	} else if c.ti.query.returnList != nil {
 		if c.ti.query.returnList.all {
-			// If all is set to true, collect the to-be-returned list
-			// of fieldcolumn pairs by going over the dataType's fields
-			// and matching them up with columns from the target relation.
-			// Fields that have no matching column in the target relation
-			// will be ignored.
-			//
-			// NOTE(mkopriva): currently if all is set to true only
-			// the columns of the target relation will be considered
-			// as candidates for the RETURNING clause, other columns
-			// from joined relations will be ignored.
-			for _, field := range c.ti.query.dataField.data.fields {
-				if col := c.rel.column(field.colId.name); col != nil {
-					cid := colId{name: field.colId.name, qual: c.ti.query.dataField.relId.alias}
-					info := &fieldColumnInfo{field: field, column: col, colId: cid}
-					c.ti.output = append(c.ti.output, info)
-				}
-			}
+			strict = false
+			outputfields = c.ti.query.dataField.data.fields
 		} else {
+			// If an explicit list of columns was provided, make sure that
+			// they are present in one of the associated relations, and that
+			// each one of them has a corresponding field, if not return an error.
+			strict = true
+
 			for _, colId := range c.ti.query.returnList.items {
-				// If a list of specific columns was provided,
-				// make sure that they are present in one of the
-				// associated relations, if not return an error.
-				col, err := c.column(colId)
+				// NOTE(mkopriva): currently the findFieldByColId method returns
+				// fields matched by just the column's name, i.e. the qualifiers
+				// are ignored, this means that one could pass in two different
+				// colIds with the same name and the method would return the same field.
+				field, err := c.findFieldByColId(colId)
 				if err != nil {
 					return err
 				}
-
-				// The to-be-returned columns must have a
-				// corresponding field in the dataType.
-				//
-				// NOTE(mkopriva): currently the to-be-returned
-				// columns are matched to fields using just the
-				// column's name, i.e. the qualifiers are ignored,
-				// this means that one could specify two separate
-				// columns that have the same name and their values
-				// would be scanned into the same field.
-				var hasfield bool
-				for _, field := range c.ti.query.dataField.data.fields {
-					if field.colId.name == colId.name {
-						info := &fieldColumnInfo{field: field, column: col, colId: colId}
-						c.ti.output = append(c.ti.output, info)
-						hasfield = true
-						break
-					}
-				}
-				if !hasfield {
-					return errors.NoFieldColumnError
-				}
+				outputfields = append(outputfields, field)
 			}
+		}
+
+	}
+	if len(outputfields) > 0 {
+		if err := c.checkFields(outputfields, dataRead, strict); err != nil {
+			return err
 		}
 	}
 
@@ -314,12 +295,7 @@ func (c *pgchecker) checkQueryStruct() (err error) {
 			dataOp = dataWrite
 		}
 
-		if err := c.checkFields(dataField.data.fields, dataOp); err != nil {
-			return err
-		}
-	}
-	if res := c.ti.query.resultField; res != nil {
-		if err := c.checkFields(res.data.fields, dataRead); err != nil {
+		if err := c.checkFields(dataField.data.fields, dataOp, true); err != nil {
 			return err
 		}
 	}
@@ -343,6 +319,41 @@ func (c *pgchecker) checkQueryStruct() (err error) {
 	// an error should be returned as then there's no way to properly match the
 	// data instances with specific rows in the table.
 	return nil
+
+	//func (q *UpdatePKeyReturningAllSingleQuery) Exec(c gosql.Conn) error {
+	//   	const queryString = `UPDATE "test_user" SET (
+	//   		"email"
+	//   		, "password"
+	//   		, "created_at"
+	//   		, "updated_at"
+	//   	) = (
+	//   		$1
+	//   		, $2
+	//   		, $3
+	//   		, $4
+	//   	)
+	//   	WHERE "id" = $5 AND "id" = $6
+	//   	RETURNING
+	//   	"id"
+	//   	, "email"
+	//   	, "created_at"
+	//   	, "updated_at"` // `
+
+	//   	row := c.QueryRow(queryString,
+	//   		q.User.Email,
+	//   		q.User.Password,
+	//   		q.User.CreatedAt,
+	//   		q.User.UpdatedAt,
+	//   		q.User.Id,
+	//   		q.User.Id,
+	//   	)
+	//   	return row.Scan(
+	//   		&q.User.Id,
+	//   		&q.User.Email,
+	//   		&q.User.CreatedAt,
+	//   		&q.User.UpdatedAt,
+	//   	)
+	//   }
 }
 
 func (c *pgchecker) checkFilterStruct() (err error) {
@@ -350,7 +361,7 @@ func (c *pgchecker) checkFilterStruct() (err error) {
 	// specified column is present in one of the loaded relations
 	// and that it has the correct type.
 	if c.ti.filter.textSearchColId != nil {
-		col, err := c.column(*c.ti.filter.textSearchColId)
+		col, err := c.findColumnByColId(*c.ti.filter.textSearchColId)
 		if err != nil {
 			return err
 		} else if col.typ.oid != pgtyp_tsvector {
@@ -359,26 +370,29 @@ func (c *pgchecker) checkFilterStruct() (err error) {
 	}
 
 	if dataField := c.ti.filter.dataField; dataField != nil {
-		if err := c.checkFields(dataField.data.fields, dataTest); err != nil {
+		if err := c.checkFields(dataField.data.fields, dataTest, false); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *pgchecker) checkFields(fields []*fieldInfo, dataOp dataOperation) (err error) {
+// checkFields checks column existence, type compatibility, operation validity
+func (c *pgchecker) checkFields(fields []*fieldInfo, dataOp dataOperation, strict bool) (err error) {
 	if dataOp == dataNop {
 		return nil
 	}
 
 	for _, fld := range fields {
 		var col *pgcolumn
-		// TODO(mkopriva): currenlty this requires that every field
-		// has a corresponding column in the target relation, which
-		// represents an ideal where each relation in the db has a
-		// matching type in the app, this however may not always be
-		// practical and there may be cases where a single struct
-		// type is used to represent multiple different relations...
+		// TODO(mkopriva): currenlty checkFields requires that every
+		// field has a corresponding column in the target relation,
+		// which represents an ideal where each relation in the db
+		// has a matching type in the app, this however may not always
+		// be practical and there may be cases where a single struct
+		// type is used to represent multiple different relations
+		// having fields that have corresponding columns in one
+		// relation but not in another...
 		if dataOp == dataRead {
 			// TODO(mkopriva): currently columns specified in
 			// the fields of the struct representing the record
@@ -392,15 +406,21 @@ func (c *pgchecker) checkFields(fields []*fieldInfo, dataOp dataOperation) (err 
 			// from the "Result" field, lookup the column
 			// in all of the associated relations since its
 			// ok to select columns from joined relations.
-			if col, err = c.column(fld.colId); err != nil {
-				return err
+			if col, err = c.findColumnByColId(fld.colId); err != nil {
+				if strict {
+					return err
+				}
+				continue
 			}
 		} else {
 			// If this is a dataWrite or dataTest operation the column
 			// must be present directly in the target relation, columns
 			// from associated relations (joins) are not allowed.
-			if col = c.rel.column(fld.colId.name); col == nil {
-				return errors.NoDBColumnError
+			if col = c.rel.findColumn(fld.colId.name); col == nil {
+				if strict {
+					return errors.NoDBColumnError
+				}
+				continue
 			}
 		}
 
@@ -410,43 +430,38 @@ func (c *pgchecker) checkFields(fields []*fieldInfo, dataOp dataOperation) (err 
 			}
 		}
 
-		if fld.useJSON && !col.typ.is(pgtyp_json, pgtyp_jsonb) {
-			return errors.BadUseJSONTargetColumnError
-		}
-		if fld.useXML && !col.typ.is(pgtyp_xml) {
-			return errors.BadUseXMLTargetColumnError
-		}
+		cid := colId{name: fld.colId.name, qual: c.ti.dataField.relId.alias}
+		info := &fieldColumnInfo{field: fld, column: col, colId: cid}
 
 		// Make sure that a value of the given field's type
 		// can be assigned to given column, and vice versa.
-		if !c.canassign(col, fld, dataOp) {
+		if !c.canAssign(info, col, fld, dataOp) {
 			return errors.BadFieldToColumnTypeError
 		}
 
-		cid := colId{name: fld.colId.name, qual: c.ti.dataField.relId.alias}
-		info := &fieldColumnInfo{field: fld, column: col, colId: cid}
 		if dataOp == dataRead {
 			c.ti.output = append(c.ti.output, info)
 		} else if dataOp == dataWrite || dataOp == dataTest {
 			c.ti.input = append(c.ti.input, info)
 		}
-		if col.isprimary {
+		// aggrgate primary keys for writes only
+		if col.isprimary && dataOp == dataWrite {
 			c.ti.primaryKeys = append(c.ti.primaryKeys, info)
 		}
 	}
 	return nil
 }
 
-func (c *pgchecker) checkjoin(jb *joinBlock) error {
+func (c *pgchecker) checkJoinBlock(jb *joinBlock) error {
 	if len(jb.relId.name) > 0 {
-		rel, err := c.loadrelation(jb.relId)
+		rel, err := c.loadRelation(jb.relId)
 		if err != nil {
 			return err
 		}
 		c.joinlist = append(c.joinlist, rel)
 	}
 	for _, join := range jb.items {
-		rel, err := c.loadrelation(join.relId)
+		rel, err := c.loadRelation(join.relId)
 		if err != nil {
 			return err
 		}
@@ -465,7 +480,7 @@ func (c *pgchecker) checkjoin(jb *joinBlock) error {
 				}
 
 				// Make sure that colId is present in relation being joined.
-				col := rel.column(cond.colId.name)
+				col := rel.findColumn(cond.colId.name)
 				if col == nil {
 					return errors.NoDBColumnError
 				}
@@ -486,7 +501,7 @@ func (c *pgchecker) checkjoin(jb *joinBlock) error {
 					// Get the type of the right hand side, which is
 					// either a column or a literal expression.
 					if len(cond.colId2.name) > 0 {
-						colId2, err := c.column(cond.colId2)
+						colId2, err := c.findColumnByColId(cond.colId2)
 						if err != nil {
 							return err
 						}
@@ -510,7 +525,7 @@ func (c *pgchecker) checkjoin(jb *joinBlock) error {
 					}
 
 					rhsoids := []pgoid{typ.oid}
-					if !c.cancompare(col, rhsoids, cond.pred) {
+					if !c.canCompare(col, rhsoids, cond.pred) {
 						return errors.BadColumnToLiteralComparisonError
 					}
 				}
@@ -523,7 +538,7 @@ func (c *pgchecker) checkjoin(jb *joinBlock) error {
 	return nil
 }
 
-func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
+func (c *pgchecker) checkOnConflictBlock(onconf *onConflictBlock) error {
 	rel := c.rel
 
 	// If a Column directive was provided in an OnConflict block, make
@@ -533,7 +548,7 @@ func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
 	if len(onconf.column) > 0 {
 		var attnums []int16
 		for _, id := range onconf.column {
-			col := rel.column(id.name)
+			col := rel.findColumn(id.name)
 			if col == nil {
 				return errors.NoDBColumnError
 			}
@@ -545,7 +560,7 @@ func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
 			if !ind.isunique && !ind.isprimary {
 				continue
 			}
-			if !matchnums(ind.key, attnums) {
+			if !matchNumbers(ind.key, attnums) {
 				continue
 			}
 
@@ -562,7 +577,7 @@ func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
 	// index is actually present on the target table and also make
 	// sure that it is a unique index.
 	if len(onconf.index) > 0 {
-		ind := rel.index(onconf.index)
+		ind := rel.findIndex(onconf.index)
 		if ind == nil {
 			return errors.NoDBIndexError
 		}
@@ -577,7 +592,7 @@ func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
 	// specified constraint is present on the target table and that
 	// it is a unique constraint.
 	if len(onconf.constraint) > 0 {
-		con := rel.constraint(onconf.constraint)
+		con := rel.findConstraint(onconf.constraint)
 		if con == nil {
 			return errors.NoDBConstraintError
 		}
@@ -590,7 +605,7 @@ func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
 	// listed column is present in the target table.
 	if onconf.update != nil {
 		for _, item := range onconf.update.items {
-			if col := rel.column(item.name); col == nil {
+			if col := rel.findColumn(item.name); col == nil {
 				return errors.NoDBColumnError
 			}
 		}
@@ -598,7 +613,7 @@ func (c *pgchecker) checkonconflict(onconf *onConflictBlock) error {
 	return nil
 }
 
-func (c *pgchecker) checkwhere(where *whereBlock) error {
+func (c *pgchecker) checkWhereBlock(where *whereBlock) error {
 	type loopstate struct {
 		conds []*searchCondition // the current iteration search conditions
 		idx   int                // keeps track of the field index
@@ -622,7 +637,7 @@ stackloop:
 			case *searchConditionField:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(cond.colId)
+				col, err := c.findColumnByColId(cond.colId)
 				if err != nil {
 					return err
 				}
@@ -658,7 +673,7 @@ stackloop:
 				} else {
 					// Check that the Field's type can be
 					// compared to that of the Column.
-					if !c.cancompare(col, fieldoids, cond.pred) {
+					if !c.canCompare(col, fieldoids, cond.pred) {
 						return errors.BadFieldToColumnTypeError
 					}
 				}
@@ -667,7 +682,7 @@ stackloop:
 			case *searchConditionColumn:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(cond.colId)
+				col, err := c.findColumnByColId(cond.colId)
 				if err != nil {
 					return err
 				}
@@ -689,7 +704,7 @@ stackloop:
 					// Get the type of the right hand side, which is
 					// either a column or a literal expression.
 					if len(cond.colId2.name) > 0 {
-						col2, err := c.column(cond.colId2)
+						col2, err := c.findColumnByColId(cond.colId2)
 						if err != nil {
 							return err
 						}
@@ -715,14 +730,14 @@ stackloop:
 					}
 
 					rhsoids := []pgoid{typ.oid}
-					if !c.cancompare(col, rhsoids, cond.pred) {
+					if !c.canCompare(col, rhsoids, cond.pred) {
 						return errors.BadColumnToLiteralComparisonError
 					}
 				}
 			case *searchConditionBetween:
 				// Check that the referenced Column is present
 				// in one of the associated relations.
-				col, err := c.column(cond.colId)
+				col, err := c.findColumnByColId(cond.colId)
 				if err != nil {
 					return err
 				}
@@ -732,7 +747,7 @@ stackloop:
 					var argoids []pgoid
 					switch a := arg.(type) {
 					case colId:
-						col2, err := c.column(a)
+						col2, err := c.findColumnByColId(a)
 						if err != nil {
 							return err
 						}
@@ -741,7 +756,7 @@ stackloop:
 						argoids = c.typeoids(a.typ)
 					}
 
-					if !c.cancompare(col, argoids, isGT) {
+					if !c.canCompare(col, argoids, isGT) {
 						return errors.BadColumnToColumnTypeComparisonError
 					}
 				}
@@ -760,12 +775,12 @@ stackloop:
 // typeoids returns a list of OIDs of those PostgreSQL types that can be
 // used to hold a value of a Go type represented by the given typeInfo.
 func (c *pgchecker) typeoids(typ typeInfo) []pgoid {
-	switch typstr := typ.string(true); typstr {
-	case goTypeStringMap, goTypeNullStringMap:
+	switch typstr := typ.goTypeId(false, false, true); typstr {
+	case goTypeStringMap, goTypeNullStringMap, goTypeStringPtrMap:
 		if t := c.pg.cat.typebyname("hstore"); t != nil {
 			return []pgoid{t.oid}
 		}
-	case goTypeStringMapSlice, goTypeNullStringMapSlice:
+	case goTypeStringMapSlice, goTypeNullStringMapSlice, goTypeStringPtrMapSlice:
 		if t := c.pg.cat.typebyname("_hstore"); t != nil {
 			return []pgoid{t.oid}
 		}
@@ -777,9 +792,9 @@ func (c *pgchecker) typeoids(typ typeInfo) []pgoid {
 	return nil
 }
 
-// cancompare reports whether a value of the given col's type can be compared to,
+// canCompare reports whether a value of the given col's type can be compared to,
 // using the predicate, a value of one of the types specified by the given oids.
-func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, pred predicate) bool {
+func (c *pgchecker) canCompare(col *pgcolumn, rhstypes []pgoid, pred predicate) bool {
 	name := predicateToBasePGOps[pred]
 	left := col.typ.oid
 	for _, right := range rhstypes {
@@ -795,10 +810,10 @@ func (c *pgchecker) cancompare(col *pgcolumn, rhstypes []pgoid, pred predicate) 
 	return false
 }
 
-// canassign reports whether a value
-func (c *pgchecker) canassign(col *pgcolumn, field *fieldInfo, dataOp dataOperation) bool {
+// canAssign reports whether a value
+func (c *pgchecker) canAssign(info *fieldColumnInfo, col *pgcolumn, field *fieldInfo, dataOp dataOperation) bool {
 	// TODO(mkopriva): this returns on success, so write tests that test
-	// successful scenarios...
+	// successful scenarios so that every code branch is covered.
 
 	// If the column is gonna be written to and the field's type knows
 	// how to encode itself to a database value, accept.
@@ -812,48 +827,27 @@ func (c *pgchecker) canassign(col *pgcolumn, field *fieldInfo, dataOp dataOperat
 		return true
 	}
 
-	// If the column's type is json(b) and the "useJSON" directive was used or
-	// the field's type implements json.Marshaler/json.Unmarshaler, accept.
-	if col.typ.oid == pgtyp_json || col.typ.oid == pgtyp_jsonb {
-		if field.useJSON || (dataOp == dataWrite && field.typ.canJSONMarshal()) ||
-			(dataOp == dataRead && field.typ.canJSONUnmarshal()) {
-			return true
-		}
-	}
+	oid := col.typ.oid
+	gotyp := field.typ.goTypeId(false, false, true)
+	typkey := pgsqlTypeKey{oid: oid}
 
-	// If the column's type is json(b) array and the field's type is a slice
-	// whose element type implements json.Marshaler/json.Unmarshaler, accept.
-	if col.typ.oid == pgtyp_jsonarr || col.typ.oid == pgtyp_jsonbarr {
-		if (dataOp == dataWrite && field.typ.kind == typeKindSlice && field.typ.elem.canJSONMarshal()) ||
-			(dataOp == dataRead && field.typ.kind == typeKindSlice && field.typ.elem.canJSONUnmarshal()) {
-			return true
+	// Because the pgsql.JSON and pgsql.XML transformers both accept the empty
+	// interface as their argument, if the field's type is not considered as
+	// raw data (string or []byte types) it can be substituted with the interface{}
+	// type for the purpose of resolving the pgsql transformer.
+	if oid == pgtyp_json || oid == pgtyp_jsonb || oid == pgtyp_xml {
+		if gotyp != goTypeString && gotyp != goTypeByteSlice {
+			gotyp = goTypeEmptyInterface
 		}
-	}
 
-	// If the column's type is xml and the "useXML" directive was used or
-	// the field's type implements xml.Marshaler/xml.Unmarshaler, accept.
-	if col.typ.oid == pgtyp_xml {
-		if field.useXML || (dataOp == dataWrite && field.typ.canXMLMarshal()) ||
-			(dataOp == dataRead && field.typ.canXMLUnmarshal()) {
-			return true
-		}
+		info.pgsql = pgsqlTypeTable[typkey][gotyp]
+		return true
 	}
-
-	// If the column's type is xml array and the field's type is a slice
-	// whose element type implements xml.Marshaler/xml.Unmarshaler, accept.
-	if col.typ.oid == pgtyp_xmlarr {
-		if (dataOp == dataWrite && field.typ.kind == typeKindSlice && field.typ.elem.canXMLMarshal()) ||
-			(dataOp == dataRead && field.typ.kind == typeKindSlice && field.typ.elem.canXMLUnmarshal()) {
-			return true
-		}
-	}
-
-	conv := pg2goconv{pgtyp: col.typ.oid, gotyp: field.typ.string(true)}
 
 	// Columns with a type in the bit or char family and a typmod of 1 have
 	// a distinct Go representation then those with a typmod != 1.
 	if col.typ.isbase(pgtyp_bit, pgtyp_varbit, pgtyp_char, pgtyp_varchar, pgtyp_bpchar) {
-		conv.typmod1 = (col.typmod == 1)
+		typkey.typmod1 = (col.typmod == 1)
 	}
 
 	// Columns with type numeric that have a precision but no scale, have
@@ -863,68 +857,43 @@ func (c *pgchecker) canassign(col *pgcolumn, field *fieldInfo, dataOp dataOperat
 		precision := ((col.typmod - 4) >> 16) & 65535
 		scale := (col.typmod - 4) & 65535
 		if precision > 0 && scale == 0 {
-			conv.noscale = true
+			typkey.noscale = true
 		}
 	}
 
-	if _, ok := pg2goconversions[conv]; ok {
+	if entry, ok := pgsqlTypeTable[typkey][gotyp]; ok {
+		info.pgsql = entry
 		return true
 	}
 
-	// If casting is allowed check if the type to which the field will be
-	// converted can be coerced to the type of the column.
-	if field.canCast {
-		return c.cancoerce(col, field)
-	}
-	return false
-}
-
-// cancoerce reports whether or not a value of the given field's type can
-// be coerced into a value of the column's type.
-func (c *pgchecker) cancoerce(col *pgcolumn, field *fieldInfo) bool {
-	// if the target type is of the string category, accept.
+	// If the target type is of the string category, accept.
 	if col.typ.category == pgtypcategory_string {
 		return true
 	}
-	// if the target type is of the array category with an element type of
-	// the string category, and the source type is a slice or an array, accept.
-	if col.typ.category == pgtypcategory_array && (field.typ.kind == typeKindSlice || field.typ.kind == typeKindArray) {
+
+	// If the field's type is []string or [][]byte and the column's type is an
+	// array type whose element type belongs to the string category then the oid
+	// can be substituted with the text[] type for the purpose of resolving a
+	// compatible pgsql transformer.
+	if (gotyp == goTypeStringSlice || gotyp == goTypeByteSliceSlice) && col.typ.category == pgtypcategory_array {
 		elemtyp := c.pg.cat.types[col.typ.elem]
 		if elemtyp != nil && elemtyp.category == pgtypcategory_string {
 			return true
 		}
 	}
 
-	targetid := col.typ.oid
-	inputids := c.typeoids(field.typ)
-	for _, inputid := range inputids {
-		if c.cancoerceoid(targetid, inputid) {
-			return true
-		}
-
-		if col.typ.category == pgtypcategory_array && (targetid != pgtyp_int2vector && targetid != pgtyp_oidvector) {
-			if srctyp := c.pg.cat.types[inputid]; srctyp != nil && srctyp.category == pgtypcategory_array {
-				if col.typ.elem == srctyp.elem {
-					return true
-				}
-				if c.pg.cat.cancasti(col.typ.elem, srctyp.elem) {
-					return true
-				}
-			}
-		}
-	}
+	// TODO(mkopriva): implement canAssign for domain types
 	if col.typ.typ == pgtyptype_domain {
-		// TODO(mkopriva): implement cancoerce for domain types
 		return false
 	}
+	// TODO(mkopriva): implement canAssign for composite types
 	if col.typ.typ == pgtyptype_composite {
-		// TODO(mkopriva): implement cancoerce for composite types
 		return false
 	}
 	return false
 }
 
-func (c *pgchecker) cancoerceoid(targetid, inputid pgoid) bool {
+func (c *pgchecker) canCoerceOID(targetid, inputid pgoid) bool {
 	// no problem if same type
 	if targetid == inputid {
 		return true
@@ -957,13 +926,13 @@ func (c *pgchecker) checkModifierFunction(fn funcName, col *pgcolumn, fieldoids 
 	if proclist, ok := c.pg.cat.procs[fn]; ok {
 		for _, proc := range proclist {
 			// ok if the column's type can be coerced to the function argument's type
-			if c.cancoerceoid(proc.argtype, col.typ.oid) {
+			if c.canCoerceOID(proc.argtype, col.typ.oid) {
 				ok1 = true
 			}
 
 			// ok if one of the fieldoids types can be assigned to the function argument's type
 			for _, foid := range fieldoids {
-				if c.cancoerceoid(proc.argtype, foid) {
+				if c.canCoerceOID(proc.argtype, foid) {
 					ok2 = true
 				}
 			}
@@ -975,7 +944,7 @@ func (c *pgchecker) checkModifierFunction(fn funcName, col *pgcolumn, fieldoids 
 	return nil
 }
 
-func (c *pgchecker) loadrelation(id relId) (*pgrelation, error) {
+func (c *pgchecker) loadRelation(id relId) (*pgrelation, error) {
 	rel := new(pgrelation)
 	rel.name = id.name
 	rel.namespace = id.qual
@@ -1077,7 +1046,7 @@ func (c *pgchecker) loadrelation(id relId) (*pgrelation, error) {
 			return nil, err
 		}
 
-		ind.indexpr = parseindexpr(ind.indexdef)
+		ind.indexpr = parseIndexExpr(ind.indexdef)
 		rel.indexes = append(rel.indexes, ind)
 	}
 	if err := rows.Err(); err != nil {
@@ -1095,16 +1064,30 @@ func (c *pgchecker) loadrelation(id relId) (*pgrelation, error) {
 	return rel, nil
 }
 
-func (c *pgchecker) column(id colId) (*pgcolumn, error) {
+func (c *pgchecker) findColumnByColId(id colId) (*pgcolumn, error) {
 	rel, ok := c.relmap[id.qual]
 	if !ok {
 		return nil, errors.NoDBRelationError
 	}
-	col := rel.column(id.name)
+	col := rel.findColumn(id.name)
 	if col == nil {
 		return nil, errors.NoDBColumnError
 	}
 	return col, nil
+}
+
+func (c *pgchecker) findFieldByColId(id colId) (*fieldInfo, error) {
+	// make sure the column actually exists
+	if _, err := c.findColumnByColId(id); err != nil {
+		return nil, err
+	}
+
+	for _, field := range c.ti.query.dataField.data.fields {
+		if field.colId.name == id.name {
+			return field, nil
+		}
+	}
+	return nil, errors.NoColumnFieldError
 }
 
 type pgrelation struct {
@@ -1117,7 +1100,7 @@ type pgrelation struct {
 	indexes     []*pgindex
 }
 
-func (rel *pgrelation) column(name string) *pgcolumn {
+func (rel *pgrelation) findColumn(name string) *pgcolumn {
 	for _, col := range rel.columns {
 		if col.name == name {
 			return col
@@ -1126,7 +1109,7 @@ func (rel *pgrelation) column(name string) *pgcolumn {
 	return nil
 }
 
-func (rel *pgrelation) constraint(name string) *pgconstraint {
+func (rel *pgrelation) findConstraint(name string) *pgconstraint {
 	for _, con := range rel.constraints {
 		if con.name == name {
 			return con
@@ -1135,7 +1118,7 @@ func (rel *pgrelation) constraint(name string) *pgconstraint {
 	return nil
 }
 
-func (rel *pgrelation) index(name string) *pgindex {
+func (rel *pgrelation) findIndex(name string) *pgindex {
 	for _, ind := range rel.indexes {
 		if ind.name == name {
 			return ind
@@ -1474,6 +1457,10 @@ const (
 
 type pgoid uint32
 
+func (oid pgoid) getArrayOID() pgoid {
+	return pgoidToArrayOID[oid]
+}
+
 // postgres types
 const (
 	pgtyp_any            pgoid = 2276
@@ -1569,6 +1556,9 @@ const (
 	pgtyp_varchararr     pgoid = 1015
 	pgtyp_xml            pgoid = 142
 	pgtyp_xmlarr         pgoid = 143
+
+	pgtyp_hstore    pgoid = 9999
+	pgtyp_hstorearr pgoid = 9998
 )
 
 // postgres type types
@@ -1617,169 +1607,56 @@ const (
 	pgcast_assignment = "a"
 )
 
-// represents a conversion between a postgres type and a go type
-type pg2goconv struct {
-	pgtyp   pgoid
-	gotyp   string
-	typmod1 bool // typmod is set to 1
-	noscale bool // numeric type with precission but no scale
+var pgoidToArrayOID = map[pgoid]pgoid{
+	pgtyp_bit:         pgtyp_bitarr,
+	pgtyp_bool:        pgtyp_boolarr,
+	pgtyp_box:         pgtyp_boxarr,
+	pgtyp_bpchar:      pgtyp_bpchararr,
+	pgtyp_bytea:       pgtyp_byteaarr,
+	pgtyp_char:        pgtyp_chararr,
+	pgtyp_cidr:        pgtyp_cidrarr,
+	pgtyp_circle:      pgtyp_circlearr,
+	pgtyp_date:        pgtyp_datearr,
+	pgtyp_daterange:   pgtyp_daterangearr,
+	pgtyp_float4:      pgtyp_float4arr,
+	pgtyp_float8:      pgtyp_float8arr,
+	pgtyp_inet:        pgtyp_inetarr,
+	pgtyp_int2:        pgtyp_int2arr,
+	pgtyp_int2vector:  pgtyp_int2vectorarr,
+	pgtyp_int4:        pgtyp_int4arr,
+	pgtyp_int4range:   pgtyp_int4rangearr,
+	pgtyp_int8:        pgtyp_int8arr,
+	pgtyp_int8range:   pgtyp_int8rangearr,
+	pgtyp_interval:    pgtyp_intervalarr,
+	pgtyp_json:        pgtyp_jsonarr,
+	pgtyp_jsonb:       pgtyp_jsonbarr,
+	pgtyp_line:        pgtyp_linearr,
+	pgtyp_lseg:        pgtyp_lsegarr,
+	pgtyp_macaddr:     pgtyp_macaddrarr,
+	pgtyp_macaddr8:    pgtyp_macaddr8arr,
+	pgtyp_money:       pgtyp_moneyarr,
+	pgtyp_numeric:     pgtyp_numericarr,
+	pgtyp_numrange:    pgtyp_numrangearr,
+	pgtyp_path:        pgtyp_patharr,
+	pgtyp_point:       pgtyp_pointarr,
+	pgtyp_polygon:     pgtyp_polygonarr,
+	pgtyp_text:        pgtyp_textarr,
+	pgtyp_time:        pgtyp_timearr,
+	pgtyp_timestamp:   pgtyp_timestamparr,
+	pgtyp_timestamptz: pgtyp_timestamptzarr,
+	pgtyp_timetz:      pgtyp_timetzarr,
+	pgtyp_tsquery:     pgtyp_tsqueryarr,
+	pgtyp_tsrange:     pgtyp_tsrangearr,
+	pgtyp_tstzrange:   pgtyp_tstzrangearr,
+	pgtyp_tsvector:    pgtyp_tsvectorarr,
+	pgtyp_uuid:        pgtyp_uuidarr,
+	pgtyp_varbit:      pgtyp_varbitarr,
+	pgtyp_varchar:     pgtyp_varchararr,
+	pgtyp_xml:         pgtyp_xmlarr,
+	pgtyp_hstore:      pgtyp_hstorearr,
 }
 
-// a map of supported conversions
-var pg2goconversions = map[pg2goconv]struct{}{
-	// typemod=1
-	{pgtyp: pgtyp_char, gotyp: goTypeRune, typmod1: true}:            {},
-	{pgtyp: pgtyp_chararr, gotyp: goTypeRuneSlice, typmod1: true}:    {},
-	{pgtyp: pgtyp_varchar, gotyp: goTypeRune, typmod1: true}:         {},
-	{pgtyp: pgtyp_varchararr, gotyp: goTypeRuneSlice, typmod1: true}: {},
-	{pgtyp: pgtyp_bpchar, gotyp: goTypeRune, typmod1: true}:          {},
-	{pgtyp: pgtyp_bpchararr, gotyp: goTypeRuneSlice, typmod1: true}:  {},
-	// numeric with scale=0
-	{pgtyp: pgtyp_numeric, gotyp: goTypeBigInt, noscale: true}:         {},
-	{pgtyp: pgtyp_numericarr, gotyp: goTypeBigIntSlice, noscale: true}: {},
-	// everything else
-	{pgtyp: pgtyp_bit, gotyp: goTypeString}:                      {},
-	{pgtyp: pgtyp_bit, gotyp: goTypeByteSlice}:                   {},
-	{pgtyp: pgtyp_bitarr, gotyp: goTypeStringSlice}:              {},
-	{pgtyp: pgtyp_bitarr, gotyp: goTypeByteSliceSlice}:           {},
-	{pgtyp: pgtyp_bool, gotyp: goTypeBool}:                       {},
-	{pgtyp: pgtyp_boolarr, gotyp: goTypeBoolSlice}:               {},
-	{pgtyp: pgtyp_box, gotyp: goTypeFloat64Array2Array2}:         {},
-	{pgtyp: pgtyp_boxarr, gotyp: goTypeFloat64Array2Array2Slice}: {},
-	{pgtyp: pgtyp_bpchar, gotyp: goTypeString}:                   {},
-	{pgtyp: pgtyp_bpchar, gotyp: goTypeByteSlice}:                {},
-	{pgtyp: pgtyp_bpchararr, gotyp: goTypeStringSlice}:           {},
-	{pgtyp: pgtyp_bpchararr, gotyp: goTypeByteSliceSlice}:        {},
-	{pgtyp: pgtyp_bpchararr, gotyp: goTypeRuneSliceSlice}:        {},
-	{pgtyp: pgtyp_bytea, gotyp: goTypeString}:                    {},
-	{pgtyp: pgtyp_bytea, gotyp: goTypeByteSlice}:                 {},
-	{pgtyp: pgtyp_byteaarr, gotyp: goTypeStringSlice}:            {},
-	{pgtyp: pgtyp_byteaarr, gotyp: goTypeByteSliceSlice}:         {},
-	{pgtyp: pgtyp_char, gotyp: goTypeString}:                     {},
-	{pgtyp: pgtyp_char, gotyp: goTypeByteSlice}:                  {},
-	{pgtyp: pgtyp_chararr, gotyp: goTypeStringSlice}:             {},
-	{pgtyp: pgtyp_chararr, gotyp: goTypeByteSliceSlice}:          {},
-	{pgtyp: pgtyp_chararr, gotyp: goTypeRuneSliceSlice}:          {},
-	{pgtyp: pgtyp_cidr, gotyp: goTypeString}:                     {},
-	{pgtyp: pgtyp_cidr, gotyp: goTypeIPNet}:                      {},
-	{pgtyp: pgtyp_cidrarr, gotyp: goTypeStringSlice}:             {},
-	{pgtyp: pgtyp_cidrarr, gotyp: goTypeIPNetSlice}:              {},
-	// TODO {pgtyp: pgtyp_circle, gotyp: ""}:        {},
-	// TODO {pgtyp: pgtyp_circlearr, gotyp: ""}:        {},
-	{pgtyp: pgtyp_date, gotyp: goTypeTime}:                     {},
-	{pgtyp: pgtyp_datearr, gotyp: goTypeTimeSlice}:             {},
-	{pgtyp: pgtyp_daterange, gotyp: goTypeTimeArray2}:          {},
-	{pgtyp: pgtyp_daterangearr, gotyp: goTypeTimeArray2Slice}:  {},
-	{pgtyp: pgtyp_float4, gotyp: goTypeFloat32}:                {},
-	{pgtyp: pgtyp_float4arr, gotyp: goTypeFloat32Slice}:        {},
-	{pgtyp: pgtyp_float8, gotyp: goTypeFloat64}:                {},
-	{pgtyp: pgtyp_float8arr, gotyp: goTypeFloat64Slice}:        {},
-	{pgtyp: pgtyp_inet, gotyp: goTypeString}:                   {},
-	{pgtyp: pgtyp_inet, gotyp: goTypeIPNet}:                    {},
-	{pgtyp: pgtyp_inetarr, gotyp: goTypeStringSlice}:           {},
-	{pgtyp: pgtyp_inetarr, gotyp: goTypeIPNetSlice}:            {},
-	{pgtyp: pgtyp_int2, gotyp: goTypeInt16}:                    {},
-	{pgtyp: pgtyp_int2arr, gotyp: goTypeInt16Slice}:            {},
-	{pgtyp: pgtyp_int2vector, gotyp: goTypeInt16Slice}:         {},
-	{pgtyp: pgtyp_int2vectorarr, gotyp: goTypeInt16SliceSlice}: {},
-	{pgtyp: pgtyp_int4, gotyp: goTypeInt32}:                    {},
-	{pgtyp: pgtyp_int4, gotyp: goTypeInt}:                      {},
-	{pgtyp: pgtyp_int4arr, gotyp: goTypeInt32Slice}:            {},
-	{pgtyp: pgtyp_int4arr, gotyp: goTypeIntSlice}:              {},
-	{pgtyp: pgtyp_int4range, gotyp: goTypeInt32Array2}:         {},
-	{pgtyp: pgtyp_int4range, gotyp: goTypeIntArray2}:           {},
-	{pgtyp: pgtyp_int4rangearr, gotyp: goTypeInt32Array2Slice}: {},
-	{pgtyp: pgtyp_int4rangearr, gotyp: goTypeIntArray2Slice}:   {},
-	{pgtyp: pgtyp_int8, gotyp: goTypeInt64}:                    {},
-	{pgtyp: pgtyp_int8, gotyp: goTypeInt}:                      {},
-	{pgtyp: pgtyp_int8arr, gotyp: goTypeInt64Slice}:            {},
-	{pgtyp: pgtyp_int8arr, gotyp: goTypeIntSlice}:              {},
-	{pgtyp: pgtyp_int8range, gotyp: goTypeInt64Array2}:         {},
-	{pgtyp: pgtyp_int8range, gotyp: goTypeIntArray2}:           {},
-	{pgtyp: pgtyp_int8rangearr, gotyp: goTypeInt64Array2Slice}: {},
-	{pgtyp: pgtyp_int8rangearr, gotyp: goTypeIntArray2Slice}:   {},
-	// TODO {pgtyp: pgtyp_interval, gotyp: ""}:   {},
-	// TODO {pgtyp: pgtyp_intervalarr, gotyp: ""}:   {},
-	{pgtyp: pgtyp_json, gotyp: goTypeString}:                        {},
-	{pgtyp: pgtyp_json, gotyp: goTypeByteSlice}:                     {},
-	{pgtyp: pgtyp_jsonarr, gotyp: goTypeStringSlice}:                {},
-	{pgtyp: pgtyp_jsonarr, gotyp: goTypeByteSliceSlice}:             {},
-	{pgtyp: pgtyp_jsonb, gotyp: goTypeString}:                       {},
-	{pgtyp: pgtyp_jsonb, gotyp: goTypeByteSlice}:                    {},
-	{pgtyp: pgtyp_jsonbarr, gotyp: goTypeStringSlice}:               {},
-	{pgtyp: pgtyp_jsonbarr, gotyp: goTypeByteSliceSlice}:            {},
-	{pgtyp: pgtyp_line, gotyp: goTypeFloat64Array3}:                 {},
-	{pgtyp: pgtyp_linearr, gotyp: goTypeFloat64Array3Slice}:         {},
-	{pgtyp: pgtyp_lseg, gotyp: goTypeFloat64Array2Array2}:           {},
-	{pgtyp: pgtyp_lsegarr, gotyp: goTypeFloat64Array2Array2Slice}:   {},
-	{pgtyp: pgtyp_macaddr, gotyp: goTypeString}:                     {},
-	{pgtyp: pgtyp_macaddr, gotyp: goTypeByteSlice}:                  {},
-	{pgtyp: pgtyp_macaddrarr, gotyp: goTypeStringSlice}:             {},
-	{pgtyp: pgtyp_macaddrarr, gotyp: goTypeByteSliceSlice}:          {},
-	{pgtyp: pgtyp_macaddr8, gotyp: goTypeString}:                    {},
-	{pgtyp: pgtyp_macaddr8, gotyp: goTypeByteSlice}:                 {},
-	{pgtyp: pgtyp_macaddr8arr, gotyp: goTypeStringSlice}:            {},
-	{pgtyp: pgtyp_macaddr8arr, gotyp: goTypeByteSliceSlice}:         {},
-	{pgtyp: pgtyp_money, gotyp: goTypeInt64}:                        {},
-	{pgtyp: pgtyp_moneyarr, gotyp: goTypeInt64Slice}:                {},
-	{pgtyp: pgtyp_numeric, gotyp: goTypeFloat64}:                    {},
-	{pgtyp: pgtyp_numeric, gotyp: goTypeBigFloat}:                   {},
-	{pgtyp: pgtyp_numericarr, gotyp: goTypeFloat64Slice}:            {},
-	{pgtyp: pgtyp_numericarr, gotyp: goTypeBigFloatSlice}:           {},
-	{pgtyp: pgtyp_numrange, gotyp: goTypeFloat64Array2}:             {},
-	{pgtyp: pgtyp_numrange, gotyp: goTypeBigFloatArray2}:            {},
-	{pgtyp: pgtyp_numrangearr, gotyp: goTypeFloat64Array2Slice}:     {},
-	{pgtyp: pgtyp_numrangearr, gotyp: goTypeBigFloatArray2Slice}:    {},
-	{pgtyp: pgtyp_path, gotyp: goTypeFloat64Array2Slice}:            {},
-	{pgtyp: pgtyp_patharr, gotyp: goTypeFloat64Array2SliceSlice}:    {},
-	{pgtyp: pgtyp_point, gotyp: goTypeFloat64Array2}:                {},
-	{pgtyp: pgtyp_pointarr, gotyp: goTypeFloat64Array2Slice}:        {},
-	{pgtyp: pgtyp_polygon, gotyp: goTypeFloat64Array2Slice}:         {},
-	{pgtyp: pgtyp_polygonarr, gotyp: goTypeFloat64Array2SliceSlice}: {},
-	{pgtyp: pgtyp_text, gotyp: goTypeString}:                        {},
-	{pgtyp: pgtyp_text, gotyp: goTypeByteSlice}:                     {},
-	{pgtyp: pgtyp_textarr, gotyp: goTypeStringSlice}:                {},
-	{pgtyp: pgtyp_textarr, gotyp: goTypeByteSliceSlice}:             {},
-	{pgtyp: pgtyp_time, gotyp: goTypeTime}:                          {},
-	{pgtyp: pgtyp_timearr, gotyp: goTypeTimeSlice}:                  {},
-	{pgtyp: pgtyp_timestamp, gotyp: goTypeTime}:                     {},
-	{pgtyp: pgtyp_timestamparr, gotyp: goTypeTimeSlice}:             {},
-	{pgtyp: pgtyp_timestamptz, gotyp: goTypeTime}:                   {},
-	{pgtyp: pgtyp_timestamptzarr, gotyp: goTypeTimeSlice}:           {},
-	{pgtyp: pgtyp_timetz, gotyp: goTypeTime}:                        {},
-	{pgtyp: pgtyp_timetzarr, gotyp: goTypeTimeSlice}:                {},
-	{pgtyp: pgtyp_tsquery, gotyp: goTypeString}:                     {},
-	{pgtyp: pgtyp_tsquery, gotyp: goTypeByteSlice}:                  {},
-	{pgtyp: pgtyp_tsqueryarr, gotyp: goTypeString}:                  {},
-	{pgtyp: pgtyp_tsqueryarr, gotyp: goTypeByteSliceSlice}:          {},
-	{pgtyp: pgtyp_tsrange, gotyp: goTypeTimeArray2}:                 {},
-	{pgtyp: pgtyp_tsrangearr, gotyp: goTypeTimeArray2Slice}:         {},
-	{pgtyp: pgtyp_tstzrange, gotyp: goTypeTimeArray2}:               {},
-	{pgtyp: pgtyp_tstzrangearr, gotyp: goTypeTimeArray2Slice}:       {},
-	{pgtyp: pgtyp_tsvector, gotyp: goTypeString}:                    {},
-	{pgtyp: pgtyp_tsvector, gotyp: goTypeByteSlice}:                 {},
-	{pgtyp: pgtyp_tsvectorarr, gotyp: goTypeStringSlice}:            {},
-	{pgtyp: pgtyp_tsvectorarr, gotyp: goTypeByteSliceSlice}:         {},
-	{pgtyp: pgtyp_uuid, gotyp: goTypeString}:                        {},
-	{pgtyp: pgtyp_uuid, gotyp: goTypeByteArray16}:                   {},
-	{pgtyp: pgtyp_uuidarr, gotyp: goTypeStringSlice}:                {},
-	{pgtyp: pgtyp_uuidarr, gotyp: goTypeByteArray16Slice}:           {},
-	{pgtyp: pgtyp_varbit, gotyp: goTypeString}:                      {},
-	{pgtyp: pgtyp_varbit, gotyp: goTypeByteSlice}:                   {},
-	{pgtyp: pgtyp_varbitarr, gotyp: goTypeStringSlice}:              {},
-	{pgtyp: pgtyp_varbitarr, gotyp: goTypeByteSliceSlice}:           {},
-	{pgtyp: pgtyp_varchar, gotyp: goTypeString}:                     {},
-	{pgtyp: pgtyp_varchar, gotyp: goTypeByteSlice}:                  {},
-	{pgtyp: pgtyp_varchararr, gotyp: goTypeStringSlice}:             {},
-	{pgtyp: pgtyp_varchararr, gotyp: goTypeByteSliceSlice}:          {},
-	{pgtyp: pgtyp_varchararr, gotyp: goTypeRuneSliceSlice}:          {},
-	{pgtyp: pgtyp_xml, gotyp: goTypeString}:                         {},
-	{pgtyp: pgtyp_xml, gotyp: goTypeByteSlice}:                      {},
-	{pgtyp: pgtyp_xmlarr, gotyp: goTypeStringSlice}:                 {},
-	{pgtyp: pgtyp_xmlarr, gotyp: goTypeByteSliceSlice}:              {},
-}
-
-var go2pgoids = map[string][]pgoid{
+var go2pgoids = map[goTypeId][]pgoid{
 	goTypeBool:                     {pgtyp_bool},
 	goTypeBoolSlice:                {pgtyp_boolarr},
 	goTypeInt:                      {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
@@ -1883,47 +1760,12 @@ var predicateToBasePGOps = map[predicate]string{
 	notIn:       "<>",
 }
 
-////////////////////////////////////////////////////////////////////////////////
+var rxUsingMethod = regexp.MustCompile(`(?i:\susing\s)`)
 
-// helper type
-type int2vec []int16
-
-func (v *int2vec) Scan(src interface{}) error {
-	if b, ok := src.([]byte); ok {
-		elems := strings.Split(string(b), " ")
-		for _, e := range elems {
-			i, err := strconv.ParseInt(e, 10, 16)
-			if err != nil {
-				return err
-			}
-			*v = append(*v, int16(i))
-		}
-	}
-	return nil
-}
-
-// helper func
-func matchnums(a, b []int16) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-aloop:
-	for _, x := range a {
-		for _, y := range b {
-			if x == y {
-				continue aloop
-			}
-		}
-		return false // x not found in b
-	}
-	return true
-}
-
-var reusingmethod = regexp.MustCompile(`(?i:\susing\s)`)
-
-func parseindexpr(s string) (expr string) {
-	loc := reusingmethod.FindStringIndex(s)
+// parseIndexExpr extracts the index_expression from a CREATE INDEX command.
+// e.g. CREATE INDEX index_name ON table_name USING method_name (index_expression);
+func parseIndexExpr(s string) (expr string) {
+	loc := rxUsingMethod.FindStringIndex(s)
 	if len(loc) > 1 {
 		s = s[loc[1]:]
 	}
@@ -1964,5 +1806,42 @@ func parseindexpr(s string) (expr string) {
 			}
 		}
 	}
+
 	return s[:position]
+}
+
+// matchNumbers is a helper func that reports whether a and b both contain
+// the same numbers regardless of the order.
+func matchNumbers(a, b []int16) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+toploop:
+	for _, x := range a {
+		for _, y := range b {
+			if x == y {
+				continue toploop
+			}
+		}
+		return false // x not found in b
+	}
+	return true
+}
+
+// helper type
+type int2vec []int16
+
+func (v *int2vec) Scan(src interface{}) error {
+	if b, ok := src.([]byte); ok {
+		elems := strings.Split(string(b), " ")
+		for _, e := range elems {
+			i, err := strconv.ParseInt(e, 10, 16)
+			if err != nil {
+				return err
+			}
+			*v = append(*v, int16(i))
+		}
+	}
+	return nil
 }

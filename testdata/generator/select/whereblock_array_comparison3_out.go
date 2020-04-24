@@ -6,6 +6,7 @@ import (
 	"github.com/frk/gosql/testdata/common"
 
 	"github.com/frk/gosql"
+	"github.com/frk/gosql/pgsql"
 )
 
 func (q *SelectWithWhereBlockArrayComparisonPredicate3Query) Exec(c gosql.Conn) error {
@@ -23,13 +24,13 @@ func (q *SelectWithWhereBlockArrayComparisonPredicate3Query) Exec(c gosql.Conn) 
 	AND u."is_active" = $8` // `
 
 	rows, err := c.Query(queryString,
-		gosql.IntSliceToIntArray(q.Where.IDs),
+		pgsql.Int4ArrayFromIntSlice(q.Where.IDs),
 		q.Where.CreatedAt.After,
 		q.Where.CreatedAt.Before,
-		gosql.IntSliceToIntArray(q.Where.Or.IDs),
+		pgsql.Int4ArrayFromIntSlice(q.Where.Or.IDs),
 		q.Where.Or.CreatedBefore,
-		gosql.StringSliceToTextArray(q.Where.Emails),
-		gosql.StringSliceToTextArray(q.Where.FullNames),
+		pgsql.TextArrayFromStringSlice(q.Where.Emails),
+		pgsql.TextArrayFromStringSlice(q.Where.FullNames),
 		q.Where.IsActive,
 	)
 	if err != nil {

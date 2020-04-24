@@ -457,7 +457,7 @@ type InsertPostgresTestBAD_BadXMLOption struct {
 //BAD: field type incompatible with column type
 type InsertPostgresTestBAD_BadFieldToColumnType struct {
 	Rel struct {
-		B int `sql:"col_b"`
+		B int `sql:"col_c"`
 	} `rel:"column_tests_1:c"`
 }
 

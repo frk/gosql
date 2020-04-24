@@ -562,14 +562,10 @@ stackloop:
 			// such the analysis of leaf-specific information
 			// needs to be carried out.
 			f.path = loop.path
-			f.isPKey = tag.HasOption("sql", "pk")
 			f.nullEmpty = tag.HasOption("sql", "nullempty")
 			f.readOnly = tag.HasOption("sql", "ro")
 			f.writeOnly = tag.HasOption("sql", "wo")
-			f.useJSON = tag.HasOption("sql", "json")
-			f.useXML = tag.HasOption("sql", "xml")
 			f.useAdd = tag.HasOption("sql", "add")
-			f.canCast = tag.HasOption("sql", "cast")
 			f.useDefault = tag.HasOption("sql", "default")
 			f.useCoalesce, f.coalesceValue = a.coalesceInfo(tag)
 
@@ -604,11 +600,6 @@ func (a *analyzer) typeInfo(tt types.Type) (typ typeInfo, base types.Type) {
 		typ.isImported = a.isImportedType(named)
 		typ.isScanner = typesutil.ImplementsScanner(named)
 		typ.isValuer = typesutil.ImplementsValuer(named)
-		typ.isTime = typesutil.IsTime(named)
-		typ.isJSONMarshaler = typesutil.ImplementsJSONMarshaler(named)
-		typ.isJSONUnmarshaler = typesutil.ImplementsJSONUnmarshaler(named)
-		typ.isXMLMarshaler = typesutil.ImplementsXMLMarshaler(named)
-		typ.isXMLUnmarshaler = typesutil.ImplementsXMLUnmarshaler(named)
 		base = named.Underlying()
 	}
 
@@ -640,10 +631,6 @@ func (a *analyzer) typeInfo(tt types.Type) (typ typeInfo, base types.Type) {
 		if typ.name == "" {
 			typ.isScanner = typesutil.IsScanner(T)
 			typ.isValuer = typesutil.IsValuer(T)
-			typ.isJSONMarshaler = typesutil.IsJSONMarshaler(T)
-			typ.isJSONUnmarshaler = typesutil.IsJSONUnmarshaler(T)
-			typ.isXMLMarshaler = typesutil.IsXMLMarshaler(T)
-			typ.isXMLUnmarshaler = typesutil.IsXMLUnmarshaler(T)
 		}
 	}
 	return typ, base
@@ -695,6 +682,7 @@ func (a *analyzer) iteratorFunction(data *dataType, sig *types.Signature) (*type
 	return named, nil
 }
 
+// typeKind returns the typeKind for the given types.Type.
 func (a *analyzer) typeKind(typ types.Type) typeKind {
 	switch x := typ.(type) {
 	case *types.Basic:
@@ -1699,16 +1687,6 @@ type typeInfo struct {
 	isScanner bool
 	// Indicates whether or not the type implements the driver.Valuer interface.
 	isValuer bool
-	// Indicates whether or not the type implements the json.Marshaler interface.
-	isJSONMarshaler bool
-	// Indicates whether or not the type implements the json.Unmarshaler interface.
-	isJSONUnmarshaler bool
-	// Indicates whether or not the type implements the xml.Marshaler interface.
-	isXMLMarshaler bool
-	// Indicates whether or not the type implements the xml.Unmarshaler interface.
-	isXMLUnmarshaler bool
-	// Indicates whether or not the type is time.Time or a type that embeds time.Time.
-	isTime bool
 	// Indicates whether or not the type is the "byte" alias type.
 	isByte bool
 	// Indicates whether or not the type is the "rune" alias type.
@@ -1723,25 +1701,67 @@ type typeInfo struct {
 	arrayLen int64
 }
 
-// string returns a textual representation of the type that t represents.
-// - If elideptr is true the "*" will be elided from the output.
-func (t *typeInfo) string(elideptr bool) string {
-	if t.isTime {
-		return "time.Time"
+func (t *typeInfo) goTypeId(pkglocal, underlying, elideptr bool) goTypeId {
+	if len(t.name) > 0 && !underlying {
+		if pkglocal && len(t.pkgLocal) > 0 && t.pkgLocal != "." {
+			return goTypeId(t.pkgLocal + "." + t.name)
+		} else if len(t.pkgName) > 0 {
+			return goTypeId(t.pkgName + "." + t.name)
+		}
+		return goTypeId(t.name)
 	}
 
 	switch t.kind {
+	default: // assume builtin basic
+		return goTypeId(typeKindToString[t.kind])
 	case typeKindArray:
-		return "[" + strconv.FormatInt(t.arrayLen, 10) + "]" + t.elem.string(elideptr)
+		return goTypeId("["+strconv.FormatInt(t.arrayLen, 10)+"]") + t.elem.goTypeId(pkglocal, false, false)
 	case typeKindSlice:
-		return "[]" + t.elem.string(elideptr)
+		return "[]" + t.elem.goTypeId(pkglocal, false, false)
 	case typeKindMap:
-		return "map[" + t.key.string(elideptr) + "]" + t.elem.string(elideptr)
+		return goTypeId("map["+t.key.goTypeId(pkglocal, false, false)+"]") + t.elem.goTypeId(pkglocal, false, false)
+	case typeKindPtr:
+		if elideptr {
+			return t.elem.goTypeId(pkglocal, false, false)
+		} else {
+			return "*" + t.elem.goTypeId(pkglocal, false, false)
+		}
+		return "*" + t.elem.goTypeId(pkglocal, false, false)
+	case typeKindUint8:
+		if t.isByte {
+			return "byte"
+		}
+		return "uint8"
+	case typeKindInt32:
+		if t.isRune {
+			return "rune"
+		}
+		return "int32"
+	case typeKindStruct, typeKindInterface, typeKindChan, typeKindFunc:
+		return "<unsupported>"
+	}
+	return "<unknown>"
+}
+
+// string returns a textual representation of the type that t represents.
+// - If elideptr is true the leading "*" will be elided from the output.
+func (t *typeInfo) string(elideptr bool) string {
+	// XXX if t.isTime {
+	// XXX 	return "time.Time"
+	// XXX }
+
+	switch t.kind {
+	case typeKindArray:
+		return "[" + strconv.FormatInt(t.arrayLen, 10) + "]" + t.elem.string(false)
+	case typeKindSlice:
+		return "[]" + t.elem.string(false)
+	case typeKindMap:
+		return "map[" + t.key.string(false) + "]" + t.elem.string(false)
 	case typeKindPtr:
 		if elideptr {
 			return t.elem.string(elideptr)
 		} else {
-			return "*" + t.elem.string(elideptr)
+			return "*" + t.elem.string(false)
 		}
 	case typeKindUint8:
 		if t.isByte {
@@ -1842,30 +1862,6 @@ func (t *typeInfo) isNilable() bool {
 	return t.is(typeKindPtr, typeKindSlice, typeKindArray, typeKindMap, typeKindInterface)
 }
 
-// canJSONMarshal reports whether or not the MarshalJSON method can be invoked
-// on an instance of the type represented by t.
-func (t *typeInfo) canJSONMarshal() bool {
-	return t.isJSONMarshaler || (t.kind == typeKindPtr && t.elem.isJSONMarshaler)
-}
-
-// canJSONUnmarshal reports whether or not the UnmarshalJSON method can
-// be invoked on an instance of the type represented by t.
-func (t *typeInfo) canJSONUnmarshal() bool {
-	return t.isJSONUnmarshaler || (t.kind == typeKindPtr && t.elem.isJSONUnmarshaler)
-}
-
-// canXMLMarshal reports whether or not the MarshalXML method can be invoked
-// on an instance of the type represented by t.
-func (t *typeInfo) canXMLMarshal() bool {
-	return t.isXMLMarshaler || (t.kind == typeKindPtr && t.elem.isXMLMarshaler)
-}
-
-// canXMLUnmarshal reports whether or not the UnmarshalXML method can be
-// invoked on an instance of the type represented by t.
-func (t *typeInfo) canXMLUnmarshal() bool {
-	return t.isXMLUnmarshaler || (t.kind == typeKindPtr && t.elem.isXMLUnmarshaler)
-}
-
 // fieldInfo holds information about a dataType's field.
 type fieldInfo struct {
 	// Name of the struct field.
@@ -1882,8 +1878,6 @@ type fieldInfo struct {
 	tag tagutil.Tag
 	// The identifier of the field's corresponding column.
 	colId colId
-	// Identifies the field's corresponding column as a primary key.
-	isPKey bool
 	// Indicates that if the field's value is EMPTY then NULL should
 	// be stored in the column during INSERT/UPDATE.
 	nullEmpty bool
@@ -1895,18 +1889,10 @@ type fieldInfo struct {
 	writeOnly bool
 	// Indicates that the DEFAULT marker should be used during INSERT/UPDATE.
 	useDefault bool
-	// Indicates that the column value should be marshaled/unmarshaled
-	// to/from JSON before/after being stored/retrieved.
-	useJSON bool
-	// Indicates that the column value should be marshaled/unmarshaled
-	// to/from XML before/after being stored/retrieved.
-	useXML bool
 	// If set to true, it indicates that the provided field value should be
 	// "added" to the already existing column value.
 	// For UPDATEs only.
 	useAdd bool
-	// Indicates whether or not an implicit CAST should be allowed.
-	canCast bool
 	// If set to true, it indicates that the column expression should be
 	// wrapped in a COALESCE call when read from the db.
 	useCoalesce bool
@@ -2547,79 +2533,116 @@ var typeKindToString = map[typeKind]string{
 	typeKindStruct:    "<struct>",
 }
 
+type goTypeId string
+
 const (
 	// A list of common Go types ("identifiers" and "literals")
 	// used for resolving type convertability.
-	goTypeBool                     = "bool"
-	goTypeBoolSlice                = "[]bool"
-	goTypeString                   = "string"
-	goTypeStringSlice              = "[]string"
-	goTypeStringSliceSlice         = "[][]string"
-	goTypeStringMap                = "map[string]string"
-	goTypeStringMapSlice           = "[]map[string]string"
-	goTypeByte                     = "byte"
-	goTypeByteSlice                = "[]byte"
-	goTypeByteSliceSlice           = "[][]byte"
-	goTypeByteArray16              = "[16]byte"
-	goTypeByteArray16Slice         = "[][16]byte"
-	goTypeRune                     = "rune"
-	goTypeRuneSlice                = "[]rune"
-	goTypeRuneSliceSlice           = "[][]rune"
-	goTypeInt                      = "int"
-	goTypeIntSlice                 = "[]int"
-	goTypeIntArray2                = "[2]int"
-	goTypeIntArray2Slice           = "[][2]int"
-	goTypeInt8                     = "int8"
-	goTypeInt8Slice                = "[]int8"
-	goTypeInt8SliceSlice           = "[][]int8"
-	goTypeInt16                    = "int16"
-	goTypeInt16Slice               = "[]int16"
-	goTypeInt16SliceSlice          = "[][]int16"
-	goTypeInt32                    = "int32"
-	goTypeInt32Slice               = "[]int32"
-	goTypeInt32Array2              = "[2]int32"
-	goTypeInt32Array2Slice         = "[][2]int32"
-	goTypeInt64                    = "int64"
-	goTypeInt64Slice               = "[]int64"
-	goTypeInt64Array2              = "[2]int64"
-	goTypeInt64Array2Slice         = "[][2]int64"
-	goTypeUint                     = "uint"
-	goTypeUintSlice                = "[]uint"
-	goTypeUint8                    = "uint8"
-	goTypeUint8Slice               = "[]uint8"
-	goTypeUint16                   = "uint16"
-	goTypeUint16Slice              = "[]uint16"
-	goTypeUint32                   = "uint32"
-	goTypeUint32Slice              = "[]uint32"
-	goTypeUint64                   = "uint64"
-	goTypeUint64Slice              = "[]uint64"
-	goTypeFloat32                  = "float32"
-	goTypeFloat32Slice             = "[]float32"
-	goTypeFloat64                  = "float64"
-	goTypeFloat64Slice             = "[]float64"
-	goTypeFloat64Array2            = "[2]float64"
-	goTypeFloat64Array2Slice       = "[][2]float64"
-	goTypeFloat64Array2SliceSlice  = "[][][2]float64"
-	goTypeFloat64Array2Array2      = "[2][2]float64"
-	goTypeFloat64Array2Array2Slice = "[][2][2]float64"
-	goTypeFloat64Array3            = "[3]float64"
-	goTypeFloat64Array3Slice       = "[][3]float64"
-	goTypeIPNet                    = "net.IPNet"
-	goTypeIPNetSlice               = "[]net.IPNet"
-	goTypeTime                     = "time.Time"
-	goTypeTimeSlice                = "[]time.Time"
-	goTypeTimeArray2               = "[2]time.Time"
-	goTypeTimeArray2Slice          = "[][2]time.Time"
-	goTypeBigInt                   = "big.Int"
-	goTypeBigIntSlice              = "[]big.Int"
-	goTypeBigIntArray2             = "[2]big.Int"
-	goTypeBigIntArray2Slice        = "[][2]big.Int"
-	goTypeBigFloat                 = "big.Float"
-	goTypeBigFloatSlice            = "[]big.Float"
-	goTypeBigFloatArray2           = "[2]big.Float"
-	goTypeBigFloatArray2Slice      = "[][2]big.Float"
-	goTypeNullStringMap            = "map[string]sql.NullString"
-	goTypeNullStringMapSlice       = "[]map[string]sql.NullString"
+	goTypeBool                     goTypeId = "bool"
+	goTypeBoolSlice                goTypeId = "[]bool"
+	goTypeBoolSliceSlice           goTypeId = "[][]bool"
+	goTypeString                   goTypeId = "string"
+	goTypeStringSlice              goTypeId = "[]string"
+	goTypeStringSliceSlice         goTypeId = "[][]string"
+	goTypeStringMap                goTypeId = "map[string]string"
+	goTypeStringMapSlice           goTypeId = "[]map[string]string"
+	goTypeByte                     goTypeId = "byte"
+	goTypeByteSlice                goTypeId = "[]byte"
+	goTypeByteSliceSlice           goTypeId = "[][]byte"
+	goTypeByteSliceSliceSlice      goTypeId = "[][][]byte"
+	goTypeByteArray16              goTypeId = "[16]byte"
+	goTypeByteArray16Slice         goTypeId = "[][16]byte"
+	goTypeRune                     goTypeId = "rune"
+	goTypeRuneSlice                goTypeId = "[]rune"
+	goTypeRuneSliceSlice           goTypeId = "[][]rune"
+	goTypeInt                      goTypeId = "int"
+	goTypeIntSlice                 goTypeId = "[]int"
+	goTypeIntSliceSlice            goTypeId = "[][]int"
+	goTypeIntArray2                goTypeId = "[2]int"
+	goTypeIntArray2Slice           goTypeId = "[][2]int"
+	goTypeInt8                     goTypeId = "int8"
+	goTypeInt8Slice                goTypeId = "[]int8"
+	goTypeInt8SliceSlice           goTypeId = "[][]int8"
+	goTypeInt8Array2               goTypeId = "[2]int8"
+	goTypeInt8Array2Slice          goTypeId = "[][2]int8"
+	goTypeInt16                    goTypeId = "int16"
+	goTypeInt16Slice               goTypeId = "[]int16"
+	goTypeInt16SliceSlice          goTypeId = "[][]int16"
+	goTypeInt16Array2              goTypeId = "[2]int16"
+	goTypeInt16Array2Slice         goTypeId = "[][2]int16"
+	goTypeInt32                    goTypeId = "int32"
+	goTypeInt32Slice               goTypeId = "[]int32"
+	goTypeInt32SliceSlice          goTypeId = "[][]int32"
+	goTypeInt32Array2              goTypeId = "[2]int32"
+	goTypeInt32Array2Slice         goTypeId = "[][2]int32"
+	goTypeInt64                    goTypeId = "int64"
+	goTypeInt64Slice               goTypeId = "[]int64"
+	goTypeInt64SliceSlice          goTypeId = "[][]int64"
+	goTypeInt64Array2              goTypeId = "[2]int64"
+	goTypeInt64Array2Slice         goTypeId = "[][2]int64"
+	goTypeUint                     goTypeId = "uint"
+	goTypeUintSlice                goTypeId = "[]uint"
+	goTypeUintSliceSlice           goTypeId = "[][]uint"
+	goTypeUintArray2               goTypeId = "[2]uint"
+	goTypeUintArray2Slice          goTypeId = "[][2]uint"
+	goTypeUint8                    goTypeId = "uint8"
+	goTypeUint8Slice               goTypeId = "[]uint8"
+	goTypeUint8SliceSlice          goTypeId = "[][]uint8"
+	goTypeUint8Array2              goTypeId = "[2]uint8"
+	goTypeUint8Array2Slice         goTypeId = "[][2]uint8"
+	goTypeUint16                   goTypeId = "uint16"
+	goTypeUint16Slice              goTypeId = "[]uint16"
+	goTypeUint16SliceSlice         goTypeId = "[][]uint16"
+	goTypeUint16Array2             goTypeId = "[2]uint16"
+	goTypeUint16Array2Slice        goTypeId = "[][2]uint16"
+	goTypeUint32                   goTypeId = "uint32"
+	goTypeUint32Slice              goTypeId = "[]uint32"
+	goTypeUint32SliceSlice         goTypeId = "[][]uint32"
+	goTypeUint32Array2             goTypeId = "[2]uint32"
+	goTypeUint32Array2Slice        goTypeId = "[][2]uint32"
+	goTypeUint64                   goTypeId = "uint64"
+	goTypeUint64Slice              goTypeId = "[]uint64"
+	goTypeUint64SliceSlice         goTypeId = "[][]uint64"
+	goTypeUint64Array2             goTypeId = "[2]uint64"
+	goTypeUint64Array2Slice        goTypeId = "[][2]uint64"
+	goTypeFloat32                  goTypeId = "float32"
+	goTypeFloat32Slice             goTypeId = "[]float32"
+	goTypeFloat32SliceSlice        goTypeId = "[][]float32"
+	goTypeFloat32Array2            goTypeId = "[2]float32"
+	goTypeFloat32Array2Slice       goTypeId = "[][2]float32"
+	goTypeFloat64                  goTypeId = "float64"
+	goTypeFloat64Slice             goTypeId = "[]float64"
+	goTypeFloat64SliceSlice        goTypeId = "[][]float64"
+	goTypeFloat64Array2            goTypeId = "[2]float64"
+	goTypeFloat64Array2Slice       goTypeId = "[][2]float64"
+	goTypeFloat64Array2SliceSlice  goTypeId = "[][][2]float64"
+	goTypeFloat64Array2Array2      goTypeId = "[2][2]float64"
+	goTypeFloat64Array2Array2Slice goTypeId = "[][2][2]float64"
+	goTypeFloat64Array3            goTypeId = "[3]float64"
+	goTypeFloat64Array3Slice       goTypeId = "[][3]float64"
+	goTypeIP                       goTypeId = "net.IP"
+	goTypeIPSlice                  goTypeId = "[]net.IP"
+	goTypeIPNet                    goTypeId = "net.IPNet"
+	goTypeIPNetSlice               goTypeId = "[]net.IPNet"
+	goTypeHardwareAddr             goTypeId = "net.HardwareAddr"
+	goTypeHardwareAddrSlice        goTypeId = "[]net.HardwareAddr"
+	goTypeTime                     goTypeId = "time.Time"
+	goTypeTimeSlice                goTypeId = "[]time.Time"
+	goTypeTimeArray2               goTypeId = "[2]time.Time"
+	goTypeTimeArray2Slice          goTypeId = "[][2]time.Time"
+	goTypeBigInt                   goTypeId = "big.Int"
+	goTypeBigIntSlice              goTypeId = "[]big.Int"
+	goTypeBigIntArray2             goTypeId = "[2]big.Int"
+	goTypeBigIntArray2Slice        goTypeId = "[][2]big.Int"
+	goTypeBigFloat                 goTypeId = "big.Float"
+	goTypeBigFloatSlice            goTypeId = "[]big.Float"
+	goTypeBigFloatArray2           goTypeId = "[2]big.Float"
+	goTypeBigFloatArray2Slice      goTypeId = "[][2]big.Float"
+	goTypeNullStringMap            goTypeId = "map[string]sql.NullString"
+	goTypeNullStringMapSlice       goTypeId = "[]map[string]sql.NullString"
+	goTypeStringPtrMap             goTypeId = "map[string]*string"
+	goTypeStringPtrMapSlice        goTypeId = "[]map[string]*string"
+	goTypeEmptyInterface           goTypeId = "interface{}"
 )
 
 // isIntegerType reports whether or not the given type is one of the basic (un)signed integer types.

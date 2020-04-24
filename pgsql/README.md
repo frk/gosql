@@ -36,6 +36,8 @@
 |                | `[]byte`                       | *native*                                   | *native*                                 |
 | `bytea[]`      | `[]string`                     | `ByteaArrayFromStringSlice`                | `ByteaArrayToStringSlice`                |
 |                | `[][]byte`                     | `ByteaArrayFromByteSliceSlice`             | `ByteaArrayToByteSliceSlice`             |
+|                | `string`                       | *native*                                   | *native*                                 |
+|                | `[]byte`                       | *native*                                   | *native*                                 |
 | `char(1)`      | `byte`                         | `CharFromByte`                             | `CharToByte`                             |
 |                | `rune`			              | `CharFromRune`                             | `CharToRune`                             |
 |                | `string`                       | *native*                                   | *native*                                 |

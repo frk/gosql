@@ -16,6 +16,7 @@ func TestGenerate(t *testing.T) {
 		dirname   string
 		filenames []string
 	}{{
+		//skip:    true,
 		dirname: "delete",
 		filenames: []string{
 			"all_directive",
@@ -51,6 +52,7 @@ func TestGenerate(t *testing.T) {
 			"where_block_2",
 		},
 	}, {
+		//skip:    true,
 		dirname: "select",
 		filenames: []string{
 			"afterscan_single",
@@ -90,6 +92,7 @@ func TestGenerate(t *testing.T) {
 			"whereblock_slice",
 		},
 	}, {
+		//skip:    true,
 		dirname: "insert",
 		filenames: []string{
 			"basic_single",
@@ -140,6 +143,7 @@ func TestGenerate(t *testing.T) {
 			"rowsaffected_single",
 		},
 	}, {
+		//skip:    true,
 		dirname: "update",
 		filenames: []string{
 			"all_single",
@@ -158,6 +162,7 @@ func TestGenerate(t *testing.T) {
 			"whereblock_returning_all_single",
 		},
 	}, {
+		//skip:    true,
 		dirname: "filter",
 		filenames: []string{
 			"alias",
