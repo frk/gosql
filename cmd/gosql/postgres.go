@@ -436,6 +436,7 @@ func (c *pgchecker) checkFields(fields []*fieldInfo, dataOp dataOperation, stric
 		// Make sure that a value of the given field's type
 		// can be assigned to given column, and vice versa.
 		if !c.canAssign(info, col, fld, dataOp) {
+			fmt.Printf("%s:%s - typmod:%d\n", fld.name, col.name, col.typmod)
 			return errors.BadFieldToColumnTypeError
 		}
 
@@ -844,10 +845,16 @@ func (c *pgchecker) canAssign(info *fieldColumnInfo, col *pgcolumn, field *field
 		return true
 	}
 
-	// Columns with a type in the bit or char family and a typmod of 1 have
-	// a distinct Go representation then those with a typmod != 1.
-	if col.typ.isbase(pgtyp_bit, pgtyp_varbit, pgtyp_char, pgtyp_varchar, pgtyp_bpchar) {
+	// Columns with a type in the bit or string family and a typmod of 1
+	// can have a distinct Go representation then those with a typmod != 1.
+	coltyp := col.typ
+	if col.typ.category == pgtypcategory_array {
+		coltyp = c.pg.cat.types[coltyp.elem]
+	}
+	if coltyp.category == pgtypcategory_bitstring {
 		typkey.typmod1 = (col.typmod == 1)
+	} else if coltyp.category == pgtypcategory_string {
+		typkey.typmod1 = ((col.typmod - 4) == 1)
 	}
 
 	// Columns with type numeric that have a precision but no scale, have
@@ -1137,6 +1144,7 @@ type pgcolumn struct {
 	// input functions and length coercion functions. The value will generally
 	// be -1 for types that do not need.
 	//
+	// NOTE(mkopriva): to get the actual value subtract 4.
 	// NOTE(mkopriva): in the case of NUMERIC(precision, scale) types, to
 	// calculate the precision use ((typmod - 4) >> 16) & 65535 and to
 	// calculate the scale use (typmod - 4) && 65535
