@@ -16,7 +16,7 @@ func TestGenerate(t *testing.T) {
 		dirname   string
 		filenames []string
 	}{{
-		skip:    true,
+		//skip:    true,
 		dirname: "delete",
 		filenames: []string{
 			"all_directive",
@@ -52,7 +52,7 @@ func TestGenerate(t *testing.T) {
 			"where_block_2",
 		},
 	}, {
-		skip:    true,
+		//skip:    true,
 		dirname: "select",
 		filenames: []string{
 			"afterscan_single",
@@ -92,7 +92,7 @@ func TestGenerate(t *testing.T) {
 			"whereblock_slice",
 		},
 	}, {
-		skip:    true,
+		//skip:    true,
 		dirname: "insert",
 		filenames: []string{
 			"basic_single",
@@ -143,7 +143,7 @@ func TestGenerate(t *testing.T) {
 			"rowsaffected_single",
 		},
 	}, {
-		skip:    true,
+		//skip:    true,
 		dirname: "update",
 		filenames: []string{
 			"all_single",
@@ -162,7 +162,7 @@ func TestGenerate(t *testing.T) {
 			"whereblock_returning_all_single",
 		},
 	}, {
-		skip:    true,
+		//skip:    true,
 		dirname: "filter",
 		filenames: []string{
 			"alias",
@@ -178,8 +178,6 @@ func TestGenerate(t *testing.T) {
 			"insert_array",
 		},
 	}}
-
-	// TODO test conversions
 
 	for _, tt := range tests {
 		if tt.skip {
@@ -200,7 +198,7 @@ func TestGenerate(t *testing.T) {
 				fileprefix := "../../testdata/generator/" + tt.dirname + "/" + filename
 
 				f := cmd.aggtypes(dir, fileprefix+"_in.go")
-				buf, err := cmd.run(f)
+				buf, err := cmd.run(f, dir.fset)
 				if err != nil {
 					t.Error(err)
 					return

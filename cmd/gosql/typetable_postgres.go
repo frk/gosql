@@ -1,17 +1,17 @@
 package main
 
-type pgsqlTypeKey struct {
-	oid     pgoid
+type pgTypeKey struct {
+	oid     pgOID
 	typmod1 bool
 	noscale bool
 }
 
-type pgsqlTypeEntry struct {
+type pgTypeEntry struct {
 	valuer  string
 	scanner string
 }
 
-var pgsqlTypeTable = map[pgsqlTypeKey]map[goTypeId]pgsqlTypeEntry{
+var pgTypeTable = map[pgTypeKey]map[goTypeId]pgTypeEntry{
 	{oid: pgtyp_bit, typmod1: true}: {
 		goTypeBool:      {valuer: "BitFromBool"},
 		goTypeUint:      {},

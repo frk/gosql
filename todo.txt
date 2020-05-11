@@ -1,0 +1,38 @@
+gosql/cmd/gosql/analysis.go:
+	- clean up & add documentation
+	- if possible provide the ast and extract position information for errors
+gosql/cmd/gosql/typecheck_postgres.go:
+	- clean up & add documentation
+	- provide a table for retrieving the postgres oids denoting types to which
+	  go types can be transformed.
+	- fix column-to-column-comparison-operator validity check
+		- write tests for this
+	- field-to-column-comparison:
+		- fix operator check
+			- write test for this
+		- add casting if necessary
+
+gosql/cmd/gosql/generator.go:
+	- clean up & add documentation
+gosql/cmd/gosql/gosql.go:
+	- clean up & add documentation
+gosql/api.go:
+	- clean up & add documentation
+	- define generic Query & DB interfaces and provide implementations, including
+	  a transaction specific implementation that can do SAVEPOINTs.
+gosql/directives.go:
+	- clean up & add documentation
+gosql/doc.go:
+	- write proper docs
+gosql/[etc/whyeven.txt]:
+	- explain reasoning behind the package
+gosql/filter.go:
+	- clean up & add documentation
+	- write tests
+gosql/internal/fql:
+	- review: make sure docs are up to date, includes proper tests, etc.
+gosql/internal/errors:
+	- provide proper errors
+gosql/internal/sqlang:
+	- clean up & add documentation
+	- write tests

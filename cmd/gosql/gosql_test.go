@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 
 type testdbtype struct {
 	root *sql.DB
-	pg   *postgres
+	pg   *pgdbInfo
 }
 
 func (t *testdbtype) init() (err error) {
@@ -50,7 +50,7 @@ func (t *testdbtype) init() (err error) {
 		return err
 	}
 
-	t.pg = new(postgres)
+	t.pg = new(pgdbInfo)
 	t.pg.url = "postgres:///" + dbname + "?sslmode=disable"
 	if err := t.pg.init(); err != nil {
 		return err

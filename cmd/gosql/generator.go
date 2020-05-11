@@ -99,7 +99,7 @@ type fieldColumnInfo struct {
 	sqlExpr SQL.ValueExpr
 
 	// TODO
-	pgsql pgsqlTypeEntry
+	pgsql pgTypeEntry
 }
 
 // skipwrite is a helper method that reports whether or not the field's column should be written to.
@@ -580,7 +580,7 @@ func (g *generator) prepareGOInputWhereFields(conds []*searchCondition, sx GO.Se
 					gotyp := cond.typ.goTypeId(false, false, true)
 					oid := g.ti.searchConditionFieldColumns[cond].typ.oid.getArrayOID()
 
-					if entry, ok := pgsqlTypeTable[pgsqlTypeKey{oid: oid}][gotyp]; !ok {
+					if entry, ok := pgTypeTable[pgTypeKey{oid: oid}][gotyp]; !ok {
 						// TODO should not happen here, this should be caught while scanning the db
 						log.Fatalf("unsupported type conversion: %s - %d", gotyp, oid)
 					} else if len(entry.valuer) > 0 {

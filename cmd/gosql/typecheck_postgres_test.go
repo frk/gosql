@@ -8,16 +8,6 @@ import (
 	"github.com/frk/gosql/internal/errors"
 )
 
-// --- FAIL: Test_pgchecker_run (0.09s)
-// --- FAIL: Test_pgchecker_run/UpdatePostgresTestBAD_ReturnRelationNotFound (0.00s)
-//     postgres_test.go:214: - (errors.errnum): Validity mismatch; got=INVALID, want=VALID - <nil> <nil>
-// --- FAIL: Test_pgchecker_run/SelectPostgresTestBAD_RelationColumnNotFound (0.00s)
-//     postgres_test.go:214: - (errors.errnum): Validity mismatch; got=INVALID, want=VALID - <nil> <nil>
-// --- FAIL: Test_pgchecker_run/SelectPostgresTestBAD_RelationColumnAliasNotFound (0.00s)
-//     postgres_test.go:214: - (errors.errnum): Validity mismatch; got=INVALID, want=VALID - <nil> <nil>
-// --- FAIL: Test_pgchecker_run/InsertPostgresTestBAD_RelationColumnNotFound (0.00s)
-//     postgres_test.go:214: - (errors.errnum): Validity mismatch; got=INVALID, want=VALID - <nil> <nil>
-
 func Test_pgchecker_run(t *testing.T) {
 	tests := []struct {
 		name string
@@ -198,7 +188,7 @@ func Test_pgchecker_run(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			dbc := new(pgchecker)
+			dbc := new(pgTypeCheck)
 			dbc.pg = testdb.pg
 			dbc.ti = ti
 			if dbc.ti.query != nil {
@@ -240,7 +230,7 @@ func Test_pgchecker_loadrelation(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
 		dbc.ti.dataField = dbc.ti.query.dataField
@@ -375,7 +365,7 @@ func Test_pgchecker_loadcolumns(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
 		dbc.ti.dataField = dbc.ti.query.dataField
@@ -414,7 +404,7 @@ func Test_pgchecker_loadconstraints(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
 		dbc.ti.dataField = dbc.ti.query.dataField
@@ -525,7 +515,7 @@ func Test_pgchecker_loadindexes(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
 		dbc.ti.dataField = dbc.ti.query.dataField
@@ -581,7 +571,7 @@ func Test_pgchecker_check_textsearch(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{filter: tt.filter, dataField: tt.filter.dataField}
 
@@ -635,7 +625,7 @@ func Test_pgchecker_check_orderby(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
 
@@ -691,7 +681,7 @@ func Test_pgchecker_check_defaults(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
 
@@ -747,7 +737,7 @@ func Test_pgchecker_check_force(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
 
@@ -879,7 +869,7 @@ func Test_pgchecker_check_onconflict(t *testing.T) {
 	}}
 
 	for i, tt := range tests {
-		dbc := new(pgchecker)
+		dbc := new(pgTypeCheck)
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
 

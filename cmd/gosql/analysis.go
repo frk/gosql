@@ -1,13 +1,13 @@
 package main
 
 import (
+	"go/token"
 	"go/types"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/frk/gosql/internal/errors"
 	"github.com/frk/gosql/internal/typesutil"
 	"github.com/frk/tagutil"
 )
@@ -41,6 +41,7 @@ var (
 
 // analyzer holds the state of the analysis.
 type analyzer struct {
+	fset    *token.FileSet
 	named   *types.Named  // the types.Named of the type under analysis
 	target  *types.Struct // the types.Struct of the type under analysis
 	pkgPath string        // the package path of the type under analysis
@@ -123,7 +124,7 @@ func (a *analyzer) queryStruct() (err error) {
 		// Ensure that there is only one field with the "rel" tag.
 		if _, ok := tag["rel"]; ok {
 			if hasRelTag {
-				return errors.MultipleDataFieldsError
+				return a.newError(errRelTagConflict, fld, "", "")
 			}
 			hasRelTag = true
 		}
@@ -141,23 +142,23 @@ func (a *analyzer) queryStruct() (err error) {
 			switch fname := strings.ToLower(a.query.dataField.name); {
 			case fname == "count" && isIntegerType(fld.Type()):
 				if a.query.kind != queryKindSelect {
-					return errors.IllegalCountFieldError
+					return a.newError(errIllegalField, fld, "", "")
 
 				}
 				a.query.kind = queryKindSelectCount
 			case fname == "exists" && isBoolType(fld.Type()):
 				if a.query.kind != queryKindSelect {
-					return errors.IllegalExistsFieldError
+					return a.newError(errIllegalField, fld, "", "")
 				}
 				a.query.kind = queryKindSelectExists
 			case fname == "notexists" && isBoolType(fld.Type()):
 				if a.query.kind != queryKindSelect {
-					return errors.IllegalNotExistsFieldError
+					return a.newError(errIllegalField, fld, "", "")
 				}
 				a.query.kind = queryKindSelectNotExists
 			case fname == "_" && typesutil.IsDirective("Relation", fld.Type()):
 				if a.query.kind != queryKindDelete {
-					return errors.IllegalRelationDirectiveError
+					return a.newError(errIllegalField, fld, "", "")
 				}
 				a.query.dataField.isDirective = true
 			default:
@@ -165,7 +166,8 @@ func (a *analyzer) queryStruct() (err error) {
 					return err
 				}
 				if (a.query.kind == queryKindInsert || a.query.kind == queryKindUpdate) && a.query.dataField.data.isIter {
-					return errors.IllegalIteratorRecordError
+					// TODO test
+					return a.newError(errIllegalField, fld, "", "")
 				}
 			}
 			continue
@@ -179,22 +181,22 @@ func (a *analyzer) queryStruct() (err error) {
 			switch strings.ToLower(dirname) {
 			case "all":
 				if a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
-					return errors.IllegalAllDirectiveError
+					return a.newError(errIllegalField, fld, "", "")
 				}
 				if a.query.all || a.query.whereBlock != nil || len(a.query.filterField) > 0 {
-					return errors.ConflictWhereProducerError
+					return a.newError(errFieldConflict, fld, "", "")
 				}
 				a.query.all = true
 			case "default":
 				if a.query.kind != queryKindInsert && a.query.kind != queryKindUpdate {
-					return errors.IllegalDefaultDirectiveError
+					return a.newError(errIllegalField, fld, "", "")
 				}
 				if a.query.defaultList, err = a.colIdList(tag["sql"], fld); err != nil {
 					return err
 				}
 			case "force":
 				if a.query.kind != queryKindInsert && a.query.kind != queryKindUpdate {
-					return errors.IllegalForceDirectiveError
+					return a.newError(errIllegalField, fld, "", "")
 				}
 				if a.query.forceList, err = a.colIdList(tag["sql"], fld); err != nil {
 					return err
@@ -202,13 +204,13 @@ func (a *analyzer) queryStruct() (err error) {
 			case "return":
 				if len(a.query.dataField.data.fields) == 0 {
 					// TODO test
-					return errors.ReturnDirectiveWithNoDataFieldError
+					return a.newError(errNoTargetField, fld, "", "")
 				}
 				if a.query.kind != queryKindInsert && a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
-					return errors.IllegalReturnDirectiveError
+					return a.newError(errIllegalField, fld, "", "")
 				}
 				if a.query.returnList != nil || a.query.resultField != nil || a.query.rowsAffectedField != nil {
-					return errors.ConflictResultProducerError
+					return a.newError(errFieldConflict, fld, "", "")
 				}
 				if a.query.returnList, err = a.colIdList(tag["sql"], fld); err != nil {
 					return err
@@ -229,10 +231,9 @@ func (a *analyzer) queryStruct() (err error) {
 				if err := a.overridingKind(tag.First("sql"), fld); err != nil {
 					return err
 				}
-			case "textsearch":
-				return errors.IllegalTextSearchDirectiveError
 			default:
-				return errors.IllegalCommandDirectiveError
+				// illegal directive field
+				return a.newError(errIllegalField, fld, "", "")
 			}
 			continue
 		}
@@ -273,21 +274,21 @@ func (a *analyzer) queryStruct() (err error) {
 				switch {
 				case isFilterType(fld.Type()):
 					if !a.query.kind.isSelect() && a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
-						return errors.IllegalFilterFieldError
+						return a.newError(errIllegalField, fld, "", "")
 					}
 					if a.query.all || a.query.whereBlock != nil || len(a.query.filterField) > 0 {
-						return errors.ConflictWhereProducerError
+						return a.newError(errFieldConflict, fld, "", "")
 					}
 					a.query.filterField = fld.Name()
 				case isErrorHandler(fld.Type()):
 					if a.query.errorHandlerField != nil {
-						return errors.ConflictErrorHandlerFieldError
+						return a.newError(errFieldConflict, fld, "", "")
 					}
 					a.query.errorHandlerField = new(errorHandlerField)
 					a.query.errorHandlerField.name = fld.Name()
 				case isErrorInfoHandler(fld.Type()):
 					if a.query.errorHandlerField != nil {
-						return errors.ConflictErrorHandlerFieldError
+						return a.newError(errFieldConflict, fld, "", "")
 					}
 					a.query.errorHandlerField = new(errorHandlerField)
 					a.query.errorHandlerField.name = fld.Name()
@@ -299,7 +300,7 @@ func (a *analyzer) queryStruct() (err error) {
 	}
 
 	if a.query.dataField == nil {
-		return errors.NoDataFieldError
+		return a.newError(errNoTargetField, nil, "", "")
 	}
 
 	if a.query.kind == queryKindUpdate && a.query.dataField.data.isSlice {
@@ -307,7 +308,8 @@ func (a *analyzer) queryStruct() (err error) {
 		// by primary keys makes sense, therefore a whereBlock, or filter,
 		// or the all directive, are disallowed.
 		if a.query.whereBlock != nil || len(a.query.filterField) > 0 || a.query.all {
-			return errors.IllegalSliceUpdateQueryModifierError
+			// TODO test
+			return a.newError(errIllegalUpdateModifier, nil, "", "")
 		}
 	}
 
@@ -335,7 +337,7 @@ func (a *analyzer) filterStruct() (err error) {
 		// Ensure that there is only one field with the "rel" tag.
 		if _, ok := tag["rel"]; ok {
 			if hasRelTag {
-				return errors.MultipleDataFieldsError
+				return a.newError(errRelTagConflict, fld, "", "")
 			}
 			hasRelTag = true
 		}
@@ -354,7 +356,8 @@ func (a *analyzer) filterStruct() (err error) {
 				return err
 			}
 			if a.filter.dataField.data.isIter {
-				return errors.IllegalIteratorRecordError
+				// TODO test
+				return a.newError(errIllegalField, fld, "", "")
 			}
 			continue
 		}
@@ -369,25 +372,25 @@ func (a *analyzer) filterStruct() (err error) {
 					return err
 				}
 			} else {
-				return errors.IllegalCommandDirectiveError
+				return a.newError(errIllegalField, fld, "", "")
 			}
 			continue
 		}
 	}
 
 	if a.filter.dataField == nil {
-		return errors.NoDataFieldError
+		// TODO test
+		return a.newError(errNoTargetField, nil, "", "")
 	}
 
 	return nil
 }
 
-// dataType
+// dataType analyzes the given field and populates the target
 func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 	var (
 		ftyp  = field.Type()
 		named *types.Named
-		err   error
 		ok    bool
 	)
 	if named, ok = ftyp.(*types.Named); ok {
@@ -411,12 +414,14 @@ func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 	// Failure of the iterator analysis will cause the whole analysis to exit
 	// as there's currently no support for non-iterator interfaces nor functions.
 	if iface, ok := ftyp.(*types.Interface); ok {
-		if named, err = a.iteratorInterface(data, iface, named); err != nil {
-			return err
+		var isValid bool
+		if named, isValid = a.iteratorInterface(data, iface, named); !isValid {
+			return a.newError(errIterType, field, "", "")
 		}
 	} else if sig, ok := ftyp.(*types.Signature); ok {
-		if named, err = a.iteratorFunction(data, sig); err != nil {
-			return err
+		var isValid bool
+		if named, isValid = a.iteratorFunction(data, sig); !isValid {
+			return a.newError(errIterType, field, "", "")
 		}
 	} else {
 		// If not an iterator, check for slices, arrays, and pointers.
@@ -438,7 +443,7 @@ func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 			if named, ok = ftyp.(*types.Named); !ok {
 				// Fail if the type is a slice, an array, or a pointer
 				// while its base type remains unnamed.
-				return errors.BadDataFieldTypeError
+				return a.newError(errDataType, field, "", "")
 			}
 		}
 	}
@@ -456,7 +461,7 @@ func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 
 	data.typeInfo.kind = a.typeKind(ftyp)
 	if data.typeInfo.kind != typeKindStruct {
-		return errors.BadDataFieldTypeError
+		return a.newError(errDataType, field, "", "")
 	}
 
 	styp := ftyp.(*types.Struct)
@@ -637,31 +642,31 @@ func (a *analyzer) typeInfo(tt types.Type) (typ typeInfo, base types.Type) {
 }
 
 // iteratorInterface
-func (a *analyzer) iteratorInterface(data *dataType, iface *types.Interface, named *types.Named) (*types.Named, error) {
+func (a *analyzer) iteratorInterface(data *dataType, iface *types.Interface, named *types.Named) (out *types.Named, isValid bool) {
 	if iface.NumExplicitMethods() != 1 {
-		return nil, errors.BadIteratorTypeError
+		return nil, false
 	}
 
 	mth := iface.ExplicitMethod(0)
 	if !a.isAccessible(mth, named) {
-		return nil, errors.BadIteratorTypeError
+		return nil, false
 	}
 
 	sig := mth.Type().(*types.Signature)
-	named, err := a.iteratorFunction(data, sig)
-	if err != nil {
-		return nil, err
+	out, isValid = a.iteratorFunction(data, sig)
+	if !isValid {
+		return nil, false
 	}
 
 	data.iterMethod = mth.Name()
-	return named, nil
+	return out, true
 }
 
 // iteratorFunction
-func (a *analyzer) iteratorFunction(data *dataType, sig *types.Signature) (*types.Named, error) {
+func (a *analyzer) iteratorFunction(data *dataType, sig *types.Signature) (out *types.Named, isValid bool) {
 	// Must take 1 argument and return one value of type error. "func(T) error"
 	if sig.Params().Len() != 1 || sig.Results().Len() != 1 || !typesutil.IsError(sig.Results().At(0).Type()) {
-		return nil, errors.BadIteratorTypeError
+		return nil, false
 	}
 
 	typ := sig.Params().At(0).Type()
@@ -673,13 +678,13 @@ func (a *analyzer) iteratorFunction(data *dataType, sig *types.Signature) (*type
 	// Make sure that the argument type is a named struct type.
 	named, ok := typ.(*types.Named)
 	if !ok {
-		return nil, errors.BadIteratorTypeError
+		return nil, false
 	} else if _, ok := named.Underlying().(*types.Struct); !ok {
-		return nil, errors.BadIteratorTypeError
+		return nil, false
 	}
 
 	data.isIter = true
-	return named, nil
+	return named, true
 }
 
 // typeKind returns the typeKind for the given types.Type.
@@ -724,17 +729,17 @@ func (a *analyzer) coalesceInfo(tag tagutil.Tag) (use bool, val string) {
 }
 
 // whereBlock
-func (a *analyzer) whereBlock(field *types.Var) (err error) {
+func (a *analyzer) whereBlock(blockField *types.Var) (err error) {
 	if !a.query.kind.isSelect() && a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
-		return errors.IllegalWhereBlockError
+		return a.newError(errIllegalField, blockField, "", "")
 	}
 	if a.query.all || a.query.whereBlock != nil || len(a.query.filterField) > 0 {
-		return errors.ConflictWhereProducerError
+		return a.newError(errFieldConflict, blockField, "", "")
 	}
 
-	ns, err := typesutil.GetStruct(field)
+	ns, err := typesutil.GetStruct(blockField)
 	if err != nil { // fails only if non struct
-		return errors.BadWhereBlockTypeError
+		return a.newError(errFieldBlock, blockField, "", "")
 	}
 
 	// The loopstate type holds the state of a loop over a struct's fields.
@@ -787,7 +792,7 @@ stackloop:
 					if v == "or" {
 						item.bool = boolOr
 					} else if v != "and" {
-						return errors.BadBoolTagValueError
+						return a.newError(errBadBoolTagValue, fld, blockField.Name(), booltag)
 					}
 				}
 			}
@@ -797,7 +802,7 @@ stackloop:
 			if sqltag == ">" {
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
-					return errors.BadWhereBlockTypeError
+					return a.newError(errFieldBlock, fld, blockField.Name(), "")
 				}
 
 				cond := new(searchConditionNested)
@@ -834,17 +839,17 @@ stackloop:
 					cond.pred = stringToPredicate[op]
 					cond.qua = stringToQuantifier[op2]
 
-					if isColId(rhs) {
-						cond.colId2, _ = a.colId(rhs, fld) // ignore error since isColId returned true
-					} else {
+					if id, err := a.colId(rhs, fld); err != nil {
 						cond.literal = rhs // assume literal expression
+					} else {
+						cond.colId2 = id
 					}
 
 					if cond.pred.isUnary() {
 						// TODO add test
-						return errors.IllegalUnaryPredicateError
+						return a.newError(errIllegalUnaryPredicate, fld, "", sqltag)
 					} else if cond.qua > 0 && !cond.pred.canQuantify() {
-						return errors.BadPredicateComboError
+						return a.newError(errIllegalPredicateQuantifier, fld, "", sqltag)
 					}
 
 					item.cond = cond
@@ -863,10 +868,10 @@ stackloop:
 				}
 				pred := stringToPredicate[op]
 				if !pred.isUnary() {
-					return errors.BadUnaryPredicateError
+					return a.newError(errBadUnaryPredicate, fld, "", sqltag)
 				}
 				if len(op2) > 0 {
-					return errors.ExtraQuantifierError
+					return a.newError(errIllegalPredicateQuantifier, fld, "", sqltag)
 				}
 
 				cond := new(searchConditionColumn)
@@ -886,13 +891,13 @@ stackloop:
 			if strings.Contains(op, "between") {
 				if len(op2) > 0 {
 					// TODO test
-					return errors.ExtraQuantifierError
+					return a.newError(errIllegalPredicateQuantifier, fld, "", sqltag)
 				}
 				ns, err := typesutil.GetStruct(fld)
 				if err != nil {
-					return errors.BadBetweenTypeError
+					return a.newError(errBadBetweenPredicate, fld, "", "")
 				} else if ns.Struct.NumFields() != 2 {
-					return errors.BadBetweenTypeError
+					return a.newError(errBadBetweenPredicate, fld, "", "")
 				}
 
 				var x, y interface{}
@@ -930,7 +935,7 @@ stackloop:
 				}
 
 				if x == nil || y == nil {
-					return errors.NoBetweenXYArgsError
+					return a.newError(errBadBetweenPredicate, fld, "", "")
 				}
 
 				colId, err := a.colId(lhs, fld)
@@ -961,12 +966,12 @@ stackloop:
 			pred := stringToPredicate[op]
 			if pred.isUnary() {
 				// TODO add test
-				return errors.IllegalUnaryPredicateError
+				return a.newError(errIllegalUnaryPredicate, fld, "", sqltag)
 			}
 
 			qua := stringToQuantifier[op2]
 			if qua > 0 && !pred.canQuantify() {
-				return errors.BadPredicateComboError
+				return a.newError(errIllegalPredicateQuantifier, fld, "", sqltag)
 			}
 
 			cond := new(searchConditionField)
@@ -978,7 +983,7 @@ stackloop:
 			cond.modFunc = a.funcName(tag["sql"][1:])
 
 			if cond.qua > 0 && cond.typ.kind != typeKindSlice && cond.typ.kind != typeKindArray {
-				return errors.BadQuantifierFieldTypeError
+				return a.newError(errIllegalPredicateQuantifier, fld, "", sqltag)
 			}
 
 			item.cond = cond
@@ -992,28 +997,31 @@ stackloop:
 	}
 
 	wb := new(whereBlock)
-	wb.name = field.Name()
+	wb.name = blockField.Name()
 	wb.conds = root.conds
 	a.query.whereBlock = wb
 	return nil
 }
 
 // joinBlock
-func (a *analyzer) joinBlock(field *types.Var) (err error) {
-	joinblockname := strings.ToLower(field.Name())
+func (a *analyzer) joinBlock(blockField *types.Var) (err error) {
+	joinblockname := strings.ToLower(blockField.Name())
 	if joinblockname == "join" && !a.query.kind.isSelect() {
-		return errors.IllegalJoinBlockError
+		return a.newError(errIllegalField, blockField, "", "")
 	} else if joinblockname == "from" && a.query.kind != queryKindUpdate {
-		return errors.IllegalFromBlockError
+		return a.newError(errIllegalField, blockField, "", "")
 	} else if joinblockname == "using" && a.query.kind != queryKindDelete {
-		return errors.IllegalUsingBlockError
+		return a.newError(errIllegalField, blockField, "", "")
+	}
+
+	ns, err := typesutil.GetStruct(blockField)
+	if err != nil {
+		return a.newError(errFieldBlock, blockField, "", "")
 	}
 
 	join := new(joinBlock)
-	ns, err := typesutil.GetStruct(field)
-	if err != nil {
-		return errors.BadJoinBlockTypeError
-	}
+	join.name = blockField.Name()
+	join.pos = blockField.Pos()
 
 	for i := 0; i < ns.Struct.NumFields(); i++ {
 		fld := ns.Struct.Field(i)
@@ -1033,9 +1041,9 @@ func (a *analyzer) joinBlock(field *types.Var) (err error) {
 		switch dirname := strings.ToLower(typesutil.GetDirectiveName(fld)); dirname {
 		case "relation":
 			if joinblockname != "from" && joinblockname != "using" {
-				return errors.IllegalJoinBlockRelationDirectiveError
+				return a.newError(errIllegalField, fld, blockField.Name(), "")
 			} else if len(join.relId.name) > 0 {
-				return errors.ConflictJoinBlockRelationDirectiveError
+				return a.newError(errFieldConflict, fld, "", "")
 			}
 			rid, err := a.relId(sqltag, fld)
 			if err != nil {
@@ -1060,10 +1068,10 @@ func (a *analyzer) joinBlock(field *types.Var) (err error) {
 					}
 
 					// optional right-hand side
-					if isColId(rhs) {
-						cond.colId2, _ = a.colId(rhs, fld) // ignore error since isColId returned true
+					if id, err := a.colId(rhs, fld); err != nil {
+						cond.literal = rhs // assume literal expression
 					} else {
-						cond.literal = rhs
+						cond.colId2 = id
 					}
 
 					cond.pred = stringToPredicate[op]
@@ -1072,15 +1080,15 @@ func (a *analyzer) joinBlock(field *types.Var) (err error) {
 					if len(rhs) > 0 {
 						if cond.pred.isUnary() {
 							// TODO add test
-							return errors.IllegalUnaryPredicateError
+							return a.newError(errIllegalUnaryPredicate, fld, "", val)
 						} else if cond.qua > 0 && !cond.pred.canQuantify() {
-							return errors.BadPredicateComboError
+							return a.newError(errIllegalPredicateQuantifier, fld, "", val)
 						}
 					} else {
 						if !cond.pred.isUnary() {
-							return errors.BadUnaryPredicateError
+							return a.newError(errBadUnaryPredicate, fld, "", val)
 						} else if len(op2) > 0 {
-							return errors.ExtraQuantifierError
+							return a.newError(errIllegalPredicateQuantifier, fld, "", val)
 						}
 					}
 
@@ -1102,7 +1110,7 @@ func (a *analyzer) joinBlock(field *types.Var) (err error) {
 			item.conds = conditions
 			join.items = append(join.items, item)
 		default:
-			return errors.IllegalJoinBlockDirectiveError
+			return a.newError(errIllegalField, fld, blockField.Name(), "")
 		}
 
 	}
@@ -1112,15 +1120,15 @@ func (a *analyzer) joinBlock(field *types.Var) (err error) {
 }
 
 // onConflictBlock
-func (a *analyzer) onConflictBlock(field *types.Var) (err error) {
+func (a *analyzer) onConflictBlock(blockField *types.Var) (err error) {
 	if a.query.kind != queryKindInsert {
-		return errors.IllegalOnConflictBlockError
+		return a.newError(errIllegalField, blockField, "", "")
 	}
 
 	onc := new(onConflictBlock)
-	ns, err := typesutil.GetStruct(field)
+	ns, err := typesutil.GetStruct(blockField)
 	if err != nil {
-		return errors.BadOnConflictBlockTypeError
+		return a.newError(errFieldBlock, blockField, "", "")
 	}
 
 	for i := 0; i < ns.Struct.NumFields(); i++ {
@@ -1136,7 +1144,7 @@ func (a *analyzer) onConflictBlock(field *types.Var) (err error) {
 		switch dirname := strings.ToLower(typesutil.GetDirectiveName(fld)); dirname {
 		case "column":
 			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
-				return errors.ConflictOnConflictBlockTargetProducerError
+				return a.newError(errFieldConflict, fld, "", "")
 			}
 			list, err := a.colIdList(tag["sql"], fld)
 			if err != nil {
@@ -1145,38 +1153,38 @@ func (a *analyzer) onConflictBlock(field *types.Var) (err error) {
 			onc.column = list.items
 		case "index":
 			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
-				return errors.ConflictOnConflictBlockTargetProducerError
+				return a.newError(errFieldConflict, fld, "", "")
 			}
 			if onc.index = tag.First("sql"); !rxIdent.MatchString(onc.index) {
-				return errors.BadIndexIdentifierValueError
+				return a.newError(errBadTagValue, fld, "", onc.index)
 			}
 		case "constraint":
 			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
-				return errors.ConflictOnConflictBlockTargetProducerError
+				return a.newError(errFieldConflict, fld, "", "")
 			}
 			if onc.constraint = tag.First("sql"); !rxIdent.MatchString(onc.constraint) {
-				return errors.BadConstraintIdentifierValueError
+				return a.newError(errBadTagValue, fld, "", onc.constraint)
 			}
 		case "ignore":
 			if onc.ignore || onc.update != nil {
-				return errors.ConflictOnConflictBlockActionProducerError
+				return a.newError(errFieldConflict, fld, "", "")
 			}
 			onc.ignore = true
 		case "update":
 			if onc.ignore || onc.update != nil {
-				return errors.ConflictOnConflictBlockActionProducerError
+				return a.newError(errFieldConflict, fld, "", "")
 			}
 			if onc.update, err = a.colIdList(tag["sql"], fld); err != nil {
 				return err
 			}
 		default:
-			return errors.IllegalOnConflictBlockDirectiveError
+			return a.newError(errIllegalField, fld, blockField.Name(), "")
 		}
 
 	}
 
 	if onc.update != nil && (len(onc.column) == 0 && len(onc.index) == 0 && len(onc.constraint) == 0) {
-		return errors.NoOnConflictTargetError
+		return a.newError(errNoTargetField, blockField, "", "")
 	}
 
 	a.query.onConflictBlock = onc
@@ -1291,26 +1299,26 @@ func (a *analyzer) splitPredicateExpr(expr string) (lhs, cop, qua, rhs string) {
 // if not empty, is expected to hold a positive integer.
 func (a *analyzer) limitField(field *types.Var, tag string) error {
 	if !a.query.kind.isSelect() {
-		return errors.IllegalLimitFieldOrDirectiveError
+		return a.newError(errIllegalField, field, "", "")
 	}
 	if a.query.limitField != nil {
-		return errors.ConflictLimitProducerError
+		return a.newError(errFieldConflict, field, "", "")
 	}
 
 	f := new(limitField)
 	if name := field.Name(); name != "_" {
 		if !isIntegerType(field.Type()) {
-			return errors.BadLimitTypeError
+			return a.newError(errFieldType, field, "", "")
 		}
 		f.name = name
 	} else if len(tag) == 0 {
-		return errors.NoLimitDirectiveValueError
+		return a.newError(errNoTagValue, field, "", "")
 	}
 
 	if len(tag) > 0 {
 		u64, err := strconv.ParseUint(tag, 10, 64)
 		if err != nil {
-			return errors.BadLimitValueError
+			return a.newError(errBadTagValue, field, "", tag)
 		}
 		f.value = u64
 	}
@@ -1323,26 +1331,26 @@ func (a *analyzer) limitField(field *types.Var, tag string) error {
 // if not empty, is expected to hold a positive integer.
 func (a *analyzer) offsetField(field *types.Var, tag string) error {
 	if !a.query.kind.isSelect() {
-		return errors.IllegalOffsetFieldOrDirectiveError
+		return a.newError(errIllegalField, field, "", "")
 	}
 	if a.query.offsetField != nil {
-		return errors.ConflictOffsetProducerError
+		return a.newError(errFieldConflict, field, "", "")
 	}
 
 	f := new(offsetField)
 	if name := field.Name(); name != "_" {
 		if !isIntegerType(field.Type()) {
-			return errors.BadOffsetTypeError
+			return a.newError(errFieldType, field, "", "")
 		}
 		f.name = name
 	} else if len(tag) == 0 {
-		return errors.NoOffsetDirectiveValueError
+		return a.newError(errNoTagValue, field, "", "")
 	}
 
 	if len(tag) > 0 {
 		u64, err := strconv.ParseUint(tag, 10, 64)
 		if err != nil {
-			return errors.BadOffsetValueError
+			return a.newError(errBadTagValue, field, "", tag)
 		}
 		f.value = u64
 	}
@@ -1353,9 +1361,9 @@ func (a *analyzer) offsetField(field *types.Var, tag string) error {
 // orderByList
 func (a *analyzer) orderByList(tags []string, field *types.Var) (err error) {
 	if !a.query.kind.isSelect() {
-		return errors.IllegalOrderByDirectiveError
+		return a.newError(errIllegalField, field, "", "")
 	} else if len(tags) == 0 {
-		return errors.EmptyOrderByListError
+		return a.newError(errNoTagValue, field, "", "")
 	}
 
 	list := new(orderByList)
@@ -1376,7 +1384,7 @@ func (a *analyzer) orderByList(tags []string, field *types.Var) (err error) {
 			} else if val[i+1:] == "nullslast" {
 				item.nulls = nullsLast
 			} else {
-				return errors.BadNullsOrderOptionValueError
+				return a.newError(errBadTagValue, field, "", val)
 			}
 			val = val[:i]
 		}
@@ -1394,7 +1402,7 @@ func (a *analyzer) orderByList(tags []string, field *types.Var) (err error) {
 
 func (a *analyzer) overridingKind(tag string, field *types.Var) error {
 	if a.query.kind != queryKindInsert {
-		return errors.IllegalOverrideDirectiveError
+		return a.newError(errIllegalField, field, "", "")
 	}
 
 	val := strings.ToLower(strings.TrimSpace(tag))
@@ -1404,17 +1412,17 @@ func (a *analyzer) overridingKind(tag string, field *types.Var) error {
 	case "user":
 		a.query.overridingKind = overridingUser
 	default:
-		return errors.BadOverrideKindValueError
+		return a.newError(errBadTagValue, field, "", tag)
 	}
 	return nil
 }
 
 func (a *analyzer) resultField(field *types.Var) error {
 	if a.query.kind != queryKindInsert && a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
-		return errors.IllegalResultFieldError
+		return a.newError(errIllegalField, field, "", "")
 	}
 	if a.query.returnList != nil || a.query.resultField != nil || a.query.rowsAffectedField != nil {
-		return errors.ConflictResultProducerError
+		return a.newError(errFieldConflict, field, "", "")
 	}
 
 	result := new(resultField)
@@ -1429,15 +1437,15 @@ func (a *analyzer) resultField(field *types.Var) error {
 
 func (a *analyzer) rowsAffectedField(field *types.Var) error {
 	if a.query.kind != queryKindInsert && a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
-		return errors.IllegalRowsAffectedFieldError
+		return a.newError(errIllegalField, field, "", "")
 	}
 	if a.query.returnList != nil || a.query.resultField != nil || a.query.rowsAffectedField != nil {
-		return errors.ConflictResultProducerError
+		return a.newError(errFieldConflict, field, "", "")
 	}
 
 	ftyp := field.Type()
 	if !isIntegerType(ftyp) {
-		return errors.BadRowsAffectedTypeError
+		return a.newError(errFieldType, field, "", "")
 	}
 
 	a.query.rowsAffectedField = new(rowsAffectedField)
@@ -1471,7 +1479,7 @@ func (a *analyzer) funcName(tagvals []string) funcName {
 // for error reporting. The expected format is: "[qualifier.]name[:alias]".
 func (a *analyzer) relId(val string, field *types.Var) (id relId, err error) {
 	if !rxRelId.MatchString(val) {
-		return id, errors.BadRelIdError
+		return id, a.newError(errBadRelIdTagValue, field, "", val)
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.qual = val[:i]
@@ -1490,7 +1498,7 @@ func (a *analyzer) relId(val string, field *types.Var) (id relId, err error) {
 // for error reporting. The expected format is: "[qualifier.]name".
 func (a *analyzer) colId(val string, field *types.Var) (id colId, err error) {
 	if !isColId(val) {
-		return id, errors.BadColIdError
+		return id, a.newError(errBadColIdTagValue, field, "", val)
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.qual = val[:i]
@@ -1505,7 +1513,7 @@ func (a *analyzer) colId(val string, field *types.Var) (id colId, err error) {
 // field argument is used only for error reporting.
 func (a *analyzer) colIdList(tag []string, field *types.Var) (*colIdList, error) {
 	if len(tag) == 0 {
-		return nil, errors.EmptyColListError
+		return nil, a.newError(errNoTagValue, field, "", "")
 	}
 
 	cl := new(colIdList)
@@ -1535,6 +1543,27 @@ func (a *analyzer) isImportedType(named *types.Named) bool {
 // the package in which the target of the analysis is declared.
 func (a *analyzer) isAccessible(x exportable, named *types.Named) bool {
 	return x.Name() != "_" && (x.Exported() || !a.isImportedType(named))
+}
+
+// newError constructs and returns a new analysisError value.
+func (a *analyzer) newError(c analysisErrorCode, f *types.Var, blockName, tagValue string) error {
+	e := analysisError{errorCode: c, blockName: blockName, tagValue: tagValue}
+	if f != nil {
+		p := a.fset.Position(f.Pos())
+		e.packagePath = a.named.Obj().Pkg().Path()
+		e.structName = a.named.Obj().Name()
+		e.fieldType = f.Type().String()
+		e.fieldName = f.Name()
+		e.fileName = p.Filename
+		e.fileLine = p.Line
+	} else {
+		p := a.fset.Position(a.named.Obj().Pos())
+		e.packagePath = a.named.Obj().Pkg().Path()
+		e.structName = a.named.Obj().Name()
+		e.fileName = p.Filename
+		e.fileLine = p.Line
+	}
+	return e
 }
 
 // exportable is implemented by both types.Var and types.Func.
@@ -1620,7 +1649,7 @@ type queryStruct struct {
 type filterStruct struct {
 	// Name of the filter struct type.
 	name string
-	// The field that holds the data type information.
+	// The field that holds the target data type information.
 	dataField *dataField
 	// If set, the column identifier to be used for text search.
 	textSearchColId *colId
@@ -1946,11 +1975,15 @@ type fieldDatum struct {
 // - As a "from" field in an update query type
 // - As a "using" field in a delete query type
 type joinBlock struct {
+	// The field name.
+	name string
 	// The identifier of the top relation in a DELETE-USING / UPDATE-FROM
 	// clause, empty in SELECT commands.
 	relId relId
 	// The list of join items declared in a join block.
 	items []*joinItem
+	// The field's position in the source code.
+	pos token.Pos
 }
 
 // joinItem represents the result of parsing the tag of a gosql.JoinXxx directive.

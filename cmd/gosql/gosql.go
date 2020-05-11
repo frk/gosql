@@ -46,13 +46,14 @@ type file struct {
 
 type directory struct {
 	path  string
+	fset  *token.FileSet
 	pkg   *ast.Package
 	info  *types.Info
 	files []*file
 }
 
 type command struct {
-	pg   *postgres
+	pg   *pgdbInfo
 	dirs []*directory
 
 	// options
@@ -76,7 +77,7 @@ func (cmd *command) exec(dburl string, files ...string) error {
 		_ = cmd.aggtypes(dir, file)
 	}
 
-	cmd.pg = &postgres{url: dburl}
+	cmd.pg = &pgdbInfo{url: dburl}
 	if err := cmd.pg.init(); err != nil {
 		return err
 	}
@@ -85,7 +86,7 @@ func (cmd *command) exec(dburl string, files ...string) error {
 	//
 	for _, dir := range cmd.dirs {
 		for _, f := range dir.files {
-			b, err := cmd.run(f)
+			b, err := cmd.run(f, dir.fset)
 			if err != nil {
 				return err
 			}
@@ -97,12 +98,12 @@ func (cmd *command) exec(dburl string, files ...string) error {
 	return nil
 }
 
-func (cmd *command) run(f *file) (*bytes.Buffer, error) {
+func (cmd *command) run(f *file, fset *token.FileSet) (*bytes.Buffer, error) {
 	var infos []*targetInfo
 
 	// analyze named types
 	for _, typ := range f.types {
-		a := &analyzer{named: typ}
+		a := &analyzer{fset: fset, named: typ}
 		if err := a.run(); err != nil {
 			return nil, err
 		}
@@ -111,7 +112,7 @@ func (cmd *command) run(f *file) (*bytes.Buffer, error) {
 
 	// type-check specs against the db
 	for _, ti := range infos {
-		c := pgchecker{pg: cmd.pg, ti: ti}
+		c := pgTypeCheck{pg: cmd.pg, ti: ti}
 		if err := c.run(); err != nil {
 			return nil, err
 		}
@@ -141,8 +142,8 @@ func (cmd *command) parsedir(path string) (*directory, error) {
 	dir.path = path
 	cmd.dirs = append(cmd.dirs, dir)
 
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir.path, cmd.notestfiles, parser.ParseComments)
+	dir.fset = token.NewFileSet()
+	pkgs, err := parser.ParseDir(dir.fset, dir.path, cmd.notestfiles, parser.ParseComments)
 	if err != nil {
 		return nil, err
 	} else if len(pkgs) != 1 {
@@ -170,7 +171,7 @@ func (cmd *command) parsedir(path string) (*directory, error) {
 	// that we need for the subsequent analysis of the target types.
 	conf := types.Config{Importer: typesutil.NewImporter()}
 	dir.info = &types.Info{Defs: make(map[*ast.Ident]types.Object)}
-	if _, err := conf.Check(dir.path, fset, astfiles, dir.info); err != nil {
+	if _, err := conf.Check(dir.path, dir.fset, astfiles, dir.info); err != nil {
 		return nil, err
 	}
 

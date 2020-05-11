@@ -1,7 +1,7 @@
 package main
 
-// TODO the postgres types circle(arr) and interval(arr) need a corresponding go type
-// TODO "cancast" per-field tag option, as well as a global option, as well as a list-of-castable-types option
+// TODO: the postgres types circle(arr) and interval(arr) could use a corresponding go type
+// TODO: mysqldbInfo & mysqlTypeCheck
 
 import (
 	"database/sql"
@@ -16,156 +16,51 @@ import (
 	"github.com/lib/pq"
 )
 
-const (
-	pgselectdbname = `SELECT current_database()` //`
-
-	pgselectdbrelation = `SELECT
-		c.oid
-		, c.relkind
-	FROM pg_class c
-	WHERE c.relname = $1
-	AND c.relnamespace = to_regnamespace($2)`  //`
-
-	pgselectdbcolumns = `SELECT
-		a.attnum
-		, a.attname
-		, a.atttypmod
-		, a.attndims
-		, a.attnotnull
-		, a.atthasdef
-		, COALESCE(i.indisprimary, false)
-		, a.atttypid
-	FROM pg_attribute a
-	LEFT JOIN pg_index i ON (
-		i.indisprimary
-		AND i.indrelid = a.attrelid
-		AND a.attnum = ANY(i.indkey)
-	)
-	WHERE a.attrelid = $1
-	AND a.attnum > 0
-	AND NOT a.attisdropped
-	ORDER BY a.attnum`  //`
-
-	pgselectdbconstraints = `SELECT
-		c.conname
-		, c.contype
-		, c.condeferrable
-		, c.condeferred
-		, c.conkey
-		, c.confkey
-	FROM pg_constraint c
-	LEFT JOIN pg_index i ON i.indexrelid = c.conindid
-	WHERE c.conrelid = $1
-	ORDER BY c.oid`  //`
-
-	pgselectdbindexes = `SELECT
-		c.relname
-		, i.indnatts
-		, i.indisunique
-		, i.indisprimary
-		, i.indisexclusion
-		, i.indimmediate
-		, i.indisready
-		, i.indkey
-		, pg_catalog.pg_get_indexdef(i.indexrelid)
-		, COALESCE(pg_catalog.pg_get_expr(i.indpred, i.indrelid, true), '')
-	FROM pg_index i
-	LEFT JOIN pg_class c ON c.oid = i.indexrelid
-	WHERE i.indrelid = $1
-	ORDER BY i.indexrelid`  //`
-
-	pgselecttypes = `SELECT
-		t.oid
-		, t.typname
-		, pg_catalog.format_type(t.oid, NULL)
-		, t.typlen
-		, t.typtype
-		, t.typcategory
-		, t.typispreferred
-		, t.typelem
-	FROM pg_type t
-	WHERE t.typrelid = 0
-	AND pg_catalog.pg_type_is_visible(t.oid)
-	AND t.typcategory <> 'P'`  //`
-
-	pgselectoperators = `SELECT
-		o.oid
-		, o.oprname
-		, o.oprkind
-		, o.oprleft
-		, o.oprright
-		, o.oprresult
-	FROM pg_operator o `  //`
-
-	pgselectcasts = `SELECT
-		c.oid
-		, c.castsource
-		, c.casttarget
-		, c.castcontext
-	FROM pg_cast c `  //`
-
-	pgselectprocs_11plus = `SELECT
-		p.oid
-		, p.proname
-		, p.proargtypes[0]
-		, p.prorettype
-		, p.prokind = 'a'
-	FROM pg_proc p
-	WHERE p.pronargs = 1
-	AND p.proname NOT LIKE 'pg_%'
-	AND p.proname NOT LIKE '_pg_%'
-	`  //`
-
-	pgselectprocs_pre11 = `SELECT
-		p.oid
-		, p.proname
-		, p.proargtypes[0]
-		, p.prorettype
-		, p.proisagg
-	FROM pg_proc p
-	WHERE p.pronargs = 1
-	AND p.proname NOT LIKE 'pg_%'
-	AND p.proname NOT LIKE '_pg_%'
-	`  //`
-
-	pgshowversionnum = `SHOW server_version_num` //`
-
-	pgselectexprtype = `SELECT id::oid FROM pg_typeof(%s) AS id` //`
-
-)
-
-type postgres struct {
-	db   *sql.DB
-	cat  *pgcatalogue
-	url  string
-	name string // name of the current database, used mainly for error reporting
+// pgdbInfo handles the connection pool to the target postgres database
+// and holds additional information about that database.
+//
+// An instance of pgdbInfo is intended to be reused by separate runs of the
+// type checker although not concurrently.
+type pgdbInfo struct {
+	// The connection pool to the target database.
+	db *sql.DB
+	// The name of the current database. (intended mainly for error reporting)
+	name string
+	// The url used to open connections to the database.
+	// Used also as the key for caching the catalogue.
+	url string
+	// The catalog for the target database.
+	cat *pgCatalog
 }
 
-func (pg *postgres) init() (err error) {
+// init creates a new connection pool to the url specified database and loads the catalog.
+func (pg *pgdbInfo) init() (err error) {
 	if pg.db, err = sql.Open("postgres", pg.url); err != nil {
 		return err
 	} else if err := pg.db.Ping(); err != nil {
 		return err
 	}
 
-	// the name of the current database
-	if err := pg.db.QueryRow(pgselectdbname).Scan(&pg.name); err != nil {
+	const selectDBName = `SELECT current_database()` //`
+	if err := pg.db.QueryRow(selectDBName).Scan(&pg.name); err != nil {
 		return err
 	}
 
-	pg.cat = new(pgcatalogue)
+	pg.cat = new(pgCatalog)
 	if err = pg.cat.load(pg.db, pg.url); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (pg *postgres) close() error {
+// close closes the underlying connection pool.
+func (pg *pgdbInfo) close() error {
 	return pg.db.Close()
 }
 
-type pgchecker struct {
-	pg *postgres
+// pgTypeCheck holds the state of the postgres specific type checker.
+type pgTypeCheck struct {
+	pg *pgdbInfo
 	ti *targetInfo
 
 	rel      *pgrelation   // the target relation
@@ -173,7 +68,8 @@ type pgchecker struct {
 	relmap   map[string]*pgrelation
 }
 
-func (c *pgchecker) run() (err error) {
+// run initializes and executes the type checker.
+func (c *pgTypeCheck) run() (err error) {
 	c.relmap = make(map[string]*pgrelation)
 	c.ti.searchConditionFieldColumns = make(map[*searchConditionField]*pgcolumn)
 	if c.rel, err = c.loadRelation(c.ti.dataField.relId); err != nil {
@@ -196,7 +92,31 @@ func (c *pgchecker) run() (err error) {
 	return nil
 }
 
-func (c *pgchecker) checkQueryStruct() (err error) {
+// checkFilterStruct type checks the target filter struct.
+func (c *pgTypeCheck) checkFilterStruct() (err error) {
+	// If a TextSearch directive was provided, make sure that the
+	// specified column is present in one of the loaded relations
+	// and that it has the correct type.
+	if c.ti.filter.textSearchColId != nil {
+		col, err := c.findColumnByColId(*c.ti.filter.textSearchColId)
+		if err != nil {
+			return err
+		} else if col.typ.oid != pgtyp_tsvector {
+			return errors.BadDBColumnTypeError
+		}
+	}
+
+	if dataField := c.ti.filter.dataField; dataField != nil {
+		// TODO check that the fields can be used in a test, i.e. comparison
+		if err := c.checkFields(dataField.data.fields, dataTest, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkQueryStruct type checks the target query struct.
+func (c *pgTypeCheck) checkQueryStruct() (err error) {
 	if join := c.ti.query.joinBlock; join != nil {
 		if err := c.checkJoinBlock(join); err != nil {
 			return err
@@ -319,66 +239,10 @@ func (c *pgchecker) checkQueryStruct() (err error) {
 	// an error should be returned as then there's no way to properly match the
 	// data instances with specific rows in the table.
 	return nil
-
-	//func (q *UpdatePKeyReturningAllSingleQuery) Exec(c gosql.Conn) error {
-	//   	const queryString = `UPDATE "test_user" SET (
-	//   		"email"
-	//   		, "password"
-	//   		, "created_at"
-	//   		, "updated_at"
-	//   	) = (
-	//   		$1
-	//   		, $2
-	//   		, $3
-	//   		, $4
-	//   	)
-	//   	WHERE "id" = $5 AND "id" = $6
-	//   	RETURNING
-	//   	"id"
-	//   	, "email"
-	//   	, "created_at"
-	//   	, "updated_at"` // `
-
-	//   	row := c.QueryRow(queryString,
-	//   		q.User.Email,
-	//   		q.User.Password,
-	//   		q.User.CreatedAt,
-	//   		q.User.UpdatedAt,
-	//   		q.User.Id,
-	//   		q.User.Id,
-	//   	)
-	//   	return row.Scan(
-	//   		&q.User.Id,
-	//   		&q.User.Email,
-	//   		&q.User.CreatedAt,
-	//   		&q.User.UpdatedAt,
-	//   	)
-	//   }
-}
-
-func (c *pgchecker) checkFilterStruct() (err error) {
-	// If a TextSearch directive was provided, make sure that the
-	// specified column is present in one of the loaded relations
-	// and that it has the correct type.
-	if c.ti.filter.textSearchColId != nil {
-		col, err := c.findColumnByColId(*c.ti.filter.textSearchColId)
-		if err != nil {
-			return err
-		} else if col.typ.oid != pgtyp_tsvector {
-			return errors.BadDBColumnTypeError
-		}
-	}
-
-	if dataField := c.ti.filter.dataField; dataField != nil {
-		if err := c.checkFields(dataField.data.fields, dataTest, false); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // checkFields checks column existence, type compatibility, operation validity
-func (c *pgchecker) checkFields(fields []*fieldInfo, dataOp dataOperation, strict bool) (err error) {
+func (c *pgTypeCheck) checkFields(fields []*fieldInfo, dataOp dataOperation, strict bool) (err error) {
 	if dataOp == dataNop {
 		return nil
 	}
@@ -436,7 +300,6 @@ func (c *pgchecker) checkFields(fields []*fieldInfo, dataOp dataOperation, stric
 		// Make sure that a value of the given field's type
 		// can be assigned to given column, and vice versa.
 		if !c.canAssign(info, col, fld, dataOp) {
-			fmt.Printf("%s:%s - typmod:%d\n", fld.name, col.name, col.typmod)
 			return errors.BadFieldToColumnTypeError
 		}
 
@@ -453,7 +316,7 @@ func (c *pgchecker) checkFields(fields []*fieldInfo, dataOp dataOperation, stric
 	return nil
 }
 
-func (c *pgchecker) checkJoinBlock(jb *joinBlock) error {
+func (c *pgTypeCheck) checkJoinBlock(jb *joinBlock) error {
 	if len(jb.relId.name) > 0 {
 		rel, err := c.loadRelation(jb.relId)
 		if err != nil {
@@ -470,6 +333,9 @@ func (c *pgchecker) checkJoinBlock(jb *joinBlock) error {
 
 		for _, item := range join.conds {
 			switch cond := item.cond.(type) {
+			default:
+				// NOTE(mkopriva): currently predicates other than
+				// searchConditionColumn are not supported as a join condition.
 			case *searchConditionColumn:
 				// A join condition's left-hand-side column MUST always
 				// reference a column of the relation being joined, so to
@@ -508,7 +374,9 @@ func (c *pgchecker) checkJoinBlock(jb *joinBlock) error {
 						}
 						typ = colId2.typ
 					} else if len(cond.literal) > 0 {
-						var oid pgoid
+						const pgselectexprtype = `SELECT id::oid FROM pg_typeof(%s) AS id` //`
+
+						var oid pgOID
 						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, cond.literal))
 						if err := row.Scan(&oid); err != nil {
 							return errors.BadLiteralExpressionError
@@ -525,21 +393,18 @@ func (c *pgchecker) checkJoinBlock(jb *joinBlock) error {
 						typ = c.pg.cat.types[typ.elem]
 					}
 
-					rhsoids := []pgoid{typ.oid}
+					rhsoids := []pgOID{typ.oid}
 					if !c.canCompare(col, rhsoids, cond.pred) {
 						return errors.BadColumnToLiteralComparisonError
 					}
 				}
-			default:
-				// NOTE(mkopriva): currently predicates other than
-				// searchConditionColumn are not supported as a join condition.
 			}
 		}
 	}
 	return nil
 }
 
-func (c *pgchecker) checkOnConflictBlock(onconf *onConflictBlock) error {
+func (c *pgTypeCheck) checkOnConflictBlock(onconf *onConflictBlock) error {
 	rel := c.rel
 
 	// If a Column directive was provided in an OnConflict block, make
@@ -614,7 +479,7 @@ func (c *pgchecker) checkOnConflictBlock(onconf *onConflictBlock) error {
 	return nil
 }
 
-func (c *pgchecker) checkWhereBlock(where *whereBlock) error {
+func (c *pgTypeCheck) checkWhereBlock(where *whereBlock) error {
 	type loopstate struct {
 		conds []*searchCondition // the current iteration search conditions
 		idx   int                // keeps track of the field index
@@ -636,6 +501,32 @@ stackloop:
 
 			switch cond := item.cond.(type) {
 			case *searchConditionField:
+				// CHECKLIST: [column, operator, field]
+				// ☑️  1. The column must exist in one of the associated relations.
+				// ☑️  2. A NOT NULL column requires non-pointer field.
+				//	*** Not sure this is necessary, how can this help? Are there cases
+				//          where this is more of a burden than help?
+				// ☑️  3. column must be, using the given operator, comparable to one of the
+				//    types to which the field type can be converted.
+				// ☑️  4. If a quantifier (ANY, ALL, etc.) was provided the field must be a slice/array.
+				// ☑️  5. If a quantifier (ANY, ALL, etc.) was provided the field's element type must be
+				//       used in check (3).
+				// ☑️  6. If a modifier function (lower, upper, etc.) was provided the column's type must
+				//       match the function's argument type.
+				// ☑️  7. If a modifier function (lower, upper, etc.) was provided the field's type must
+				//       must be convertible to a type accepted by the function as its argument.
+				// ☑️  8. If a modifier function (lower, upper, etc.) was provided the result types of
+				//       the LHS and RHS expressions must be comparable using the given operator.
+
+				// TODO(mkopriva): COLUMN TO FIELD COMPARISON:
+				// 0. construct a map of: [LHS (postgres_oid) -> CMP (comparison_operator) -> RHS (postgres_oid[])]
+				// 1. resolve the RHS list using the known LHS and CMP
+				// 2. using the RHS list, the typetable, and the field's type
+				//    we can look for a compatible match, but, the first
+				//    oid in the RHS list should be, if present, the LHS oid
+				//    so that that is chosen if the field can be converted to
+				//    that.
+
 				// Check that the referenced Column is present
 				// in one of the associated relations.
 				col, err := c.findColumnByColId(cond.colId)
@@ -711,7 +602,9 @@ stackloop:
 						}
 						typ = col2.typ
 					} else if len(cond.literal) > 0 {
-						var oid pgoid
+						const pgselectexprtype = `SELECT id::oid FROM pg_typeof(%s) AS id` //`
+
+						var oid pgOID
 						row := c.pg.db.QueryRow(fmt.Sprintf(pgselectexprtype, cond.literal))
 						if err := row.Scan(&oid); err != nil {
 							return errors.BadLiteralExpressionError
@@ -730,7 +623,7 @@ stackloop:
 						typ = c.pg.cat.types[typ.elem]
 					}
 
-					rhsoids := []pgoid{typ.oid}
+					rhsoids := []pgOID{typ.oid}
 					if !c.canCompare(col, rhsoids, cond.pred) {
 						return errors.BadColumnToLiteralComparisonError
 					}
@@ -745,14 +638,14 @@ stackloop:
 
 				// Check that both predicands, x and y, can be compared to the column.
 				for _, arg := range []interface{}{cond.x, cond.y} {
-					var argoids []pgoid
+					var argoids []pgOID
 					switch a := arg.(type) {
 					case colId:
 						col2, err := c.findColumnByColId(a)
 						if err != nil {
 							return err
 						}
-						argoids = []pgoid{col2.typ.oid}
+						argoids = []pgOID{col2.typ.oid}
 					case *fieldDatum:
 						argoids = c.typeoids(a.typ)
 					}
@@ -775,15 +668,15 @@ stackloop:
 
 // typeoids returns a list of OIDs of those PostgreSQL types that can be
 // used to hold a value of a Go type represented by the given typeInfo.
-func (c *pgchecker) typeoids(typ typeInfo) []pgoid {
+func (c *pgTypeCheck) typeoids(typ typeInfo) []pgOID {
 	switch typstr := typ.goTypeId(false, false, true); typstr {
 	case goTypeStringMap, goTypeNullStringMap, goTypeStringPtrMap:
-		if t := c.pg.cat.typebyname("hstore"); t != nil {
-			return []pgoid{t.oid}
+		if t := c.pg.cat.typeByName("hstore"); t != nil {
+			return []pgOID{t.oid}
 		}
 	case goTypeStringMapSlice, goTypeNullStringMapSlice, goTypeStringPtrMapSlice:
-		if t := c.pg.cat.typebyname("_hstore"); t != nil {
-			return []pgoid{t.oid}
+		if t := c.pg.cat.typeByName("_hstore"); t != nil {
+			return []pgOID{t.oid}
 		}
 	default:
 		if oids, ok := go2pgoids[typstr]; ok {
@@ -795,7 +688,7 @@ func (c *pgchecker) typeoids(typ typeInfo) []pgoid {
 
 // canCompare reports whether a value of the given col's type can be compared to,
 // using the predicate, a value of one of the types specified by the given oids.
-func (c *pgchecker) canCompare(col *pgcolumn, rhstypes []pgoid, pred predicate) bool {
+func (c *pgTypeCheck) canCompare(col *pgcolumn, rhstypes []pgOID, pred predicate) bool {
 	name := predicateToBasePGOps[pred]
 	left := col.typ.oid
 	for _, right := range rhstypes {
@@ -812,7 +705,7 @@ func (c *pgchecker) canCompare(col *pgcolumn, rhstypes []pgoid, pred predicate) 
 }
 
 // canAssign reports whether a value
-func (c *pgchecker) canAssign(info *fieldColumnInfo, col *pgcolumn, field *fieldInfo, dataOp dataOperation) bool {
+func (c *pgTypeCheck) canAssign(info *fieldColumnInfo, col *pgcolumn, field *fieldInfo, dataOp dataOperation) bool {
 	// TODO(mkopriva): this returns on success, so write tests that test
 	// successful scenarios so that every code branch is covered.
 
@@ -830,7 +723,7 @@ func (c *pgchecker) canAssign(info *fieldColumnInfo, col *pgcolumn, field *field
 
 	oid := col.typ.oid
 	gotyp := field.typ.goTypeId(false, false, true)
-	typkey := pgsqlTypeKey{oid: oid}
+	typkey := pgTypeKey{oid: oid}
 
 	// Because the pgsql.JSON and pgsql.XML transformers both accept the empty
 	// interface as their argument, if the field's type is not considered as
@@ -841,7 +734,7 @@ func (c *pgchecker) canAssign(info *fieldColumnInfo, col *pgcolumn, field *field
 			gotyp = goTypeEmptyInterface
 		}
 
-		info.pgsql = pgsqlTypeTable[typkey][gotyp]
+		info.pgsql = pgTypeTable[typkey][gotyp]
 		return true
 	}
 
@@ -868,7 +761,7 @@ func (c *pgchecker) canAssign(info *fieldColumnInfo, col *pgcolumn, field *field
 		}
 	}
 
-	if entry, ok := pgsqlTypeTable[typkey][gotyp]; ok {
+	if entry, ok := pgTypeTable[typkey][gotyp]; ok {
 		info.pgsql = entry
 		return true
 	}
@@ -900,7 +793,7 @@ func (c *pgchecker) canAssign(info *fieldColumnInfo, col *pgcolumn, field *field
 	return false
 }
 
-func (c *pgchecker) canCoerceOID(targetid, inputid pgoid) bool {
+func (c *pgTypeCheck) canCoerceOID(targetid, inputid pgOID) bool {
 	// no problem if same type
 	if targetid == inputid {
 		return true
@@ -924,7 +817,7 @@ func (c *pgchecker) canCoerceOID(targetid, inputid pgoid) bool {
 }
 
 // check that the column's and field's type can be used as the argument to the specified function.
-func (c *pgchecker) checkModifierFunction(fn funcName, col *pgcolumn, fieldoids []pgoid) error {
+func (c *pgTypeCheck) checkModifierFunction(fn funcName, col *pgcolumn, fieldoids []pgOID) error {
 	var (
 		ok1 bool // column's type can be coerced to the functions argument's type
 		ok2 bool // field's type can be assigned to the functions argument's type
@@ -951,7 +844,7 @@ func (c *pgchecker) checkModifierFunction(fn funcName, col *pgcolumn, fieldoids 
 	return nil
 }
 
-func (c *pgchecker) loadRelation(id relId) (*pgrelation, error) {
+func (c *pgTypeCheck) loadRelation(id relId) (*pgrelation, error) {
 	rel := new(pgrelation)
 	rel.name = id.name
 	rel.namespace = id.qual
@@ -959,8 +852,13 @@ func (c *pgchecker) loadRelation(id relId) (*pgrelation, error) {
 		rel.namespace = "public"
 	}
 
-	// retrieve relation info
-	row := c.pg.db.QueryRow(pgselectdbrelation, rel.name, rel.namespace)
+	const selectRelationInfo = `SELECT
+		c.oid
+		, c.relkind
+	FROM pg_class c
+	WHERE c.relname = $1
+	AND c.relnamespace = to_regnamespace($2)` //`
+	row := c.pg.db.QueryRow(selectRelationInfo, rel.name, rel.namespace)
 	if err := row.Scan(&rel.oid, &rel.relkind); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, errors.NoDBRelationError
@@ -968,8 +866,26 @@ func (c *pgchecker) loadRelation(id relId) (*pgrelation, error) {
 		return nil, err
 	}
 
-	// retrieve column info
-	rows, err := c.pg.db.Query(pgselectdbcolumns, rel.oid)
+	const selectRelationColumns = `SELECT
+		a.attnum
+		, a.attname
+		, a.atttypmod
+		, a.attndims
+		, a.attnotnull
+		, a.atthasdef
+		, COALESCE(i.indisprimary, false)
+		, a.atttypid
+	FROM pg_attribute a
+	LEFT JOIN pg_index i ON (
+		i.indisprimary
+		AND i.indrelid = a.attrelid
+		AND a.attnum = ANY(i.indkey)
+	)
+	WHERE a.attrelid = $1
+	AND a.attnum > 0
+	AND NOT a.attisdropped
+	ORDER BY a.attnum` //`
+	rows, err := c.pg.db.Query(selectRelationColumns, rel.oid)
 	if err != nil {
 		return nil, err
 	}
@@ -1002,8 +918,18 @@ func (c *pgchecker) loadRelation(id relId) (*pgrelation, error) {
 		return nil, err
 	}
 
-	// load constraints info
-	rows, err = c.pg.db.Query(pgselectdbconstraints, rel.oid)
+	const selectRelationConstraints = `SELECT
+		c.conname
+		, c.contype
+		, c.condeferrable
+		, c.condeferred
+		, c.conkey
+		, c.confkey
+	FROM pg_constraint c
+	LEFT JOIN pg_index i ON i.indexrelid = c.conindid
+	WHERE c.conrelid = $1
+	ORDER BY c.oid` //`
+	rows, err = c.pg.db.Query(selectRelationConstraints, rel.oid)
 	if err != nil {
 		return nil, err
 	}
@@ -1028,8 +954,22 @@ func (c *pgchecker) loadRelation(id relId) (*pgrelation, error) {
 		return nil, err
 	}
 
-	// load index info
-	rows, err = c.pg.db.Query(pgselectdbindexes, rel.oid)
+	const selectRelationIndexes = `SELECT
+		c.relname
+		, i.indnatts
+		, i.indisunique
+		, i.indisprimary
+		, i.indisexclusion
+		, i.indimmediate
+		, i.indisready
+		, i.indkey
+		, pg_catalog.pg_get_indexdef(i.indexrelid)
+		, COALESCE(pg_catalog.pg_get_expr(i.indpred, i.indrelid, true), '')
+	FROM pg_index i
+	LEFT JOIN pg_class c ON c.oid = i.indexrelid
+	WHERE i.indrelid = $1
+	ORDER BY i.indexrelid` //`
+	rows, err = c.pg.db.Query(selectRelationIndexes, rel.oid)
 	if err != nil {
 		return nil, err
 	}
@@ -1071,7 +1011,7 @@ func (c *pgchecker) loadRelation(id relId) (*pgrelation, error) {
 	return rel, nil
 }
 
-func (c *pgchecker) findColumnByColId(id colId) (*pgcolumn, error) {
+func (c *pgTypeCheck) findColumnByColId(id colId) (*pgcolumn, error) {
 	rel, ok := c.relmap[id.qual]
 	if !ok {
 		return nil, errors.NoDBRelationError
@@ -1083,7 +1023,7 @@ func (c *pgchecker) findColumnByColId(id colId) (*pgcolumn, error) {
 	return col, nil
 }
 
-func (c *pgchecker) findFieldByColId(id colId) (*fieldInfo, error) {
+func (c *pgTypeCheck) findFieldByColId(id colId) (*fieldInfo, error) {
 	// make sure the column actually exists
 	if _, err := c.findColumnByColId(id); err != nil {
 		return nil, err
@@ -1098,7 +1038,7 @@ func (c *pgchecker) findFieldByColId(id colId) (*fieldInfo, error) {
 }
 
 type pgrelation struct {
-	oid         pgoid  // The object identifier of the relation.
+	oid         pgOID  // The object identifier of the relation.
 	name        string // The name of the relation.
 	namespace   string // The name of the namespace to which the relation belongs.
 	relkind     string // The relation's kind, we're only interested in r, v, and m.
@@ -1156,7 +1096,7 @@ type pgcolumn struct {
 	// Reports whether or not the column is a primary key.
 	isprimary bool
 	// The id of the column's type.
-	typoid pgoid
+	typoid pgOID
 	// Info about the column's type.
 	typ *pgtype
 }
@@ -1208,7 +1148,7 @@ type pgindex struct {
 }
 
 type pgtype struct {
-	oid pgoid
+	oid pgOID
 	// The name of the type.
 	name string
 	// The formatted name of the type.
@@ -1224,10 +1164,10 @@ type pgtype struct {
 	ispreferred bool
 	// If this is an array type then elem identifies the element type
 	// of that array type.
-	elem pgoid
+	elem pgOID
 }
 
-func (t pgtype) is(oids ...pgoid) bool {
+func (t pgtype) is(oids ...pgOID) bool {
 	for _, oid := range oids {
 		if t.oid == oid {
 			return true
@@ -1238,7 +1178,7 @@ func (t pgtype) is(oids ...pgoid) bool {
 
 // isbase returns true if t's oid matches one of the given oids, or if t is an
 // array type isbase returns true if t's elem matches one of the given oids.
-func (t pgtype) isbase(oids ...pgoid) bool {
+func (t pgtype) isbase(oids ...pgOID) bool {
 	if t.category == pgtypcategory_array {
 		for _, oid := range oids {
 			if t.elem == oid {
@@ -1250,53 +1190,50 @@ func (t pgtype) isbase(oids ...pgoid) bool {
 }
 
 type pgoperator struct {
-	oid    pgoid
+	oid    pgOID
 	name   string
 	kind   string
-	left   pgoid
-	right  pgoid
-	result pgoid
+	left   pgOID
+	right  pgOID
+	result pgOID
 }
 
 type pgopkey struct {
 	name  string
-	left  pgoid
-	right pgoid
+	left  pgOID
+	right pgOID
 }
 
 type pgcast struct {
-	oid     pgoid
-	source  pgoid
-	target  pgoid
+	oid     pgOID
+	source  pgOID
+	target  pgOID
 	context string
 }
 
 type pgproc struct {
-	oid     pgoid
+	oid     pgOID
 	name    string
-	argtype pgoid
-	rettype pgoid
+	argtype pgOID
+	rettype pgOID
 	isagg   bool
 }
 
 type pgcastkey struct {
-	target pgoid
-	source pgoid
+	target pgOID
+	source pgOID
 }
 
-type pgcatalogue struct {
-	types     map[pgoid]*pgtype
+// pgCatalog holds useful information on various objects of the database.
+type pgCatalog struct {
+	types     map[pgOID]*pgtype
 	operators map[pgopkey]*pgoperator
 	casts     map[pgcastkey]*pgcast
 	procs     map[funcName][]*pgproc
 }
 
-var pgcataloguecache = struct {
-	sync.RWMutex
-	m map[string]*pgcatalogue
-}{m: make(map[string]*pgcatalogue)}
-
-func (c *pgcatalogue) typebyname(name string) *pgtype {
+// typeByName looks up and returns the pgtype by the given name.
+func (c *pgCatalog) typeByName(name string) *pgtype {
 	for _, t := range c.types {
 		if t.name == name {
 			return t
@@ -1305,12 +1242,12 @@ func (c *pgcatalogue) typebyname(name string) *pgtype {
 	return nil
 }
 
-func (c *pgcatalogue) typebyoid(oid pgoid) *pgtype {
+func (c *pgCatalog) typebyoid(oid pgOID) *pgtype {
 	return c.types[oid]
 }
 
 // cancasti reports whether s can be cast to t *implicitly* or in assignment.
-func (c *pgcatalogue) cancasti(t, s pgoid) bool {
+func (c *pgCatalog) cancasti(t, s pgOID) bool {
 	key := pgcastkey{target: t, source: s}
 	if cast := c.casts[key]; cast != nil {
 		return cast.context == pgcast_implicit || cast.context == pgcast_assignment
@@ -1318,20 +1255,31 @@ func (c *pgcatalogue) cancasti(t, s pgoid) bool {
 	return false
 }
 
-func (c *pgcatalogue) load(db *sql.DB, key string) error {
-	pgcataloguecache.Lock()
-	defer pgcataloguecache.Unlock()
+func (c *pgCatalog) load(db *sql.DB, key string) error {
+	pgCatalogCache.Lock()
+	defer pgCatalogCache.Unlock()
 
-	cat := pgcataloguecache.m[key]
+	cat := pgCatalogCache.m[key]
 	if cat != nil {
 		*c = *cat
 		return nil
 	}
 
-	c.types = make(map[pgoid]*pgtype)
-
-	// load types
-	rows, err := db.Query(pgselecttypes)
+	const selectTypes = `SELECT
+		t.oid
+		, t.typname
+		, pg_catalog.format_type(t.oid, NULL)
+		, t.typlen
+		, t.typtype
+		, t.typcategory
+		, t.typispreferred
+		, t.typelem
+	FROM pg_type t
+	WHERE t.typrelid = 0
+	AND pg_catalog.pg_type_is_visible(t.oid)
+	AND t.typcategory <> 'P'` //`
+	c.types = make(map[pgOID]*pgtype)
+	rows, err := db.Query(selectTypes)
 	if err != nil {
 		return err
 	}
@@ -1358,10 +1306,16 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		return err
 	}
 
+	const selectOperators = `SELECT
+		o.oid
+		, o.oprname
+		, o.oprkind
+		, o.oprleft
+		, o.oprright
+		, o.oprresult
+	FROM pg_operator o ` //`
 	c.operators = make(map[pgopkey]*pgoperator)
-
-	// load operators
-	rows, err = db.Query(pgselectoperators)
+	rows, err = db.Query(selectOperators)
 	if err != nil {
 		return err
 	}
@@ -1386,10 +1340,14 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		return err
 	}
 
+	const selectCasts = `SELECT
+		c.oid
+		, c.castsource
+		, c.casttarget
+		, c.castcontext
+	FROM pg_cast c ` //`
 	c.casts = make(map[pgcastkey]*pgcast)
-
-	// load casts
-	rows, err = db.Query(pgselectcasts)
+	rows, err = db.Query(selectCasts)
 	if err != nil {
 		return err
 	}
@@ -1412,20 +1370,42 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		return err
 	}
 
-	c.procs = make(map[funcName][]*pgproc)
-
+	const showVersionNumber = `SHOW server_version_num` //`
 	var version int
-	var pgselectprocs string
-	if err := db.QueryRow(pgshowversionnum).Scan(&version); err != nil {
+	if err := db.QueryRow(showVersionNumber).Scan(&version); err != nil {
 		return err
-	} else if version >= 110000 {
-		pgselectprocs = pgselectprocs_11plus
-	} else {
-		pgselectprocs = pgselectprocs_pre11
 	}
 
-	// load procs
-	rows, err = db.Query(pgselectprocs)
+	var selectProcs string
+	if version >= 110000 {
+		// v11+
+		selectProcs = `SELECT
+			p.oid
+			, p.proname
+			, p.proargtypes[0]
+			, p.prorettype
+			, p.prokind = 'a'
+		FROM pg_proc p
+		WHERE p.pronargs = 1
+		AND p.proname NOT LIKE 'pg_%'
+		AND p.proname NOT LIKE '_pg_%'
+		` //`
+	} else {
+		// pre v11
+		selectProcs = `SELECT
+			p.oid
+			, p.proname
+			, p.proargtypes[0]
+			, p.prorettype
+			, p.proisagg
+		FROM pg_proc p
+		WHERE p.pronargs = 1
+		AND p.proname NOT LIKE 'pg_%'
+		AND p.proname NOT LIKE '_pg_%'
+		` //`
+	}
+	c.procs = make(map[funcName][]*pgproc)
+	rows, err = db.Query(selectProcs)
 	if err != nil {
 		return err
 	}
@@ -1450,7 +1430,7 @@ func (c *pgcatalogue) load(db *sql.DB, key string) error {
 		return err
 	}
 
-	pgcataloguecache.m[key] = c
+	pgCatalogCache.m[key] = c
 	return nil
 }
 
@@ -1463,110 +1443,110 @@ const (
 	dataTest
 )
 
-type pgoid uint32
+type pgOID uint32
 
-func (oid pgoid) getArrayOID() pgoid {
+func (oid pgOID) getArrayOID() pgOID {
 	return pgoidToArrayOID[oid]
 }
 
 // postgres types
 const (
-	pgtyp_any            pgoid = 2276
-	pgtyp_bit            pgoid = 1560
-	pgtyp_bitarr         pgoid = 1561
-	pgtyp_bool           pgoid = 16
-	pgtyp_boolarr        pgoid = 1000
-	pgtyp_box            pgoid = 603
-	pgtyp_boxarr         pgoid = 1020
-	pgtyp_bpchar         pgoid = 1042
-	pgtyp_bpchararr      pgoid = 1014
-	pgtyp_bytea          pgoid = 17
-	pgtyp_byteaarr       pgoid = 1001
-	pgtyp_char           pgoid = 18
-	pgtyp_chararr        pgoid = 1002
-	pgtyp_cidr           pgoid = 650
-	pgtyp_cidrarr        pgoid = 651
-	pgtyp_circle         pgoid = 718
-	pgtyp_circlearr      pgoid = 719
-	pgtyp_date           pgoid = 1082
-	pgtyp_datearr        pgoid = 1182
-	pgtyp_daterange      pgoid = 3912
-	pgtyp_daterangearr   pgoid = 3913
-	pgtyp_float4         pgoid = 700
-	pgtyp_float4arr      pgoid = 1021
-	pgtyp_float8         pgoid = 701
-	pgtyp_float8arr      pgoid = 1022
-	pgtyp_inet           pgoid = 869
-	pgtyp_inetarr        pgoid = 1041
-	pgtyp_int2           pgoid = 21
-	pgtyp_int2arr        pgoid = 1005
-	pgtyp_int2vector     pgoid = 22
-	pgtyp_int2vectorarr  pgoid = 1006
-	pgtyp_int4           pgoid = 23
-	pgtyp_int4arr        pgoid = 1007
-	pgtyp_int4range      pgoid = 3904
-	pgtyp_int4rangearr   pgoid = 3905
-	pgtyp_int8           pgoid = 20
-	pgtyp_int8arr        pgoid = 1016
-	pgtyp_int8range      pgoid = 3926
-	pgtyp_int8rangearr   pgoid = 3927
-	pgtyp_interval       pgoid = 1186
-	pgtyp_intervalarr    pgoid = 1187
-	pgtyp_json           pgoid = 114
-	pgtyp_jsonarr        pgoid = 199
-	pgtyp_jsonb          pgoid = 3802
-	pgtyp_jsonbarr       pgoid = 3807
-	pgtyp_line           pgoid = 628
-	pgtyp_linearr        pgoid = 629
-	pgtyp_lseg           pgoid = 601
-	pgtyp_lsegarr        pgoid = 1018
-	pgtyp_macaddr        pgoid = 829
-	pgtyp_macaddrarr     pgoid = 1040
-	pgtyp_macaddr8       pgoid = 774
-	pgtyp_macaddr8arr    pgoid = 775
-	pgtyp_money          pgoid = 790
-	pgtyp_moneyarr       pgoid = 791
-	pgtyp_numeric        pgoid = 1700
-	pgtyp_numericarr     pgoid = 1231
-	pgtyp_numrange       pgoid = 3906
-	pgtyp_numrangearr    pgoid = 3907
-	pgtyp_oidvector      pgoid = 30
-	pgtyp_path           pgoid = 602
-	pgtyp_patharr        pgoid = 1019
-	pgtyp_point          pgoid = 600
-	pgtyp_pointarr       pgoid = 1017
-	pgtyp_polygon        pgoid = 604
-	pgtyp_polygonarr     pgoid = 1027
-	pgtyp_text           pgoid = 25
-	pgtyp_textarr        pgoid = 1009
-	pgtyp_time           pgoid = 1083
-	pgtyp_timearr        pgoid = 1183
-	pgtyp_timestamp      pgoid = 1114
-	pgtyp_timestamparr   pgoid = 1115
-	pgtyp_timestamptz    pgoid = 1184
-	pgtyp_timestamptzarr pgoid = 1185
-	pgtyp_timetz         pgoid = 1266
-	pgtyp_timetzarr      pgoid = 1270
-	pgtyp_tsquery        pgoid = 3615
-	pgtyp_tsqueryarr     pgoid = 3645
-	pgtyp_tsrange        pgoid = 3908
-	pgtyp_tsrangearr     pgoid = 3909
-	pgtyp_tstzrange      pgoid = 3910
-	pgtyp_tstzrangearr   pgoid = 3911
-	pgtyp_tsvector       pgoid = 3614
-	pgtyp_tsvectorarr    pgoid = 3643
-	pgtyp_uuid           pgoid = 2950
-	pgtyp_uuidarr        pgoid = 2951
-	pgtyp_unknown        pgoid = 705
-	pgtyp_varbit         pgoid = 1562
-	pgtyp_varbitarr      pgoid = 1563
-	pgtyp_varchar        pgoid = 1043
-	pgtyp_varchararr     pgoid = 1015
-	pgtyp_xml            pgoid = 142
-	pgtyp_xmlarr         pgoid = 143
+	pgtyp_any            pgOID = 2276
+	pgtyp_bit            pgOID = 1560
+	pgtyp_bitarr         pgOID = 1561
+	pgtyp_bool           pgOID = 16
+	pgtyp_boolarr        pgOID = 1000
+	pgtyp_box            pgOID = 603
+	pgtyp_boxarr         pgOID = 1020
+	pgtyp_bpchar         pgOID = 1042
+	pgtyp_bpchararr      pgOID = 1014
+	pgtyp_bytea          pgOID = 17
+	pgtyp_byteaarr       pgOID = 1001
+	pgtyp_char           pgOID = 18
+	pgtyp_chararr        pgOID = 1002
+	pgtyp_cidr           pgOID = 650
+	pgtyp_cidrarr        pgOID = 651
+	pgtyp_circle         pgOID = 718
+	pgtyp_circlearr      pgOID = 719
+	pgtyp_date           pgOID = 1082
+	pgtyp_datearr        pgOID = 1182
+	pgtyp_daterange      pgOID = 3912
+	pgtyp_daterangearr   pgOID = 3913
+	pgtyp_float4         pgOID = 700
+	pgtyp_float4arr      pgOID = 1021
+	pgtyp_float8         pgOID = 701
+	pgtyp_float8arr      pgOID = 1022
+	pgtyp_inet           pgOID = 869
+	pgtyp_inetarr        pgOID = 1041
+	pgtyp_int2           pgOID = 21
+	pgtyp_int2arr        pgOID = 1005
+	pgtyp_int2vector     pgOID = 22
+	pgtyp_int2vectorarr  pgOID = 1006
+	pgtyp_int4           pgOID = 23
+	pgtyp_int4arr        pgOID = 1007
+	pgtyp_int4range      pgOID = 3904
+	pgtyp_int4rangearr   pgOID = 3905
+	pgtyp_int8           pgOID = 20
+	pgtyp_int8arr        pgOID = 1016
+	pgtyp_int8range      pgOID = 3926
+	pgtyp_int8rangearr   pgOID = 3927
+	pgtyp_interval       pgOID = 1186
+	pgtyp_intervalarr    pgOID = 1187
+	pgtyp_json           pgOID = 114
+	pgtyp_jsonarr        pgOID = 199
+	pgtyp_jsonb          pgOID = 3802
+	pgtyp_jsonbarr       pgOID = 3807
+	pgtyp_line           pgOID = 628
+	pgtyp_linearr        pgOID = 629
+	pgtyp_lseg           pgOID = 601
+	pgtyp_lsegarr        pgOID = 1018
+	pgtyp_macaddr        pgOID = 829
+	pgtyp_macaddrarr     pgOID = 1040
+	pgtyp_macaddr8       pgOID = 774
+	pgtyp_macaddr8arr    pgOID = 775
+	pgtyp_money          pgOID = 790
+	pgtyp_moneyarr       pgOID = 791
+	pgtyp_numeric        pgOID = 1700
+	pgtyp_numericarr     pgOID = 1231
+	pgtyp_numrange       pgOID = 3906
+	pgtyp_numrangearr    pgOID = 3907
+	pgtyp_oidvector      pgOID = 30
+	pgtyp_path           pgOID = 602
+	pgtyp_patharr        pgOID = 1019
+	pgtyp_point          pgOID = 600
+	pgtyp_pointarr       pgOID = 1017
+	pgtyp_polygon        pgOID = 604
+	pgtyp_polygonarr     pgOID = 1027
+	pgtyp_text           pgOID = 25
+	pgtyp_textarr        pgOID = 1009
+	pgtyp_time           pgOID = 1083
+	pgtyp_timearr        pgOID = 1183
+	pgtyp_timestamp      pgOID = 1114
+	pgtyp_timestamparr   pgOID = 1115
+	pgtyp_timestamptz    pgOID = 1184
+	pgtyp_timestamptzarr pgOID = 1185
+	pgtyp_timetz         pgOID = 1266
+	pgtyp_timetzarr      pgOID = 1270
+	pgtyp_tsquery        pgOID = 3615
+	pgtyp_tsqueryarr     pgOID = 3645
+	pgtyp_tsrange        pgOID = 3908
+	pgtyp_tsrangearr     pgOID = 3909
+	pgtyp_tstzrange      pgOID = 3910
+	pgtyp_tstzrangearr   pgOID = 3911
+	pgtyp_tsvector       pgOID = 3614
+	pgtyp_tsvectorarr    pgOID = 3643
+	pgtyp_uuid           pgOID = 2950
+	pgtyp_uuidarr        pgOID = 2951
+	pgtyp_unknown        pgOID = 705
+	pgtyp_varbit         pgOID = 1562
+	pgtyp_varbitarr      pgOID = 1563
+	pgtyp_varchar        pgOID = 1043
+	pgtyp_varchararr     pgOID = 1015
+	pgtyp_xml            pgOID = 142
+	pgtyp_xmlarr         pgOID = 143
 
-	pgtyp_hstore    pgoid = 9999
-	pgtyp_hstorearr pgoid = 9998
+	pgtyp_hstore    pgOID = 9999
+	pgtyp_hstorearr pgOID = 9998
 )
 
 // postgres type types
@@ -1615,7 +1595,7 @@ const (
 	pgcast_assignment = "a"
 )
 
-var pgoidToArrayOID = map[pgoid]pgoid{
+var pgoidToArrayOID = map[pgOID]pgOID{
 	pgtyp_bit:         pgtyp_bitarr,
 	pgtyp_bool:        pgtyp_boolarr,
 	pgtyp_box:         pgtyp_boxarr,
@@ -1664,7 +1644,7 @@ var pgoidToArrayOID = map[pgoid]pgoid{
 	pgtyp_hstore:      pgtyp_hstorearr,
 }
 
-var go2pgoids = map[goTypeId][]pgoid{
+var go2pgoids = map[goTypeId][]pgOID{
 	goTypeBool:                     {pgtyp_bool},
 	goTypeBoolSlice:                {pgtyp_boolarr},
 	goTypeInt:                      {pgtyp_int4, pgtyp_int2, pgtyp_int8, pgtyp_float4, pgtyp_float8, pgtyp_numeric},
@@ -1853,3 +1833,8 @@ func (v *int2vec) Scan(src interface{}) error {
 	}
 	return nil
 }
+
+var pgCatalogCache = struct {
+	sync.RWMutex
+	m map[string]*pgCatalog
+}{m: make(map[string]*pgCatalog)}

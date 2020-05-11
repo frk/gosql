@@ -10,6 +10,7 @@ import (
 )
 
 type Testdata struct {
+	Fset  *token.FileSet
 	Files []*ast.File
 	Defs  map[*ast.Ident]types.Object
 }
@@ -34,6 +35,7 @@ func ParseTestdata(dir string) Testdata {
 		log.Fatal(err)
 	}
 	return Testdata{
+		Fset:  fset,
 		Files: files,
 		Defs:  info.Defs,
 	}
