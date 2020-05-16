@@ -11,6 +11,47 @@ type pgTypeEntry struct {
 	scanner string
 }
 
+var pgLength1TypeTable = map[pgOID]map[goTypeId]pgTypeEntry{
+	pgtyp_bit: {
+		goTypeBool:      {valuer: "BitFromBool"},
+		goTypeUint:      {},
+		goTypeUint8:     {},
+		goTypeString:    {},
+		goTypeByteSlice: {},
+	},
+	pgtyp_bitarr: {
+		goTypeBoolSlice:  {valuer: "BitArrayFromBoolSlice", scanner: "BitArrayToBoolSlice"},
+		goTypeUintSlice:  {valuer: "BitArrayFromUintSlice", scanner: "BitArrayToUintSlice"},
+		goTypeUint8Slice: {valuer: "BitArrayFromUint8Slice", scanner: "BitArrayToUint8Slice"},
+		goTypeString:     {},
+		goTypeByteSlice:  {},
+	},
+	pgtyp_bpchar: {
+		goTypeByte:      {valuer: "BPCharFromByte", scanner: "BPCharToByte"},
+		goTypeRune:      {valuer: "BPCharFromRune", scanner: "BPCharToRune"},
+		goTypeString:    {},
+		goTypeByteSlice: {},
+	},
+	pgtyp_bpchararr: {
+		goTypeRuneSlice:   {valuer: "BPCharArrayFromRuneSlice", scanner: "BPCharArrayToRuneSlice"},
+		goTypeStringSlice: {valuer: "BPCharArrayFromStringSlice", scanner: "BPCharArrayToStringSlice"},
+		goTypeString:      {valuer: "BPCharArrayFromString", scanner: "BPCharArrayToString"},
+		goTypeByteSlice:   {valuer: "BPCharArrayFromByteSlice", scanner: "BPCharArrayToByteSlice"},
+	},
+	pgtyp_char: {
+		goTypeByte:      {valuer: "CharFromByte", scanner: "CharToByte"},
+		goTypeRune:      {valuer: "CharFromRune", scanner: "CharToRune"},
+		goTypeString:    {},
+		goTypeByteSlice: {},
+	},
+	pgtyp_chararr: {
+		goTypeRuneSlice:   {valuer: "CharArrayFromRuneSlice", scanner: "CharArrayToRuneSlice"},
+		goTypeStringSlice: {valuer: "CharArrayFromStringSlice", scanner: "CharArrayToStringSlice"},
+		goTypeString:      {valuer: "CharArrayFromString", scanner: "CharArrayToString"},
+		goTypeByteSlice:   {valuer: "CharArrayFromByteSlice", scanner: "CharArrayToByteSlice"},
+	},
+}
+
 var pgTypeTable = map[pgTypeKey]map[goTypeId]pgTypeEntry{
 	{oid: pgtyp_bit, typmod1: true}: {
 		goTypeBool:      {valuer: "BitFromBool"},

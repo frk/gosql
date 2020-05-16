@@ -8,15 +8,6 @@ import (
 	"github.com/frk/gosql"
 )
 
-// column_tests_1 record
-type CT1 struct {
-	A int       `sql:"col_a"`
-	B string    `sql:"col_b"`
-	C bool      `sql:"col_c"`
-	D float64   `sql:"col_d"`
-	E time.Time `sql:"col_e"`
-}
-
 //BAD: relation does not exist
 type SelectPostgresTestBAD_NoRelation struct {
 	Columns CT1 `rel:"norel"`
@@ -143,7 +134,7 @@ type InsertPostgresTestBAD_OnConflictNoIndex struct {
 
 //BAD: onconflict block unique index not found
 type InsertPostgresTestBAD_OnConflictNoUniqueIndex struct {
-	Rel        CT1 `rel:"column_tests_2:c"`
+	Rel        CT2 `rel:"column_tests_2:c"`
 	OnConflict struct {
 		_ gosql.Index `sql:"column_tests_2_nonunique_index"`
 	}
@@ -159,7 +150,7 @@ type InsertPostgresTestBAD_OnConflictNoConstraint struct {
 
 //BAD: onconflict block constraint not found
 type InsertPostgresTestBAD_OnConflictNoUniqueConstraint struct {
-	Rel        CT1 `rel:"column_tests_2:c"`
+	Rel        CT2 `rel:"column_tests_2:c"`
 	OnConflict struct {
 		_ gosql.Constraint `sql:"column_tests_2_nonunique_constraint"`
 	}
@@ -393,14 +384,20 @@ type InsertPostgresTestBAD_ForceRelationNotFound struct {
 
 //BAD: returning column not found
 type UpdatePostgresTestBAD_ReturnColumnNotFound struct {
-	Rel CT1          `rel:"column_tests_1:c"`
+	Rel CT1_bad      `rel:"column_tests_1:c"`
 	_   gosql.Return `sql:"c.col_xyz"`
 }
 
-//BAD: returning relation not found
+//BAD: returning relation "x" not found
 type UpdatePostgresTestBAD_ReturnRelationNotFound struct {
 	Rel CT1          `rel:"column_tests_1:c"`
 	_   gosql.Return `sql:"x.col_a"`
+}
+
+//BAD: returning column field not found
+type UpdatePostgresTestBAD_ReturnFieldNotFound struct {
+	Rel CT1_part     `rel:"column_tests_1:c"`
+	_   gosql.Return `sql:"c.col_d"`
 }
 
 //BAD: textsearch column not found
@@ -469,4 +466,34 @@ type InsertPostgresTestBAD_ResultColumnNotFound struct {
 	Result struct {
 		A int `sql:"col_xyz"`
 	}
+}
+
+// column_tests_1 record
+type CT1 struct {
+	A int       `sql:"col_a"`
+	B string    `sql:"col_b"`
+	C bool      `sql:"col_c"`
+	D float64   `sql:"col_d"`
+	E time.Time `sql:"col_e"`
+}
+
+type CT1_part struct {
+	A int    `sql:"col_a"`
+	B string `sql:"col_b"`
+	C bool   `sql:"col_c"`
+
+	// omitted fields
+	// D float64   `sql:"col_d"`
+	// E time.Time `sql:"col_e"`
+}
+
+type CT1_bad struct {
+	XYZ string `sql:"col_xyz"` // not in table
+}
+
+// column_tests_2 record (partial)
+type CT2 struct {
+	Foo int    `sql:"col_foo"`
+	Bar string `sql:"col_bar"`
+	Baz bool   `sql:"col_baz"`
 }

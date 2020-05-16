@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"testing"
 
 	"github.com/frk/compare"
@@ -131,32 +130,176 @@ func Test_pgchecker_run(t *testing.T) {
 		err:  errors.BadColumnToColumnTypeComparisonError,
 	}, {
 		name: "SelectPostgresTestBAD_OrderByColumnNotFound",
-		err:  errors.NoDBColumnError,
+		err: typeError{
+			errorCode:    errNoRelationColumn,
+			pkgPath:      "path/to/test",
+			targetName:   "SelectPostgresTestBAD_OrderByColumnNotFound",
+			fieldType:    "github.com/frk/gosql.OrderBy",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_1",
+			colQualifier: "c",
+			colName:      "col_xyz",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     346,
+		},
 	}, {
 		name: "SelectPostgresTestBAD_OrderByRelationNotFound",
-		err:  errors.NoDBRelationError,
+		err: typeError{
+			errorCode:    errNoDatabaseRelation,
+			pkgPath:      "path/to/test",
+			targetName:   "SelectPostgresTestBAD_OrderByRelationNotFound",
+			fieldType:    "github.com/frk/gosql.OrderBy",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "",
+			relName:      "",
+			colQualifier: "x",
+			colName:      "col_a",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     352,
+		},
 	}, {
 		name: "InsertPostgresTestBAD_DefaultBadRelationAlias",
-		err:  errors.BadTargetTableForDefaultError,
+		err: typeError{
+			errorCode:    errBadColumnQualifier,
+			pkgPath:      "path/to/test",
+			targetName:   "InsertPostgresTestBAD_DefaultBadRelationAlias",
+			fieldType:    "github.com/frk/gosql.Default",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "",
+			relName:      "",
+			colQualifier: "x",
+			colName:      "col_b",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     358,
+		},
 	}, {
 		name: "InsertPostgresTestBAD_DefaultColumnNotFound",
-		err:  errors.NoDBColumnError,
+		err: typeError{
+			errorCode:    errNoRelationColumn,
+			pkgPath:      "path/to/test",
+			targetName:   "InsertPostgresTestBAD_DefaultColumnNotFound",
+			fieldType:    "github.com/frk/gosql.Default",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_1",
+			colQualifier: "c",
+			colName:      "col_xyz",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     364,
+		},
 	}, {
 		name: "InsertPostgresTestBAD_DefaultNotSet",
-		err:  errors.NoColumnDefaultSetError,
+		err: typeError{
+			errorCode:    errNoColumnDefault,
+			pkgPath:      "path/to/test",
+			targetName:   "InsertPostgresTestBAD_DefaultNotSet",
+			fieldType:    "github.com/frk/gosql.Default",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_1",
+			colQualifier: "c",
+			colName:      "col_b",
+			colType:      "text",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     370,
+		},
 	}, {
 		name: "InsertPostgresTestBAD_ForceColumnNotFound",
-		err:  errors.NoDBColumnError,
+		err: typeError{
+			errorCode:    errNoRelationColumn,
+			pkgPath:      "path/to/test",
+			targetName:   "InsertPostgresTestBAD_ForceColumnNotFound",
+			fieldType:    "github.com/frk/gosql.Force",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_1",
+			colQualifier: "c",
+			colName:      "col_xyz",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     376,
+		},
 	}, {
 		name: "InsertPostgresTestBAD_ForceRelationNotFound",
-		err:  errors.NoDBRelationError,
+		err: typeError{
+			errorCode:    errNoDatabaseRelation,
+			pkgPath:      "path/to/test",
+			targetName:   "InsertPostgresTestBAD_ForceRelationNotFound",
+			fieldType:    "github.com/frk/gosql.Force",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "",
+			relName:      "",
+			colQualifier: "x",
+			colName:      "col_a",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     382,
+		},
 	}, {
 		name: "UpdatePostgresTestBAD_ReturnColumnNotFound",
-		err:  errors.NoDBColumnError,
+		err: typeError{
+			errorCode:    errNoRelationColumn,
+			pkgPath:      "path/to/test",
+			targetName:   "UpdatePostgresTestBAD_ReturnColumnNotFound",
+			fieldType:    "github.com/frk/gosql.Return",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_1",
+			colQualifier: "c",
+			colName:      "col_xyz",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     388,
+		},
 	}, {
 		name: "UpdatePostgresTestBAD_ReturnRelationNotFound",
-		err:  errors.NoDBRelationError,
-		// TODO }, {
+		err: typeError{
+			errorCode:    errNoDatabaseRelation,
+			pkgPath:      "path/to/test",
+			targetName:   "UpdatePostgresTestBAD_ReturnRelationNotFound",
+			fieldType:    "github.com/frk/gosql.Return",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "",
+			relName:      "",
+			colQualifier: "x",
+			colName:      "col_a",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     394,
+		},
+	}, {
+		name: "UpdatePostgresTestBAD_ReturnFieldNotFound",
+		err: typeError{
+			errorCode:    errNoColumnField,
+			pkgPath:      "path/to/test",
+			targetName:   "UpdatePostgresTestBAD_ReturnFieldNotFound",
+			fieldType:    "github.com/frk/gosql.Return",
+			fieldName:    "_",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_1",
+			colQualifier: "c",
+			colName:      "col_d",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     400,
+		},
+		//TODO }, {
 		// TODO 	name: "FilterPostgresTestBAD_TextSearchColumnNotFound",
 		// TODO 	err:  errors.NoDBColumnError,
 		// TODO }, {
@@ -189,6 +332,7 @@ func Test_pgchecker_run(t *testing.T) {
 			}
 
 			dbc := new(pgTypeCheck)
+			dbc.fset = tdata.Fset
 			dbc.pg = testdb.pg
 			dbc.ti = ti
 			if dbc.ti.query != nil {
@@ -207,19 +351,19 @@ func Test_pgchecker_run(t *testing.T) {
 func Test_pgchecker_loadrelation(t *testing.T) {
 	tests := []struct {
 		relId relId
-		want  *pgrelation
+		want  *pgRelationInfo
 		err   error
 	}{{
 		relId: relId{name: "relation_test", qual: "public"},
-		want:  &pgrelation{name: "relation_test", namespace: "public", relkind: "r"},
+		want:  &pgRelationInfo{name: "relation_test", namespace: "public", relkind: "r"},
 		err:   nil,
 	}, {
 		relId: relId{name: "column_tests_1", qual: "public"},
-		want:  &pgrelation{name: "column_tests_1", namespace: "public", relkind: "r"},
+		want:  &pgRelationInfo{name: "column_tests_1", namespace: "public", relkind: "r"},
 		err:   nil,
 	}, {
 		relId: relId{name: "view_test"},
-		want:  &pgrelation{name: "view_test", namespace: "public", relkind: "v"},
+		want:  &pgRelationInfo{name: "view_test", namespace: "public", relkind: "v"},
 		err:   nil,
 	}, {
 		relId: relId{name: "no_relation", qual: "public"},
@@ -231,6 +375,7 @@ func Test_pgchecker_loadrelation(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgTypeCheck)
+		dbc.fset = tdata.Fset
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
 		dbc.ti.dataField = dbc.ti.query.dataField
@@ -257,7 +402,6 @@ func Test_pgchecker_loadrelation(t *testing.T) {
 		}
 
 		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
 			t.Error(i, e)
 		}
 	}
@@ -366,6 +510,7 @@ func Test_pgchecker_loadcolumns(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgTypeCheck)
+		dbc.fset = tdata.Fset
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
 		dbc.ti.dataField = dbc.ti.query.dataField
@@ -378,7 +523,6 @@ func Test_pgchecker_loadcolumns(t *testing.T) {
 		}
 
 		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
 			t.Error(i, e)
 		}
 	}
@@ -405,6 +549,7 @@ func Test_pgchecker_loadconstraints(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgTypeCheck)
+		dbc.fset = tdata.Fset
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
 		dbc.ti.dataField = dbc.ti.query.dataField
@@ -417,7 +562,6 @@ func Test_pgchecker_loadconstraints(t *testing.T) {
 		}
 
 		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
 			t.Error(i, e)
 		}
 	}
@@ -516,6 +660,7 @@ func Test_pgchecker_loadindexes(t *testing.T) {
 
 	for i, tt := range tests {
 		dbc := new(pgTypeCheck)
+		dbc.fset = tdata.Fset
 		dbc.pg = testdb.pg
 		dbc.ti = &targetInfo{query: &queryStruct{dataField: &dataField{relId: tt.relId}}}
 		dbc.ti.dataField = dbc.ti.query.dataField
@@ -528,354 +673,6 @@ func Test_pgchecker_loadindexes(t *testing.T) {
 		}
 
 		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
-			t.Error(i, e)
-		}
-	}
-}
-
-func Test_pgchecker_check_textsearch(t *testing.T) {
-	tests := []struct {
-		filter *filterStruct
-		err    error
-	}{{
-		filter: &filterStruct{
-			dataField:       &dataField{relId: relId{name: "column_tests_2"}},
-			textSearchColId: &colId{qual: "", name: "col_text_search_ok"},
-		},
-		err: nil,
-	}, {
-		filter: &filterStruct{
-			dataField:       &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			textSearchColId: &colId{qual: "c", name: "col_text_search_ok"},
-		},
-		err: nil,
-	}, {
-		filter: &filterStruct{
-			dataField:       &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			textSearchColId: &colId{qual: "d", name: "col_text_search_ok"},
-		},
-		err: errors.NoDBRelationError,
-	}, {
-		filter: &filterStruct{
-			dataField:       &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			textSearchColId: &colId{qual: "c", name: "col_none"},
-		},
-		err: errors.NoDBColumnError,
-	}, {
-		filter: &filterStruct{
-			dataField:       &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			textSearchColId: &colId{qual: "c", name: "col_text_search_bad"},
-		},
-		err: errors.BadDBColumnTypeError,
-	}}
-
-	for i, tt := range tests {
-		dbc := new(pgTypeCheck)
-		dbc.pg = testdb.pg
-		dbc.ti = &targetInfo{filter: tt.filter, dataField: tt.filter.dataField}
-
-		err := dbc.run()
-		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
-			t.Error(i, e)
-		}
-	}
-}
-
-func Test_pgchecker_check_orderby(t *testing.T) {
-	tests := []struct {
-		query *queryStruct
-		err   error
-	}{{
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			orderByList: &orderByList{items: []*orderByItem{
-				{colId: colId{name: "col_orderby_a"}},
-				{colId: colId{name: "col_orderby_b"}},
-			}},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			orderByList: &orderByList{items: []*orderByItem{
-				{colId: colId{qual: "c", name: "col_orderby_a"}},
-				{colId: colId{qual: "c", name: "col_orderby_b"}},
-			}},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			orderByList: &orderByList{items: []*orderByItem{
-				{colId: colId{qual: "d", name: "col_orderby_a"}},
-				{colId: colId{qual: "d", name: "col_orderby_b"}},
-			}},
-		},
-		err: errors.NoDBRelationError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			orderByList: &orderByList{items: []*orderByItem{
-				{colId: colId{qual: "c", name: "col_none"}},
-			}},
-		},
-		err: errors.NoDBColumnError,
-	}}
-
-	for i, tt := range tests {
-		dbc := new(pgTypeCheck)
-		dbc.pg = testdb.pg
-		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
-
-		err := dbc.run()
-		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
-			t.Error(i, e)
-		}
-	}
-}
-
-func Test_pgchecker_check_defaults(t *testing.T) {
-	tests := []struct {
-		query *queryStruct
-		err   error
-	}{{
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			defaultList: &colIdList{items: []colId{
-				{name: "col_foo"},
-				{name: "col_bar"},
-				{name: "col_baz"},
-			}},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			defaultList: &colIdList{items: []colId{
-				{qual: "c", name: "col_foo"},
-				{qual: "c", name: "col_baz"},
-			}},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			defaultList: &colIdList{items: []colId{
-				{qual: "c", name: "col_foo"},
-				{qual: "d", name: "col_bar"},
-			}},
-		},
-		err: errors.BadTargetTableForDefaultError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			defaultList: &colIdList{items: []colId{
-				{qual: "c", name: "col_foo"},
-				{qual: "c", name: "col_none"},
-			}},
-		},
-		err: errors.NoDBColumnError,
-	}}
-
-	for i, tt := range tests {
-		dbc := new(pgTypeCheck)
-		dbc.pg = testdb.pg
-		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
-
-		err := dbc.run()
-		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
-			t.Error(i, e)
-		}
-	}
-}
-
-func Test_pgchecker_check_force(t *testing.T) {
-	tests := []struct {
-		query *queryStruct
-		err   error
-	}{{
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			forceList: &colIdList{items: []colId{
-				{name: "col_foo"},
-				{name: "col_bar"},
-				{name: "col_baz"},
-			}},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			forceList: &colIdList{items: []colId{
-				{qual: "c", name: "col_foo"},
-				{qual: "c", name: "col_baz"},
-			}},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			forceList: &colIdList{items: []colId{
-				{qual: "c", name: "col_foo"},
-				{qual: "d", name: "col_bar"},
-			}},
-		},
-		err: errors.NoDBRelationError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2", alias: "c"}},
-			forceList: &colIdList{items: []colId{
-				{qual: "c", name: "col_foo"},
-				{qual: "c", name: "col_none"},
-			}},
-		},
-		err: errors.NoDBColumnError,
-	}}
-
-	for i, tt := range tests {
-		dbc := new(pgTypeCheck)
-		dbc.pg = testdb.pg
-		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
-
-		err := dbc.run()
-		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
-			t.Error(i, e)
-		}
-	}
-}
-
-func Test_pgchecker_check_onconflict(t *testing.T) {
-	tests := []struct {
-		query *queryStruct
-		err   error
-	}{{
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				column: []colId{
-					{name: "col_indkey1"},
-					{name: "col_indkey2"},
-				},
-			},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField:       &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{column: []colId{{name: "col_none"}}},
-		},
-		err: errors.NoDBColumnError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				column: []colId{{name: "col_indkey2"}},
-			},
-		},
-		err: errors.NoDBIndexForColumnListError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				column: []colId{{name: "col_indkey1"}},
-			},
-		},
-		err: errors.NoDBIndexForColumnListError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				column: []colId{
-					{name: "col_indkey1"},
-					{name: "col_indkey2"},
-					{name: "col_foo"},
-				},
-			},
-		},
-		err: errors.NoDBIndexForColumnListError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				index: "column_tests_2_unique_index",
-			},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				index: "column_tests_2_index_none",
-			},
-		},
-		err: errors.NoDBIndexError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				index: "column_tests_2_nonunique_index",
-			},
-		},
-		err: errors.NoDBIndexError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				constraint: "column_tests_2_unique_constraint",
-			},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				constraint: "column_tests_2_unique_constraint_none",
-			},
-		},
-		err: errors.NoDBConstraintError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{
-				constraint: "column_tests_2_nonunique_constraint",
-			},
-		},
-		err: errors.NoDBConstraintError,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{update: &colIdList{items: []colId{
-				{name: "col_foo"},
-				{name: "col_bar"},
-				{name: "col_baz"},
-			}}},
-		},
-		err: nil,
-	}, {
-		query: &queryStruct{
-			dataField: &dataField{relId: relId{name: "column_tests_2"}},
-			onConflictBlock: &onConflictBlock{update: &colIdList{items: []colId{
-				{name: "col_foo"},
-				{name: "col_bar"},
-				{name: "col_none"},
-			}}},
-		},
-		err: errors.NoDBColumnError,
-	}}
-
-	for i, tt := range tests {
-		dbc := new(pgTypeCheck)
-		dbc.pg = testdb.pg
-		dbc.ti = &targetInfo{query: tt.query, dataField: tt.query.dataField}
-
-		err := dbc.run()
-		if e := compare.Compare(err, tt.err); e != nil {
-			log.Printf("%#v\n", err)
 			t.Error(i, e)
 		}
 	}

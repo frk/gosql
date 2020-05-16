@@ -6,6 +6,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"go/token"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,8 +20,8 @@ import (
 // pgdbInfo handles the connection pool to the target postgres database
 // and holds additional information about that database.
 //
-// An instance of pgdbInfo is intended to be reused by separate runs of the
-// type checker although not concurrently.
+// pgdbInfo is NOT safe for concurrent use, an instance of pgdbInfo is intended
+// to be reused by separate runs of the type checker although not concurrently.
 type pgdbInfo struct {
 	// The connection pool to the target database.
 	db *sql.DB
@@ -33,7 +34,8 @@ type pgdbInfo struct {
 	cat *pgCatalog
 }
 
-// init creates a new connection pool to the url specified database and loads the catalog.
+// init creates a new connection pool to the url specified database and loads
+// the catalog information.
 func (pg *pgdbInfo) init() (err error) {
 	if pg.db, err = sql.Open("postgres", pg.url); err != nil {
 		return err
@@ -60,31 +62,63 @@ func (pg *pgdbInfo) close() error {
 
 // pgTypeCheck holds the state of the postgres specific type checker.
 type pgTypeCheck struct {
-	pg *pgdbInfo
-	ti *targetInfo
+	fset *token.FileSet
+	pg   *pgdbInfo
+	ti   *targetInfo
 
-	rel      *pgrelation   // the target relation
-	joinlist []*pgrelation // joined relations
-	relmap   map[string]*pgrelation
+	// The target relation.
+	rel *pgRelationInfo
+	// A map of column qualifier (alias or relname or "") to the
+	// relations denoted by said qualifier.
+	relmap map[string]*pgRelationInfo
+	// A map that holds the set of joined relations.
+	joinrels map[relId]*pgRelationInfo
 }
 
-// run initializes and executes the type checker.
-func (c *pgTypeCheck) run() (err error) {
-	c.relmap = make(map[string]*pgrelation)
+func (c *pgTypeCheck) init() (err error) {
 	c.ti.searchConditionFieldColumns = make(map[*searchConditionField]*pgcolumn)
+
+	c.joinrels = make(map[relId]*pgRelationInfo)
+	c.relmap = make(map[string]*pgRelationInfo)
 	if c.rel, err = c.loadRelation(c.ti.dataField.relId); err != nil {
 		return err
 	}
 
-	// Map the target relation to the "" (empty string) key, this will allow
+	// Map the "" (empty string) key to the target relation, this will allow
 	// columns, constraints, and indexes that were specified without a qualifier
 	// to be associated with this target relation.
 	c.relmap[""] = c.rel
 
+	// Load all the joined relations if a joinBlock is present.
+	if c.ti.query != nil && c.ti.query.joinBlock != nil {
+		jb := c.ti.query.joinBlock
+		if len(jb.relId.name) > 0 {
+			rel, err := c.loadRelation(jb.relId)
+			if err != nil {
+				return err
+			}
+			c.joinrels[jb.relId] = rel
+		}
+		for _, join := range jb.items {
+			rel, err := c.loadRelation(join.relId)
+			if err != nil {
+				return err
+			}
+			c.joinrels[join.relId] = rel
+		}
+	}
+	return nil
+}
+
+// run initializes and executes the type checker.
+func (c *pgTypeCheck) run() (err error) {
+	if err := c.init(); err != nil {
+		return err
+	}
+
 	if c.ti.query != nil {
 		return c.checkQueryStruct()
-	}
-	if c.ti.filter != nil {
+	} else if c.ti.filter != nil {
 		return c.checkFilterStruct()
 	}
 
@@ -94,21 +128,12 @@ func (c *pgTypeCheck) run() (err error) {
 
 // checkFilterStruct type checks the target filter struct.
 func (c *pgTypeCheck) checkFilterStruct() (err error) {
-	// If a TextSearch directive was provided, make sure that the
-	// specified column is present in one of the loaded relations
-	// and that it has the correct type.
-	if c.ti.filter.textSearchColId != nil {
-		col, err := c.findColumnByColId(*c.ti.filter.textSearchColId)
-		if err != nil {
-			return err
-		} else if col.typ.oid != pgtyp_tsvector {
-			return errors.BadDBColumnTypeError
-		}
+	checks := []func() error{
+		c.checkFilterDataField, // TODO
+		c.checkTextSearchColId, // TODO
 	}
-
-	if dataField := c.ti.filter.dataField; dataField != nil {
-		// TODO check that the fields can be used in a test, i.e. comparison
-		if err := c.checkFields(dataField.data.fields, dataTest, false); err != nil {
+	for i := 0; i < len(checks); i++ {
+		if err := checks[i](); err != nil {
 			return err
 		}
 	}
@@ -117,108 +142,26 @@ func (c *pgTypeCheck) checkFilterStruct() (err error) {
 
 // checkQueryStruct type checks the target query struct.
 func (c *pgTypeCheck) checkQueryStruct() (err error) {
-	if join := c.ti.query.joinBlock; join != nil {
-		if err := c.checkJoinBlock(join); err != nil {
-			return err
-		}
-	}
-	if onconf := c.ti.query.onConflictBlock; onconf != nil {
-		if err := c.checkOnConflictBlock(onconf); err != nil {
-			return err
-		}
-	}
-	if where := c.ti.query.whereBlock; where != nil {
-		if err := c.checkWhereBlock(where); err != nil {
-			return err
-		}
-	}
+	checks := []func() error{
+		c.checkForceList,
+		c.checkDefaultList,
+		c.checkOrderByList, // TODO
 
-	// If an OrderBy directive was used, make sure that the specified
-	// columns are present in the loaded relations.
-	if c.ti.query.orderByList != nil {
-		for _, item := range c.ti.query.orderByList.items {
-			if _, err := c.findColumnByColId(item.colId); err != nil {
-				return err
-			}
-		}
+		c.checkReturnList,  // TODO
+		c.checkResultField, // TODO
+
+		c.checkQueryDataField,  // TODO
+		c.checkJoinBlock,       // TODO
+		c.checkOnConflictBlock, // TODO
+		c.checkWhereBlock,      // TODO
 	}
-
-	// If a Default directive was provided, make sure that the specified
-	// columns are present in the target relation.
-	if c.ti.query.defaultList != nil {
-		for _, item := range c.ti.query.defaultList.items {
-			// Qualifier, if present, must match the target table's alias.
-			if len(item.qual) > 0 && item.qual != c.ti.query.dataField.relId.alias {
-				return errors.BadTargetTableForDefaultError
-			}
-
-			if col := c.rel.findColumn(item.name); col == nil {
-				return errors.NoDBColumnError
-			} else if !col.hasdefault {
-				return errors.NoColumnDefaultSetError
-			}
-		}
-	}
-
-	// If a Force directive was provided, make sure that the specified
-	// columns are present in the loaded relations.
-	if c.ti.query.forceList != nil {
-		for _, item := range c.ti.query.forceList.items {
-			if _, err := c.findColumnByColId(item); err != nil {
-				return err
-			}
-		}
-	}
-
-	// If a Return directive was provided, make sure that the specified
-	// columns are present in the loaded relations.
-	var strict bool
-	var outputfields []*fieldInfo
-	if res := c.ti.query.resultField; res != nil {
-		strict = true
-		outputfields = res.data.fields
-	} else if c.ti.query.returnList != nil {
-		if c.ti.query.returnList.all {
-			strict = false
-			outputfields = c.ti.query.dataField.data.fields
-		} else {
-			// If an explicit list of columns was provided, make sure that
-			// they are present in one of the associated relations, and that
-			// each one of them has a corresponding field, if not return an error.
-			strict = true
-
-			for _, colId := range c.ti.query.returnList.items {
-				// NOTE(mkopriva): currently the findFieldByColId method returns
-				// fields matched by just the column's name, i.e. the qualifiers
-				// are ignored, this means that one could pass in two different
-				// colIds with the same name and the method would return the same field.
-				field, err := c.findFieldByColId(colId)
-				if err != nil {
-					return err
-				}
-				outputfields = append(outputfields, field)
-			}
-		}
-
-	}
-	if len(outputfields) > 0 {
-		if err := c.checkFields(outputfields, dataRead, strict); err != nil {
+	for i := 0; i < len(checks); i++ {
+		if err := checks[i](); err != nil {
 			return err
 		}
 	}
 
-	if dataField := c.ti.query.dataField; dataField != nil && !dataField.isDirective {
-		var dataOp dataOperation
-		if c.ti.query.kind == queryKindSelect {
-			dataOp = dataRead
-		} else if c.ti.query.kind == queryKindInsert || c.ti.query.kind == queryKindUpdate {
-			dataOp = dataWrite
-		}
-
-		if err := c.checkFields(dataField.data.fields, dataOp, true); err != nil {
-			return err
-		}
-	}
+	////////////////////////////////////////////////////////////////////////
 
 	if c.ti.query.kind == queryKindInsert {
 		// TODO(mkopriva): if this is an insert make sure that all columns that
@@ -241,95 +184,315 @@ func (c *pgTypeCheck) checkQueryStruct() (err error) {
 	return nil
 }
 
-// checkFields checks column existence, type compatibility, operation validity
-func (c *pgTypeCheck) checkFields(fields []*fieldInfo, dataOp dataOperation, strict bool) (err error) {
-	if dataOp == dataNop {
+// checkForceList checks the columns listed in the gosql.Force directive's tag.
+//
+// CHECKLIST:
+//  ✅ Each column MUST be present in one of the loaded relations.
+func (c *pgTypeCheck) checkForceList() error {
+	list := c.ti.query.forceList
+	if list == nil {
 		return nil
 	}
 
-	for _, fld := range fields {
-		var col *pgcolumn
-		// TODO(mkopriva): currenlty checkFields requires that every
-		// field has a corresponding column in the target relation,
-		// which represents an ideal where each relation in the db
-		// has a matching type in the app, this however may not always
-		// be practical and there may be cases where a single struct
-		// type is used to represent multiple different relations
-		// having fields that have corresponding columns in one
-		// relation but not in another...
-		if dataOp == dataRead {
-			// TODO(mkopriva): currently columns specified in
-			// the fields of the struct representing the record
-			// aren't really meant to include the relation alias
-			// which makes this a bit of a non-issue, however in
-			// the future it would be good to provide a way to do
-			// that, like when selecting columns from multiple
-			// joined tables.. therefore this stays here, at least for now...
-
-			// If this is a SELECT, or the target type is
-			// from the "Result" field, lookup the column
-			// in all of the associated relations since its
-			// ok to select columns from joined relations.
-			if col, err = c.findColumnByColId(fld.colId); err != nil {
-				if strict {
-					return err
-				}
-				continue
-			}
-		} else {
-			// If this is a dataWrite or dataTest operation the column
-			// must be present directly in the target relation, columns
-			// from associated relations (joins) are not allowed.
-			if col = c.rel.findColumn(fld.colId.name); col == nil {
-				if strict {
-					return errors.NoDBColumnError
-				}
-				continue
-			}
-		}
-
-		if dataOp == dataWrite {
-			if fld.useDefault && !col.hasdefault {
-				// TODO error
-			}
-		}
-
-		cid := colId{name: fld.colId.name, qual: c.ti.dataField.relId.alias}
-		info := &fieldColumnInfo{field: fld, column: col, colId: cid}
-
-		// Make sure that a value of the given field's type
-		// can be assigned to given column, and vice versa.
-		if !c.canAssign(info, col, fld, dataOp) {
-			return errors.BadFieldToColumnTypeError
-		}
-
-		if dataOp == dataRead {
-			c.ti.output = append(c.ti.output, info)
-		} else if dataOp == dataWrite || dataOp == dataTest {
-			c.ti.input = append(c.ti.input, info)
-		}
-		// aggrgate primary keys for writes only
-		if col.isprimary && dataOp == dataWrite {
-			c.ti.primaryKeys = append(c.ti.primaryKeys, info)
+	for _, colId := range list.items {
+		if errcode := c.checkColumnExists(colId); errcode > 0 {
+			return c.newError(errcode, colId, nil, list)
 		}
 	}
 	return nil
 }
 
-func (c *pgTypeCheck) checkJoinBlock(jb *joinBlock) error {
-	if len(jb.relId.name) > 0 {
-		rel, err := c.loadRelation(jb.relId)
-		if err != nil {
-			return err
-		}
-		c.joinlist = append(c.joinlist, rel)
+// checkOrderByList checks the columns listed in the gosql.OrderBy directive's tag.
+//
+// CHECKLIST:
+//  ✅ Each column MUST be present in one of the loaded relations.
+func (c *pgTypeCheck) checkOrderByList() error {
+	list := c.ti.query.orderByList
+	if list == nil {
+		return nil
 	}
-	for _, join := range jb.items {
-		rel, err := c.loadRelation(join.relId)
-		if err != nil {
+
+	for _, item := range list.items {
+		if errcode := c.checkColumnExists(item.colId); errcode > 0 {
+			return c.newError(errcode, item.colId, nil, list)
+		}
+	}
+	return nil
+}
+
+// checkDefaultList checks the columns listed in the gosql.Default directive's tag.
+//
+// CHECKLIST:
+//  ✅ Each column MUST be present in the TARGET relation.
+//  ✅ Each column MUST have a DEFAULT set.
+//  ✅ If a column has a qualifier it MUST match the alias,
+//     or name, of the target relation.
+func (c *pgTypeCheck) checkDefaultList() error {
+	list := c.ti.query.defaultList
+	if list == nil {
+		return nil
+	}
+
+	for _, item := range list.items {
+		if len(item.qual) > 0 {
+			relId := c.ti.query.dataField.relId
+			if item.qual != relId.alias && item.qual != relId.name {
+				return c.newError(errBadColumnQualifier, item, nil, list)
+			}
+		}
+
+		if col := c.rel.findColumn(item.name); col == nil {
+			return c.newError(errNoRelationColumn, item, nil, list)
+		} else if !col.hasdefault {
+			return c.newError(errNoColumnDefault, item, col, list)
+		}
+	}
+	return nil
+}
+
+// checkReturnList checks the columns listed in the gosql.Return directive's tag.
+//
+// CHECKLIST:
+// - If "*" tag was used:
+//  ✅ each field of the target data type that HAS a corresponding column in
+//     one of the loaded relations (denoted by the field's tag), MUST be of a
+//     type that IS READABLE from a value of the corresponding column's type.
+//
+// - If "<column_list>" tag was used:
+//  ✅ Each listed column MUST be present in the TARGET relation.
+//  ✅ Each listed column MUST have a corresponding field in the target data type.
+//  ✅ Each listed column's qualifier, if it has one, MUST match the alias, or name,
+//     of the TARGET relation.
+//  ✅ Each listed column's corresponding field MUST be of a type that IS READABLE
+//     from a value of that column's type.
+func (c *pgTypeCheck) checkReturnList() error {
+	list := c.ti.query.returnList
+	if list == nil {
+		return nil
+	}
+
+	var strict bool
+	var fields []*fieldInfo
+
+	if list.all {
+		strict = false
+		fields = c.ti.query.dataField.data.fields
+	} else {
+		strict = true
+		for _, colId := range list.items {
+			fi, errcode := c.findColumnField(colId, strict)
+			if errcode > 0 {
+				return c.newError(errcode, colId, nil, list)
+			} else if fi != nil {
+				fields = append(fields, fi)
+			}
+		}
+	}
+
+	for _, field := range fields {
+		if err := c.checkColumnRead(field, strict); err != nil {
 			return err
 		}
-		c.joinlist = append(c.joinlist, rel)
+	}
+	return nil
+}
+
+// columnRead holds information necessary for the generator to produces .
+type columnRead struct {
+	// The column identifier.
+	colId colId
+	// The column from which the data will be read.
+	column *pgcolumn
+	// Info on the field into which the column will be read.
+	field *fieldInfo
+	// The name of the scanner to be used for reading the column.
+	scanner string
+}
+
+// checkColumnRead checks if a value from the column that is associated with
+// the given field can be assigned to that field. If strict=false and there
+// is no column associated with the given field the check will be skipped.
+//
+// CHECKLIST:
+//  ✅ The field's type MUST NOT be a non-empty interface type.
+//  ✅ The field's type CAN be a non-interface type that implements sql.Scanner.
+// TODO documentation ...
+func (c *pgTypeCheck) checkColumnRead(field *fieldInfo, strict bool) error {
+	col, err := c.findColumnByColId(field.colId)
+	if err != nil && strict {
+		return err
+	} else if col == nil && !strict {
+		return nil
+	}
+
+	check := func(fld *fieldInfo, col *pgcolumn) (scanner string, errcode typeErrorCode) {
+		// non-empty interface, reject
+		if fld.typ.kind == typeKindInterface && !fld.typ.isEmptyInterface {
+			return "", errBadColumnReadIfaceType
+		}
+
+		// implements sql.Scanner & non-interface, accept as is
+		if fld.typ.isScanner && fld.typ.kind != typeKindInterface {
+			return "", 0
+		}
+
+		if col.typ.is(pgtyp_json, pgtyp_jsonb) {
+			if !fld.typ.canJSONUnmarshal() {
+				// chan or func but does not implement json.Unmarshaler, reject
+				if fld.typ.is(typeKindChan, typeKindFunc) {
+					return "", errBadColumnReadType
+				}
+
+				// []byte type, accept as is
+				if fld.typ.goTypeId(false, false, true) == goTypeByteSlice {
+					return "", 0
+				}
+
+				// string kind, accept as is
+				if fld.typ.is(typeKindString) {
+					return "", 0
+				}
+			}
+
+			// everything else, accept with JSON
+			return "JSON", 0
+		}
+
+		// empty interface, accept with AnyToEmptyInterface
+		if fld.typ.isEmptyInterface {
+			return "AnyToEmptyInterface", 0
+		}
+
+		if col.typ.is(pgtyp_xml) {
+			if !fld.typ.canXMLUnmarshal() {
+				if fld.typ.is(typeKindChan, typeKindFunc, typeKindMap) {
+					return "", errBadColumnReadType
+				}
+
+				// []byte type, accept as is
+				if fld.typ.goTypeId(false, false, true) == goTypeByteSlice {
+					return "", 0
+				}
+
+				// string kind, accept as is
+				if fld.typ.is(typeKindString) {
+					return "", 0
+				}
+			}
+
+			// everything else, accept with XML
+			return "XML", 0
+		}
+
+		if c.isLength1Type(col) {
+			// type table entry exists, accept
+			gotyp := fld.typ.goTypeId(false, false, true)
+			if e, ok := pgLength1TypeTable[col.typ.oid][gotyp]; ok {
+				return e.scanner, 0
+			}
+			return "", errBadColumnReadType
+		} else {
+			// type table entry exists, accept
+			gotyp := fld.typ.goTypeId(false, false, true)
+			if e, ok := pgTypeTable[pgTypeKey{oid: col.typ.oid}][gotyp]; ok {
+				return e.scanner, 0
+			}
+
+			// try to salvage this
+			oid := col.typ.oid
+			if col.typ.category == pgtypcategory_string {
+				oid = pgtyp_text
+			} else if col.typ.category == pgtypcategory_array {
+				if et := c.pg.cat.types[col.typ.elem]; et != nil && et.category == pgtypcategory_string {
+					oid = pgtyp_textarr
+				}
+			}
+			if e, ok := pgTypeTable[pgTypeKey{oid: oid}][gotyp]; ok {
+				return e.scanner, 0
+			}
+		}
+
+		if false { // TODO(mkopriva): [ ... ]
+			if col.typ.is(pgtyp_circle, pgtyp_circlearr) {
+				// ...
+			} else if col.typ.is(pgtyp_interval, pgtyp_intervalarr) {
+				// ...
+			} else if col.typ.typ == pgtyptype_domain {
+				// ...
+			} else if col.typ.typ == pgtyptype_composite {
+				// ...
+			}
+		}
+
+		return "", errBadColumnReadType
+	}
+
+	scanner, errcode := check(field, col)
+	if errcode > 0 {
+		return c.newError(errcode, field.colId, col, field)
+	}
+
+	read := new(columnRead)
+	read.colId = field.colId
+	read.column = col
+	read.field = field
+	read.scanner = scanner
+
+	// NOTE(mkopriva): currently reading is allowed ONLY from the target
+	// relation therefore here the alias of the target relation is used.
+	// Once it is allowed to read from other, joined relations this will
+	// need to be updated to properly handle that scenario.
+	read.colId.qual = c.ti.dataField.relId.alias
+
+	c.ti.reads = append(c.ti.reads, read)
+	return nil
+}
+
+// checkQueryDataField
+func (c *pgTypeCheck) checkQueryDataField() error {
+	dataField := c.ti.query.dataField
+	if dataField == nil || dataField.isDirective {
+		return nil
+	}
+
+	//var dataOp dataOperation
+	if c.ti.query.kind == queryKindSelect {
+		for _, field := range dataField.data.fields {
+			if err := c.checkColumnRead(field, true); err != nil {
+				return err
+			}
+		}
+	} else if c.ti.query.kind == queryKindInsert || c.ti.query.kind == queryKindUpdate {
+		return c._checkFields(dataField.data.fields, dataWrite, true)
+	}
+	return nil
+}
+
+// checkResultField
+func (c *pgTypeCheck) checkResultField() error {
+	result := c.ti.query.resultField
+	if result == nil {
+		return nil
+	}
+
+	if len(result.data.fields) > 0 {
+		for _, field := range result.data.fields {
+			if err := c.checkColumnRead(field, true); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (c *pgTypeCheck) checkJoinBlock() error {
+	jb := c.ti.query.joinBlock
+	if jb == nil {
+		return nil
+	}
+
+	for _, join := range jb.items {
+		rel := c.joinrels[join.relId]
 
 		for _, item := range join.conds {
 			switch cond := item.cond.(type) {
@@ -404,7 +567,12 @@ func (c *pgTypeCheck) checkJoinBlock(jb *joinBlock) error {
 	return nil
 }
 
-func (c *pgTypeCheck) checkOnConflictBlock(onconf *onConflictBlock) error {
+func (c *pgTypeCheck) checkOnConflictBlock() error {
+	onconf := c.ti.query.onConflictBlock
+	if onconf == nil {
+		return nil
+	}
+
 	rel := c.rel
 
 	// If a Column directive was provided in an OnConflict block, make
@@ -479,7 +647,12 @@ func (c *pgTypeCheck) checkOnConflictBlock(onconf *onConflictBlock) error {
 	return nil
 }
 
-func (c *pgTypeCheck) checkWhereBlock(where *whereBlock) error {
+func (c *pgTypeCheck) checkWhereBlock() error {
+	where := c.ti.query.whereBlock
+	if where == nil {
+		return nil
+	}
+
 	type loopstate struct {
 		conds []*searchCondition // the current iteration search conditions
 		idx   int                // keeps track of the field index
@@ -666,6 +839,113 @@ stackloop:
 	return nil
 }
 
+// If a TextSearch directive was provided, make sure that the
+// specified column is present in one of the loaded relations
+// and that it has the correct type.
+func (c *pgTypeCheck) checkTextSearchColId() error {
+	colid := c.ti.filter.textSearchColId
+	if colid == nil {
+		return nil
+	}
+
+	col, err := c.findColumnByColId(*colid)
+	if err != nil {
+		return err
+	} else if col.typ.oid != pgtyp_tsvector {
+		return errors.BadDBColumnTypeError
+	}
+
+	return nil
+}
+
+func (c *pgTypeCheck) checkFilterDataField() error {
+	dataField := c.ti.filter.dataField
+	if dataField == nil {
+		return nil
+	}
+
+	// TODO check that the fields can be used in a test, i.e. comparison
+	if err := c._checkFields(dataField.data.fields, dataTest, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkFields checks column existence, type compatibility, operation validity
+func (c *pgTypeCheck) _checkFields(fields []*fieldInfo, dataOp dataOperation, strict bool) (err error) {
+	if dataOp == dataNop {
+		return nil
+	}
+
+	for _, fld := range fields {
+		var col *pgcolumn
+		// TODO(mkopriva): currenlty checkFields requires that every
+		// field has a corresponding column in the target relation,
+		// which represents an ideal where each relation in the db
+		// has a matching type in the app, this however may not always
+		// be practical and there may be cases where a single struct
+		// type is used to represent multiple different relations
+		// having fields that have corresponding columns in one
+		// relation but not in another...
+		if dataOp == dataRead {
+			// TODO(mkopriva): currently columns specified in
+			// the fields of the struct representing the record
+			// aren't really meant to include the relation alias
+			// which makes this a bit of a non-issue, however in
+			// the future it would be good to provide a way to do
+			// that, like when selecting columns from multiple
+			// joined tables.. therefore this stays here, at least for now...
+
+			// If this is a SELECT, or the target type is
+			// from the "Result" field, lookup the column
+			// in all of the associated relations since its
+			// ok to select columns from joined relations.
+			if col, err = c.findColumnByColId(fld.colId); err != nil {
+				if strict {
+					return err
+				}
+				continue
+			}
+		} else {
+			// If this is a dataWrite or dataTest operation the column
+			// must be present directly in the target relation, columns
+			// from associated relations (joins) are not allowed.
+			if col = c.rel.findColumn(fld.colId.name); col == nil {
+				if strict {
+					return errors.NoDBColumnError
+				}
+				continue
+			}
+		}
+
+		if dataOp == dataWrite {
+			if fld.useDefault && !col.hasdefault {
+				// TODO error
+			}
+		}
+
+		cid := colId{name: fld.colId.name, qual: c.ti.dataField.relId.alias}
+		info := &fieldColumnInfo{field: fld, column: col, colId: cid}
+
+		// Make sure that a value of the given field's type
+		// can be assigned to given column, and vice versa.
+		if !c.canAssign(info, col, fld, dataOp) {
+			return errors.BadFieldToColumnTypeError
+		}
+
+		if dataOp == dataRead {
+			// XXX
+		} else if dataOp == dataWrite || dataOp == dataTest {
+			c.ti.input = append(c.ti.input, info)
+		}
+		// aggrgate primary keys for writes only
+		if col.isprimary && dataOp == dataWrite {
+			c.ti.primaryKeys = append(c.ti.primaryKeys, info)
+		}
+	}
+	return nil
+}
+
 // typeoids returns a list of OIDs of those PostgreSQL types that can be
 // used to hold a value of a Go type represented by the given typeInfo.
 func (c *pgTypeCheck) typeoids(typ typeInfo) []pgOID {
@@ -844,8 +1124,8 @@ func (c *pgTypeCheck) checkModifierFunction(fn funcName, col *pgcolumn, fieldoid
 	return nil
 }
 
-func (c *pgTypeCheck) loadRelation(id relId) (*pgrelation, error) {
-	rel := new(pgrelation)
+func (c *pgTypeCheck) loadRelation(id relId) (*pgRelationInfo, error) {
+	rel := new(pgRelationInfo)
 	rel.name = id.name
 	rel.namespace = id.qual
 	if len(rel.namespace) == 0 {
@@ -1023,21 +1303,100 @@ func (c *pgTypeCheck) findColumnByColId(id colId) (*pgcolumn, error) {
 	return col, nil
 }
 
-func (c *pgTypeCheck) findFieldByColId(id colId) (*fieldInfo, error) {
-	// make sure the column actually exists
-	if _, err := c.findColumnByColId(id); err != nil {
-		return nil, err
-	}
-
+// findColumnField finds and returns the *fieldInfo of the target data type's
+// field that is tagged with the column identified by the given colId. If strict
+// is true, findColumnField will also check whether or not the column actually exists.
+//
+// NOTE(mkopriva): currently the findColumnField method returns fields matched
+// by just the column's name, i.e. the qualifiers are ignored, this means that
+// one could pass in two different colIds with the same name and the method
+// would return the same field.
+func (c *pgTypeCheck) findColumnField(id colId, strict bool) (*fieldInfo, typeErrorCode) {
 	for _, field := range c.ti.query.dataField.data.fields {
 		if field.colId.name == id.name {
-			return field, nil
+			if strict {
+				if errcode := c.checkColumnExists(id); errcode > 0 {
+					return nil, errcode
+				}
+			}
+			return field, 0
 		}
 	}
-	return nil, errors.NoColumnFieldError
+	return nil, errNoColumnField
 }
 
-type pgrelation struct {
+// checkColumnExists checks whether or not the column, or its relation, denoted by
+// the given id is present in the database. If the column exists 0 will be returned,
+// if the column doesn't exist errNoRelationColumn will be returned, and if the
+// column's relation doesn't exist then errNoDatabaseRelation will be returned.
+func (c *pgTypeCheck) checkColumnExists(id colId) typeErrorCode {
+	if rel, ok := c.relmap[id.qual]; ok {
+		for _, col := range rel.columns {
+			if col.name == id.name {
+				return 0 // found
+			}
+		}
+		return errNoRelationColumn
+	}
+	return errNoDatabaseRelation
+}
+
+// newError constructs and returns a new typeError value.
+func (c *pgTypeCheck) newError(errcode typeErrorCode, cid colId, col *pgcolumn, fptr fieldPtr) error {
+	e := typeError{errorCode: errcode}
+	e.pkgPath = c.ti.pkgPath
+	e.targetName = c.ti.typeName
+	e.dbName = c.pg.name
+	e.colQualifier = cid.qual
+	e.colName = cid.name
+
+	if rel, ok := c.relmap[cid.qual]; ok {
+		e.relQualifier = rel.namespace
+		e.relName = rel.name
+	}
+	if f, ok := c.ti.fieldmap[fptr]; ok {
+		p := c.fset.Position(f.fvar.Pos())
+		e.fieldType = f.fvar.Type().String()
+		e.fieldName = f.fvar.Name()
+		e.fileName = p.Filename
+		e.fileLine = p.Line
+	}
+	if col != nil {
+		e.colType = col.typ.namefmt
+	}
+	return e
+}
+
+// isLength1Type reports whether or not the given column's type
+// is a "length 1" type, i.e. char(1), varchar(1), or bit(1)[], etc.
+func (c *pgTypeCheck) isLength1Type(col *pgcolumn) bool {
+	typ := col.typ
+	if typ.category == pgtypcategory_array {
+		typ = c.pg.cat.types[typ.elem]
+	}
+
+	if typ.category == pgtypcategory_bitstring {
+		return (col.typmod == 1)
+	} else if typ.category == pgtypcategory_string {
+		return ((col.typmod - 4) == 1)
+	}
+	return false
+}
+
+// isNumericWithoutScale reports whether or not the given column's type is
+// a numeric type with no scale. Numeric types without scale are stored by
+// postgres as integers which might be useful in deciding how to decode the
+// column's value in Go.
+func (c *pgTypeCheck) isNumericWithoutScale(col *pgcolumn) bool {
+	if col.typ.is(pgtyp_numeric, pgtyp_numericarr) {
+		precision := ((col.typmod - 4) >> 16) & 65535
+		scale := (col.typmod - 4) & 65535
+		return (precision > 0 && scale == 0)
+	}
+	return false
+}
+
+type pgRelationInfo struct {
 	oid         pgOID  // The object identifier of the relation.
 	name        string // The name of the relation.
 	namespace   string // The name of the namespace to which the relation belongs.
@@ -1047,7 +1406,7 @@ type pgrelation struct {
 	indexes     []*pgindex
 }
 
-func (rel *pgrelation) findColumn(name string) *pgcolumn {
+func (rel *pgRelationInfo) findColumn(name string) *pgcolumn {
 	for _, col := range rel.columns {
 		if col.name == name {
 			return col
@@ -1056,7 +1415,7 @@ func (rel *pgrelation) findColumn(name string) *pgcolumn {
 	return nil
 }
 
-func (rel *pgrelation) findConstraint(name string) *pgconstraint {
+func (rel *pgRelationInfo) findConstraint(name string) *pgconstraint {
 	for _, con := range rel.constraints {
 		if con.name == name {
 			return con
@@ -1065,7 +1424,7 @@ func (rel *pgrelation) findConstraint(name string) *pgconstraint {
 	return nil
 }
 
-func (rel *pgrelation) findIndex(name string) *pgindex {
+func (rel *pgRelationInfo) findIndex(name string) *pgindex {
 	for _, ind := range rel.indexes {
 		if ind.name == name {
 			return ind

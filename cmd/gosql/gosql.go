@@ -112,7 +112,7 @@ func (cmd *command) run(f *file, fset *token.FileSet) (*bytes.Buffer, error) {
 
 	// type-check specs against the db
 	for _, ti := range infos {
-		c := pgTypeCheck{pg: cmd.pg, ti: ti}
+		c := pgTypeCheck{fset: fset, pg: cmd.pg, ti: ti}
 		if err := c.run(); err != nil {
 			return nil, err
 		}

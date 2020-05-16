@@ -32,17 +32,51 @@ const (
 )
 
 type analysisError struct {
-	errorCode   analysisErrorCode
-	packagePath string
-	structName  string
-	blockName   string
-	fieldType   string
-	fieldName   string
-	tagValue    string
-	fileName    string
-	fileLine    int
+	errorCode  analysisErrorCode
+	pkgPath    string
+	targetName string
+	blockName  string
+	fieldType  string
+	fieldName  string
+	tagValue   string
+	fileName   string
+	fileLine   int
 }
 
 func (e analysisError) Error() string {
+	return fmt.Sprintf("%s:%d: [ TODO ERROR MESG ] ", e.fileName, e.fileLine)
+}
+
+type typeErrorCode uint
+
+const (
+	_ typeErrorCode = iota
+	errNoDatabaseRelation
+	errNoRelationColumn
+	errNoColumnDefault
+	errBadColumnQualifier
+	errNoColumnField
+	errBadColumnReadType
+	errBadColumnReadIfaceType
+)
+
+type typeError struct {
+	errorCode    typeErrorCode
+	pkgPath      string
+	targetName   string
+	fieldType    string
+	fieldName    string
+	tagValue     string
+	dbName       string
+	relQualifier string
+	relName      string
+	colQualifier string
+	colName      string
+	colType      string
+	fileName     string
+	fileLine     int
+}
+
+func (e typeError) Error() string {
 	return fmt.Sprintf("%s:%d: [ TODO ERROR MESG ] ", e.fileName, e.fileLine)
 }

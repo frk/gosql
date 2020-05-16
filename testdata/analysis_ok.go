@@ -602,3 +602,15 @@ type SelectAnalysisTestOK_typeinfo_string struct {
 		f73 []json.RawMessage           `sql:"c73"`
 	} `rel:"relation_a:a"`
 }
+
+type donothing interface{}
+
+//OK: test field types empty interfaces
+type SelectAnalysisTestOK_FieldTypesEmptyInterfaces struct {
+	Rel struct {
+		f1 interface{}  `sql:"c1"`
+		f2 *interface{} `sql:"c2"`
+		f3 donothing    `sql:"c3"`
+		f4 *donothing   `sql:"c4"`
+	} `rel:"relation_a:a"`
+}

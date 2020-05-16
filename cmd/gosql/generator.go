@@ -55,9 +55,8 @@ var (
 
 // targetInfo holds the information for the analyzed and type checked target type.
 type targetInfo struct {
-	// Populated by the analyzer. Set to the dataField of either the queryStruct
-	// or the filterStruct, depending on which one was analyzed.
-	dataField *dataField
+	pkgPath  string
+	typeName string
 	// Populated by the analyzer. If the target is a query struct, then this
 	// field will be set to the result of the query struct analysis, otherwise
 	// it will remain uninitialized.
@@ -66,15 +65,22 @@ type targetInfo struct {
 	// field will be set to the result of the filter struct analysis, otherwise
 	// it will remain uninitialized.
 	filter *filterStruct
+	// Populated by the analyzer. Set to the dataField of either the queryStruct
+	// or the filterStruct, depending on which one was analyzed.
+	dataField *dataField
+	// Populated by the analyzer and used by the type checker mostly,
+	// if not entirely, for error reporting.
+	fieldmap map[fieldPtr]fieldVar
 
 	// Populated by the type checker. A fieldColumnInfo slice that holds
 	// the data source fields and their corresponding target columns into
 	// which the data is stored.
 	input []*fieldColumnInfo
-	// Populated by the type checker. A fieldColumnInfo slice that holds
-	// the data target fields and their corresponding source columns from
+	// Populated by the type checker. A columnRead slice that holds the
+	// data target fields and their corresponding source columns from
 	// which the data is read.
-	output []*fieldColumnInfo
+	reads []*columnRead
+
 	// Populated by the type checker. A list of fieldColumnInfos that
 	// represent the primary key of the target relation.
 	primaryKeys []*fieldColumnInfo
@@ -109,9 +115,9 @@ func (ti *targetInfo) skipwrite(fc *fieldColumnInfo) bool {
 }
 
 // skipread is a helper method that reports whether or not the field's column should be read from.
-func (ti *targetInfo) skipread(fc *fieldColumnInfo) bool {
-	return fc.field.writeOnly && (ti.query.forceList == nil ||
-		(ti.query.forceList.all == false && !ti.query.forceList.contains(fc.colId)))
+func (ti *targetInfo) skipread(r *columnRead) bool {
+	return r.field.writeOnly && (ti.query.forceList == nil ||
+		(ti.query.forceList.all == false && !ti.query.forceList.contains(r.colId)))
 }
 
 // usedefault is a helper method that reports whether or not the SQL's DEFAULT
@@ -650,7 +656,7 @@ func (g *generator) prepareGOLimitOffsetFallback(ti *targetInfo) {
 
 // prepareOutput .................
 func (g *generator) prepareOutput(ti *targetInfo) {
-	if len(ti.output) > 0 {
+	if len(ti.reads) > 0 {
 		skipinit := ti.skipinit()
 		g.prepareOutputGORoot(ti, skipinit)
 		g.prepareOutputGORootFields(ti, skipinit)
@@ -706,15 +712,15 @@ func (g *generator) prepareOutputGORootFields(ti *targetInfo, skipinit bool) {
 	// initialization statements have already been created
 	var done = make(map[string]bool)
 
-	for _, item := range ti.output {
-		if ti.skipread(item) { // writeonly?
+	for _, read := range ti.reads {
+		if ti.skipread(read) { // writeonly?
 			continue
 		}
 
 		key := "" // key for the done map
 
 		fx := g.scanroot
-		for _, node := range item.field.path {
+		for _, node := range read.field.path {
 			fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{node.name}}
 
 			if skipinit {
@@ -736,18 +742,18 @@ func (g *generator) prepareOutputGORootFields(ti *targetInfo, skipinit bool) {
 			}
 		}
 
-		fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{item.field.name}}
+		fx = GO.SelectorExpr{X: fx, Sel: GO.Ident{read.field.name}}
 		fx = GO.UnaryExpr{Op: GO.UnaryAmp, X: fx}
-		fx = g.transformOutputGOFieldExpr(fx, item)
+		fx = g.transformOutputGOFieldExpr(fx, read)
 		g.scanargs = append(g.scanargs, fx)
 	}
 }
 
 // transformOutputGOFieldExpr ...
-func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, fc *fieldColumnInfo) GO.ExprNode {
-	if len(fc.pgsql.scanner) > 0 {
+func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, r *columnRead) GO.ExprNode {
+	if len(r.scanner) > 0 {
 		g.addpgsql = true
-		call := GO.CallExpr{Fun: GO.QualifiedIdent{"pgsql", fc.pgsql.scanner}}
+		call := GO.CallExpr{Fun: GO.QualifiedIdent{"pgsql", r.scanner}}
 		call.Args = GO.ArgsList{List: x}
 		return call
 	}
@@ -756,8 +762,8 @@ func (g *generator) transformOutputGOFieldExpr(x GO.ExprNode, fc *fieldColumnInf
 
 // prepareOutputSQLColumns prepares the list of SQL columns to be returned by the query.
 func (g *generator) prepareOutputSQLColumns(ti *targetInfo) {
-	for _, item := range ti.output {
-		if ti.skipread(item) { // writeonly?
+	for _, read := range ti.reads {
+		if ti.skipread(read) { // writeonly?
 			continue
 		}
 
@@ -765,7 +771,7 @@ func (g *generator) prepareOutputSQLColumns(ti *targetInfo) {
 		// - check whether or not the column can be NULL and if so add a COALESCE
 		// - check whether or not the field has the "usecoalesce" flag set to true and if so add a COALESCE
 		// - ... anything else?
-		g.outputcolumns = append(g.outputcolumns, g.sqlcolref(item.colId))
+		g.outputcolumns = append(g.outputcolumns, g.sqlcolref(read.colId))
 	}
 }
 

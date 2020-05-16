@@ -47,30 +47,44 @@ type analyzer struct {
 	pkgPath string        // the package path of the type under analysis
 
 	// the results
+	info   *targetInfo
 	query  *queryStruct
 	filter *filterStruct
 }
 
-// targetInfo returns the result of the analysis.
-func (a *analyzer) targetInfo() *targetInfo {
-	info := new(targetInfo)
-	if a.query != nil {
-		info.query = a.query
-		info.dataField = a.query.dataField
-	} else {
-		info.filter = a.filter
-		info.dataField = a.filter.dataField
-	}
-	return info
+// fieldPtr represents a pointer to the result of a struct field's analysis.
+type fieldPtr interface{}
+
+// fieldVar holds the types.Var represenation and the raw tag of a struct field.
+type fieldVar struct {
+	// types.Var representation of the struct field.
+	fvar *types.Var
+	// The raw string value of the field's tag.
+	ftag string
 }
 
-// TODO(mkopriva): to provide more detailed error messages either pass in the
-// details about the file under analysis, or make sure that the caller has that
-// information and appends it to the error.
-//
+// targetInfo returns the result of the analysis.
+func (a *analyzer) targetInfo() *targetInfo {
+	if a.query != nil {
+		a.info.pkgPath = a.pkgPath
+		a.info.typeName = a.query.name
+		a.info.query = a.query
+		a.info.dataField = a.query.dataField
+	} else {
+		a.info.pkgPath = a.pkgPath
+		a.info.typeName = a.filter.name
+		a.info.filter = a.filter
+		a.info.dataField = a.filter.dataField
+	}
+	return a.info
+}
+
 // The run method runs the analysis of the analyzer's types.Named value.
 // The result of the analysis can be retrieved with the targetInfo method.
 func (a *analyzer) run() (err error) {
+	a.info = new(targetInfo)
+	a.info.fieldmap = make(map[fieldPtr]fieldVar)
+
 	structType, ok := a.named.Underlying().(*types.Struct)
 	if !ok {
 		panic(a.named.Obj().Name() + " must be a struct type.") // this shouldn't happen
@@ -118,8 +132,9 @@ func (a *analyzer) queryStruct() (err error) {
 	var hasRelTag bool
 
 	for i := 0; i < a.target.NumFields(); i++ {
+		tagraw := a.target.Tag(i)
 		fld := a.target.Field(i)
-		tag := tagutil.New(a.target.Tag(i))
+		tag := tagutil.New(tagraw)
 
 		// Ensure that there is only one field with the "rel" tag.
 		if _, ok := tag["rel"]; ok {
@@ -138,6 +153,8 @@ func (a *analyzer) queryStruct() (err error) {
 			a.query.dataField = new(dataField)
 			a.query.dataField.name = fld.Name()
 			a.query.dataField.relId = rid
+
+			a.info.fieldmap[a.query.dataField] = fieldVar{fvar: fld, ftag: tagraw}
 
 			switch fname := strings.ToLower(a.query.dataField.name); {
 			case fname == "count" && isIntegerType(fld.Type()):
@@ -187,6 +204,7 @@ func (a *analyzer) queryStruct() (err error) {
 					return a.newError(errFieldConflict, fld, "", "")
 				}
 				a.query.all = true
+				a.info.fieldmap[&a.query.all] = fieldVar{fvar: fld, ftag: tagraw}
 			case "default":
 				if a.query.kind != queryKindInsert && a.query.kind != queryKindUpdate {
 					return a.newError(errIllegalField, fld, "", "")
@@ -194,6 +212,7 @@ func (a *analyzer) queryStruct() (err error) {
 				if a.query.defaultList, err = a.colIdList(tag["sql"], fld); err != nil {
 					return err
 				}
+				a.info.fieldmap[a.query.defaultList] = fieldVar{fvar: fld, ftag: tagraw}
 			case "force":
 				if a.query.kind != queryKindInsert && a.query.kind != queryKindUpdate {
 					return a.newError(errIllegalField, fld, "", "")
@@ -201,6 +220,8 @@ func (a *analyzer) queryStruct() (err error) {
 				if a.query.forceList, err = a.colIdList(tag["sql"], fld); err != nil {
 					return err
 				}
+
+				a.info.fieldmap[a.query.forceList] = fieldVar{fvar: fld, ftag: tagraw}
 			case "return":
 				if len(a.query.dataField.data.fields) == 0 {
 					// TODO test
@@ -215,22 +236,27 @@ func (a *analyzer) queryStruct() (err error) {
 				if a.query.returnList, err = a.colIdList(tag["sql"], fld); err != nil {
 					return err
 				}
+				a.info.fieldmap[a.query.returnList] = fieldVar{fvar: fld, ftag: tagraw}
 			case "limit":
 				if err := a.limitField(fld, tag.First("sql")); err != nil {
 					return err
 				}
+				a.info.fieldmap[a.query.limitField] = fieldVar{fvar: fld, ftag: tagraw}
 			case "offset":
 				if err := a.offsetField(fld, tag.First("sql")); err != nil {
 					return err
 				}
+				a.info.fieldmap[a.query.offsetField] = fieldVar{fvar: fld, ftag: tagraw}
 			case "orderby":
 				if err := a.orderByList(tag["sql"], fld); err != nil {
 					return err
 				}
+				a.info.fieldmap[a.query.orderByList] = fieldVar{fvar: fld, ftag: tagraw}
 			case "override":
 				if err := a.overridingKind(tag.First("sql"), fld); err != nil {
 					return err
 				}
+				a.info.fieldmap[&a.query.overridingKind] = fieldVar{fvar: fld, ftag: tagraw}
 			default:
 				// illegal directive field
 				return a.newError(errIllegalField, fld, "", "")
@@ -244,30 +270,37 @@ func (a *analyzer) queryStruct() (err error) {
 			if err := a.whereBlock(fld); err != nil {
 				return err
 			}
+			a.info.fieldmap[a.query.whereBlock] = fieldVar{fvar: fld, ftag: tagraw}
 		case "join", "from", "using":
 			if err := a.joinBlock(fld); err != nil {
 				return err
 			}
+			a.info.fieldmap[a.query.joinBlock] = fieldVar{fvar: fld, ftag: tagraw}
 		case "onconflict":
 			if err := a.onConflictBlock(fld); err != nil {
 				return err
 			}
+			a.info.fieldmap[a.query.onConflictBlock] = fieldVar{fvar: fld, ftag: tagraw}
 		case "result":
 			if err := a.resultField(fld); err != nil {
 				return err
 			}
+			a.info.fieldmap[a.query.resultField] = fieldVar{fvar: fld, ftag: tagraw}
 		case "limit":
 			if err := a.limitField(fld, tag.First("sql")); err != nil {
 				return err
 			}
+			a.info.fieldmap[a.query.limitField] = fieldVar{fvar: fld, ftag: tagraw}
 		case "offset":
 			if err := a.offsetField(fld, tag.First("sql")); err != nil {
 				return err
 			}
+			a.info.fieldmap[a.query.offsetField] = fieldVar{fvar: fld, ftag: tagraw}
 		case "rowsaffected":
 			if err := a.rowsAffectedField(fld); err != nil {
 				return err
 			}
+			a.info.fieldmap[a.query.rowsAffectedField] = fieldVar{fvar: fld, ftag: tagraw}
 		default:
 			// if no match by field name, look for specific field types
 			if a.isAccessible(fld, a.named) {
@@ -296,7 +329,6 @@ func (a *analyzer) queryStruct() (err error) {
 				}
 			}
 		}
-
 	}
 
 	if a.query.dataField == nil {
@@ -331,8 +363,9 @@ func (a *analyzer) filterStruct() (err error) {
 	var hasRelTag bool
 
 	for i := 0; i < a.target.NumFields(); i++ {
+		tagraw := a.target.Tag(i)
 		fld := a.target.Field(i)
-		tag := tagutil.New(a.target.Tag(i))
+		tag := tagutil.New(tagraw)
 
 		// Ensure that there is only one field with the "rel" tag.
 		if _, ok := tag["rel"]; ok {
@@ -351,6 +384,8 @@ func (a *analyzer) filterStruct() (err error) {
 			a.filter.dataField = new(dataField)
 			a.filter.dataField.name = fld.Name()
 			a.filter.dataField.relId = rid
+
+			a.info.fieldmap[a.filter.dataField] = fieldVar{fvar: fld, ftag: tagraw}
 
 			if err := a.dataType(&a.filter.dataField.data, fld); err != nil {
 				return err
@@ -371,6 +406,7 @@ func (a *analyzer) filterStruct() (err error) {
 				if err := a.textSearch(tag.First("sql"), fld); err != nil {
 					return err
 				}
+				a.info.fieldmap[a.filter.textSearchColId] = fieldVar{fvar: fld, ftag: tagraw}
 			} else {
 				return a.newError(errIllegalField, fld, "", "")
 			}
@@ -562,6 +598,9 @@ stackloop:
 				continue stackloop
 			}
 
+			// TODO check the the chan, func, and interface type
+			// in association with the write/read?
+
 			// If the field is not a struct to be descended,
 			// it is considered to be a "leaf" field and as
 			// such the analysis of leaf-specific information
@@ -590,9 +629,9 @@ stackloop:
 }
 
 // The typeInfo method analyzes the given type and returns the result. The analysis
-// looks only for information of "named types" and in case of slice, array, map,
-// or pointer types it will analyze the element type of those types. The second
-// return value is the base element type of the given type.
+// looks only for information of "named types" and in case of slice, array, map, or
+// pointer types it will analyze the element type of those types. The second return
+// value is the types.Type representation of the base element type of the given type.
 func (a *analyzer) typeInfo(tt types.Type) (typ typeInfo, base types.Type) {
 	base = tt
 
@@ -605,6 +644,10 @@ func (a *analyzer) typeInfo(tt types.Type) (typ typeInfo, base types.Type) {
 		typ.isImported = a.isImportedType(named)
 		typ.isScanner = typesutil.ImplementsScanner(named)
 		typ.isValuer = typesutil.ImplementsValuer(named)
+		typ.isJSONMarshaler = typesutil.ImplementsJSONMarshaler(named)
+		typ.isJSONUnmarshaler = typesutil.ImplementsJSONUnmarshaler(named)
+		typ.isXMLMarshaler = typesutil.ImplementsXMLMarshaler(named)
+		typ.isXMLUnmarshaler = typesutil.ImplementsXMLUnmarshaler(named)
 		base = named.Underlying()
 	}
 
@@ -631,6 +674,7 @@ func (a *analyzer) typeInfo(tt types.Type) (typ typeInfo, base types.Type) {
 		elem, base = a.typeInfo(T.Elem())
 		typ.elem = &elem
 	case *types.Interface:
+		typ.isEmptyInterface = typesutil.IsEmptyInterface(T)
 		// If base is an unnamed interface type check at least whether
 		// or not it declares, or embeds, one of the relevant methods.
 		if typ.name == "" {
@@ -1021,7 +1065,6 @@ func (a *analyzer) joinBlock(blockField *types.Var) (err error) {
 
 	join := new(joinBlock)
 	join.name = blockField.Name()
-	join.pos = blockField.Pos()
 
 	for i := 0; i < ns.Struct.NumFields(); i++ {
 		fld := ns.Struct.Field(i)
@@ -1516,21 +1559,22 @@ func (a *analyzer) colIdList(tag []string, field *types.Var) (*colIdList, error)
 		return nil, a.newError(errNoTagValue, field, "", "")
 	}
 
-	cl := new(colIdList)
+	list := new(colIdList)
 	if len(tag) == 1 && tag[0] == "*" {
-		cl.all = true
-		return cl, nil
+		list.all = true
+		return list, nil
 	}
 
-	cl.items = make([]colId, len(tag))
+	list.items = make([]colId, len(tag))
 	for i, val := range tag {
 		id, err := a.colId(val, field)
 		if err != nil {
 			return nil, err
 		}
-		cl.items[i] = id
+		list.items[i] = id
 	}
-	return cl, nil
+
+	return list, nil
 }
 
 // isImportedType reports whether or not the given type is imported based on
@@ -1550,16 +1594,16 @@ func (a *analyzer) newError(c analysisErrorCode, f *types.Var, blockName, tagVal
 	e := analysisError{errorCode: c, blockName: blockName, tagValue: tagValue}
 	if f != nil {
 		p := a.fset.Position(f.Pos())
-		e.packagePath = a.named.Obj().Pkg().Path()
-		e.structName = a.named.Obj().Name()
+		e.pkgPath = a.named.Obj().Pkg().Path()
+		e.targetName = a.named.Obj().Name()
 		e.fieldType = f.Type().String()
 		e.fieldName = f.Name()
 		e.fileName = p.Filename
 		e.fileLine = p.Line
 	} else {
 		p := a.fset.Position(a.named.Obj().Pos())
-		e.packagePath = a.named.Obj().Pkg().Path()
-		e.structName = a.named.Obj().Name()
+		e.pkgPath = a.named.Obj().Pkg().Path()
+		e.targetName = a.named.Obj().Name()
 		e.fileName = p.Filename
 		e.fileLine = p.Line
 	}
@@ -1716,6 +1760,16 @@ type typeInfo struct {
 	isScanner bool
 	// Indicates whether or not the type implements the driver.Valuer interface.
 	isValuer bool
+	// Indicates whether or not the type implements the json.Marshaler interface.
+	isJSONMarshaler bool
+	// Indicates whether or not the type implements the json.Unmarshaler interface.
+	isJSONUnmarshaler bool
+	// Indicates whether or not the type implements the xml.Marshaler interface.
+	isXMLMarshaler bool
+	// Indicates whether or not the type implements the xml.Unmarshaler interface.
+	isXMLUnmarshaler bool
+	// Indicates whether or not the type is an empty interface type.
+	isEmptyInterface bool
 	// Indicates whether or not the type is the "byte" alias type.
 	isByte bool
 	// Indicates whether or not the type is the "rune" alias type.
@@ -1891,6 +1945,26 @@ func (t *typeInfo) isNilable() bool {
 	return t.is(typeKindPtr, typeKindSlice, typeKindArray, typeKindMap, typeKindInterface)
 }
 
+// Indicates whether or not the MarshalJSON method can be called on the type.
+func (t *typeInfo) canJSONMarshal() bool {
+	return t.isJSONMarshaler || (t.kind == typeKindPtr && t.elem.isJSONMarshaler)
+}
+
+// Indicates whether or not the UnmarshalJSON method can be called on the type.
+func (t *typeInfo) canJSONUnmarshal() bool {
+	return t.isJSONUnmarshaler || (t.kind == typeKindPtr && t.elem.isJSONUnmarshaler)
+}
+
+// Indicates whether or not the MarshalXML method can be called on the type.
+func (t *typeInfo) canXMLMarshal() bool {
+	return t.isXMLMarshaler || (t.kind == typeKindPtr && t.elem.isXMLMarshaler)
+}
+
+// Indicates whether or not the UnmarshalXML method can be called on the type.
+func (t *typeInfo) canXMLUnmarshal() bool {
+	return t.isXMLUnmarshaler || (t.kind == typeKindPtr && t.elem.isXMLUnmarshaler)
+}
+
 // fieldInfo holds information about a dataType's field.
 type fieldInfo struct {
 	// Name of the struct field.
@@ -1982,8 +2056,6 @@ type joinBlock struct {
 	relId relId
 	// The list of join items declared in a join block.
 	items []*joinItem
-	// The field's position in the source code.
-	pos token.Pos
 }
 
 // joinItem represents the result of parsing the tag of a gosql.JoinXxx directive.
