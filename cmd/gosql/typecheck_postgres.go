@@ -1,6 +1,5 @@
 package main
 
-// TODO: the postgres types circle(arr) and interval(arr) could use a corresponding go type
 // TODO: mysqldbInfo & mysqlTypeCheck
 
 import (
@@ -145,12 +144,12 @@ func (c *pgTypeCheck) checkQueryStruct() (err error) {
 	checks := []func() error{
 		c.checkForceList,
 		c.checkDefaultList,
-		c.checkOrderByList, // TODO
+		c.checkOrderByList,
 
-		c.checkReturnList,  // TODO
-		c.checkResultField, // TODO
+		c.checkReturnList,
+		c.checkResultField,
+		c.checkQueryDataField, // TODO
 
-		c.checkQueryDataField,  // TODO
 		c.checkJoinBlock,       // TODO
 		c.checkOnConflictBlock, // TODO
 		c.checkWhereBlock,      // TODO
@@ -254,9 +253,10 @@ func (c *pgTypeCheck) checkDefaultList() error {
 //
 // CHECKLIST:
 // - If "*" tag was used:
-//  ✅ each field of the target data type that HAS a corresponding column in
-//     one of the loaded relations (denoted by the field's tag), MUST be of a
-//     type that IS READABLE from a value of the corresponding column's type.
+//  ✅ Each field of the target data type MAY have a corresponding column
+//     in one of the loaded relations (denoted by the field's tag).
+//  ✅ Each field of the target data type that has a corresponding column MUST
+//     be of a type that is readable from a value of that column.
 //
 // - If "<column_list>" tag was used:
 //  ✅ Each listed column MUST be present in the TARGET relation.
@@ -297,7 +297,56 @@ func (c *pgTypeCheck) checkReturnList() error {
 	return nil
 }
 
-// columnRead holds information necessary for the generator to produces .
+// checkResultField checks the fields of the resultField struct data type.
+//
+// CHECKLIST:
+//  ✅ Each field of the result data type MUST have a corresponding column in
+//     one of the loaded relations.
+//  ✅ Each field of the result data type MUST be of a type that is readable
+//     from a value of the corresponding column.
+func (c *pgTypeCheck) checkResultField() error {
+	result := c.ti.query.resultField
+	if result == nil {
+		return nil
+	}
+
+	for _, field := range result.data.fields {
+		if err := c.checkColumnRead(field, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkQueryDataField checks the fields of the query's struct data type.
+//
+// CHECKLIST:
+//  ✅ ....
+func (c *pgTypeCheck) checkQueryDataField() error {
+	dataField := c.ti.query.dataField
+	if dataField == nil || dataField.isDirective {
+		return nil
+	}
+
+	if c.ti.query.kind == queryKindSelect {
+		for _, field := range dataField.data.fields {
+			if err := c.checkColumnRead(field, true); err != nil {
+				return err
+			}
+		}
+	} else if c.ti.query.kind == queryKindInsert || c.ti.query.kind == queryKindUpdate {
+		for _, field := range dataField.data.fields {
+			if err := c.checkColumnWrite(field, true); err != nil {
+				return err
+			}
+		}
+		return c._checkFields(dataField.data.fields, dataWrite, true)
+	}
+	return nil
+}
+
+// columnRead holds the information needed by the generator to produce the
+// expression nodes that constitute a column-to-field read operation.
 type columnRead struct {
 	// The column identifier.
 	colId colId
@@ -310,13 +359,29 @@ type columnRead struct {
 }
 
 // checkColumnRead checks if a value from the column that is associated with
-// the given field can be assigned to that field. If strict=false and there
+// the given field can be read into that field. If strict=false and there
 // is no column associated with the given field the check will be skipped.
+// If the check is successful a new instance of *columnRead will be appended
+// to the reads field of the *tagetInfo instance.
 //
 // CHECKLIST:
 //  ✅ The field's type MUST NOT be a non-empty interface type.
-//  ✅ The field's type CAN be a non-interface type that implements sql.Scanner.
-// TODO documentation ...
+//  ✅ The field's type MAY be a non-interface type that implements sql.Scanner.
+//
+// - If the column's type is json or jsonb:
+//  ✅ The field's type MUST NOT be a chan, func, or a complex type IF it does
+//     not implement the json.Unmarshaler interface,
+//  ✅ otherwise the field's type MAY be any other type.
+//
+//  ✅ The field's type MAY be the empty-interface type.
+//
+// - If the column's type is xml:
+//  ✅ The field's type MUST NOT be a func, chan, or map type IF it does not
+//     implement the xml.Unmarshaler interface,
+//  ✅ otherwise the field's type MAY be any other type.
+//
+//  ✅ The field's type MAY be any type that, together with the column's type,
+//     has an entry in the relevant type table.
 func (c *pgTypeCheck) checkColumnRead(field *fieldInfo, strict bool) error {
 	col, err := c.findColumnByColId(field.colId)
 	if err != nil && strict {
@@ -338,8 +403,8 @@ func (c *pgTypeCheck) checkColumnRead(field *fieldInfo, strict bool) error {
 
 		if col.typ.is(pgtyp_json, pgtyp_jsonb) {
 			if !fld.typ.canJSONUnmarshal() {
-				// chan or func but does not implement json.Unmarshaler, reject
-				if fld.typ.is(typeKindChan, typeKindFunc) {
+				// chan, func, or complex, reject
+				if fld.typ.is(typeKindChan, typeKindFunc, typeKindComplex64, typeKindComplex128) {
 					return "", errBadColumnReadType
 				}
 
@@ -385,7 +450,7 @@ func (c *pgTypeCheck) checkColumnRead(field *fieldInfo, strict bool) error {
 		}
 
 		if c.isLength1Type(col) {
-			// type table entry exists, accept
+			// length-1 type table entry exists, accept
 			gotyp := fld.typ.goTypeId(false, false, true)
 			if e, ok := pgLength1TypeTable[col.typ.oid][gotyp]; ok {
 				return e.scanner, 0
@@ -448,39 +513,164 @@ func (c *pgTypeCheck) checkColumnRead(field *fieldInfo, strict bool) error {
 	return nil
 }
 
-// checkQueryDataField
-func (c *pgTypeCheck) checkQueryDataField() error {
-	dataField := c.ti.query.dataField
-	if dataField == nil || dataField.isDirective {
-		return nil
-	}
-
-	//var dataOp dataOperation
-	if c.ti.query.kind == queryKindSelect {
-		for _, field := range dataField.data.fields {
-			if err := c.checkColumnRead(field, true); err != nil {
-				return err
-			}
-		}
-	} else if c.ti.query.kind == queryKindInsert || c.ti.query.kind == queryKindUpdate {
-		return c._checkFields(dataField.data.fields, dataWrite, true)
-	}
-	return nil
+// columnWrite holds the information needed by the generator to produce the
+// expression nodes that constitute a field-to-column write operation.
+type columnWrite struct {
+	// The column identifier.
+	colId colId
+	// The column to which the data will be written.
+	column *pgcolumn
+	// Info on the field from which the column will be written.
+	field *fieldInfo
+	// The name of the valuer to be used for writing the column.
+	valuer string
 }
 
-// checkResultField
-func (c *pgTypeCheck) checkResultField() error {
-	result := c.ti.query.resultField
-	if result == nil {
+// checkColumnWrite checks if a value of the given field can be written to the
+// column that is associated with that field. If strict=false and there
+// is no column associated with the given field the check will be skipped.
+// If the check is successful a new instance of *columnWrite will be appended
+// to the writes field of the *tagetInfo instance.
+//
+// CHECKLIST:
+//  ✅ If strict=true; the column denoted by the given field MUST be present
+//     in the target relation.
+//  ✅ If the given field has the "default" tag, the target column MUST have
+//     a default data value assigned.
+//  ✅ The field's type MAY implement the driver.Valuer interface.
+//
+// - If the column's type is json or jsonb:
+//  ✅ The field's type MUST NOT be a chan, func, or a complex type IF it does
+//     not implement the json.Marshaler interface,
+//  ✅ otherwise the field's type MAY be any other type.
+//
+// - If the column's type is xml:
+//  ✅ The field's type MUST NOT be a func, chan, or map type IF it does not
+//     implement the xml.Marshaler interface,
+//  ✅ otherwise the field's type MAY be any other type.
+//
+//  ✅ The field's type MAY be any type that, together with the column's type,
+//     has an entry in the relevant type table.
+func (c *pgTypeCheck) checkColumnWrite(field *fieldInfo, strict bool) error {
+	col := c.rel.findColumn(field.colId.name)
+	if col == nil && strict {
+		// colId with no qualifier to resolve to the target relation
+		cid := colId{name: field.colId.name}
+		return c.newError(errNoRelationColumn, cid, nil, field)
+	} else if col == nil && !strict {
 		return nil
 	}
 
-	if len(result.data.fields) > 0 {
-		for _, field := range result.data.fields {
-			if err := c.checkColumnRead(field, true); err != nil {
-				return err
+	check := func(fld *fieldInfo, col *pgcolumn) (valuer string, errcode typeErrorCode) {
+		// default requested but non available, reject
+		if fld.useDefault && !col.hasdefault {
+			return "", errNoColumnDefault
+		}
+
+		// implements driver.Valuer, accept as is
+		if fld.typ.isValuer {
+			return "", 0
+		}
+
+		if col.typ.is(pgtyp_json, pgtyp_jsonb) {
+			if !fld.typ.canJSONMarshal() {
+				// chan, func, or complex, reject
+				if fld.typ.is(typeKindChan, typeKindFunc, typeKindComplex64, typeKindComplex128) {
+					return "", errBadColumnWriteType
+				}
+
+				// []byte type, accept as is
+				if fld.typ.goTypeId(false, false, true) == goTypeByteSlice {
+					return "", 0
+				}
+
+				// string kind, accept as is
+				if fld.typ.is(typeKindString) {
+					return "", 0
+				}
+			}
+
+			// everything else, accept with JSON
+			return "JSON", 0
+		} else if col.typ.is(pgtyp_xml) {
+			if !fld.typ.canXMLMarshal() {
+				if fld.typ.is(typeKindChan, typeKindFunc, typeKindMap) {
+					return "", errBadColumnWriteType
+				}
+
+				// []byte type, accept as is
+				if fld.typ.goTypeId(false, false, true) == goTypeByteSlice {
+					return "", 0
+				}
+
+				// string kind, accept as is
+				if fld.typ.is(typeKindString) {
+					return "", 0
+				}
+			}
+
+			// everything else, accept with XML
+			return "XML", 0
+		}
+
+		if c.isLength1Type(col) {
+			// length-1 type table entry exists, accept
+			gotyp := fld.typ.goTypeId(false, false, true)
+			if e, ok := pgLength1TypeTable[col.typ.oid][gotyp]; ok {
+				return e.valuer, 0
+			}
+			return "", errBadColumnWriteType
+		} else {
+			// type table entry exists, accept
+			gotyp := fld.typ.goTypeId(false, false, true)
+			if e, ok := pgTypeTable[pgTypeKey{oid: col.typ.oid}][gotyp]; ok {
+				return e.valuer, 0
+			}
+
+			// try to salvage this
+			oid := col.typ.oid
+			if col.typ.category == pgtypcategory_string {
+				oid = pgtyp_text
+			} else if col.typ.category == pgtypcategory_array {
+				if et := c.pg.cat.types[col.typ.elem]; et != nil && et.category == pgtypcategory_string {
+					oid = pgtyp_textarr
+				}
+			}
+			if e, ok := pgTypeTable[pgTypeKey{oid: oid}][gotyp]; ok {
+				return e.valuer, 0
 			}
 		}
+
+		if false { // TODO(mkopriva): [ ... ]
+			if col.typ.is(pgtyp_circle, pgtyp_circlearr) {
+				// ...
+			} else if col.typ.is(pgtyp_interval, pgtyp_intervalarr) {
+				// ...
+			} else if col.typ.typ == pgtyptype_domain {
+				// ...
+			} else if col.typ.typ == pgtyptype_composite {
+				// ...
+			}
+		}
+
+		return "", errBadColumnWriteType
+	}
+
+	valuer, errcode := check(field, col)
+	if errcode > 0 {
+		return c.newError(errcode, field.colId, col, field)
+	}
+
+	write := new(columnWrite)
+	write.colId = field.colId
+	write.colId.qual = c.ti.dataField.relId.alias
+	write.column = col
+	write.field = field
+	write.valuer = valuer
+
+	c.ti.writes = append(c.ti.writes, write)
+	if col.isprimary {
+		c.ti.pkeys = append(c.ti.pkeys, write)
 	}
 	return nil
 }

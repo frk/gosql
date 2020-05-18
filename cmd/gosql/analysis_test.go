@@ -10,7 +10,7 @@ import (
 
 var tdata = testutil.ParseTestdata("../../testdata")
 
-func runAnalysis(name string, t *testing.T) (*targetInfo, error) {
+func runAnalysis(name string, t *testing.T) (*analyzer, error) {
 	named := testutil.FindNamedType(name, tdata)
 	if named == nil {
 		// Stop the test if no type with the given name was found.
@@ -22,8 +22,7 @@ func runAnalysis(name string, t *testing.T) (*targetInfo, error) {
 	if err := a.run(); err != nil {
 		return nil, err
 	}
-
-	return a.targetInfo(), nil
+	return a, nil
 }
 
 func TestAnalysis_queryStruct(t *testing.T) {
@@ -2776,9 +2775,9 @@ func TestAnalysis_queryStruct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got *queryStruct
-			ti, err := runAnalysis(tt.name, t)
-			if ti != nil {
-				got = ti.query
+			a, err := runAnalysis(tt.name, t)
+			if a != nil && a.info != nil {
+				got = a.info.query
 			}
 
 			if e := compare.Compare(err, tt.err); e != nil {
@@ -2853,9 +2852,9 @@ func TestAnalysis_filterStruct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got *filterStruct
-			ti, err := runAnalysis(tt.name, t)
-			if ti != nil {
-				got = ti.filter
+			a, err := runAnalysis(tt.name, t)
+			if a != nil && a.info != nil {
+				got = a.info.filter
 			}
 
 			if e := compare.Compare(err, tt.err); e != nil {
@@ -2948,11 +2947,11 @@ func TestTypeinfo_string(t *testing.T) {
 		{"f73", "[]json.RawMessage"},
 	}
 
-	ti, err := runAnalysis("SelectAnalysisTestOK_typeinfo_string", t)
+	a, err := runAnalysis("SelectAnalysisTestOK_typeinfo_string", t)
 	if err != nil {
 		t.Error(err)
 	}
-	fields := ti.query.dataField.data.fields
+	fields := a.info.query.dataField.data.fields
 	for i := 0; i < len(fields); i++ {
 		ff := fields[i]
 		tt := tests[i]

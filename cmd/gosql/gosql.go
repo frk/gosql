@@ -107,7 +107,7 @@ func (cmd *command) run(f *file, fset *token.FileSet) (*bytes.Buffer, error) {
 		if err := a.run(); err != nil {
 			return nil, err
 		}
-		infos = append(infos, a.targetInfo())
+		infos = append(infos, a.info)
 	}
 
 	// type-check specs against the db

@@ -75,7 +75,9 @@ type targetInfo struct {
 	// Populated by the type checker. A fieldColumnInfo slice that holds
 	// the data source fields and their corresponding target columns into
 	// which the data is stored.
-	input []*fieldColumnInfo
+	input  []*fieldColumnInfo
+	writes []*columnWrite
+	pkeys  []*columnWrite
 	// Populated by the type checker. A columnRead slice that holds the
 	// data target fields and their corresponding source columns from
 	// which the data is read.
@@ -101,9 +103,6 @@ type fieldColumnInfo struct {
 	column *pgcolumn
 	// The column identifier.
 	colId colId
-	// The column SQL expression.
-	sqlExpr SQL.ValueExpr
-
 	// TODO
 	pgsql pgTypeEntry
 }
@@ -152,7 +151,8 @@ type generator struct {
 
 	// query specific state, needs to be reset on each iteration
 	ti         *targetInfo
-	nparam     int               // number of parameters
+	nparam     int // number of parameters
+	params     map[interface{}]int
 	asvar      bool              // if true, the query string should be declared as a var, not const.
 	fclose     bool              // if true, the SQL query needs to be closed (with right parentheses) after the filter's been added.
 	insx       []GO.SelectorExpr // slice fields for IN clauses
@@ -182,6 +182,7 @@ func (g *generator) run(pkgName string) error {
 	for _, ti := range g.infos {
 		g.ti = ti
 		g.nparam = 0
+		g.params = make(map[interface{}]int)
 		g.asvar = false
 		g.fclose = false
 		g.insx = nil
@@ -539,8 +540,7 @@ func (g *generator) prepareSQLInputColumns(ti *targetInfo) {
 		}
 
 		// the parameter placeholder
-		item.sqlExpr = g.sqlparam()
-		g.sqlInputValues = append(g.sqlInputValues, item.sqlExpr)
+		g.sqlInputValues = append(g.sqlInputValues, g.sqlparam(item.field))
 	}
 
 	if updateWithSlice {
@@ -549,10 +549,9 @@ func (g *generator) prepareSQLInputColumns(ti *targetInfo) {
 			if !ti.skipwrite(item) { // read only?
 				continue
 			}
-			g.sqlInputColumns2 = append(g.sqlInputColumns2, SQL.Name(item.column.name))
 
-			item.sqlExpr = g.sqlparam()
-			g.sqlInputValues2 = append(g.sqlInputValues2, item.sqlExpr)
+			g.sqlInputColumns2 = append(g.sqlInputColumns2, SQL.Name(item.column.name))
+			g.sqlInputValues2 = append(g.sqlInputValues2, g.sqlparam(item.field))
 		}
 	}
 }
@@ -1606,11 +1605,7 @@ func (g *generator) buildSQLWhereClause(ti *targetInfo) (where SQL.WhereClause) 
 			p := SQL.ComparisonPredicate{}
 			p.Cmp = predicateToSQLCmpOp[isEQ]
 			p.LPredicand = g.sqlcolref(item.colId)
-
-			if item.sqlExpr == nil {
-				item.sqlExpr = g.sqlparam()
-			}
-			p.RPredicand = item.sqlExpr
+			p.RPredicand = g.sqlparam(item.field)
 
 			if ti.query.dataField.data.isSlice {
 				col := SQL.ColumnIdent{Qual: "x", Name: SQL.Name(item.colId.name)}
@@ -1651,13 +1646,13 @@ func (g *generator) sqlsearchcond(conds []*searchCondition, sel GO.SelectorExpr,
 				p.LowEnd = g.sqlcolref(x)
 			} else {
 				// assume cond.x is *fieldDatum
-				p.LowEnd = g.sqlparam()
+				p.LowEnd = g.sqlparam(nil)
 			}
 			if y, ok := cond.y.(colId); ok {
 				p.HighEnd = g.sqlcolref(y)
 			} else {
 				// assume cond.x is *fieldDatum
-				p.HighEnd = g.sqlparam()
+				p.HighEnd = g.sqlparam(nil)
 			}
 			x = p
 
@@ -1678,7 +1673,7 @@ func (g *generator) sqlsearchcond(conds []*searchCondition, sel GO.SelectorExpr,
 				pred = cond.pred
 				qua = cond.qua
 				lhs = g.sqlcolref(cond.colId)
-				rhs = g.sqlparam()
+				rhs = g.sqlparam(nil)
 				if len(cond.modFunc) > 0 {
 					li := SQL.RoutineInvocation{}
 					li.Name = string(cond.modFunc)
@@ -1939,7 +1934,7 @@ func (g *generator) sqljoincond(items []*searchCondition) (cond SQL.JoinConditio
 func (g *generator) sqllimit(query *queryStruct) (limit SQL.LimitClause) {
 	if query.limitField != nil {
 		if len(query.limitField.name) > 0 {
-			limit.Value = g.sqlparam()
+			limit.Value = g.sqlparam(nil)
 		} else if query.limitField.value > 0 {
 			limit.Value = SQL.LimitUint(query.limitField.value)
 		}
@@ -1960,7 +1955,7 @@ func (g *generator) sqllimit(query *queryStruct) (limit SQL.LimitClause) {
 func (g *generator) sqloffset(query *queryStruct) (offset SQL.OffsetClause) {
 	if query.offsetField != nil {
 		if len(query.offsetField.name) > 0 {
-			offset.Value = g.sqlparam()
+			offset.Value = g.sqlparam(nil)
 		} else if query.offsetField.value > 0 {
 			offset.Value = SQL.OffsetUint(query.offsetField.value)
 		}
@@ -1984,7 +1979,16 @@ func (g *generator) sqlcolref(id colId) SQL.ColumnReference {
 	}
 }
 
-func (g *generator) sqlparam() SQL.OrdinalParameterSpec {
+func (g *generator) sqlparam(src interface{}) SQL.OrdinalParameterSpec {
+	if src != nil {
+		if n, ok := g.params[src]; ok {
+			return SQL.OrdinalParameterSpec{n}
+		}
+		g.nparam += 1
+		g.params[src] = g.nparam
+		return SQL.OrdinalParameterSpec{g.nparam}
+	}
+
 	g.nparam += 1
 	return SQL.OrdinalParameterSpec{g.nparam}
 }

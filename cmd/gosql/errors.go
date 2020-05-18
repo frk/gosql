@@ -57,6 +57,7 @@ const (
 	errBadColumnQualifier
 	errNoColumnField
 	errBadColumnReadType
+	errBadColumnWriteType
 	errBadColumnReadIfaceType
 )
 

@@ -6,12 +6,16 @@ import (
 	"os"
 	"testing"
 
+	"github.com/frk/compare"
+
 	_ "github.com/lib/pq"
 )
 
 var testdb *testdbtype
 
 func TestMain(m *testing.M) {
+	compare.DefaultConfig.ObserveFieldTag = "cmp"
+
 	var exitcode int
 
 	func() { // use a func wrapper so we can rely on defer

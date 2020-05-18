@@ -435,7 +435,7 @@ type SelectPostgresTestBAD_RelationColumnAliasNotFound struct {
 //BAD: target relation column not found
 type InsertPostgresTestBAD_RelationColumnNotFound struct {
 	Rel struct {
-		Xyz string `sql:"col_xyz"`
+		XYZ string `sql:"col_xyz"`
 	} `rel:"column_tests_1:c"`
 }
 

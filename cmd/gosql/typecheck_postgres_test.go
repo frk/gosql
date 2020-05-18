@@ -70,7 +70,22 @@ func Test_pgchecker_run(t *testing.T) {
 		err:  errors.NoDBConstraintError,
 	}, {
 		name: "InsertPostgresTestBAD_OnConflictUpdateColumnNotFound",
-		err:  errors.NoDBColumnError,
+		err: typeError{
+			errorCode:    errNoRelationColumn,
+			pkgPath:      "path/to/test",
+			targetName:   "InsertPostgresTestBAD_OnConflictUpdateColumnNotFound",
+			fieldType:    "int",
+			fieldName:    "A",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_2",
+			colQualifier: "",
+			colName:      "col_a",
+			colType:      "",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     473,
+		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereFieldNotFound",
 		err:  errors.NoDBColumnError,
@@ -316,17 +331,47 @@ func Test_pgchecker_run(t *testing.T) {
 		err:  errors.NoDBRelationError,
 	}, {
 		name: "InsertPostgresTestBAD_RelationColumnNotFound",
-		err:  errors.NoDBColumnError,
+		err: typeError{
+			errorCode:    errNoRelationColumn,
+			pkgPath:      "path/to/test",
+			targetName:   "InsertPostgresTestBAD_RelationColumnNotFound",
+			fieldType:    "string",
+			fieldName:    "XYZ",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_1",
+			colQualifier: "",
+			colName:      "col_xyz",
+			colType:      "",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     438,
+		},
 	}, {
 		name: "InsertPostgresTestBAD_BadFieldToColumnType",
-		err:  errors.BadFieldToColumnTypeError,
+		err: typeError{
+			errorCode:    errBadColumnWriteType,
+			pkgPath:      "path/to/test",
+			targetName:   "InsertPostgresTestBAD_BadFieldToColumnType",
+			fieldType:    "int",
+			fieldName:    "B",
+			tagValue:     "",
+			dbName:       "gosql_test_db",
+			relQualifier: "public",
+			relName:      "column_tests_1",
+			colQualifier: "",
+			colName:      "col_c",
+			colType:      "boolean",
+			fileName:     "../../testdata/postgres_bad.go",
+			fileLine:     459,
+		},
 	}, {
 		name: "InsertPostgresTestBAD_ResultColumnNotFound",
 		err:  errors.NoDBColumnError,
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ti, err := runAnalysis(tt.name, t)
+			a, err := runAnalysis(tt.name, t)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -334,12 +379,7 @@ func Test_pgchecker_run(t *testing.T) {
 			dbc := new(pgTypeCheck)
 			dbc.fset = tdata.Fset
 			dbc.pg = testdb.pg
-			dbc.ti = ti
-			if dbc.ti.query != nil {
-				dbc.ti.dataField = dbc.ti.query.dataField
-			} else if dbc.ti.filter != nil {
-				dbc.ti.dataField = dbc.ti.filter.dataField
-			}
+			dbc.ti = a.info
 
 			err = dbc.run()
 			if e := compare.Compare(err, tt.err); e != nil {

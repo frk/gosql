@@ -63,22 +63,6 @@ type fieldVar struct {
 	ftag string
 }
 
-// targetInfo returns the result of the analysis.
-func (a *analyzer) targetInfo() *targetInfo {
-	if a.query != nil {
-		a.info.pkgPath = a.pkgPath
-		a.info.typeName = a.query.name
-		a.info.query = a.query
-		a.info.dataField = a.query.dataField
-	} else {
-		a.info.pkgPath = a.pkgPath
-		a.info.typeName = a.filter.name
-		a.info.filter = a.filter
-		a.info.dataField = a.filter.dataField
-	}
-	return a.info
-}
-
 // The run method runs the analysis of the analyzer's types.Named value.
 // The result of the analysis can be retrieved with the targetInfo method.
 func (a *analyzer) run() (err error) {
@@ -126,6 +110,10 @@ func (a *analyzer) run() (err error) {
 
 // queryStruct runs the analysis of a queryStruct.
 func (a *analyzer) queryStruct() (err error) {
+	a.info.pkgPath = a.pkgPath
+	a.info.typeName = a.query.name
+	a.info.query = a.query
+
 	// Used to track the presence of a field with a `rel` tag. Currently
 	// only one "rel field" is allowed, if more than one are found an error
 	// will be returned, regarless of whether the tag is empty or not.
@@ -154,6 +142,7 @@ func (a *analyzer) queryStruct() (err error) {
 			a.query.dataField.name = fld.Name()
 			a.query.dataField.relId = rid
 
+			a.info.dataField = a.query.dataField
 			a.info.fieldmap[a.query.dataField] = fieldVar{fvar: fld, ftag: tagraw}
 
 			switch fname := strings.ToLower(a.query.dataField.name); {
@@ -220,7 +209,6 @@ func (a *analyzer) queryStruct() (err error) {
 				if a.query.forceList, err = a.colIdList(tag["sql"], fld); err != nil {
 					return err
 				}
-
 				a.info.fieldmap[a.query.forceList] = fieldVar{fvar: fld, ftag: tagraw}
 			case "return":
 				if len(a.query.dataField.data.fields) == 0 {
@@ -357,6 +345,10 @@ func (a *analyzer) queryStruct() (err error) {
 
 // filterStruct runs the analysis of a filterStruct.
 func (a *analyzer) filterStruct() (err error) {
+	a.info.pkgPath = a.pkgPath
+	a.info.typeName = a.filter.name
+	a.info.filter = a.filter
+
 	// Used to track the presence of a field with a `rel` tag. Currently
 	// only one "rel field" is allowed, if more than one are found an error
 	// will be returned, regarless of whether the tag is empty or not.
@@ -385,6 +377,7 @@ func (a *analyzer) filterStruct() (err error) {
 			a.filter.dataField.name = fld.Name()
 			a.filter.dataField.relId = rid
 
+			a.info.dataField = a.filter.dataField
 			a.info.fieldmap[a.filter.dataField] = fieldVar{fvar: fld, ftag: tagraw}
 
 			if err := a.dataType(&a.filter.dataField.data, fld); err != nil {
@@ -424,20 +417,34 @@ func (a *analyzer) filterStruct() (err error) {
 
 // dataType analyzes the given field and populates the target
 func (a *analyzer) dataType(data *dataType, field *types.Var) error {
+	data.fieldmap = make(map[fieldPtr]fieldVar)
+	defer func() {
+		// NOTE(mkopriva): this step is necessary because of the cache.
+		//
+		// If there were no cache, each call to analyzer.dataType would
+		// traverse each field of the target struct data type and could
+		// therefore store the field info directly into a.info.fieldmap.
+		//
+		// However, because the cache is in place the fields are not traversed
+		// for cached dataTypes and the a.info.fieldmap is then not populated.
+		for k, v := range data.fieldmap {
+			a.info.fieldmap[k] = v
+		}
+	}()
+
 	var (
-		ftyp  = field.Type()
-		named *types.Named
-		ok    bool
+		ftyp     = field.Type()
+		cacheKey = ftyp.String()
+		named    *types.Named
+		ok       bool
 	)
 	if named, ok = ftyp.(*types.Named); ok {
 		ftyp = named.Underlying()
+		cacheKey = named.String()
 	}
 
-	// XXX Experimental: Not confident that "go/types.Type.String()" won't
-	// produce conflicting values for different types.
-	dataTypeKey := ftyp.String()
 	dataTypeCache.RLock()
-	v := dataTypeCache.m[dataTypeKey]
+	v := dataTypeCache.m[cacheKey]
 	dataTypeCache.RUnlock()
 	if v != nil {
 		*data = *v
@@ -493,6 +500,10 @@ func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 		data.typeInfo.isImported = a.isImportedType(named)
 		data.isAfterScanner = typesutil.ImplementsAfterScanner(named)
 		ftyp = named.Underlying()
+
+		dataTypeCache.Lock()
+		dataTypeCache.m[cacheKey] = data
+		dataTypeCache.Unlock()
 	}
 
 	data.typeInfo.kind = a.typeKind(ftyp)
@@ -501,14 +512,7 @@ func (a *analyzer) dataType(data *dataType, field *types.Var) error {
 	}
 
 	styp := ftyp.(*types.Struct)
-	if err := a.fieldInfoList(data, styp); err != nil {
-		return err
-	}
-
-	dataTypeCache.Lock()
-	dataTypeCache.m[dataTypeKey] = data
-	dataTypeCache.Unlock()
-	return nil
+	return a.fieldInfoList(data, styp)
 }
 
 // fieldInfoList
@@ -529,8 +533,9 @@ stackloop:
 	for len(stack) > 0 {
 		loop := stack[len(stack)-1]
 		for loop.idx < loop.styp.NumFields() {
+			tagraw := loop.styp.Tag(loop.idx)
 			fld := loop.styp.Field(loop.idx)
-			tag := tagutil.New(loop.styp.Tag(loop.idx))
+			tag := tagutil.New(tagraw)
 			sqltag := tag.First("sql")
 
 			// Instead of incrementing the index in the for-statement
@@ -555,6 +560,7 @@ stackloop:
 			f.name = fld.Name()
 			f.isEmbedded = fld.Embedded()
 			f.isExported = fld.Exported()
+			data.fieldmap[f] = fieldVar{fvar: fld, ftag: tagraw}
 
 			// Analyze the field's type.
 			ftyp := fld.Type()
@@ -1175,8 +1181,9 @@ func (a *analyzer) onConflictBlock(blockField *types.Var) (err error) {
 	}
 
 	for i := 0; i < ns.Struct.NumFields(); i++ {
+		tagraw := ns.Struct.Tag(i)
 		fld := ns.Struct.Field(i)
-		tag := tagutil.New(ns.Struct.Tag(i))
+		tag := tagutil.New(tagraw)
 
 		// In an onConflictBlock all fields are expected to be directives
 		// with the blank identifier as their name.
@@ -1194,6 +1201,7 @@ func (a *analyzer) onConflictBlock(blockField *types.Var) (err error) {
 				return err
 			}
 			onc.column = list.items
+			a.info.fieldmap[&onc.column] = fieldVar{fvar: fld, ftag: tagraw}
 		case "index":
 			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
 				return a.newError(errFieldConflict, fld, "", "")
@@ -1201,6 +1209,7 @@ func (a *analyzer) onConflictBlock(blockField *types.Var) (err error) {
 			if onc.index = tag.First("sql"); !rxIdent.MatchString(onc.index) {
 				return a.newError(errBadTagValue, fld, "", onc.index)
 			}
+			a.info.fieldmap[&onc.index] = fieldVar{fvar: fld, ftag: tagraw}
 		case "constraint":
 			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
 				return a.newError(errFieldConflict, fld, "", "")
@@ -1208,11 +1217,13 @@ func (a *analyzer) onConflictBlock(blockField *types.Var) (err error) {
 			if onc.constraint = tag.First("sql"); !rxIdent.MatchString(onc.constraint) {
 				return a.newError(errBadTagValue, fld, "", onc.constraint)
 			}
+			a.info.fieldmap[&onc.constraint] = fieldVar{fvar: fld, ftag: tagraw}
 		case "ignore":
 			if onc.ignore || onc.update != nil {
 				return a.newError(errFieldConflict, fld, "", "")
 			}
 			onc.ignore = true
+			a.info.fieldmap[&onc.ignore] = fieldVar{fvar: fld, ftag: tagraw}
 		case "update":
 			if onc.ignore || onc.update != nil {
 				return a.newError(errFieldConflict, fld, "", "")
@@ -1220,6 +1231,7 @@ func (a *analyzer) onConflictBlock(blockField *types.Var) (err error) {
 			if onc.update, err = a.colIdList(tag["sql"], fld); err != nil {
 				return err
 			}
+			a.info.fieldmap[onc.update] = fieldVar{fvar: fld, ftag: tagraw}
 		default:
 			return a.newError(errIllegalField, fld, blockField.Name(), "")
 		}
@@ -1740,6 +1752,15 @@ type dataType struct {
 	isAfterScanner bool
 	// Fields will hold the info on the dataType's fields.
 	fields []*fieldInfo
+	// A map of fieldInfo pointers to source code information about the field.
+	// Used only for error reporting, after analysis of the dataType instance
+	// this map is merged into the fieldmap of the targetInfo instance.
+	//
+	// Use `cmp:"-"` to ignore the map's contents during testing since
+	// the map as an intermediary container is of secondary importance,
+	// plus initializing it for the comparison to succeed would be too
+	// much work with little to no return.
+	fieldmap map[fieldPtr]fieldVar `cmp:"-"`
 }
 
 // typeInfo holds detailed information about a Go type.
