@@ -111,6 +111,9 @@ type (
 	// the resulting ON CONFLICT clause's conflict_target using the name
 	// of a unique index. The index name should be should be provided in
 	// the directive's `sql` tag.
+	//
+	// NOTE(mkopriva): The index name will be used by the db check to retrive the index
+	// expression and the generator will use that to produce the conflict target.
 	Index directive
 
 	// The Constraint directive can be used in an OnConflict block to specify

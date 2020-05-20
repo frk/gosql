@@ -1543,7 +1543,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{{
 				cond: &searchConditionField{
 					name:  "ID",
 					typ:   typeInfo{kind: typeKindInt},
@@ -1562,16 +1562,16 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
-				{cond: &searchConditionColumn{colId: colId{name: "column_a"}, pred: notNull}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_b"}, pred: isNull}},
-				{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_c"}, pred: notTrue}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_d"}, pred: isTrue}},
-				{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_e"}, pred: notFalse}},
-				{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_f"}, pred: isFalse}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_g"}, pred: notUnknown}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_h"}, pred: isUnknown}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_i"}, pred: isTrue}},
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{lhsColId: colId{name: "column_a"}, pred: notNull}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_b"}, pred: isNull}},
+				{bool: boolOr, cond: &searchConditionColumn{lhsColId: colId{name: "column_c"}, pred: notTrue}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_d"}, pred: isTrue}},
+				{bool: boolOr, cond: &searchConditionColumn{lhsColId: colId{name: "column_e"}, pred: notFalse}},
+				{bool: boolOr, cond: &searchConditionColumn{lhsColId: colId{name: "column_f"}, pred: isFalse}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_g"}, pred: notUnknown}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_h"}, pred: isUnknown}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_i"}, pred: isTrue}},
 			}},
 		},
 	}, {
@@ -1584,7 +1584,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionNested{name: "x", conds: []*searchCondition{
 					{cond: &searchConditionField{
 						name:  "foo",
@@ -1592,10 +1592,10 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						colId: colId{name: "column_foo"},
 						pred:  isEQ,
 					}},
-					{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_a"}, pred: isNull}},
+					{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_a"}, pred: isNull}},
 				}}},
 				{bool: boolOr, cond: &searchConditionNested{name: "y", conds: []*searchCondition{
-					{cond: &searchConditionColumn{colId: colId{name: "column_b"}, pred: notTrue}},
+					{cond: &searchConditionColumn{lhsColId: colId{name: "column_b"}, pred: notTrue}},
 					{bool: boolOr, cond: &searchConditionField{
 						name:  "bar",
 						typ:   typeInfo{kind: typeKindString},
@@ -1615,11 +1615,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 							colId: colId{name: "column_quux"},
 							pred:  isEQ,
 						}},
-						{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_c"}, pred: isTrue}},
+						{bool: boolOr, cond: &searchConditionColumn{lhsColId: colId{name: "column_c"}, pred: isTrue}},
 					}}},
 				}}},
-				{bool: boolOr, cond: &searchConditionColumn{colId: colId{name: "column_d"}, pred: notFalse}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_e"}, pred: isFalse}},
+				{bool: boolOr, cond: &searchConditionColumn{lhsColId: colId{name: "column_d"}, pred: notFalse}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_e"}, pred: isFalse}},
 				{bool: boolAnd, cond: &searchConditionField{
 					name:  "foo",
 					typ:   typeInfo{kind: typeKindInt},
@@ -1638,7 +1638,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionField{name: "a", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_a"}, pred: isLT}},
 				{bool: boolAnd, cond: &searchConditionField{name: "b", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_b"}, pred: isGT}},
 				{bool: boolAnd, cond: &searchConditionField{name: "c", typ: typeInfo{kind: typeKindInt}, colId: colId{name: "column_c"}, pred: isLTE}},
@@ -1658,12 +1658,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
-				{cond: &searchConditionColumn{colId: colId{name: "column_a"}, pred: notEQ, colId2: colId{name: "column_b"}}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{qual: "t", name: "column_c"}, pred: isEQ, colId2: colId{qual: "u", name: "column_d"}}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{qual: "t", name: "column_e"}, pred: isGT, literal: "123"}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{qual: "t", name: "column_f"}, pred: isEQ, literal: "'active'"}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{qual: "t", name: "column_g"}, pred: notEQ, literal: "true"}},
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{lhsColId: colId{name: "column_a"}, pred: notEQ, rhsColId: colId{name: "column_b"}}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{qual: "t", name: "column_c"}, pred: isEQ, rhsColId: colId{qual: "u", name: "column_d"}}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{qual: "t", name: "column_e"}, pred: isGT, literal: "123"}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{qual: "t", name: "column_f"}, pred: isEQ, literal: "'active'"}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{qual: "t", name: "column_g"}, pred: notEQ, literal: "true"}},
 			}},
 		},
 	}, {
@@ -1676,7 +1676,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionBetween{
 					name:  "a",
 					colId: colId{name: "column_a"},
@@ -1688,14 +1688,14 @@ func TestAnalysis_queryStruct(t *testing.T) {
 					name:  "b",
 					colId: colId{name: "column_b"},
 					pred:  isBetweenSym,
-					x:     colId{name: "column_x"},
-					y:     colId{name: "column_y"},
+					x:     &colId{name: "column_x"},
+					y:     &colId{name: "column_y"},
 				}},
 				{bool: boolAnd, cond: &searchConditionBetween{
 					name:  "c",
 					colId: colId{name: "column_c"},
 					pred:  notBetweenSym,
-					x:     colId{name: "column_z"},
+					x:     &colId{name: "column_z"},
 					y:     &fieldDatum{name: "z", typ: typeInfo{kind: typeKindInt}},
 				}},
 				{bool: boolAnd, cond: &searchConditionBetween{
@@ -1703,7 +1703,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 					colId: colId{name: "column_d"},
 					pred:  notBetween,
 					x:     &fieldDatum{name: "z", typ: typeInfo{kind: typeKindInt}},
-					y:     colId{name: "column_z"},
+					y:     &colId{name: "column_z"},
 				}},
 			}},
 		},
@@ -1717,7 +1717,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionField{
 					name:  "a",
 					typ:   typeInfo{kind: typeKindInt},
@@ -1730,8 +1730,8 @@ func TestAnalysis_queryStruct(t *testing.T) {
 					colId: colId{name: "column_b"},
 					pred:  notDistinct,
 				}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_c"}, pred: isDistinct, colId2: colId{name: "column_x"}}},
-				{bool: boolAnd, cond: &searchConditionColumn{colId: colId{name: "column_d"}, pred: notDistinct, colId2: colId{name: "column_y"}}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_c"}, pred: isDistinct, rhsColId: colId{name: "column_x"}}},
+				{bool: boolAnd, cond: &searchConditionColumn{lhsColId: colId{name: "column_d"}, pred: notDistinct, rhsColId: colId{name: "column_y"}}},
 			}},
 		},
 	}, {
@@ -1744,7 +1744,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionField{
 					name: "a",
 					typ: typeInfo{
@@ -1817,7 +1817,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionField{
 					name:  "a",
 					typ:   typeInfo{kind: typeKindString},
@@ -1878,47 +1878,47 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a", alias: "a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			joinBlock: &joinBlock{name: "Using", relId: relId{name: "relation_b", alias: "b"}, items: []*joinItem{
+			joinStruct: &joinStruct{name: "Using", relId: relId{name: "relation_b", alias: "b"}, items: []*joinItem{
 				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "c", name: "b_id"},
-						colId2: colId{qual: "b", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "c", name: "b_id"},
+						rhsColId: colId{qual: "b", name: "id"},
+						pred:     isEQ,
 					}}}},
 				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "d", name: "c_id"},
-						colId2: colId{qual: "c", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "d", name: "c_id"},
+						rhsColId: colId{qual: "c", name: "id"},
+						pred:     isEQ,
 					},
 				}, {
 					bool: boolOr,
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "d", name: "num"},
-						colId2: colId{qual: "b", name: "num"},
-						pred:   isGT,
+						lhsColId: colId{qual: "d", name: "num"},
+						rhsColId: colId{qual: "b", name: "num"},
+						pred:     isGT,
 					},
 				}}},
 				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "e", name: "d_id"},
-						colId2: colId{qual: "d", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "e", name: "d_id"},
+						rhsColId: colId{qual: "d", name: "id"},
+						pred:     isEQ,
 					},
 				}, {
 					bool: boolAnd,
 					cond: &searchConditionColumn{
-						colId: colId{qual: "e", name: "is_foo"},
-						pred:  isFalse,
+						lhsColId: colId{qual: "e", name: "is_foo"},
+						pred:     isFalse,
 					},
 				}}},
 				{joinType: joinCross, relId: relId{name: "relation_f", alias: "f"}},
 			}},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionColumn{
-					colId:  colId{qual: "a", name: "id"},
-					pred:   isEQ,
-					colId2: colId{qual: "d", name: "a_id"},
+					lhsColId: colId{qual: "a", name: "id"},
+					pred:     isEQ,
+					rhsColId: colId{qual: "d", name: "a_id"},
 				}},
 			}},
 		},
@@ -1932,48 +1932,48 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a", alias: "a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			joinBlock: &joinBlock{name: "From", relId: relId{name: "relation_b", alias: "b"}, items: []*joinItem{
+			joinStruct: &joinStruct{name: "From", relId: relId{name: "relation_b", alias: "b"}, items: []*joinItem{
 				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "c", name: "b_id"},
-						colId2: colId{qual: "b", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "c", name: "b_id"},
+						rhsColId: colId{qual: "b", name: "id"},
+						pred:     isEQ,
 					},
 				}}},
 				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "d", name: "c_id"},
-						colId2: colId{qual: "c", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "d", name: "c_id"},
+						rhsColId: colId{qual: "c", name: "id"},
+						pred:     isEQ,
 					},
 				}, {
 					bool: boolOr,
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "d", name: "num"},
-						colId2: colId{qual: "b", name: "num"},
-						pred:   isGT,
+						lhsColId: colId{qual: "d", name: "num"},
+						rhsColId: colId{qual: "b", name: "num"},
+						pred:     isGT,
 					},
 				}}},
 				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "e", name: "d_id"},
-						colId2: colId{qual: "d", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "e", name: "d_id"},
+						rhsColId: colId{qual: "d", name: "id"},
+						pred:     isEQ,
 					},
 				}, {
 					bool: boolAnd,
 					cond: &searchConditionColumn{
-						colId: colId{qual: "e", name: "is_foo"},
-						pred:  isFalse,
+						lhsColId: colId{qual: "e", name: "is_foo"},
+						pred:     isFalse,
 					},
 				}}},
 				{joinType: joinCross, relId: relId{name: "relation_f", alias: "f"}},
 			}},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionColumn{
-					colId:  colId{qual: "a", name: "id"},
-					colId2: colId{qual: "d", name: "a_id"},
-					pred:   isEQ,
+					lhsColId: colId{qual: "a", name: "id"},
+					rhsColId: colId{qual: "d", name: "a_id"},
+					pred:     isEQ,
 				}},
 			}},
 		},
@@ -1987,55 +1987,55 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId: relId{name: "relation_a", alias: "a"},
 				data:  dataType{typeInfo: typeInfo{kind: typeKindStruct}},
 			},
-			joinBlock: &joinBlock{name: "Join", items: []*joinItem{
+			joinStruct: &joinStruct{name: "Join", items: []*joinItem{
 				{joinType: joinLeft, relId: relId{name: "relation_b", alias: "b"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "b", name: "a_id"},
-						colId2: colId{qual: "a", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "b", name: "a_id"},
+						rhsColId: colId{qual: "a", name: "id"},
+						pred:     isEQ,
 					},
 				}}},
 				{joinType: joinLeft, relId: relId{name: "relation_c", alias: "c"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "c", name: "b_id"},
-						colId2: colId{qual: "b", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "c", name: "b_id"},
+						rhsColId: colId{qual: "b", name: "id"},
+						pred:     isEQ,
 					},
 				}}},
 				{joinType: joinRight, relId: relId{name: "relation_d", alias: "d"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "d", name: "c_id"},
-						colId2: colId{qual: "c", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "d", name: "c_id"},
+						rhsColId: colId{qual: "c", name: "id"},
+						pred:     isEQ,
 					},
 				}, {
 					bool: boolOr,
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "d", name: "num"},
-						colId2: colId{qual: "b", name: "num"},
-						pred:   isGT,
+						lhsColId: colId{qual: "d", name: "num"},
+						rhsColId: colId{qual: "b", name: "num"},
+						pred:     isGT,
 					},
 				}}},
 				{joinType: joinFull, relId: relId{name: "relation_e", alias: "e"}, conds: []*searchCondition{{
 					cond: &searchConditionColumn{
-						colId:  colId{qual: "e", name: "d_id"},
-						colId2: colId{qual: "d", name: "id"},
-						pred:   isEQ,
+						lhsColId: colId{qual: "e", name: "d_id"},
+						rhsColId: colId{qual: "d", name: "id"},
+						pred:     isEQ,
 					},
 				}, {
 					bool: boolAnd,
 					cond: &searchConditionColumn{
-						colId: colId{qual: "e", name: "is_foo"},
-						pred:  isFalse,
+						lhsColId: colId{qual: "e", name: "is_foo"},
+						pred:     isFalse,
 					},
 				}}},
 				{joinType: joinCross, relId: relId{name: "relation_f", alias: "f"}},
 			}},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
 				{cond: &searchConditionColumn{
-					colId:  colId{qual: "a", name: "id"},
-					pred:   isEQ,
-					colId2: colId{qual: "d", name: "a_id"},
+					lhsColId: colId{qual: "a", name: "id"},
+					pred:     isEQ,
+					rhsColId: colId{qual: "d", name: "a_id"},
 				}},
 			}},
 		},
@@ -2308,10 +2308,10 @@ func TestAnalysis_queryStruct(t *testing.T) {
 	}, {
 		name: "InsertAnalysisTestOK_OnConflict",
 		want: &queryStruct{
-			name:            "InsertAnalysisTestOK_OnConflict",
-			kind:            queryKindInsert,
-			dataField:       reldummyslice,
-			onConflictBlock: &onConflictBlock{ignore: true},
+			name:       "InsertAnalysisTestOK_OnConflict",
+			kind:       queryKindInsert,
+			dataField:  reldummyslice,
+			onConflict: &onConflictStruct{name: "OnConflict", ignore: &ignoreDirective{}},
 		},
 	}, {
 		name: "InsertAnalysisTestOK_OnConflictColumn",
@@ -2319,9 +2319,10 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			name:      "InsertAnalysisTestOK_OnConflictColumn",
 			kind:      queryKindInsert,
 			dataField: reldummyslice,
-			onConflictBlock: &onConflictBlock{
-				column: []colId{{qual: "a", name: "id"}},
-				ignore: true,
+			onConflict: &onConflictStruct{
+				name:   "OnConflict",
+				column: &columnDirective{[]sqlTagColId{{name: "id", qualifier: "a"}}},
+				ignore: &ignoreDirective{},
 			},
 		},
 	}, {
@@ -2330,12 +2331,15 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			name:      "InsertAnalysisTestOK_OnConflictConstraint",
 			kind:      queryKindInsert,
 			dataField: reldummyslice,
-			onConflictBlock: &onConflictBlock{
-				constraint: "relation_constraint_xyz",
-				update: &colIdList{items: []colId{
-					{qual: "a", name: "foo"},
-					{qual: "a", name: "bar"},
-					{qual: "a", name: "baz"},
+			onConflict: &onConflictStruct{
+				name:       "OnConflict",
+				constraint: &constraintDirective{"relation_constraint_xyz"},
+				update: &updateDirective{sqlTagColIdList{
+					items: []sqlTagColId{
+						{name: "foo", qualifier: "a"},
+						{name: "bar", qualifier: "a"},
+						{name: "baz", qualifier: "a"},
+					},
 				}},
 			},
 		},
@@ -2345,9 +2349,10 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			name:      "InsertAnalysisTestOK_OnConflictIndex",
 			kind:      queryKindInsert,
 			dataField: reldummyslice,
-			onConflictBlock: &onConflictBlock{
-				index:  "relation_index_xyz",
-				update: &colIdList{all: true},
+			onConflict: &onConflictStruct{
+				name:   "OnConflict",
+				index:  &indexDirective{"relation_index_xyz"},
+				update: &updateDirective{sqlTagColIdList{all: true}},
 			},
 		},
 	}, {
@@ -2360,8 +2365,8 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId:       relId{name: "relation_a", alias: "a"},
 				isDirective: true,
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
-				{cond: &searchConditionColumn{colId: colId{qual: "a", name: "is_inactive"}, pred: isTrue}},
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{lhsColId: colId{qual: "a", name: "is_inactive"}, pred: isTrue}},
 			}},
 			resultField: &resultField{
 				name: "Result",
@@ -2378,8 +2383,8 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				relId:       relId{name: "relation_a", alias: "a"},
 				isDirective: true,
 			},
-			whereBlock: &whereBlock{name: "Where", conds: []*searchCondition{
-				{cond: &searchConditionColumn{colId: colId{qual: "a", name: "is_inactive"}, pred: isTrue}},
+			whereStruct: &whereStruct{name: "Where", conds: []*searchCondition{
+				{cond: &searchConditionColumn{lhsColId: colId{qual: "a", name: "is_inactive"}, pred: isTrue}},
 			}},
 			rowsAffectedField: &rowsAffectedField{
 				name: "RowsAffected",

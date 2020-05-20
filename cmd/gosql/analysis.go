@@ -39,6 +39,116 @@ var (
 	rxCoalesce = regexp.MustCompile(`(?i)^coalesce$|^coalesce\((.*)\)$`)
 )
 
+// queryStruct
+type queryStruct struct {
+	// Name of the query struct type.
+	name string
+	// The kind of the queryStruct.
+	kind queryKind
+	// The primary field that holds the queryStruct's data.
+	dataField *dataField
+	// The optional secondary field that holds the queryStruct's result data.
+	resultField *resultField
+
+	onConflict *onConflictStruct
+
+	joinStruct        *joinStruct
+	whereStruct       *whereStruct
+	orderByList       *orderByList
+	limitField        *limitField
+	offsetField       *offsetField
+	rowsAffectedField *rowsAffectedField
+	defaultList       *colIdList
+	forceList         *colIdList
+	returnList        *colIdList
+	errorHandlerField *errorHandlerField
+	overridingKind    overridingKind
+
+	// The name of the Filter type field, if any.
+	filterField string
+	// Indicates that the query to be generated should be executed
+	// against all the rows of the relation.
+	all bool
+}
+
+// whereStruct represents a struct analyzed from a queryStruct's field named "where" (case insensitive).
+type whereStruct struct {
+	// Name of the field (case preserved).
+	name string
+	// The list of search conditions declared in the whereStruct.
+	conds []*searchCondition
+}
+
+// joinStruct represents a struct analyzed from a queryStruct's field named "join", "from", or "using" (case insensitive).
+type joinStruct struct {
+	// Name of the field (case preserved).
+	name string
+	// The identifier of the top relation in a DELETE-USING / UPDATE-FROM
+	// clause, empty in SELECT commands.
+	relId relId
+	// The list of join items declared in a join block.
+	items []*joinItem
+}
+
+// onConflictStruct represents a struct analyzed from a queryStruct's field named "onconflict" (case insensitive).
+type onConflictStruct struct {
+	// Name of the field (case preserved).
+	name string
+	// If set, indicates that the gosql.Column "conflict_target" directive was used.
+	column *columnDirective
+	// If set, indicates that the gosql.Index "conflict_target" directive was used.
+	index *indexDirective
+	// If set, indicates that the gosql.Constraint "conflict_target" directive was used.
+	constraint *constraintDirective
+	// If set, indicates that the gosql.Ignore "conflict_action" directive was used.
+	ignore *ignoreDirective
+	// If set, indicates that the gosql.Update "conflict_action" directive was used.
+	update *updateDirective
+}
+
+// columnDirective represents a directive field analyzed from "_ gosql.Column".
+type columnDirective struct {
+	// The column ids extracted from the directive field's `sql` tag.
+	sqlTagColIds []sqlTagColId
+}
+
+// indexDirective represents an "onConflictStruct" field analyzed from a "_ gosql.Index" directive.
+type indexDirective struct {
+	// The value extracted from the directive field's `sql` tag.
+	sqlTagValue string
+}
+
+// constraintDirective represents an "onConflictStruct" field analyzed from a "_ gosql.Constraint" directive.
+type constraintDirective struct {
+	// The value extracted from the directive field's `sql` tag.
+	sqlTagValue string
+}
+
+// updateDirective represents an "onConflictStruct" field analyzed from a "_ gosql.Update" directive.
+type updateDirective struct {
+	// The list of column identifiers extracted from the directive field's `sql` tag.
+	sqlTagColIdList sqlTagColIdList
+}
+
+// ignoreDirective represents an "onConflictStruct" field analyzed from a "_ gosql.Ignore" directive.
+type ignoreDirective struct{}
+
+// sqlTagColId represents a column identifier as parsed from a field's `sql` tag.
+type sqlTagColId struct {
+	// The name of the column.
+	name string
+	// The table or table alias qualifier of the column, or empty.
+	qualifier string
+}
+
+// sqlTagColIdList represents a list of column identifiers as parsed from a field's `sql` tag.
+type sqlTagColIdList struct {
+	// The individual column identifiers extracted from the `sql` tag.
+	items []sqlTagColId
+	// If set to `true`, indicates that "*" was used in the `sql` tag.
+	all bool
+}
+
 // analyzer holds the state of the analysis.
 type analyzer struct {
 	fset    *token.FileSet
@@ -189,7 +299,7 @@ func (a *analyzer) queryStruct() (err error) {
 				if a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
 					return a.newError(errIllegalField, fld, "", "")
 				}
-				if a.query.all || a.query.whereBlock != nil || len(a.query.filterField) > 0 {
+				if a.query.all || a.query.whereStruct != nil || len(a.query.filterField) > 0 {
 					return a.newError(errFieldConflict, fld, "", "")
 				}
 				a.query.all = true
@@ -255,20 +365,19 @@ func (a *analyzer) queryStruct() (err error) {
 		// fields with specific names
 		switch fname := strings.ToLower(fld.Name()); fname {
 		case "where":
-			if err := a.whereBlock(fld); err != nil {
+			if err := a.whereStruct(fld); err != nil {
 				return err
 			}
-			a.info.fieldmap[a.query.whereBlock] = fieldVar{fvar: fld, ftag: tagraw}
+			a.info.fieldmap[a.query.whereStruct] = fieldVar{fvar: fld, ftag: tagraw}
 		case "join", "from", "using":
-			if err := a.joinBlock(fld); err != nil {
+			if err := a.joinStruct(fld); err != nil {
 				return err
 			}
-			a.info.fieldmap[a.query.joinBlock] = fieldVar{fvar: fld, ftag: tagraw}
+			a.info.fieldmap[a.query.joinStruct] = fieldVar{fvar: fld, ftag: tagraw}
 		case "onconflict":
-			if err := a.onConflictBlock(fld); err != nil {
+			if err := a.analyzeOnConflictStruct(fld, tagraw); err != nil {
 				return err
 			}
-			a.info.fieldmap[a.query.onConflictBlock] = fieldVar{fvar: fld, ftag: tagraw}
 		case "result":
 			if err := a.resultField(fld); err != nil {
 				return err
@@ -297,7 +406,7 @@ func (a *analyzer) queryStruct() (err error) {
 					if !a.query.kind.isSelect() && a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
 						return a.newError(errIllegalField, fld, "", "")
 					}
-					if a.query.all || a.query.whereBlock != nil || len(a.query.filterField) > 0 {
+					if a.query.all || a.query.whereStruct != nil || len(a.query.filterField) > 0 {
 						return a.newError(errFieldConflict, fld, "", "")
 					}
 					a.query.filterField = fld.Name()
@@ -325,16 +434,16 @@ func (a *analyzer) queryStruct() (err error) {
 
 	if a.query.kind == queryKindUpdate && a.query.dataField.data.isSlice {
 		// If this is an UPDATE with a slice of values, then only matching
-		// by primary keys makes sense, therefore a whereBlock, or filter,
+		// by primary keys makes sense, therefore a whereStruct, or filter,
 		// or the all directive, are disallowed.
-		if a.query.whereBlock != nil || len(a.query.filterField) > 0 || a.query.all {
+		if a.query.whereStruct != nil || len(a.query.filterField) > 0 || a.query.all {
 			// TODO test
 			return a.newError(errIllegalUpdateModifier, nil, "", "")
 		}
 	}
 
 	// TODO if queryKind is Update and the record (single or slice) does not
-	// have a primary key AND there's no whereBlock, no filter, no all directive
+	// have a primary key AND there's no whereStruct, no filter, no all directive
 	// return an error. That case suggests that all records should be updated
 	// however the all directive must be provided explicitly, as a way to
 	// ensure the programmer does not, by mistake, declare a query that
@@ -778,12 +887,12 @@ func (a *analyzer) coalesceInfo(tag tagutil.Tag) (use bool, val string) {
 	return use, val
 }
 
-// whereBlock
-func (a *analyzer) whereBlock(blockField *types.Var) (err error) {
+// whereStruct
+func (a *analyzer) whereStruct(blockField *types.Var) (err error) {
 	if !a.query.kind.isSelect() && a.query.kind != queryKindUpdate && a.query.kind != queryKindDelete {
 		return a.newError(errIllegalField, blockField, "", "")
 	}
-	if a.query.all || a.query.whereBlock != nil || len(a.query.filterField) > 0 {
+	if a.query.all || a.query.whereStruct != nil || len(a.query.filterField) > 0 {
 		return a.newError(errFieldConflict, blockField, "", "")
 	}
 
@@ -796,7 +905,7 @@ func (a *analyzer) whereBlock(blockField *types.Var) (err error) {
 	type loopstate struct {
 		conds  []*searchCondition
 		nested *searchConditionNested
-		ns     *typesutil.NamedStruct // the struct type of the whereBlock
+		ns     *typesutil.NamedStruct // the struct type of the whereStruct
 		idx    int                    // keeps track of the field index
 	}
 
@@ -809,8 +918,9 @@ stackloop:
 	for len(stack) > 0 {
 		loop := stack[len(stack)-1]
 		for loop.idx < loop.ns.Struct.NumFields() {
+			tagraw := loop.ns.Struct.Tag(loop.idx)
 			fld := loop.ns.Struct.Field(loop.idx)
-			tag := tagutil.New(loop.ns.Struct.Tag(loop.idx))
+			tag := tagutil.New(tagraw)
 			sqltag := tag.First("sql")
 
 			// Instead of incrementing the index in the for-statement
@@ -833,7 +943,7 @@ stackloop:
 			loop.conds = append(loop.conds, item)
 
 			// Analyze the bool operation for any but the first
-			// item in a whereBlock. Fail if a value was provided
+			// item in a whereStruct. Fail if a value was provided
 			// but it is not "or" nor "and".
 			if len(loop.conds) > 1 {
 				item.bool = boolAnd // default to "and"
@@ -847,7 +957,7 @@ stackloop:
 				}
 			}
 
-			// Nested whereblocks are marked with ">" and should be
+			// Nested wherefields are marked with ">" and should be
 			// analyzed before any other fields in the current block.
 			if sqltag == ">" {
 				ns, err := typesutil.GetStruct(fld)
@@ -863,6 +973,7 @@ stackloop:
 				loop2.ns = ns
 				loop2.nested = cond
 				stack = append(stack, loop2)
+				a.info.fieldmap[cond] = fieldVar{fvar: fld, ftag: tagraw}
 				continue stackloop
 			}
 
@@ -885,14 +996,14 @@ stackloop:
 					}
 
 					cond := new(searchConditionColumn)
-					cond.colId = colId
+					cond.lhsColId = colId
 					cond.pred = stringToPredicate[op]
 					cond.qua = stringToQuantifier[op2]
 
 					if id, err := a.colId(rhs, fld); err != nil {
 						cond.literal = rhs // assume literal expression
 					} else {
-						cond.colId2 = id
+						cond.rhsColId = id
 					}
 
 					if cond.pred.isUnary() {
@@ -903,6 +1014,7 @@ stackloop:
 					}
 
 					item.cond = cond
+					a.info.fieldmap[cond] = fieldVar{fvar: fld, ftag: tagraw}
 					continue
 				}
 
@@ -925,9 +1037,10 @@ stackloop:
 				}
 
 				cond := new(searchConditionColumn)
-				cond.colId = colId
+				cond.lhsColId = colId
 				cond.pred = pred
 				item.cond = cond
+				a.info.fieldmap[cond] = fieldVar{fvar: fld, ftag: tagraw}
 				continue
 			}
 
@@ -952,8 +1065,9 @@ stackloop:
 
 				var x, y interface{}
 				for i := 0; i < 2; i++ {
+					tagraw := ns.Struct.Tag(i)
 					fld := ns.Struct.Field(i)
-					tag := tagutil.New(ns.Struct.Tag(i))
+					tag := tagutil.New(tagraw)
 					sqltag := tag.First("sql")
 
 					if fld.Name() == "_" && typesutil.IsDirective("Column", fld.Type()) {
@@ -964,10 +1078,12 @@ stackloop:
 							return err
 						}
 						if sqltag2 == "x" {
-							x = colId
+							x = &colId
 						} else if sqltag2 == "y" {
-							y = colId
+							y = &colId
 						}
+
+						a.info.fieldmap[&colId] = fieldVar{fvar: fld, ftag: tagraw}
 						continue
 					}
 
@@ -981,6 +1097,8 @@ stackloop:
 						} else if sqltag == "y" {
 							y = v
 						}
+
+						a.info.fieldmap[v] = fieldVar{fvar: fld, ftag: tagraw}
 					}
 				}
 
@@ -1000,6 +1118,7 @@ stackloop:
 				cond.x = x
 				cond.y = y
 				item.cond = cond
+				a.info.fieldmap[cond] = fieldVar{fvar: fld, ftag: tagraw}
 				continue
 			}
 
@@ -1037,6 +1156,7 @@ stackloop:
 			}
 
 			item.cond = cond
+			a.info.fieldmap[cond] = fieldVar{fvar: fld, ftag: tagraw}
 		}
 
 		if loop.nested != nil {
@@ -1046,15 +1166,15 @@ stackloop:
 		stack = stack[:len(stack)-1]
 	}
 
-	wb := new(whereBlock)
+	wb := new(whereStruct)
 	wb.name = blockField.Name()
 	wb.conds = root.conds
-	a.query.whereBlock = wb
+	a.query.whereStruct = wb
 	return nil
 }
 
-// joinBlock
-func (a *analyzer) joinBlock(blockField *types.Var) (err error) {
+// joinStruct
+func (a *analyzer) joinStruct(blockField *types.Var) (err error) {
 	joinblockname := strings.ToLower(blockField.Name())
 	if joinblockname == "join" && !a.query.kind.isSelect() {
 		return a.newError(errIllegalField, blockField, "", "")
@@ -1069,19 +1189,20 @@ func (a *analyzer) joinBlock(blockField *types.Var) (err error) {
 		return a.newError(errFieldBlock, blockField, "", "")
 	}
 
-	join := new(joinBlock)
+	join := new(joinStruct)
 	join.name = blockField.Name()
 
 	for i := 0; i < ns.Struct.NumFields(); i++ {
+		rawtag := ns.Struct.Tag(i)
 		fld := ns.Struct.Field(i)
-		tag := tagutil.New(ns.Struct.Tag(i))
+		tag := tagutil.New(rawtag)
 		sqltag := tag.First("sql")
 
 		if sqltag == "-" || sqltag == "" {
 			continue
 		}
 
-		// In a joinBlock all fields are expected to be directives
+		// In a joinStruct all fields are expected to be directives
 		// with the blank identifier as their name.
 		if fld.Name() != "_" {
 			continue
@@ -1112,7 +1233,7 @@ func (a *analyzer) joinBlock(blockField *types.Var) (err error) {
 
 					cond := new(searchConditionColumn)
 					lhs, op, op2, rhs := a.splitPredicateExpr(val)
-					if cond.colId, err = a.colId(lhs, fld); err != nil {
+					if cond.lhsColId, err = a.colId(lhs, fld); err != nil {
 						return err
 					}
 
@@ -1120,7 +1241,7 @@ func (a *analyzer) joinBlock(blockField *types.Var) (err error) {
 					if id, err := a.colId(rhs, fld); err != nil {
 						cond.literal = rhs // assume literal expression
 					} else {
-						cond.colId2 = id
+						cond.rhsColId = id
 					}
 
 					cond.pred = stringToPredicate[op]
@@ -1150,6 +1271,7 @@ func (a *analyzer) joinBlock(blockField *types.Var) (err error) {
 					}
 
 					conditions = append(conditions, item)
+					a.info.fieldmap[cond] = fieldVar{fvar: fld, ftag: rawtag}
 				}
 			}
 
@@ -1164,85 +1286,170 @@ func (a *analyzer) joinBlock(blockField *types.Var) (err error) {
 
 	}
 
-	a.query.joinBlock = join
+	a.query.joinStruct = join
 	return nil
 }
 
-// onConflictBlock
-func (a *analyzer) onConflictBlock(blockField *types.Var) (err error) {
-	if a.query.kind != queryKindInsert {
-		return a.newError(errIllegalField, blockField, "", "")
+// analyzeOnConflictColumnDirective analyzes the given field and its associated
+// tag as a "gosql.Column" directive.
+//
+// ✅ The given onConflictStruct MUST NOT have any other "conflict_target" fields set.
+// ✅ The tag MUST contain a valid identifier.
+func (a *analyzer) analyzeOnConflictColumnDirective(oc *onConflictStruct, field *types.Var, tag string) (err error) {
+	if oc.column != nil || oc.index != nil || oc.constraint != nil {
+		return a.newError(errFieldConflict, field, "", "")
 	}
 
-	onc := new(onConflictBlock)
-	ns, err := typesutil.GetStruct(blockField)
+	slice := tagutil.New(tag)["sql"]
+	ids, err := a.parseSqlTagColIds(slice, field)
 	if err != nil {
-		return a.newError(errFieldBlock, blockField, "", "")
+		return err
 	}
 
-	for i := 0; i < ns.Struct.NumFields(); i++ {
-		tagraw := ns.Struct.Tag(i)
-		fld := ns.Struct.Field(i)
-		tag := tagutil.New(tagraw)
+	oc.column = new(columnDirective)
+	oc.column.sqlTagColIds = ids
+	a.info.fieldmap[oc.column] = fieldVar{fvar: field, ftag: tag}
+	return nil
+}
 
-		// In an onConflictBlock all fields are expected to be directives
+// analyzeOnConflictIndexDirective analyzes the given field and its associated
+// tag as a "gosql.Index" directive.
+//
+// ✅ The given onConflictStruct MUST NOT have any other "conflict_target" fields set.
+// ✅ The tag MUST contain a valid identifier.
+func (a *analyzer) analyzeOnConflictIndexDirective(oc *onConflictStruct, field *types.Var, tag string) (err error) {
+	if oc.column != nil || oc.index != nil || oc.constraint != nil {
+		return a.newError(errFieldConflict, field, "", "")
+	}
+
+	value := tagutil.New(tag).First("sql")
+	if !rxIdent.MatchString(value) {
+		return a.newError(errBadTagValue, field, "", value)
+	}
+
+	oc.index = new(indexDirective)
+	oc.index.sqlTagValue = value
+	a.info.fieldmap[oc.index] = fieldVar{fvar: field, ftag: tag}
+	return nil
+}
+
+// analyzeOnConflictConstraintDirective analyzes the given field and its associated
+// tag as a "gosql.Constraint" directive.
+//
+// ✅ The given onConflictStruct MUST NOT have any other "conflict_target" fields set.
+// ✅ The tag MUST contain a valid identifier.
+func (a *analyzer) analyzeOnConflictConstraintDirective(oc *onConflictStruct, field *types.Var, tag string) (err error) {
+	if oc.column != nil || oc.index != nil || oc.constraint != nil {
+		return a.newError(errFieldConflict, field, "", "")
+	}
+
+	value := tagutil.New(tag).First("sql")
+	if !rxIdent.MatchString(value) {
+		return a.newError(errBadTagValue, field, "", value)
+	}
+
+	oc.constraint = new(constraintDirective)
+	oc.constraint.sqlTagValue = value
+	a.info.fieldmap[oc.constraint] = fieldVar{fvar: field, ftag: tag}
+	return nil
+}
+
+// analyzeOnConflictIgnoreDirective analyzes the given field as a "gosql.Ignore" directive.
+//
+// ✅ The given onConflictStruct MUST NOT have any other "conflict_action" fields set.
+func (a *analyzer) analyzeOnConflictIgnoreDirective(oc *onConflictStruct, field *types.Var, tag string) (err error) {
+	if oc.ignore != nil || oc.update != nil {
+		return a.newError(errFieldConflict, field, "", "")
+	}
+
+	oc.ignore = new(ignoreDirective)
+	a.info.fieldmap[oc.ignore] = fieldVar{fvar: field, ftag: tag}
+	return nil
+}
+
+// analyzeOnConflictUpdateDirective analyzes the given field and its associated
+// tag as a "gosql.Update" directive.
+//
+// ✅ The given onConflictStruct MUST NOT have any other "conflict_action" fields set.
+func (a *analyzer) analyzeOnConflictUpdateDirective(oc *onConflictStruct, field *types.Var, tag string) (err error) {
+	if oc.ignore != nil || oc.update != nil {
+		return a.newError(errFieldConflict, field, "", "")
+	}
+
+	slice := tagutil.New(tag)["sql"]
+	list, err := a.parseSqlTagColIdList(slice, field)
+	if err != nil {
+		return err
+	}
+
+	oc.update = new(updateDirective)
+	oc.update.sqlTagColIdList = list
+	a.info.fieldmap[oc.update] = fieldVar{fvar: field, ftag: tag}
+	return nil
+}
+
+// analyzeOnConflictStruct analyzes the given field as an "onconflict" struct.
+// The structTag argument is used for error reporting.
+//
+// ✅ The kind of the target query MUST be "insert".
+// ✅ The type of the given field MUST be a struct type.
+// ✅ The struct type MUST contain exactly 1 "conflict_action" directive.
+// ✅ The struct type MUST contain exactly 1 "conflict_target" directive, if it
+//    contains the gosql.Update "conflict_action" directive.
+// ✅ The struct type MAY contain, at most, 1 "conflict_target" directive, if it
+//    contains the gosql.Ignore "conflict_action" directive.
+func (a *analyzer) analyzeOnConflictStruct(structField *types.Var, structTag string) (err error) {
+	if a.query.kind != queryKindInsert {
+		return a.newError(errIllegalField, structField, "", "")
+	}
+	ns, err := typesutil.GetStruct(structField)
+	if err != nil {
+		return a.newError(errFieldBlock, structField, "", "")
+	}
+
+	onConflict := new(onConflictStruct)
+	onConflict.name = structField.Name()
+	for i := 0; i < ns.Struct.NumFields(); i++ {
+		tag := ns.Struct.Tag(i)
+		field := ns.Struct.Field(i)
+
+		// In an onConflictStruct all fields are expected to be directives
 		// with the blank identifier as their name.
-		if fld.Name() != "_" {
+		if field.Name() != "_" {
 			continue
 		}
 
-		switch dirname := strings.ToLower(typesutil.GetDirectiveName(fld)); dirname {
+		switch dirname := strings.ToLower(typesutil.GetDirectiveName(field)); dirname {
 		case "column":
-			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
-				return a.newError(errFieldConflict, fld, "", "")
-			}
-			list, err := a.colIdList(tag["sql"], fld)
-			if err != nil {
+			if err = a.analyzeOnConflictColumnDirective(onConflict, field, tag); err != nil {
 				return err
 			}
-			onc.column = list.items
-			a.info.fieldmap[&onc.column] = fieldVar{fvar: fld, ftag: tagraw}
 		case "index":
-			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
-				return a.newError(errFieldConflict, fld, "", "")
-			}
-			if onc.index = tag.First("sql"); !rxIdent.MatchString(onc.index) {
-				return a.newError(errBadTagValue, fld, "", onc.index)
-			}
-			a.info.fieldmap[&onc.index] = fieldVar{fvar: fld, ftag: tagraw}
-		case "constraint":
-			if len(onc.column) > 0 || len(onc.index) > 0 || len(onc.constraint) > 0 {
-				return a.newError(errFieldConflict, fld, "", "")
-			}
-			if onc.constraint = tag.First("sql"); !rxIdent.MatchString(onc.constraint) {
-				return a.newError(errBadTagValue, fld, "", onc.constraint)
-			}
-			a.info.fieldmap[&onc.constraint] = fieldVar{fvar: fld, ftag: tagraw}
-		case "ignore":
-			if onc.ignore || onc.update != nil {
-				return a.newError(errFieldConflict, fld, "", "")
-			}
-			onc.ignore = true
-			a.info.fieldmap[&onc.ignore] = fieldVar{fvar: fld, ftag: tagraw}
-		case "update":
-			if onc.ignore || onc.update != nil {
-				return a.newError(errFieldConflict, fld, "", "")
-			}
-			if onc.update, err = a.colIdList(tag["sql"], fld); err != nil {
+			if err = a.analyzeOnConflictIndexDirective(onConflict, field, tag); err != nil {
 				return err
 			}
-			a.info.fieldmap[onc.update] = fieldVar{fvar: fld, ftag: tagraw}
+		case "constraint":
+			if err = a.analyzeOnConflictConstraintDirective(onConflict, field, tag); err != nil {
+				return err
+			}
+		case "ignore":
+			if err = a.analyzeOnConflictIgnoreDirective(onConflict, field, tag); err != nil {
+				return err
+			}
+		case "update":
+			if err = a.analyzeOnConflictUpdateDirective(onConflict, field, tag); err != nil {
+				return err
+			}
 		default:
-			return a.newError(errIllegalField, fld, blockField.Name(), "")
+			return a.newError(errIllegalField, field, structField.Name(), "")
 		}
 
 	}
-
-	if onc.update != nil && (len(onc.column) == 0 && len(onc.index) == 0 && len(onc.constraint) == 0) {
-		return a.newError(errNoTargetField, blockField, "", "")
+	if onConflict.update != nil && (onConflict.column == nil && onConflict.index == nil && onConflict.constraint == nil) {
+		return a.newError(errNoTargetField, structField, "", "")
 	}
-
-	a.query.onConflictBlock = onc
+	a.query.onConflict = onConflict
+	a.info.fieldmap[onConflict] = fieldVar{fvar: structField, ftag: structTag}
 	return nil
 }
 
@@ -1548,6 +1755,64 @@ func (a *analyzer) relId(val string, field *types.Var) (id relId, err error) {
 	return id, nil
 }
 
+// parseSqlTagColId parses the given string as a column identifier and returns
+// the result. The additional field argument is used only for error reporting.
+//
+// ✅ The string MUST be in the expected format, which is: "[qualifier.]name".
+func (a *analyzer) parseSqlTagColId(val string, field *types.Var) (id sqlTagColId, err error) {
+	if !isColId(val) {
+		return id, a.newError(errBadColIdTagValue, field, "", val)
+	}
+	if i := strings.LastIndexByte(val, '.'); i > -1 {
+		id.qualifier = val[:i]
+		val = val[i+1:]
+	}
+	id.name = val
+	return id, nil
+}
+
+// parseSqlTagColIds parses the individual strings in the given slice as column
+// identifiers and returns the result. The additional field argument is used only
+// for error reporting.
+//
+// ✅ The individual strings MUST be in the expected format, which is: "[qualifier.]name".
+func (a *analyzer) parseSqlTagColIds(tag []string, field *types.Var) ([]sqlTagColId, error) {
+	if len(tag) == 0 {
+		return nil, a.newError(errNoTagValue, field, "", "")
+	}
+
+	ids := make([]sqlTagColId, len(tag))
+	for i, val := range tag {
+		id, err := a.parseSqlTagColId(val, field)
+		if err != nil {
+			return nil, err
+		}
+		ids[i] = id
+	}
+	return ids, nil
+}
+
+// parseSqlTagColIdList parses the individual strings in the given slice as column
+// identifiers and returns the result. The additional field argument is used only
+// for error reporting.
+//
+// ✅ A slice of length=1 holding a "*" string value MAY be use instead of column ids.
+// ✅ The individual strings MUST be in the expected format, which is: "[qualifier.]name".
+func (a *analyzer) parseSqlTagColIdList(tag []string, field *types.Var) (list sqlTagColIdList, err error) {
+	if len(tag) == 1 && tag[0] == "*" {
+		list.all = true
+		return list, nil
+	}
+
+	items, err := a.parseSqlTagColIds(tag, field)
+	if err != nil {
+		return list, err
+	}
+	list.items = items
+	return list, nil
+}
+
+// DEPRECATED
 // parses the given string and returns a colId, if the value's format is invalid
 // an error will be returned instead. The additional field argument is used only
 // for error reporting. The expected format is: "[qualifier.]name".
@@ -1563,6 +1828,7 @@ func (a *analyzer) colId(val string, field *types.Var) (id colId, err error) {
 	return id, nil
 }
 
+// DEPRECATED
 // parses the given tag slice as a list of column identifiers, if any of the
 // values in the slice is invalid then an error will be returned. The additional
 // field argument is used only for error reporting.
@@ -1670,37 +1936,6 @@ func (k queryKind) String() string {
 	return "<unknown queryKind>"
 }
 
-// queryStruct
-type queryStruct struct {
-	// Name of the query struct type.
-	name string
-	// The kind of the queryStruct.
-	kind queryKind
-	// The primary field that holds the queryStruct's data.
-	dataField *dataField
-	// The optional secondary field that holds the queryStruct's result data.
-	resultField *resultField
-
-	joinBlock         *joinBlock
-	whereBlock        *whereBlock
-	onConflictBlock   *onConflictBlock
-	orderByList       *orderByList
-	limitField        *limitField
-	offsetField       *offsetField
-	rowsAffectedField *rowsAffectedField
-	defaultList       *colIdList
-	forceList         *colIdList
-	returnList        *colIdList
-	errorHandlerField *errorHandlerField
-	overridingKind    overridingKind
-
-	// The name of the Filter type field, if any.
-	filterField string
-	// Indicates that the query to be generated should be executed
-	// against all the rows of the relation.
-	all bool
-}
-
 // filterStruct
 type filterStruct struct {
 	// Name of the filter struct type.
@@ -1795,14 +2030,14 @@ type typeInfo struct {
 	isByte bool
 	// Indicates whether or not the type is the "rune" alias type.
 	isRune bool
+	// If kind is array, arrayLen will hold the array's length.
+	arrayLen int64
 	// If kind is map, key will hold the info on the map's key type.
 	key *typeInfo
 	// If kind is map, elem will hold the info on the map's value type.
 	// If kind is ptr, elem will hold the info on pointed-to type.
 	// If kind is slice/array, elem will hold the info on slice/array element type.
 	elem *typeInfo
-	// If kind is array, arrayLen will hold the array's length.
-	arrayLen int64
 }
 
 func (t *typeInfo) goTypeId(pkglocal, underlying, elideptr bool) goTypeId {
@@ -2061,24 +2296,6 @@ type fieldDatum struct {
 	typ typeInfo
 }
 
-// joinBlock represents the result of the analysis of a queryStruct's "join block" field.
-// The joinBlock is used by the generator to produce a list of table JOIN expressions in
-// a SELECT's FROM clause, or an UPDATE's FROM clause, or a DELETE's USING clause.
-//
-// The joinBlock is declared in 3 different ways:
-// - As a "join" field in a select query type
-// - As a "from" field in an update query type
-// - As a "using" field in a delete query type
-type joinBlock struct {
-	// The field name.
-	name string
-	// The identifier of the top relation in a DELETE-USING / UPDATE-FROM
-	// clause, empty in SELECT commands.
-	relId relId
-	// The list of join items declared in a join block.
-	items []*joinItem
-}
-
 // joinItem represents the result of parsing the tag of a gosql.JoinXxx directive.
 // The joinItem is used by the generator to produce a single JOIN clause.
 type joinItem struct {
@@ -2090,29 +2307,20 @@ type joinItem struct {
 	conds []*searchCondition
 }
 
-// whereBlock represents the result of the analysis of a queryStruct's "where block"
-// field. The whereBlock is used by the generator to produce a WHERE clause.
-type whereBlock struct {
-	// The name of the "where block" field.
-	name string
-	// The list of search conditions declared in the whereBlock.
-	conds []*searchCondition
-}
-
-// searchCondition represents the result of the analysis of a whereBlock's or
-// joinBlock's field or directive. The searchCondition is used by the generator
+// searchCondition represents the result of the analysis of a whereStruct's or
+// joinStruct's field or directive. The searchCondition is used by the generator
 // to produce a search condition in a WHERE clause, or a qualified JOIN ON clause.
 type searchCondition struct {
 	// If set, the logical connective.
 	bool boolean
 	// The specific search condition type:
-	// - For a whereBlock this can be either searchConditionField, searchConditionColumn,
+	// - For a whereStruct this can be either searchConditionField, searchConditionColumn,
 	//   searchConditionBetween, or searchConditionNested.
-	// - For a joinBlock this can only be searchConditionColumn.
+	// - For a joinStruct this can only be searchConditionColumn.
 	cond interface{}
 }
 
-// searchConditionNested represents the result of the analysis of a nested whereBlock.
+// searchConditionNested represents the result of the analysis of a nested whereStruct.
 // The searchConditionNested is used by the generator to produce nested, parenthesized
 // search conditions in a WHERE clause.
 type searchConditionNested struct {
@@ -2122,7 +2330,7 @@ type searchConditionNested struct {
 	conds []*searchCondition
 }
 
-// searchConditionField represents the result of the analysis of a whereBlock's field.
+// searchConditionField represents the result of the analysis of a whereStruct's field.
 // The searchConditionField is used by the generator to produce a column-to-parameter
 // comparison in a WHERE clause, passing the field value as the argument to the query.
 type searchConditionField struct {
@@ -2147,9 +2355,9 @@ type searchConditionField struct {
 // part of a WHERE clause or a qualified JOIN clause.
 type searchConditionColumn struct {
 	// The column representing the LHS predicand.
-	colId colId
+	lhsColId colId
 	// If set, the column representing the RHS predicand.
-	colId2 colId
+	rhsColId colId
 	// If set, the literal value representing the RHS predicand.
 	literal string
 	// If set, indentifies the type of the condition's predicate.
@@ -2158,7 +2366,7 @@ type searchConditionColumn struct {
 	qua quantifier
 }
 
-// searchConditionBetween represents the result of the analysis of a whereBlock's "between" field.
+// searchConditionBetween represents the result of the analysis of a whereStruct's "between" field.
 // The searchConditionBetween is used by the generator to produce a BETWEEN predicate in a WHERE clause.
 type searchConditionBetween struct {
 	// The name of the "between" field.
@@ -2171,32 +2379,6 @@ type searchConditionBetween struct {
 	x interface{}
 	// The upper bound range predicand. Either a colId, or a fieldDatum.
 	y interface{}
-}
-
-// onConflictBlock represents the result of the analysis of a queryStruct's "on conflict" field.
-// The onConflictBlock is used by the generator to produce an ON CONFLICT clause in an INSERT query.
-type onConflictBlock struct {
-	// If set, indicates that the gosql.Column directive was used and the contents
-	// of the slice are the column ids parsed from the tag of that directive.
-	column []colId
-	// If set, indicates that the gosql.Index directive was used. The value
-	// is parsed from the directive's tag and represents the index to be used
-	// for the on conflict target.
-	//
-	// NOTE(mkopriva): The index name will be used by the db check to retrive the index
-	// expression and the generator will use that to produce the conflict target.
-	index string
-	// If set, indicates that the gosql.Constraint directive was used. The value
-	// is the name of a unique constraint as parsed from the directive's tag.
-	//
-	// NOTE(mkopriva): The generator will use this value to generate
-	// the ON CONFLICT ON CONSTRAINT <constraint_name> clause.
-	constraint string
-	// If set to true, indicates that the gosql.Ignore directive was used.
-	ignore bool
-	// If set, indicates that the gosql.Update directive was used, the contents
-	// of the colIdList will hold the column ids parsed from the directive's tag.
-	update *colIdList
 }
 
 // orderByList represents the result of the analysis of a gosql.OrderBy directive.
@@ -2347,7 +2529,7 @@ const (
 	boolNot                // negation
 )
 
-// predicate represents the type of search condition's predicate.
+// predicate represents the predicate type of a search condition.
 type predicate uint
 
 const (

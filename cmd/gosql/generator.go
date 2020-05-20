@@ -72,17 +72,25 @@ type targetInfo struct {
 	// if not entirely, for error reporting.
 	fieldmap map[fieldPtr]fieldVar
 
-	// Populated by the type checker. A fieldColumnInfo slice that holds
-	// the data source fields and their corresponding target columns into
-	// which the data is stored.
-	input  []*fieldColumnInfo
-	writes []*columnWrite
-	pkeys  []*columnWrite
+	writes   []*columnWrite
+	pkeys    []*columnWrite
+	joins    []*tableJoin
+	conflict *onConflictType
+	where    *whereInfo
 	// Populated by the type checker. A columnRead slice that holds the
 	// data target fields and their corresponding source columns from
 	// which the data is read.
 	reads []*columnRead
+	// Populated by the type checker. A columnFilter slice that holds the
+	// target columns and their corresponding source fields to be used to
+	// generate code for query filtering.
+	filters []*columnFilter
 
+	// DEPRECATED
+	// Populated by the type checker. A fieldColumnInfo slice that holds
+	// the data source fields and their corresponding target columns into
+	// which the data is stored.
+	input []*fieldColumnInfo
 	// Populated by the type checker. A list of fieldColumnInfos that
 	// represent the primary key of the target relation.
 	primaryKeys []*fieldColumnInfo
@@ -90,8 +98,6 @@ type targetInfo struct {
 	// correct represenation of the database type of the column that's
 	// associated with a predicate's field.
 	searchConditionFieldColumns map[*searchConditionField]*pgcolumn
-	// Set by the type checker. Info on the index to be used for an ON CONFLICT clause.
-	onConflictIndex *pgindex
 }
 
 // fieldColumnInfo holds the combined field-column information from the analyzer,
@@ -119,6 +125,11 @@ func (ti *targetInfo) skipread(r *columnRead) bool {
 		(ti.query.forceList.all == false && !ti.query.forceList.contains(r.colId)))
 }
 
+func (ti *targetInfo) skipwrite2(w *columnWrite) bool {
+	return w.field.readOnly && (ti.query.forceList == nil ||
+		(ti.query.forceList.all == false && !ti.query.forceList.contains(w.colId)))
+}
+
 // usedefault is a helper method that reports whether or not the SQL's DEFAULT
 // marker should be used to write a column.
 func (ti *targetInfo) usedefault(fc *fieldColumnInfo) bool {
@@ -141,7 +152,7 @@ type generator struct {
 	keytag  string
 	keysep  string
 	keybase bool
-	keyfunc func(*fieldColumnInfo) string
+	keyfunc func(*columnFilter) string
 
 	file GO.File
 
@@ -245,8 +256,8 @@ func (g *generator) buildFilterMap(ti *targetInfo) (mapId GO.Ident, mapDecl GO.V
 
 	elems := make([]GO.KeyElement, 0)
 	keyset := make(map[string]struct{})
-	for _, item := range ti.input {
-		key := g.keyfunc(item) //.field.tag.First("json")
+	for _, filter := range ti.filters {
+		key := g.keyfunc(filter) //.field.tag.First("json")
 		if _, ok := keyset[key]; ok {
 			continue
 		}
@@ -254,7 +265,7 @@ func (g *generator) buildFilterMap(ti *targetInfo) (mapId GO.Ident, mapDecl GO.V
 
 		var e GO.KeyElement
 		e.Key = GO.StringLit(key)
-		e.Value = GO.RawStringLit(item.colId.quoted())
+		e.Value = GO.RawStringLit(filter.colId.quoted())
 		elems = append(elems, e)
 	}
 
@@ -317,7 +328,7 @@ func (g *generator) buildFilterColumnMethodList(ti *targetInfo, mapId GO.Ident) 
 		val = GO.Ident{"val"} // the value argument name
 	)
 
-	for _, item := range ti.input {
+	for _, filter := range ti.filters {
 		var m GO.MethodDecl
 
 		// the method's receiver
@@ -325,31 +336,31 @@ func (g *generator) buildFilterColumnMethodList(ti *targetInfo, mapId GO.Ident) 
 		m.Recv.Type = GO.PointerRecvType{ti.filter.name}
 
 		// the method's name
-		for _, node := range item.field.path {
+		for _, node := range filter.field.path {
 			// If the field's nested, concatenate the names of the parent fields.
 			//
 			// TODO(mkopriva): reconsider concatenating without prejudice, might
 			// be better to omit embedded fields, so that the method name match
 			// the corresponding field selection ability.
-			// NOTE(mkopriva): keep in mind that if the above TODO item is implemented,
+			// NOTE(mkopriva): keep in mind that if the above TODO filter is implemented,
 			// it will be important to keep track of the field "promotion hierarchy",
 			// i.e. two fields with the same name, nested in embedded fields, but at
 			// different depths...
 			m.Name.Name += node.name
 		}
-		m.Name.Name += item.field.name
+		m.Name.Name += filter.field.name
 		if _, ok := filterMethodNamesReserved[m.Name.Name]; ok {
 			continue // skip if name is reserved
 		}
 
-		if typ := item.field.typ; typ.isImported {
+		if typ := filter.field.typ; typ.isImported {
 			g.addimport(typ.pkgPath, typ.pkgName, typ.pkgLocal)
 		}
 
 		// the method's input and output arguments
 		m.Type.Params = GO.ParamList{
 			{Names: op, Type: GO.Ident{"string"}},
-			{Names: val, Type: GO.Ident{item.field.typ.nameOrLiteral(true)}},
+			{Names: val, Type: GO.Ident{filter.field.typ.nameOrLiteral(true)}},
 		}
 		m.Type.Results = GO.ParamList{{Type: GO.PointerType{GO.Ident{ti.filter.name}}}}
 
@@ -357,7 +368,7 @@ func (g *generator) buildFilterColumnMethodList(ti *targetInfo, mapId GO.Ident) 
 		m.Body.List = []GO.StmtNode{
 			GO.ExprStmt{GO.CallExpr{
 				Fun:  GO.Ident{"f.Filter.Col"},
-				Args: GO.ArgsList{List: GO.ExprList{GO.RawStringLit(item.colId.quoted()), op, val}},
+				Args: GO.ArgsList{List: GO.ExprList{GO.RawStringLit(filter.colId.quoted()), op, val}},
 			}},
 			GO.ReturnStmt{f},
 		}
@@ -446,9 +457,9 @@ func (g *generator) prepareInput(ti *targetInfo) {
 	}
 
 	// prepare input for the WHERE clause
-	if ti.query.whereBlock != nil && len(ti.query.whereBlock.conds) > 0 {
-		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.whereBlock.name}}
-		g.prepareGOInputWhereFields(ti.query.whereBlock.conds, sx)
+	if ti.query.whereStruct != nil && len(ti.query.whereStruct.conds) > 0 {
+		sx := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{ti.query.whereStruct.name}}
+		g.prepareGOInputWhereFields(ti.query.whereStruct.conds, sx)
 	} else if ti.query.kind == queryKindUpdate && (ti.query.all == false && ti.query.filterField == "") {
 		g.prepareGOInputPrimaryKeyFields(ti)
 	}
@@ -1492,13 +1503,13 @@ func (g *generator) sqlinsert(ti *targetInfo) (stmt SQL.InsertStatement) {
 	stmt.Head.Source = src
 	//stmt.Head.Source.Select = nil
 
-	if ti.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || ti.query.onConflictBlock != nil) {
+	if ti.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || ti.query.onConflict != nil) {
 		var tail SQL.InsertTail
-		tail.OnConflict = g.sqlonconflict(ti)
+		tail.OnConflict = g.buildSQLOnConflictClause(ti)
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
 		g.sqltailnode = tail
 	} else {
-		stmt.Tail.OnConflict = g.sqlonconflict(ti)
+		stmt.Tail.OnConflict = g.buildSQLOnConflictClause(ti)
 		stmt.Tail.Returning = SQL.ReturningClause(g.outputcolumns)
 	}
 	return stmt
@@ -1508,7 +1519,7 @@ func (g *generator) sqlupdate(ti *targetInfo) (stmt SQL.UpdateStatement) {
 	stmt.Head.Table = g.sqlrelid(ti.query.dataField.relId)
 	stmt.Head.Set.Targets = g.sqlInputColumns
 	stmt.Head.Set.Values.Exprs = g.sqlInputValues
-	stmt.Head.From = g.sqlfrom(ti.query.joinBlock)
+	stmt.Head.From = g.sqlfrom(ti.query.joinStruct)
 
 	if ti.query.kind == queryKindUpdate && ti.query.dataField.data.isSlice {
 		// SQL.ValuesListClausePartial{}
@@ -1531,7 +1542,7 @@ func (g *generator) sqlupdate(ti *targetInfo) (stmt SQL.UpdateStatement) {
 		var tail SQL.UpdateTail
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
 		g.sqltailnode = tail
-	} else if ti.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || ti.query.whereBlock != nil) {
+	} else if ti.query.dataField.data.isSlice && (len(g.outputcolumns) > 0 || ti.query.whereStruct != nil) {
 		var tail SQL.UpdateTail
 		tail.Where = g.buildSQLWhereClause(ti)
 		tail.Returning = SQL.ReturningClause(g.outputcolumns)
@@ -1548,7 +1559,7 @@ func (g *generator) sqlupdate(ti *targetInfo) (stmt SQL.UpdateStatement) {
 func (g *generator) sqlselect(ti *targetInfo) (selstmt SQL.SelectStatement) {
 	selstmt.Columns = g.outputcolumns // columns
 	selstmt.Table = g.sqlrelid(ti.query.dataField.relId)
-	selstmt.Join = g.sqljoin(ti.query.joinBlock)
+	selstmt.Join = g.sqljoin(ti.query.joinStruct)
 	selstmt.Where = g.buildSQLWhereClause(ti)
 	selstmt.Order = g.sqlorderby(ti.query)
 	selstmt.Limit = g.sqllimit(ti.query)
@@ -1559,7 +1570,7 @@ func (g *generator) sqlselect(ti *targetInfo) (selstmt SQL.SelectStatement) {
 // sqldelete builds and returns an SQL.DeleteStatement.
 func (g *generator) sqldelete(ti *targetInfo) (delstmt SQL.DeleteStatement) {
 	delstmt.Table = g.sqlrelid(ti.query.dataField.relId)
-	delstmt.Using = g.sqlusing(ti.query.joinBlock)
+	delstmt.Using = g.sqlusing(ti.query.joinStruct)
 	delstmt.Where = g.buildSQLWhereClause(ti)
 	delstmt.Returning = SQL.ReturningClause(g.outputcolumns) //returning
 	return delstmt
@@ -1568,7 +1579,7 @@ func (g *generator) sqldelete(ti *targetInfo) (delstmt SQL.DeleteStatement) {
 // sqlselectexists builds and returns an SQL.SelectExistsStatement.
 func (g *generator) sqlselectexists(ti *targetInfo) (selstmt SQL.SelectExistsStatement) {
 	selstmt.Table = g.sqlrelid(ti.query.dataField.relId)
-	selstmt.Join = g.sqljoin(ti.query.joinBlock)
+	selstmt.Join = g.sqljoin(ti.query.joinStruct)
 	selstmt.Not = ti.query.kind == queryKindSelectNotExists
 	if ti.query.filterField == "" {
 		selstmt.Where = g.buildSQLWhereClause(ti)
@@ -1585,7 +1596,7 @@ func (g *generator) sqlselectexists(ti *targetInfo) (selstmt SQL.SelectExistsSta
 // sqlselectcount builds and returns an SQL.SelectCountStatement.
 func (g *generator) sqlselectcount(ti *targetInfo) (selstmt SQL.SelectCountStatement) {
 	selstmt.Table = g.sqlrelid(ti.query.dataField.relId)
-	selstmt.Join = g.sqljoin(ti.query.joinBlock)
+	selstmt.Join = g.sqljoin(ti.query.joinStruct)
 	if ti.query.filterField == "" {
 		selstmt.Where = g.buildSQLWhereClause(ti)
 		selstmt.Order = g.sqlorderby(ti.query)
@@ -1596,7 +1607,7 @@ func (g *generator) sqlselectcount(ti *targetInfo) (selstmt SQL.SelectCountState
 
 // buildSQLWhereClause builds and returns ...
 func (g *generator) buildSQLWhereClause(ti *targetInfo) (where SQL.WhereClause) {
-	if w := ti.query.whereBlock; w != nil {
+	if w := ti.query.whereStruct; w != nil {
 		sel := GO.SelectorExpr{X: idrecv, Sel: GO.Ident{w.name}}
 		where.SearchCondition, _ = g.sqlsearchcond(w.conds, sel, false)
 	} else if ti.query.kind == queryKindUpdate && (ti.query.all == false && ti.query.filterField == "") {
@@ -1642,14 +1653,14 @@ func (g *generator) sqlsearchcond(conds []*searchCondition, sel GO.SelectorExpr,
 		case *searchConditionBetween:
 			p := SQL.BetweenPredicate{}
 			p.Predicand = g.sqlcolref(cond.colId)
-			if x, ok := cond.x.(colId); ok {
-				p.LowEnd = g.sqlcolref(x)
+			if x, ok := cond.x.(*colId); ok {
+				p.LowEnd = g.sqlcolref(*x)
 			} else {
 				// assume cond.x is *fieldDatum
 				p.LowEnd = g.sqlparam(nil)
 			}
-			if y, ok := cond.y.(colId); ok {
-				p.HighEnd = g.sqlcolref(y)
+			if y, ok := cond.y.(*colId); ok {
+				p.HighEnd = g.sqlcolref(*y)
 			} else {
 				// assume cond.x is *fieldDatum
 				p.HighEnd = g.sqlparam(nil)
@@ -1694,9 +1705,9 @@ func (g *generator) sqlsearchcond(conds []*searchCondition, sel GO.SelectorExpr,
 			case *searchConditionColumn:
 				pred = cond.pred
 				qua = cond.qua
-				lhs = g.sqlcolref(cond.colId)
-				if !cond.colId2.isEmpty() {
-					rhs = g.sqlcolref(cond.colId2)
+				lhs = g.sqlcolref(cond.lhsColId)
+				if !cond.rhsColId.isEmpty() {
+					rhs = g.sqlcolref(cond.rhsColId)
 				} else if len(cond.literal) > 0 {
 					rhs = SQL.Literal{cond.literal}
 				}
@@ -1811,45 +1822,113 @@ func (g *generator) sqlsearchcond(conds []*searchCondition, sel GO.SelectorExpr,
 	return list, count
 }
 
-func (g *generator) sqlonconflict(ti *targetInfo) (clause *SQL.OnConflictClause) {
-	if ti.query.onConflictBlock == nil {
+func (g *generator) buildSQLBoolValueExpr(test *columnTest) SQL.BoolValueExpr {
+	var lhs = g.sqlcolref(test.lhsColId)
+	var rhs SQL.ValueExpr
+
+	if !test.rhsColId.isEmpty() {
+		rhs = g.sqlcolref(test.rhsColId)
+	} else if len(test.rhsLiteral) > 0 {
+		rhs = SQL.Literal{test.rhsLiteral}
+	}
+
+	if test.qua > 0 {
+		cast := SQL.CastExpr{}
+		cast.Expr = rhs
+		cast.Type = test.rhsType.namefmt + "[]"
+
+		quax := SQL.QuantifiedExpr{}
+		quax.Qua = quantifierToSQLQuantifier[test.qua]
+		quax.Expr = cast
+		rhs = quax
+	}
+
+	switch test.pred {
+	case isEQ, notEQ, notEQ2, isLT, isGT, isLTE, isGTE:
+		comparison := SQL.ComparisonPredicate{}
+		comparison.Cmp = predicateToSQLCmpOp[test.pred]
+		comparison.LPredicand = lhs
+		comparison.RPredicand = rhs
+		return comparison
+	case isLike, notLike:
+		like := SQL.LikePredicate{}
+		like.Not = (test.pred == notLike)
+		like.Predicand = lhs
+		like.Pattern = rhs
+		return like
+	case isILike, notILike:
+		ilike := SQL.ILikePredicate{}
+		ilike.Not = (test.pred == notILike)
+		ilike.Predicand = lhs
+		ilike.Pattern = rhs
+		return ilike
+	case isSimilar, notSimilar:
+		similar := SQL.SimilarPredicate{}
+		similar.Not = (test.pred == notSimilar)
+		similar.Predicand = lhs
+		similar.Pattern = rhs
+		return similar
+	case isDistinct, notDistinct:
+		distinct := SQL.DistinctPredicate{}
+		distinct.Not = (test.pred == notDistinct)
+		distinct.LPredicand = lhs
+		distinct.RPredicand = rhs
+		return distinct
+	case isMatch, isMatchi, notMatch, notMatchi:
+		regex := SQL.RegexPredicate{}
+		regex.Op = predicateToSQLRegExOp[test.pred]
+		regex.Predicand = lhs
+		regex.Pattern = rhs
+		return regex
+	case isTrue, notTrue, isFalse, notFalse, isUnknown, notUnknown:
+		truth := SQL.TruthPredicate{}
+		truth.Not = (test.pred == notTrue || test.pred == notFalse || test.pred == notUnknown)
+		truth.Truth = predicateToSQLTruth[test.pred]
+		truth.Predicand = lhs
+		return truth
+	case isNull, notNull:
+		null := SQL.NullPredicate{}
+		null.Not = (test.pred == notNull)
+		null.Predicand = lhs
+		return null
+	case isIn, notIn:
+		// TODO
+		fallthrough
+	default:
+		// no predicate, assume lhs is by itself a boolean value expression
+		return lhs
+	}
+
+	return nil
+}
+
+func (g *generator) buildSQLOnConflictClause(ti *targetInfo) (clause *SQL.OnConflictClause) {
+	if ti.query.onConflict == nil {
 		return nil
 	}
 
 	clause = new(SQL.OnConflictClause)
 
 	// conflict target
-	if len(ti.query.onConflictBlock.column) > 0 {
-		target := make(SQL.ConflictColumns, len(ti.query.onConflictBlock.column))
+	if len(ti.conflict.columns) > 0 {
+		target := make(SQL.ConflictColumns, len(ti.conflict.columns))
 		for i := 0; i < len(target); i++ {
-			target[i] = SQL.Name(ti.query.onConflictBlock.column[i].name)
+			target[i] = SQL.Name(ti.conflict.columns[i].name)
 		}
 		clause.Target = target
-	} else if len(ti.query.onConflictBlock.index) > 0 {
+	} else if ti.conflict.index != nil {
 		target := SQL.ConflictIndex{}
-		target.Expr = ti.onConflictIndex.indexpr
-		target.Pred = ti.onConflictIndex.indpred
+		target.Expr = ti.conflict.index.indexpr
+		target.Pred = ti.conflict.index.indpred
 		clause.Target = target
-	} else if len(ti.query.onConflictBlock.constraint) > 0 {
-		clause.Target = SQL.ConflictConstraint(ti.query.onConflictBlock.constraint)
+	} else if ti.conflict.constraint != nil {
+		clause.Target = SQL.ConflictConstraint(ti.conflict.constraint.name)
 	}
 
-	// conflict action
-	if ti.query.onConflictBlock.ignore {
-		return clause
-	} else if ti.query.onConflictBlock.update != nil {
+	if len(ti.conflict.update) > 0 {
 		ux := SQL.UpdateExcluded{}
-		if ti.query.onConflictBlock.update.all {
-			for _, item := range ti.input {
-				if ti.skipwrite(item) {
-					continue
-				}
-				ux.Columns = append(ux.Columns, SQL.Name(item.colId.name))
-			}
-		} else {
-			for _, cid := range ti.query.onConflictBlock.update.items {
-				ux.Columns = append(ux.Columns, SQL.Name(cid.name))
-			}
+		for _, col := range ti.conflict.update {
+			ux.Columns = append(ux.Columns, SQL.Name(col.name))
 		}
 
 		clause.Action = new(SQL.ConflictAction)
@@ -1873,7 +1952,7 @@ func (g *generator) sqlorderby(query *queryStruct) (order SQL.OrderClause) {
 	return order
 }
 
-func (g *generator) sqlfrom(jb *joinBlock) (from SQL.FromClause) {
+func (g *generator) sqlfrom(jb *joinStruct) (from SQL.FromClause) {
 	if jb == nil {
 		return from
 	}
@@ -1889,7 +1968,7 @@ func (g *generator) sqlfrom(jb *joinBlock) (from SQL.FromClause) {
 	return from
 }
 
-func (g *generator) sqlusing(jb *joinBlock) (using SQL.UsingClause) {
+func (g *generator) sqlusing(jb *joinStruct) (using SQL.UsingClause) {
 	if jb == nil {
 		return using
 	}
@@ -1905,7 +1984,7 @@ func (g *generator) sqlusing(jb *joinBlock) (using SQL.UsingClause) {
 	return using
 }
 
-func (g *generator) sqljoin(jb *joinBlock) (jc SQL.JoinClause) {
+func (g *generator) sqljoin(jb *joinStruct) (jc SQL.JoinClause) {
 	if jb == nil {
 		return jc
 	}
@@ -2016,27 +2095,27 @@ func (g *generator) resolveKeyFunc() {
 	}
 }
 
-func (g *generator) _fieldNameBase(fc *fieldColumnInfo) (key string) {
-	return fc.field.name
+func (g *generator) _fieldNameBase(cf *columnFilter) (key string) {
+	return cf.field.name
 }
 
-func (g *generator) _fieldNameJoin(fc *fieldColumnInfo) (key string) {
-	for _, node := range fc.field.path {
+func (g *generator) _fieldNameJoin(cf *columnFilter) (key string) {
+	for _, node := range cf.field.path {
 		key += node.name + g.keysep
 	}
-	key += fc.field.name
+	key += cf.field.name
 	return key
 }
 
-func (g *generator) _tagNameBase(fc *fieldColumnInfo) (key string) {
-	return fc.field.tag.First(g.keytag)
+func (g *generator) _tagNameBase(cf *columnFilter) (key string) {
+	return cf.field.tag.First(g.keytag)
 }
 
-func (g *generator) _tagNameJoin(fc *fieldColumnInfo) (key string) {
-	for _, node := range fc.field.path {
+func (g *generator) _tagNameJoin(cf *columnFilter) (key string) {
+	for _, node := range cf.field.path {
 		key += node.tag.First(g.keytag) + g.keysep
 	}
-	key += fc.field.tag.First(g.keytag)
+	key += cf.field.tag.First(g.keytag)
 	return key
 }
 

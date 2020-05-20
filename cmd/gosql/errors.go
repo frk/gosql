@@ -53,12 +53,15 @@ const (
 	_ typeErrorCode = iota
 	errNoDatabaseRelation
 	errNoRelationColumn
+	errNoUniqueIndex
+	errNoUniqueConstraint
 	errNoColumnDefault
 	errBadColumnQualifier
 	errNoColumnField
 	errBadColumnReadType
 	errBadColumnWriteType
 	errBadColumnReadIfaceType
+	errBadColumnPredicate
 )
 
 type typeError struct {
@@ -79,5 +82,38 @@ type typeError struct {
 }
 
 func (e typeError) Error() string {
+	return fmt.Sprintf("%s:%d: [ TODO ERROR MESG ] ", e.fileName, e.fileLine)
+}
+
+type predicateErrorCode uint
+
+const (
+	_ predicateErrorCode = iota
+	errBadUnaryPredicateType
+	errBadPredicateQuantifierType
+	errBadComparisonOperation
+)
+
+type predicateError struct {
+	errorCode  predicateErrorCode
+	pkgPath    string
+	targetName string
+	fieldType  string
+	fieldName  string
+	tagValue   string
+	dbName     string
+	lhsRel     string
+	lhsExpr    string
+	lhsType    string
+	rhsRel     string
+	rhsExpr    string
+	rhsType    string
+	predicate  string
+	quantifier string
+	fileName   string
+	fileLine   int
+}
+
+func (e predicateError) Error() string {
 	return fmt.Sprintf("%s:%d: [ TODO ERROR MESG ] ", e.fileName, e.fileLine)
 }
