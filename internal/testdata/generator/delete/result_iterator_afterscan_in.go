@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/frk/gosql"
-	"github.com/frk/gosql/testdata/common"
+	"github.com/frk/gosql/internal/testdata/common"
 )
 
 type DeleteWithResultIteratorAfterScanQuery struct {

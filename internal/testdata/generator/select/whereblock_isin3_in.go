@@ -3,7 +3,7 @@ package testdata
 import (
 	"time"
 
-	"github.com/frk/gosql/testdata/common"
+	"github.com/frk/gosql/internal/testdata/common"
 )
 
 type SelectWithWhereBlockInPredicate3Query struct {

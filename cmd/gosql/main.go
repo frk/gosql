@@ -1,7 +1,5 @@
 package main
 
-//
-
 type Config struct {
 	// Connection string to the postgres database that will be used for type checking.
 	DatabaseURL string
@@ -26,4 +24,5 @@ type Config struct {
 }
 
 func main() {
+	//
 }

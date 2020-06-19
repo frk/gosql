@@ -9,8 +9,8 @@ import (
 	"github.com/frk/gosql/internal/analysis"
 	"github.com/frk/gosql/internal/postgres"
 
-	GO "github.com/frk/gosql/internal/x/golang"
-	SQL "github.com/frk/gosql/internal/x/sqlang"
+	GO "github.com/frk/ast/golang"
+	SQL "github.com/frk/ast/sqlang"
 )
 
 var _ = log.Println
@@ -1935,7 +1935,7 @@ func addImport(g *generator, path, name, local string) {
 func sortImports(imports *GO.ImportDecl) {
 	var specs1, specs2, specs3 []GO.ImportSpec
 	for _, s := range imports.Specs {
-		if s.Path == gosqlPkgPath || s.Path == pgsqlPkgPath {
+		if strings.HasPrefix(string(s.Path), gosqlPkgPath) {
 			specs3 = append(specs3, s)
 		} else if i := strings.IndexByte(string(s.Path), '.'); i >= 0 {
 			specs2 = append(specs2, s)
