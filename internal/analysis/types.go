@@ -566,7 +566,7 @@ type (
 // Miscellaneous
 //
 type (
-	// funcName is the name of a database function that can either be used to modify
+	// FuncName is the name of a database function that can either be used to modify
 	// a value, like lower, upper, etc. or a function that can be used as an aggregate.
 	FuncName string
 
@@ -598,7 +598,7 @@ func (s *QueryStruct) IsUpdateWithPKeys() bool {
 
 func (s *QueryStruct) IsUpdateWithoutPKeys() bool {
 	return s.Kind == QueryKindUpdate &&
-		(s.Rel.Type.IsSignle()) &&
+		(s.Rel.Type.IsSingle()) &&
 		(s.Where != nil || s.Filter != nil || s.All != nil)
 }
 
@@ -615,9 +615,9 @@ func (s *QueryStruct) IsWithoutOutput() bool {
 }
 
 func (s *QueryStruct) IsSingleOutput() bool {
-	return (s.Kind.isSelect() && s.Rel.Type.IsSignle()) ||
-		(s.Result != nil && s.Result.Type.IsSignle()) ||
-		(s.Return != nil && s.Rel.Type.IsSignle())
+	return (s.Kind.isSelect() && s.Rel.Type.IsSingle()) ||
+		(s.Result != nil && s.Result.Type.IsSingle()) ||
+		(s.Return != nil && s.Rel.Type.IsSingle())
 }
 
 func (s *QueryStruct) HasNoErrorInfoHandler() bool {
@@ -639,6 +639,7 @@ func (s *QueryStruct) OutputRelFieldName() string {
 	return s.Rel.FieldName
 }
 
+// OutputRelType returns the RelType representation of the QueryStruct's output.
 func (s *QueryStruct) OutputRelType() RelType {
 	if s.Result != nil {
 		return s.Result.Type
@@ -646,11 +647,14 @@ func (s *QueryStruct) OutputRelType() RelType {
 	return s.Rel.Type
 }
 
+// OutputIsAfterScanner reports whether or not the QueryStruct's
+// output type implements the AfterScanner interface.
 func (s *QueryStruct) OutputIsAfterScanner() bool {
 	return s.OutputRelType().IsAfterScanner
 }
 
-func (t *RelType) IsSignle() bool {
+// IsSingle reports whether or not the RelType represents a non-collection type.
+func (t *RelType) IsSingle() bool {
 	return !t.IsSlice && !t.IsIter && !t.IsArray
 }
 

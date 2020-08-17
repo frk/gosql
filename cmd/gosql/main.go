@@ -2,6 +2,11 @@ package main
 
 type Config struct {
 	// Connection string to the postgres database that will be used for type checking.
+	// TODO
+	// - accept as argument
+	// - default to env var
+	// - allow individual target structs to somehow specify the database
+	//   connection string...
 	DatabaseURL string
 	// The source file, or directory, that contains the targets for the generator.
 	//

@@ -163,8 +163,8 @@ type DeleteAnalysisTestOK14 struct {
 			y int `sql:"y"`
 		} `sql:"column_a isbetween"`
 		b struct {
-			_ gosql.Column `sql:"column_x,x"`
-			_ gosql.Column `sql:"column_y,y"`
+			_ gosql.Column `sql:"column_x,X"`
+			_ gosql.Column `sql:"column_y,Y"`
 		} `sql:"column_b isbetweensym"`
 		c struct {
 			_ gosql.Column `sql:"column_z,x"`
@@ -173,6 +173,10 @@ type DeleteAnalysisTestOK14 struct {
 		d struct {
 			z int          `sql:"x"`
 			_ gosql.Column `sql:"column_z,y"`
+		} `sql:"column_d notbetween"`
+		d2 struct {
+			z int          `sql:"lower"`
+			_ gosql.Column `sql:"column_z,upper"`
 		} `sql:"column_d notbetween"`
 	}
 }

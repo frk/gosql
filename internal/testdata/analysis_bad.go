@@ -208,9 +208,9 @@ type SelectAnalysisTestBAD_ConflictLimitProducer struct {
 
 //BAD: Select with conflicting offset producers
 type SelectAnalysisTestBAD_ConflictOffsetProducer struct {
-	Rel    []T          `rel:"relation_a:a"`
-	_      gosql.Offset `sql:"2"`
+	Rel    []T `rel:"relation_a:a"`
 	Offset int
+	_      gosql.Offset `sql:"2"`
 }
 
 //BAD: Select with illegal rowsaffected field
@@ -235,7 +235,7 @@ type SelectAnalysisTestBAD_ConflictWhereProducer struct {
 }
 
 //BAD: Delete with conflicting error handlers
-type DeleteAnalysisTestBAD_ConflictWhereProducer struct {
+type DeleteAnalysisTestBAD_ConflictErrorHandler struct {
 	Rel          T `rel:"relation_a:a"`
 	ErrorHandler myerrorhandler
 	erh          myerrorhandler
@@ -430,7 +430,7 @@ type DeleteAnalysisTestBAD_BadWhereFieldColId struct {
 type DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
-		Id int `sql:"a.id notin any"`
+		Id []int `sql:"a.id notin any"`
 	}
 }
 
@@ -721,4 +721,48 @@ type DeleteAnalysisTestBAD_BadRowsAffecteFieldType struct {
 type FilterAnalysisTestBAD_BadTextSearchDirectiveColId struct {
 	Rel T                `rel:"relation_a:a"`
 	_   gosql.TextSearch `sql:"123"`
+}
+
+//BAD: Update slice with All directive
+type UpdateAnalysisTestBAD_IllegalAllDirective struct {
+	Rel []T `rel:"relation_a:a"`
+	_   gosql.All
+}
+
+//BAD: Update slice with Where struct
+type UpdateAnalysisTestBAD_IllegalWhereStruct struct {
+	Rel   []T `rel:"relation_a:a"`
+	Where struct {
+		Name string `sql:"name"`
+	}
+}
+
+//BAD: Update slice with Filter field
+type UpdateAnalysisTestBAD_IllegalFilterField struct {
+	Rel []T `rel:"relation_a:a"`
+	F   gosql.Filter
+}
+
+//BAD: Delete with illegal unary predicate in expression
+type DeleteAnalysisTestBAD_IllegalUnaryPredicateInExpression struct {
+	Rel   T `rel:"relation_a:a"`
+	Where struct {
+		_ gosql.Column `sql:"a.id isfalse a.foo"`
+	}
+}
+
+//BAD: Select with illegal unary predicate in gosql.JoinXxx directive expression
+type SelectAnalysisTestBAD_IllegalUnaryPredicateInJoinDirectiveExpression struct {
+	Rel  T `rel:"relation_a:a"`
+	Join struct {
+		_ gosql.LeftJoin `sql:"relation_b:b,b.foo istrue a.bar"`
+	}
+}
+
+//BAD: where block with list predicate on field of non-sequence type
+type DeleteAnalysisTestBAD_ListPredicate struct {
+	Rel   T `rel:"relation_a"`
+	Where struct {
+		a int `sql:"column_a isin"`
+	}
 }

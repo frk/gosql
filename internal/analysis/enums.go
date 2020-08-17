@@ -52,13 +52,21 @@ func (k TypeKind) isBasic() bool { return _basic_kind_start < k && k < _basic_ki
 // BasicString returns a string representation of k.
 func (k TypeKind) BasicString() string {
 	if k.isBasic() {
-		return basicTypeKinds[k]
+		return typeKinds[k]
 	}
 	return "<unknown>"
 }
 
-// Basic type kind string represenations indexed by typeKind.
-var basicTypeKinds = [...]string{
+func (k TypeKind) String() string {
+	if int(k) < len(typeKinds) {
+		return typeKinds[k]
+	}
+	return "<unknown>"
+}
+
+// Type kind string represenations indexed by typeKind.
+var typeKinds = [...]string{
+	TypeKindInvalid:    "<invalid>",
 	TypeKindBool:       "bool",
 	TypeKindInt:        "int",
 	TypeKindInt8:       "int8",
@@ -76,6 +84,16 @@ var basicTypeKinds = [...]string{
 	TypeKindComplex64:  "complex64",
 	TypeKindComplex128: "complex128",
 	TypeKindString:     "string",
+
+	// ...
+	TypeKindArray:     "array",
+	TypeKindInterface: "interface",
+	TypeKindMap:       "map",
+	TypeKindPtr:       "ptr",
+	TypeKindSlice:     "slice",
+	TypeKindStruct:    "struct",
+	TypeKindChan:      "chan",
+	TypeKindFunc:      "func",
 }
 
 // typeKinds indexed by types.BasicKind.
@@ -255,10 +273,10 @@ const (
 	NotSimilar // IS NOT SIMILAR TO
 	_pattern_pred_end
 
-	_array_pred_start
+	_list_pred_start
 	IsIn  // IN
 	NotIn // NOT IN
-	_array_pred_end
+	_list_pred_end
 
 	_range_pred_start
 	IsBetween      // BETWEEN x AND y
@@ -356,8 +374,8 @@ func (p Predicate) IsPatternMatch() bool { return _pattern_pred_start < p && p <
 // IsRange reports whether or not the predicate represents a range comparison.
 func (p Predicate) IsRange() bool { return _range_pred_start < p && p < _range_pred_end }
 
-// IsArray reports whether or not the predicate represents an array comparison.
-func (p Predicate) IsArray() bool { return _array_pred_start < p && p < _array_pred_end }
+// IsList reports whether or not the predicate represents an list comparison.
+func (p Predicate) IsList() bool { return _list_pred_start < p && p < _list_pred_end }
 
 // IsUnary reports whether or not the predicate represents a unary comparison.
 func (p Predicate) IsUnary() bool { return p.IsNull() || p.IsBoolean() }
