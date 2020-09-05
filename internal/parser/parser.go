@@ -20,10 +20,15 @@ var (
 	rxTargetName = regexp.MustCompile(`^(?i:Select|Insert|Update|Delete|Filter)`)
 )
 
+type Target struct {
+	Named *types.Named
+	Pos   token.Pos
+}
+
 type File struct {
 	FilePath  string
 	Directory *Directory
-	Targets   []*types.Named
+	Targets   []*Target
 }
 
 type Directory struct {
@@ -103,7 +108,7 @@ func ParseFileDirectories(filepaths ...string) ([]*Directory, error) {
 	return dirs, nil
 }
 
-// FileWithTargetTypes aggregates *types.Named instances of all of the target types declared in the file.
+// FileWithTargetTypes aggregates *Target instances of all of the target types declared in the file.
 func FileWithTargetTypes(dir *Directory, filepath string) *File {
 	fileCache.RLock()
 	f := fileCache.m[filepath]
@@ -130,7 +135,7 @@ func FileWithTargetTypes(dir *Directory, filepath string) *File {
 			if obj, ok := dir.Info.Defs[typeSpec.Name]; ok {
 				if typeName, ok := obj.(*types.TypeName); ok {
 					if named, ok := typeName.Type().(*types.Named); ok {
-						f.Targets = append(f.Targets, named)
+						f.Targets = append(f.Targets, &Target{Named: named, Pos: typeName.Pos()})
 					}
 				}
 

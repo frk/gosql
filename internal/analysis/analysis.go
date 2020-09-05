@@ -29,7 +29,7 @@ var (
 	rxRelIdent = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*(?:\:[A-Za-z_]\w*)?$`)
 
 	// Matches a valid table column reference.
-	// - Valid format: [rel_alias.]column_name
+	// - Valid format: [rel_name_or_alias.]column_name
 	rxColIdent = regexp.MustCompile(`^(?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*$`)
 
 	// Matches a few reserved identifiers.
@@ -70,16 +70,21 @@ type Info struct {
 	PkgPath string
 	// The type name of the analyzed TargetStruct.
 	TypeName string
+	// The soruce position of the TargetStruct's type name.
+	TypeNamePos token.Pos
 	// FieldMap maintains a map of pointers of arbitrary type that represent
 	// the result of analyzed fields, to the fields' related go/types specific
 	// information. Intended for error reporting by the backend type-checker.
 	FieldMap map[FieldPtr]FieldVar
+	// RelSpace maintains a set of *unique* relation names or aliases that map
+	// onto their respective RelIdent values that were parsed from struct tags.
+	RelSpace map[string]RelIdent
 }
 
 // Run analyzes the given named type which is expected to be a struct type whose name
 // prefix matches one of the allowed prefixes. It panics if the named type is not actually
 // a struct type or if its name does not start with one of the predefined prefixes.
-func Run(fset *token.FileSet, named *types.Named, info *Info) (TargetStruct, error) {
+func Run(fset *token.FileSet, named *types.Named, pos token.Pos, info *Info) (TargetStruct, error) {
 	structType, ok := named.Underlying().(*types.Struct)
 	if !ok {
 		panic(named.Obj().Name() + " must be a struct type.") // this shouldn't happen
@@ -94,7 +99,9 @@ func Run(fset *token.FileSet, named *types.Named, info *Info) (TargetStruct, err
 	a.info.FileSet = fset
 	a.info.PkgPath = a.pkgPath
 	a.info.TypeName = named.Obj().Name()
+	a.info.TypeNamePos = pos
 	a.info.FieldMap = make(map[FieldPtr]FieldVar)
+	a.info.RelSpace = make(map[string]RelIdent)
 
 	if strings.HasPrefix(strings.ToLower(named.Obj().Name()), "filter") {
 		return analyzeFilterStruct(a, structType)
@@ -103,7 +110,7 @@ func Run(fset *token.FileSet, named *types.Named, info *Info) (TargetStruct, err
 }
 
 func (a *analysis) error(code errorCode, f *types.Var, blockName, tagString, tagExpr, tagError string) error {
-	e := &Error{Code: code, BlockName: blockName, TagString: tagString, TagExpr: tagExpr, TagError: tagError}
+	e := &anError{Code: code, BlockName: blockName, TagString: tagString, TagExpr: tagExpr, TagError: tagError}
 	if f != nil {
 		p := a.fset.Position(f.Pos())
 		e.PkgPath = a.named.Obj().Pkg().Path()
@@ -121,6 +128,13 @@ func (a *analysis) error(code errorCode, f *types.Var, blockName, tagString, tag
 		e.FileLine = p.Line
 	}
 
+	if a.query != nil && a.query.Rel != nil {
+		e.RelField = a.query.Rel.FieldName
+		e.RelType = a.query.Rel.Type
+	} else if a.filter != nil && a.filter.Rel != nil {
+		e.RelField = a.filter.Rel.FieldName
+		e.RelType = a.filter.Rel.Type
+	}
 	return e
 }
 
@@ -137,12 +151,18 @@ func analyzeFilterStruct(a *analysis, structType *types.Struct) (*FilterStruct, 
 		// Ensure that there is only one field with the "rel" tag.
 		if _, ok := tag["rel"]; ok {
 			if a.filter.Rel != nil {
-				return nil, a.error(errConflictingRelTag, fvar, "", "", "", "") // XXX XXX XXX XXX
+				return nil, a.error(errConflictingRelTag, fvar, "", ftag, "", "")
 			}
 
 			rid, ecode := parseRelIdent(tag.First("rel"))
 			if ecode > 0 {
 				return nil, a.error(ecode, fvar, "", ftag, "", tag.First("rel"))
+			} else if ecode, errval := addToRelSpace(a, rid); ecode > 0 {
+				// NOTE(mkopriva): Because of the "a.filter.Rel != nil" check above and the
+				// fact that FilterXxx types don't accept any other relation-specifying
+				// fields, this branch will actually not run, nevertheless it is left here
+				// just in case the implementation changes allowing for this error to occur.
+				return nil, a.error(ecode, fvar, "", ftag, "", errval)
 			}
 
 			a.filter.Rel = new(RelField)
@@ -154,7 +174,7 @@ func analyzeFilterStruct(a *analysis, structType *types.Struct) (*FilterStruct, 
 			}
 
 			if a.filter.Rel.Type.IsIter {
-				return nil, a.error(errIllegalQueryField, fvar, "", "", "", "") // TODO test
+				return nil, a.error(errIllegalIteratorField, fvar, "", ftag, "", "")
 			}
 			continue
 		}
@@ -241,6 +261,9 @@ func analyzeQueryStruct(a *analysis, structType *types.Struct) (*QueryStruct, er
 		}
 	}
 
+	// TODO(mkopriva): if QueryKind is Select, Update, or Insert, and the analyzed
+	// RelType.Fields slice is empty (for Select also check ResultType.Fields), then fail.
+
 	// TODO(mkopriva): allow for embedding a struct with "common feature fields",
 	// and make sure to also allow imported and local-unexported struct types.
 	//
@@ -262,6 +285,12 @@ func analyzeQueryStructRelField(a *analysis, f *types.Var, ftag, reltag string) 
 	rid, ecode := parseRelIdent(reltag)
 	if ecode > 0 {
 		return a.error(ecode, f, "", ftag, "", reltag)
+	} else if ecode, errval := addToRelSpace(a, rid); ecode > 0 {
+		// NOTE(mkopriva): Because of the "a.query.Rel != nil" check above and the
+		// fact that the rel field in query types is intentionally analyzed before
+		// any other field, this branch will actually not run, nevertheless it is left here
+		// just in case the implementation changes allowing for this error to occur.
+		return a.error(ecode, f, "", ftag, "", errval)
 	}
 
 	a.query.Rel = new(RelField)
@@ -547,9 +576,9 @@ stackloop:
 			}
 
 			// Resolve the column id.
-			cid, ecode := parseColIdent(loop.pfx + sqltag)
+			cid, ecode, eval := parseColIdent(a, loop.pfx+sqltag)
 			if ecode > 0 {
-				return a.error(ecode, fvar, "", ftag, "", sqltag)
+				return a.error(ecode, fvar, "", ftag, "", eval)
 			}
 
 			// TODO check the the chan, func, and interface type
@@ -787,9 +816,9 @@ stackloop:
 				// either another column or a value-literal to which
 				// the main column should be compared.
 				if len(rhs) > 0 {
-					cid, ecode := parseColIdent(lhs)
+					cid, ecode, eval := parseColIdent(a, lhs)
 					if ecode > 0 {
-						return a.error(ecode, fvar, f.Name(), ftag, "", lhs)
+						return a.error(ecode, fvar, f.Name(), ftag, sqltag, eval)
 					}
 
 					item := new(WhereColumnDirective)
@@ -797,8 +826,12 @@ stackloop:
 					item.Predicate = stringToPredicate[op]
 					item.Quantifier = stringToQuantifier[op2]
 
-					if cid, ecode := parseColIdent(rhs); ecode > 0 {
-						item.RHSLiteral = rhs // assume literal expression
+					if cid, ecode, eval := parseColIdent(a, rhs); ecode > 0 {
+						if ecode != errBadColIdTagValue {
+							return a.error(ecode, fvar, f.Name(), ftag, sqltag, eval)
+						}
+						// assume literal expression
+						item.RHSLiteral = rhs
 					} else {
 						item.RHSColIdent = cid
 					}
@@ -815,9 +848,9 @@ stackloop:
 				}
 
 				// Assume column with unary predicate.
-				cid, ecode := parseColIdent(lhs)
+				cid, ecode, eval := parseColIdent(a, lhs)
 				if ecode > 0 {
-					return a.error(ecode, fvar, f.Name(), ftag, "", lhs)
+					return a.error(ecode, fvar, f.Name(), ftag, sqltag, eval)
 				}
 				// If no operator was provided, default to "istrue"
 				if len(op) == 0 {
@@ -867,9 +900,9 @@ stackloop:
 					tag := tagutil.New(ftag)
 
 					if fvar.Name() == "_" && typesutil.IsDirective("Column", fvar.Type()) {
-						cid, ecode := parseColIdent(tag.First("sql"))
+						cid, ecode, eval := parseColIdent(a, tag.First("sql"))
 						if ecode > 0 {
-							return a.error(ecode, fvar, f.Name(), ftag, "", tag.First("sql"))
+							return a.error(ecode, fvar, f.Name(), ftag, tag.First("sql"), eval)
 						}
 
 						item := new(BetweenColumnDirective)
@@ -899,9 +932,9 @@ stackloop:
 					return a.error(errBadBetweenPredicate, fvar, f.Name(), ftag, "", "")
 				}
 
-				cid, ecode := parseColIdent(lhs)
+				cid, ecode, eval := parseColIdent(a, lhs)
 				if ecode > 0 {
-					return a.error(ecode, fvar, f.Name(), ftag, "", lhs)
+					return a.error(ecode, fvar, f.Name(), ftag, sqltag, eval)
 				}
 
 				item := new(WhereBetweenStruct)
@@ -917,9 +950,9 @@ stackloop:
 			}
 
 			// Analyze field where item.
-			cid, ecode := parseColIdent(lhs)
+			cid, ecode, eval := parseColIdent(a, lhs)
 			if ecode > 0 {
-				return a.error(ecode, fvar, f.Name(), ftag, "", lhs)
+				return a.error(ecode, fvar, f.Name(), ftag, lhs, eval)
 			}
 			// If no predicate was provided default to "="
 			if len(op) == 0 {
@@ -940,7 +973,7 @@ stackloop:
 				return a.error(errIllegalPredicateQuantifier, fvar, f.Name(), ftag, sqltag, op2)
 			} else if item.Quantifier > 0 && !item.Type.IsSequence() {
 				return a.error(errIllegalFieldQuantifier, fvar, f.Name(), ftag, sqltag, op2)
-			} else if item.Predicate.IsList() && !item.Type.IsSequence() {
+			} else if item.Predicate.IsArray() && !item.Type.IsSequence() {
 				return a.error(errIllegalListPredicate, fvar, f.Name(), ftag, sqltag, op)
 			}
 
@@ -1037,6 +1070,8 @@ func analyzeJoinStructRelationDirective(a *analysis, j *JoinStruct, f *types.Var
 	rid, ecode := parseRelIdent(tag.First("sql"))
 	if ecode > 0 {
 		return a.error(ecode, f, j.FieldName, ftag, "", tag.First("sql"))
+	} else if ecode, errval := addToRelSpace(a, rid); ecode > 0 {
+		return a.error(ecode, f, j.FieldName, ftag, "", errval)
 	}
 
 	j.Relation = new(RelationDirective)
@@ -1051,6 +1086,8 @@ func analyzeJoinStructJoinDirective(a *analysis, j *JoinStruct, dirName string, 
 	rid, ecode := parseRelIdent(tag.First("sql"))
 	if ecode > 0 {
 		return a.error(ecode, f, j.FieldName, ftag, "", tag.First("sql"))
+	} else if ecode, errval := addToRelSpace(a, rid); ecode > 0 {
+		return a.error(ecode, f, j.FieldName, ftag, "", errval)
 	}
 
 	dir := new(JoinDirective)
@@ -1074,9 +1111,21 @@ func analyzeJoinStructJoinDirective(a *analysis, j *JoinStruct, dirName string, 
 			//     ✅ The op2 MUST be empty
 			lhs, op, op2, rhs := parsePredicateExpr(val)
 
-			cid, ecode := parseColIdent(lhs)
+			cid, ecode, eval := parseColIdent(a, lhs)
 			if ecode > 0 {
-				return a.error(ecode, f, j.FieldName, ftag, "", lhs)
+				return a.error(ecode, f, j.FieldName, ftag, val, eval)
+			}
+
+			// NOTE(mkopriva): At the moment a join condition's left-hand-side
+			// column MUST always reference a column of the relation being joined,
+			// so to avoid confusion make sure that cid has either no qualifier or,
+			// if it has one, it matches the alias of the joined table.
+			//
+			// TODO(mkopriva): Remove this limitation and properly handle the
+			// operands regardless of which side they are positioned in.
+			if len(cid.Qualifier) > 0 && (len(rid.Alias) > 0 && rid.Alias != cid.Qualifier) ||
+				(len(rid.Alias) == 0 && rid.Name != cid.Qualifier) {
+				return a.error(errBadJoinConditionLHS, f, j.FieldName, ftag, val, lhs)
 			}
 
 			item := new(JoinConditionTagItem)
@@ -1086,8 +1135,12 @@ func analyzeJoinStructJoinDirective(a *analysis, j *JoinStruct, dirName string, 
 
 			// binary expression?
 			if len(rhs) > 0 {
-				if cid, ecode := parseColIdent(rhs); ecode > 0 {
-					item.RHSLiteral = rhs // assume literal expression
+				if cid, ecode, eval := parseColIdent(a, rhs); ecode > 0 {
+					if ecode != errBadColIdTagValue {
+						return a.error(ecode, f, j.FieldName, ftag, val, eval)
+					}
+					// assume literal expression
+					item.RHSLiteral = rhs
 				} else {
 					item.RHSColIdent = cid
 				}
@@ -1207,7 +1260,7 @@ func analyzeOnConflictColumnDirective(a *analysis, oc *OnConflictStruct, f *type
 	}
 
 	slice := tagutil.New(tag)["sql"]
-	ids, ecode, eval := parseColIdents(slice)
+	ids, ecode, eval := parseColIdents(a, slice)
 	if ecode > 0 {
 		return a.error(ecode, f, oc.FieldName, tag, "", eval)
 	}
@@ -1283,7 +1336,7 @@ func analyzeOnConflictUpdateDirective(a *analysis, oc *OnConflictStruct, f *type
 	}
 
 	slice := tagutil.New(tag)["sql"]
-	list, ecode, eval := parseColIdentList(slice)
+	list, ecode, eval := parseColIdentList(a, slice)
 	if ecode > 0 {
 		return a.error(ecode, f, oc.FieldName, tag, "", eval)
 	}
@@ -1473,9 +1526,9 @@ func analyzeOrderByDirective(a *analysis, f *types.Var, tag string) (err error) 
 			val = val[:i]
 		}
 
-		cid, ecode := parseColIdent(val)
+		cid, ecode, eval := parseColIdent(a, val)
 		if ecode > 0 {
-			return a.error(ecode, f, "", tag, "", val)
+			return a.error(ecode, f, "", tag, val, eval)
 		}
 
 		item.ColIdent = cid
@@ -1521,9 +1574,17 @@ func analyzeReturnDirective(a *analysis, f *types.Var, tag string) error {
 		return a.error(errConflictingResultTarget, f, "", tag, "", "")
 	}
 
-	list, ecode, eval := parseColIdentList(tagutil.New(tag)["sql"])
+	t := tagutil.New(tag)
+	list, ecode, eval := parseColIdentList(a, t["sql"])
 	if ecode > 0 {
-		return a.error(ecode, f, "", tag, "", eval)
+		return a.error(ecode, f, "", tag, t.Get("sql"), eval)
+	}
+
+	// Make sure that the column ids have a matching field.
+	for _, id := range list.Items {
+		if !a.query.Rel.Type.HasFieldWithColumn(id.Name) {
+			return a.error(errColumnFieldUnknown, f, "", tag, t.Get("sql"), id.String())
+		}
 	}
 
 	a.query.Return = new(ReturnDirective)
@@ -1553,9 +1614,10 @@ func analyzeDefaultDirective(a *analysis, f *types.Var, tag string) error {
 		return a.error(errIllegalQueryField, f, "", tag, "", "")
 	}
 
-	list, ecode, eval := parseColIdentList(tagutil.New(tag)["sql"])
+	t := tagutil.New(tag)
+	list, ecode, eval := parseColIdentList(a, t["sql"])
 	if ecode > 0 {
-		return a.error(ecode, f, "", tag, "", eval)
+		return a.error(ecode, f, "", tag, t.Get("sql"), eval)
 	}
 
 	a.query.Default = new(DefaultDirective)
@@ -1569,9 +1631,17 @@ func analyzeForceDirective(a *analysis, f *types.Var, tag string) error {
 		return a.error(errIllegalQueryField, f, "", tag, "", "")
 	}
 
-	list, ecode, eval := parseColIdentList(tagutil.New(tag)["sql"])
+	t := tagutil.New(tag)
+	list, ecode, eval := parseColIdentList(a, t["sql"])
 	if ecode > 0 {
-		return a.error(ecode, f, "", tag, "", eval)
+		return a.error(ecode, f, "", tag, t.Get("sql"), eval)
+	}
+
+	// Make sure that the column ids have a matching field.
+	for _, id := range list.Items {
+		if !a.query.Rel.Type.HasFieldWithColumn(id.Name) {
+			return a.error(errColumnFieldUnknown, f, "", tag, t.Get("sql"), id.String())
+		}
 	}
 
 	a.query.Force = new(ForceDirective)
@@ -1583,18 +1653,36 @@ func analyzeForceDirective(a *analysis, f *types.Var, tag string) error {
 // analyzeTextSearchDirective analyzes the given field and its tag as the gosql.TextSearch
 // directive and sets the result to the given analysis' filter.
 func analyzeTextSearchDirective(a *analysis, f *types.Var, tag string) error {
-	val := tagutil.New(tag).First("sql")
-	val = strings.ToLower(strings.TrimSpace(val))
+	tval := tagutil.New(tag).First("sql")
+	tval = strings.ToLower(strings.TrimSpace(tval))
 
-	cid, ecode := parseColIdent(val)
+	cid, ecode, eval := parseColIdent(a, tval)
 	if ecode > 0 {
-		return a.error(ecode, f, "", tag, "", val)
+		return a.error(ecode, f, "", tag, tval, eval)
 	}
 
 	a.filter.TextSearch = new(TextSearchDirective)
 	a.filter.TextSearch.ColIdent = cid
 	a.info.FieldMap[a.filter.TextSearch] = FieldVar{Var: f, Tag: tag}
 	return nil
+}
+
+func addToRelSpace(a *analysis, id RelIdent) (ecode errorCode, errval string) {
+	if a.info.RelSpace == nil {
+		a.info.RelSpace = make(map[string]RelIdent)
+	}
+	if len(id.Alias) > 0 {
+		if _, ok := a.info.RelSpace[id.Alias]; ok {
+			return errConflictingRelAlias, id.Alias
+		}
+		a.info.RelSpace[id.Alias] = id
+		return 0, ""
+	}
+	if _, ok := a.info.RelSpace[id.Name]; ok {
+		return errConflictingRelName, id.Name
+	}
+	a.info.RelSpace[id.Name] = id
+	return 0, ""
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1757,32 +1845,35 @@ func parseRelIdent(val string) (id RelIdent, ecode errorCode) {
 // parseColIdent parses the given string as a column identifier and returns the result.
 //
 // ✅ The string MUST be in the expected format, which is: "[qualifier.]name".
-func parseColIdent(val string) (id ColIdent, ecode errorCode) {
+func parseColIdent(a *analysis, val string) (id ColIdent, ecode errorCode, eval string) {
 	if !isColIdent(val) {
-		return id, errBadColIdTagValue
+		return id, errBadColIdTagValue, val
 	}
 	if i := strings.LastIndexByte(val, '.'); i > -1 {
 		id.Qualifier = val[:i]
+		if _, ok := a.info.RelSpace[id.Qualifier]; !ok {
+			return id, errUnknownColumnQualifier, id.Qualifier
+		}
 		val = val[i+1:]
 	}
 	id.Name = val
-	return id, 0
+	return id, 0, ""
 }
 
 // parseColIdents parses the individual strings in the given slice as
 // column identifiers and returns the result as []ColIdent.
 //
 // ✅ The individual strings MUST be in the expected format, which is: "[qualifier.]name".
-func parseColIdents(tag []string) (ids []ColIdent, ecode errorCode, eval string) {
+func parseColIdents(a *analysis, tag []string) (ids []ColIdent, ecode errorCode, eval string) {
 	if len(tag) == 0 {
 		return nil, errMissingTagColumnList, ""
 	}
 
 	ids = make([]ColIdent, len(tag))
 	for i, val := range tag {
-		id, ecode := parseColIdent(val)
+		id, ecode, eval := parseColIdent(a, val)
 		if ecode > 0 {
-			return nil, ecode, val
+			return nil, ecode, eval
 		}
 		ids[i] = id
 	}
@@ -1794,13 +1885,13 @@ func parseColIdents(tag []string) (ids []ColIdent, ecode errorCode, eval string)
 //
 // ✅ A slice of length=1 holding a "*" string value MAY be use instead of column ids.
 // ✅ The individual strings MUST be in the expected format, which is: "[qualifier.]name".
-func parseColIdentList(tag []string) (list ColIdentList, ecode errorCode, eval string) {
+func parseColIdentList(a *analysis, tag []string) (list ColIdentList, ecode errorCode, eval string) {
 	if len(tag) == 1 && tag[0] == "*" {
 		list.All = true
 		return list, 0, ""
 	}
 
-	items, ecode, eval := parseColIdents(tag)
+	items, ecode, eval := parseColIdents(a, tag)
 	if ecode > 0 {
 		return list, ecode, eval
 	}

@@ -41,7 +41,7 @@ func ParseTestdata(dir string) Testdata {
 	}
 }
 
-func FindNamedType(name string, tdata Testdata) *types.Named {
+func FindNamedType(name string, tdata Testdata) (*types.Named, token.Pos) {
 	for _, f := range tdata.Files {
 		for _, decl := range f.Decls {
 			gen, ok := decl.(*ast.GenDecl)
@@ -57,7 +57,7 @@ func FindNamedType(name string, tdata Testdata) *types.Named {
 				if obj, ok := tdata.Defs[typ.Name]; ok {
 					if tn, ok := obj.(*types.TypeName); ok {
 						if named, ok := tn.Type().(*types.Named); ok {
-							return named
+							return named, tn.Pos()
 						}
 					}
 				}
@@ -65,7 +65,7 @@ func FindNamedType(name string, tdata Testdata) *types.Named {
 		}
 	}
 
-	return nil
+	return nil, 0
 }
 
 type pkgimporter struct {

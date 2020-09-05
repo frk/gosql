@@ -3,8 +3,6 @@
 package testdata
 
 import (
-	"time"
-
 	"github.com/frk/gosql"
 )
 
@@ -33,22 +31,6 @@ type DeletePostgresTestBAD_JoinNoRelation2 struct {
 	}
 	Where struct {
 		_ gosql.Column `sql:"a.col_a = b.col_foo"`
-	}
-}
-
-//BAD: Alias referenced in join doesn't match the joined table's alias
-type SelectPostgresTestBAD_JoinNoAliasRelation struct {
-	Columns CT1 `rel:"column_tests_1:a"`
-	Join    struct {
-		_ gosql.LeftJoin `sql:"column_tests_2:b,x.col_foo = a.col_a"`
-	}
-}
-
-//BAD: Alias referenced in join doesn't match any known relation
-type SelectPostgresTestBAD_JoinNoAliasRelation2 struct {
-	Columns CT1 `rel:"column_tests_1:a"`
-	Join    struct {
-		_ gosql.LeftJoin `sql:"column_tests_2:b,b.col_foo = x.col_a"`
 	}
 }
 
@@ -173,19 +155,11 @@ type SelectPostgresTestBAD_WhereFieldColumnNotFound struct {
 	}
 }
 
-//BAD: whereblock aliased relation not found
-type SelectPostgresTestBAD_WhereBadAlias struct {
-	Rel   CT1 `rel:"column_tests_1:c"`
-	Where struct {
-		Id int `sql:"x.id"`
-	}
-}
-
 //BAD: whereblock cannot compare types
 type SelectPostgresTestBAD_WhereCannotCompareTypes struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
-		D float64 `sql:"c.col_e"`
+		D float64 `sql:"c.col_e ~"`
 	}
 }
 
@@ -202,14 +176,6 @@ type SelectPostgresTestBAD_WhereColumnNotFound struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
 		_ gosql.Column `sql:"c.col_xyz istrue"`
-	}
-}
-
-//BAD: whereblock with column not found 2 (bad alias)
-type SelectPostgresTestBAD_WhereColumnNotFoundBadAlias struct {
-	Rel   CT1 `rel:"column_tests_1:c"`
-	Where struct {
-		_ gosql.Column `sql:"x.col_a = 123"`
 	}
 }
 
@@ -234,14 +200,6 @@ type SelectPostgresTestBAD_WhereColumnNotFoundRHS struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
 		_ gosql.Column `sql:"c.col_a = c.col_xyz"`
-	}
-}
-
-//BAD: whereblock with RHS column not found 2 (bad alias)
-type SelectPostgresTestBAD_WhereColumnNotFoundRHSBadAlias struct {
-	Rel   CT1 `rel:"column_tests_1:c"`
-	Where struct {
-		_ gosql.Column `sql:"c.col_a = x.col_a"`
 	}
 }
 
@@ -280,34 +238,12 @@ type SelectPostgresTestBAD_WhereBetweenColumnNotFound struct {
 	}
 }
 
-//BAD: whereblock between relation not found (bad alias)
-type SelectPostgresTestBAD_WhereBetweenRelationNotFound struct {
-	Rel   CT1 `rel:"column_tests_1:c"`
-	Where struct {
-		a struct {
-			_ gosql.Column `sql:"c.col_b,x"`
-			_ gosql.Column `sql:"c.col_c,y"`
-		} `sql:"x.col_a isbetween"`
-	}
-}
-
 //BAD: whereblock between column not found
 type SelectPostgresTestBAD_WhereBetweenArgColumnNotFound struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
 		a struct {
 			_ gosql.Column `sql:"c.col_xyz,x"`
-			_ gosql.Column `sql:"c.col_c,y"`
-		} `sql:"c.col_a isbetween"`
-	}
-}
-
-//BAD: whereblock between relation not found (bad alias)
-type SelectPostgresTestBAD_WhereBetweenArgRelationNotFound struct {
-	Rel   CT1 `rel:"column_tests_1:c"`
-	Where struct {
-		a struct {
-			_ gosql.Column `sql:"x.col_b,x"`
 			_ gosql.Column `sql:"c.col_c,y"`
 		} `sql:"c.col_a isbetween"`
 	}
@@ -330,18 +266,6 @@ type SelectPostgresTestBAD_OrderByColumnNotFound struct {
 	_   gosql.OrderBy `sql:"c.col_a,c.col_xyz"`
 }
 
-//BAD: orderby relation not found
-type SelectPostgresTestBAD_OrderByRelationNotFound struct {
-	Rel CT1           `rel:"column_tests_1:c"`
-	_   gosql.OrderBy `sql:"x.col_a"`
-}
-
-//BAD: default bad relation alias
-type InsertPostgresTestBAD_DefaultBadRelationAlias struct {
-	Rel CT1           `rel:"column_tests_1:c"`
-	_   gosql.Default `sql:"x.col_b"`
-}
-
 //BAD: default column not found
 type InsertPostgresTestBAD_DefaultColumnNotFound struct {
 	Rel CT1           `rel:"column_tests_1:c"`
@@ -354,46 +278,16 @@ type InsertPostgresTestBAD_DefaultNotSet struct {
 	_   gosql.Default `sql:"c.col_b"`
 }
 
-//BAD: force column not found
-type InsertPostgresTestBAD_ForceColumnNotFound struct {
-	Rel CT1         `rel:"column_tests_1:c"`
-	_   gosql.Force `sql:"c.col_xyz"`
-}
-
-//BAD: force relation not found
-type InsertPostgresTestBAD_ForceRelationNotFound struct {
-	Rel CT1         `rel:"column_tests_1:c"`
-	_   gosql.Force `sql:"x.col_a"`
-}
-
 //BAD: returning column not found
 type UpdatePostgresTestBAD_ReturnColumnNotFound struct {
 	Rel CT1_bad      `rel:"column_tests_1:c"`
 	_   gosql.Return `sql:"c.col_xyz"`
 }
 
-//BAD: returning relation "x" not found
-type UpdatePostgresTestBAD_ReturnRelationNotFound struct {
-	Rel CT1          `rel:"column_tests_1:c"`
-	_   gosql.Return `sql:"x.col_a"`
-}
-
-//BAD: returning column field not found
-type UpdatePostgresTestBAD_ReturnFieldNotFound struct {
-	Rel CT1_part     `rel:"column_tests_1:c"`
-	_   gosql.Return `sql:"c.col_d"`
-}
-
 //BAD: textsearch column not found
 type FilterPostgresTestBAD_TextSearchColumnNotFound struct {
 	_ CT1              `rel:"column_tests_1:c"`
 	_ gosql.TextSearch `sql:"c.col_xyz"`
-}
-
-//BAD: textsearch relation not found (bad alias)
-type FilterPostgresTestBAD_TextSearchRelationNotFound struct {
-	_ CT1              `rel:"column_tests_1:c"`
-	_ gosql.TextSearch `sql:"x.col_b"`
 }
 
 //BAD: textsearch bad column type
@@ -445,32 +339,96 @@ type InsertPostgresTestBAD_ResultColumnNotFound struct {
 	}
 }
 
-// column_tests_1 record
-type CT1 struct {
-	A int       `sql:"col_a"`
-	B string    `sql:"col_b"`
-	C bool      `sql:"col_c"`
-	D float64   `sql:"col_d"`
-	E time.Time `sql:"col_e"`
+//BAD: relation does not exist
+type SelectPostgresTestBAD_NoSchema struct {
+	Columns CT1 `rel:"noschema.column_tests_1:c"`
 }
 
-type CT1_part struct {
-	A int    `sql:"col_a"`
-	B string `sql:"col_b"`
-	C bool   `sql:"col_c"`
-
-	// omitted fields
-	// D float64   `sql:"col_d"`
-	// E time.Time `sql:"col_e"`
+//BAD: target relation column not found
+type SelectPostgresTestBAD_RelationColumnNotFound2 struct {
+	Rel CT1_bad `rel:"column_tests_1:c"`
 }
 
-type CT1_bad struct {
-	XYZ string `sql:"col_xyz"` // not in table
+//BAD: field-to-column type not compatibile
+type FilterPostgresTestBAD_BadFieldWriteType struct {
+	_ struct {
+		Metadata func() `sql:"metadata2"`
+	} `rel:"test_user:c"`
 }
 
-// column_tests_2 record (partial)
-type CT2 struct {
-	Foo int    `sql:"col_foo"`
-	Bar string `sql:"col_bar"`
-	Baz bool   `sql:"col_baz"`
+//BAD: field-to-column type not compatibile
+type FilterPostgresTestBAD_BadFieldWriteType2 struct {
+	_ struct {
+		Envelope chan struct{} `sql:"envelope"`
+	} `rel:"test_user:c"`
+}
+
+//BAD: field-to-column type not compatibile
+type FilterPostgresTestBAD_BadFieldWriteType3 struct {
+	_ struct {
+		Lines float64 `sql:"col_linearr"`
+	} `rel:"pgsql_test:t"`
+}
+
+//BAD: whereblock wrong column type for quantifier
+type SelectPostgresTestBAD_WhereLiteralBadTypeForQuantifier struct {
+	Rel   CT1 `rel:"column_tests_1:c"`
+	Where struct {
+		_ gosql.Column `sql:"c.col_a notin 'foo bar'"`
+	}
+}
+
+//BAD: whereblock with unknown func
+type SelectPostgresTestBAD_WhereUnknownFunc struct {
+	Rel   CT1 `rel:"column_tests_1:c"`
+	Where struct {
+		D float64 `sql:"c.col_d,@unknown_func"`
+	}
+}
+
+//BAD: default option on column with no DEFAULT constraint.
+type InsertPostgresTestBAD_DefaultOption struct {
+	Rel struct {
+		B string `sql:"col_b,default"`
+	} `rel:"column_tests_1:c"`
+}
+
+//BAD: column-to-field type not compatibile
+type SelectPostgresTestBAD_ColumnTypeToBadField struct {
+	Rel struct {
+		B int `sql:"col_c"`
+	} `rel:"column_tests_1:c"`
+}
+
+//BAD: column-to-field type not compatibile
+type SelectPostgresTestBAD_ColumnTypeToBadField2 struct {
+	Rel struct {
+		Envelope chan struct{} `sql:"envelope"`
+	} `rel:"test_user:c"`
+}
+
+//BAD: column-to-field type not compatibile
+type SelectPostgresTestBAD_ColumnTypeToBadField3 struct {
+	Rel struct {
+		Lines float64 `sql:"col_linearr"`
+	} `rel:"pgsql_test:t"`
+}
+
+//BAD: whereblock between column not found
+type SelectPostgresTestBAD_BadBetweenColumnComparison struct {
+	Rel   CT1 `rel:"column_tests_1:c"`
+	Where struct {
+		a struct {
+			_ gosql.Column `sql:"c.col_d,x"`
+			_ gosql.Column `sql:"c.col_c,y"`
+		} `sql:"c.col_a isbetween"`
+	}
+}
+
+//BAD: onconflict columns match only non-unique index
+type InsertPostgresTestBAD_OnConflictIndexColumnsNotUnique struct {
+	Rel        CT2 `rel:"column_tests_2:c"`
+	OnConflict struct {
+		_ gosql.Column `sql:"c.col_indkey1,c.col_indkey2,c.col_indkey3"`
+	}
 }

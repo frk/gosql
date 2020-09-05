@@ -226,6 +226,8 @@ type (
 		IsPrimary bool
 		// The number of dimensions if the column is an array type, otherwise 0.
 		NumDims int
+		// The OID of the column's type.
+		TypeOID oid.OID
 		// Info about the column's type.
 		Type *Type
 		// The Relation to which the Column belongs.

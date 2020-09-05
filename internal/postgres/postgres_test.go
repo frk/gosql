@@ -1,11 +1,16 @@
 package postgres
 
 import (
+	"fmt"
+	"log"
 	"testing"
 
 	"github.com/frk/compare"
 	"github.com/frk/gosql/internal/analysis"
+	"github.com/frk/gosql/internal/postgres/oid"
 	"github.com/frk/gosql/internal/x/testutil"
+
+	"github.com/lib/pq"
 )
 
 func init() {
@@ -15,7 +20,7 @@ func init() {
 var tdata = testutil.ParseTestdata("../testdata")
 
 func testCheck(name string, t *testing.T) (*TargetInfo, error) {
-	named := testutil.FindNamedType(name, tdata)
+	named, pos := testutil.FindNamedType(name, tdata)
 	if named == nil {
 		// Stop the test if no type with the given name was found.
 		t.Fatal(name, " not found")
@@ -23,7 +28,7 @@ func testCheck(name string, t *testing.T) (*TargetInfo, error) {
 	}
 
 	info := new(analysis.Info)
-	ts, err := analysis.Run(tdata.Fset, named, info)
+	ts, err := analysis.Run(tdata.Fset, named, pos, info)
 	if err != nil {
 		return nil, err
 	}
@@ -31,894 +36,1423 @@ func testCheck(name string, t *testing.T) (*TargetInfo, error) {
 	return Check(testdb.DB, ts, info)
 }
 
-func TestCheck(t *testing.T) {
+func TestOpen(t *testing.T) {
 	tests := []struct {
-		name string
-		err  error
+		dsn      string
+		err      error
+		printerr bool
+	}{
+		{
+			dsn: "postgres:///gosql_test_db?sslmode=disable",
+		}, {
+			dsn: "postgres://foo@bar/baz?sslmode=disable",
+			err: &dbError{
+				Code: errDatabaseOpen,
+				DB:   dbInfo{DSN: "postgres://foo@bar/baz?sslmode=disable"},
+				Err:  &pq.Error{},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		db, err := Open(tt.dsn)
+		if err == nil {
+			db.Close()
+		}
+		if e := compare.Compare(err, tt.err); e != nil {
+			t.Errorf("%v - %#v %v", e, err, err)
+		}
+		if tt.printerr && err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
+func TestCheck(t *testing.T) {
+	test_dbinfo := dbInfo{DSN: testdb.DB.dsn, Name: testdb.DB.name, User: testdb.DB.user, SearchPath: testdb.DB.searchpath}
+	column_tests_1, err := loadRelation(&checker{db: testdb.DB}, testdb.DB, analysis.RelIdent{"column_tests_1", "", ""}, 0)
+	if err != nil {
+		log.Fatalf("relation not found: %v\n", err)
+	}
+	column_tests_2, err := loadRelation(&checker{db: testdb.DB}, testdb.DB, analysis.RelIdent{"column_tests_2", "", ""}, 0)
+	if err != nil {
+		log.Fatalf("relation not found: %v\n", err)
+	}
+	test_user, err := loadRelation(&checker{db: testdb.DB}, testdb.DB, analysis.RelIdent{"test_user", "", ""}, 0)
+	if err != nil {
+		log.Fatalf("relation not found: %v\n", err)
+	}
+	pgsql_test, err := loadRelation(&checker{db: testdb.DB}, testdb.DB, analysis.RelIdent{"pgsql_test", "", ""}, 0)
+	if err != nil {
+		log.Fatalf("relation not found: %v\n", err)
+	}
+
+	tests := []struct {
+		name     string
+		err      error
+		printerr bool
 	}{{
 		name: "SelectPostgresTestOK_Simple",
 		err:  nil,
 	}, {
 		name: "SelectPostgresTestBAD_NoRelation",
-		err: Error{
-			Code:       ErrNoRelation,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "norel",
-			TargetName: "SelectPostgresTestBAD_NoRelation",
-			FieldType:  "path/to/test.CT1",
-			FieldName:  "Columns",
-			FieldTag:   `rel:"norel"`,
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   13,
+		err: &dbError{
+			Code: errRelationUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_NoRelation",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 10,
+				},
+			},
+			Field: fieldInfo{
+				Name: "Columns",
+				Type: "path/to/test.CT1",
+				Tag:  `rel:"norel"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 11,
+				},
+			},
+			Rel: relInfo{
+				Id: analysis.RelIdent{"norel", "", ""},
+			},
 		},
 	}, {
 		name: "DeletePostgresTestBAD_JoinNoRelation",
-		err: Error{
-			Code:       ErrNoRelation,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "norel",
-			TargetName: "DeletePostgresTestBAD_JoinNoRelation",
-			FieldType:  "github.com/frk/gosql.Relation",
-			FieldName:  "_",
-			FieldTag:   `sql:"norel:b"`,
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   20,
+		err: &dbError{
+			Code: errRelationUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "DeletePostgresTestBAD_JoinNoRelation",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 15,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Relation",
+				Tag:  `sql:"norel:b"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 18,
+				},
+			},
+			Rel: relInfo{
+				Id: analysis.RelIdent{"norel", "b", ""},
+			},
 		},
 	}, {
 		name: "DeletePostgresTestBAD_JoinNoRelation2",
-		err: Error{
-			Code:       ErrNoRelation,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "norel",
-			TargetName: "DeletePostgresTestBAD_JoinNoRelation2",
-			FieldType:  "github.com/frk/gosql.LeftJoin",
-			FieldName:  "_",
-			FieldTag:   `sql:"norel:c,c.b_id = b.id"`,
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   32,
-		},
-	}, {
-		name: "SelectPostgresTestBAD_JoinNoAliasRelation",
-		err: Error{
-			Code:         ErrBadAlias,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_2",
-			ColName:      "col_foo",
-			ColQualifier: "x",
-			TargetName:   "SelectPostgresTestBAD_JoinNoAliasRelation",
-			FieldType:    "github.com/frk/gosql.LeftJoin",
-			FieldName:    "_",
-			FieldTag:     `sql:"column_tests_2:b,x.col_foo = a.col_a"`,
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     43,
-		},
-	}, {
-		name: "SelectPostgresTestBAD_JoinNoAliasRelation2",
-		err: Error{
-			Code:         ErrBadAlias,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "col_a",
-			ColQualifier: "x",
-			TargetName:   "SelectPostgresTestBAD_JoinNoAliasRelation2",
-			FieldType:    "github.com/frk/gosql.LeftJoin",
-			FieldName:    "_",
-			FieldTag:     `sql:"column_tests_2:b,b.col_foo = x.col_a"`,
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     51,
+		err: &dbError{
+			Code: errRelationUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "DeletePostgresTestBAD_JoinNoRelation2",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 26,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.LeftJoin",
+				Tag:  `sql:"norel:c,c.b_id = b.id"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 30,
+				},
+			},
+			Rel: relInfo{
+				Id: analysis.RelIdent{"norel", "c", ""},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_JoinNoColumn",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_2",
-			RelSchema:    "public",
-			ColName:      "nocol",
-			ColQualifier: "b",
-			LitExpr:      "",
-			TargetName:   "SelectPostgresTestBAD_JoinNoColumn",
-			FieldType:    "github.com/frk/gosql.LeftJoin",
-			FieldName:    "_",
-			FieldTag:     `sql:"column_tests_2:b,b.nocol = a.nocol"`,
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     59,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_JoinNoColumn",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 38,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "b", ""}, Relation: column_tests_2},
+			Col: colInfo{Id: analysis.ColIdent{"nocol", "b"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.LeftJoin",
+				Tag:  `sql:"column_tests_2:b,b.nocol = a.nocol"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 41,
+				},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_JoinNoColumn2",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "nocol",
-			ColQualifier: "a",
-			TargetName:   "SelectPostgresTestBAD_JoinNoColumn2",
-			FieldType:    "github.com/frk/gosql.LeftJoin",
-			FieldName:    "_",
-			FieldTag:     `sql:"column_tests_2:b,b.col_foo = a.nocol"`,
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     67,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_JoinNoColumn2",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 46,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"nocol", "a"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.LeftJoin",
+				Tag:  `sql:"column_tests_2:b,b.col_foo = a.nocol"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 49,
+				},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_JoinBadUnaryBoolColumn",
-		err: Error{
-			Code:         ErrBadUnaryPredicateType,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_2",
-			RelSchema:    "public",
-			ColName:      "col_foo",
-			ColQualifier: "b",
-			ColType:      "integer",
-			TargetName:   "SelectPostgresTestBAD_JoinBadUnaryBoolColumn",
-			Predicate:    analysis.IsTrue,
-			FieldType:    "github.com/frk/gosql.LeftJoin",
-			FieldName:    "_",
-			FieldTag:     "sql:\"column_tests_2:b,b.col_foo istrue\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     75,
+		err: &dbError{
+			Code: errPredicateOperandBool,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_JoinBadUnaryBoolColumn",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 54,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.LeftJoin",
+				Tag:  `sql:"column_tests_2:b,b.col_foo istrue"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 57,
+				},
+			},
+			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
+			Col:  colInfo{Id: analysis.ColIdent{"col_foo", "b"}, Column: findRelColumn(column_tests_2, "col_foo")},
+			Pred: analysis.IsTrue,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_JoinBadUnaryNullColumn",
-		err: Error{
-			Code:         ErrBadUnaryPredicateType,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_2",
-			RelSchema:    "public",
-			ColName:      "col_baz",
-			ColQualifier: "b",
-			ColType:      "boolean",
-			TargetName:   "SelectPostgresTestBAD_JoinBadUnaryNullColumn",
-			Predicate:    analysis.IsNull,
-			FieldType:    "github.com/frk/gosql.LeftJoin",
-			FieldName:    "_",
-			FieldTag:     "sql:\"column_tests_2:b,b.col_baz isnull\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     83,
+		err: &dbError{
+			Code: errPredicateOperandNull,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_JoinBadUnaryNullColumn",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 62,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.LeftJoin",
+				Tag:  `sql:"column_tests_2:b,b.col_baz isnull"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 65,
+				},
+			},
+			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
+			Col:  colInfo{Id: analysis.ColIdent{"col_baz", "b"}, Column: findRelColumn(column_tests_2, "col_baz")},
+			Pred: analysis.IsNull,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_JoinBadLiteralExpression",
-		err: Error{
-			Code:       ErrBadLiteralExpression,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			LitExpr:    "'foo'bar",
-			TargetName: "SelectPostgresTestBAD_JoinBadLiteralExpression",
-			FieldType:  "github.com/frk/gosql.LeftJoin",
-			FieldName:  "_",
-			FieldTag:   "sql:\"column_tests_2:b,b.col_baz = 'foo'bar \"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   91,
+		err: &dbError{
+			Code: errPredicateLiteralExpr,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_JoinBadLiteralExpression",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 70,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.LeftJoin",
+				Tag:  `sql:"column_tests_2:b,b.col_baz = 'foo'bar "`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 73,
+				},
+			},
+			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
+			Col:    colInfo{Id: analysis.ColIdent{"col_baz", "b"}, Column: findRelColumn(column_tests_2, "col_baz")},
+			RHSLit: exprInfo{Expr: "'foo'bar"},
+			Pred:   analysis.IsEQ,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_JoinBadQuantifierColumnType",
-		err: Error{
-			Code:       ErrBadComparisonOperation,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_2",
-			RelSchema:  "public",
-			ColName:    "col_foo",
-			ColType:    "integer",
-			Col2Name:   "col_a",
-			Col2Type:   "integer",
-			Predicate:  analysis.IsGT,
-			Quantifier: analysis.QuantAny,
-			TargetName: "SelectPostgresTestBAD_JoinBadQuantifierColumnType",
-			FieldType:  "github.com/frk/gosql.LeftJoin",
-			FieldName:  "_",
-			FieldTag:   "sql:\"column_tests_2:b,b.col_foo >any a.col_a\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   99,
+		err: &dbError{
+			Code: errPredicateOperandQuantifier,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_JoinBadQuantifierColumnType",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 78,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.LeftJoin",
+				Tag:  `sql:"column_tests_2:b,b.col_foo >any a.col_a"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 81,
+				},
+			},
+			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
+			Col:    colInfo{Id: analysis.ColIdent{"col_foo", "b"}, Column: findRelColumn(column_tests_2, "col_foo")},
+			RHSCol: colInfo{Id: analysis.ColIdent{"col_a", "a"}, Column: findRelColumn(column_tests_1, "col_a")},
+			Pred:   analysis.IsGT,
+			Quant:  analysis.QuantAny,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_JoinBadComparisonOperandType",
-		err: Error{
-			Code:       ErrBadComparisonOperation,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_2",
-			RelSchema:  "public",
-			ColName:    "col_baz",
-			ColType:    "boolean",
-			Col2Type:   "unknown",
-			LitExpr:    "'baz'",
-			Predicate:  analysis.IsLT,
-			TargetName: "SelectPostgresTestBAD_JoinBadComparisonOperandType",
-			FieldType:  "github.com/frk/gosql.LeftJoin",
-			FieldName:  "_",
-			FieldTag:   "sql:\"column_tests_2:b,b.col_baz < 'baz'\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   107,
+		err: &dbError{
+			Code: errColumnComparison,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_JoinBadComparisonOperandType",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 86,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.LeftJoin",
+				Tag:  `sql:"column_tests_2:b,b.col_baz < 'baz'"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 89,
+				},
+			},
+			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
+			Col:    colInfo{Id: analysis.ColIdent{"col_baz", "b"}, Column: findRelColumn(column_tests_2, "col_baz")},
+			RHSLit: exprInfo{Expr: "'baz'", Type: testdb.DB.catalog.Types[oid.Unknown]},
+			Pred:   analysis.IsLT,
 		},
 	}, {
 		name: "InsertPostgresTestBAD_OnConflictNoColumn",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "InsertPostgresTestBAD_OnConflictNoColumn",
-			FieldType:    "github.com/frk/gosql.Column",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_xyz\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     115,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_OnConflictNoColumn",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 94,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  "sql:\"c.col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 97,
+				},
+			},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_OnConflictColumnNoIndexMatch",
-		err: Error{
-			Code:       ErrNoUniqueIndex,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			TargetName: "InsertPostgresTestBAD_OnConflictColumnNoIndexMatch",
-			FieldType:  "github.com/frk/gosql.Column",
-			FieldName:  "_",
-			FieldTag:   "sql:\"c.col_a,c.col_b\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   123,
+		err: &dbError{
+			Code: errOnConflictIndexColumnsUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_OnConflictColumnNoIndexMatch",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 102,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  `sql:"c.col_a,c.col_b"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 105,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_OnConflictNoIndex",
-		err: Error{
-			Code:       ErrNoUniqueIndex,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			TargetName: "InsertPostgresTestBAD_OnConflictNoIndex",
-			FieldType:  "github.com/frk/gosql.Index",
-			FieldName:  "_",
-			FieldTag:   "sql:\"some_index\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   131,
+		err: &dbError{
+			Code: errOnConflictIndexUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_OnConflictNoIndex",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 110,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Index",
+				Tag:  "sql:\"some_index\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 113,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_OnConflictNoUniqueIndex",
-		err: Error{
-			Code:       ErrNoUniqueIndex,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_2",
-			RelSchema:  "public",
-			TargetName: "InsertPostgresTestBAD_OnConflictNoUniqueIndex",
-			FieldType:  "github.com/frk/gosql.Index",
-			FieldName:  "_",
-			FieldTag:   "sql:\"column_tests_2_nonunique_index\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   139,
+		err: &dbError{
+			Code: errOnConflictIndexNotUnique,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_OnConflictNoUniqueIndex",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 118,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Index",
+				Tag:  "sql:\"column_tests_2_nonunique_index\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 121,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_OnConflictNoConstraint",
-		err: Error{
-			Code:       ErrNoUniqueConstraint,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			TargetName: "InsertPostgresTestBAD_OnConflictNoConstraint",
-			FieldType:  "github.com/frk/gosql.Constraint",
-			FieldName:  "_",
-			FieldTag:   "sql:\"some_constraint\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   147,
+		err: &dbError{
+			Code: errOnConflictConstraintUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_OnConflictNoConstraint",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 126,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Constraint",
+				Tag:  "sql:\"some_constraint\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 129,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_OnConflictNoUniqueConstraint",
-		err: Error{
-			Code:       ErrNoUniqueConstraint,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_2",
-			RelSchema:  "public",
-			TargetName: "InsertPostgresTestBAD_OnConflictNoUniqueConstraint",
-			FieldType:  "github.com/frk/gosql.Constraint",
-			FieldName:  "_",
-			FieldTag:   "sql:\"column_tests_2_nonunique_constraint\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   155,
+		err: &dbError{
+			Code: errOnConflictConstraintNotUnique,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_OnConflictNoUniqueConstraint",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 134,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Constraint",
+				Tag:  "sql:\"column_tests_2_nonunique_constraint\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 137,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_OnConflictUpdateColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_2",
-			RelSchema:    "public",
-			ColName:      "col_a",
-			ColQualifier: "c",
-			TargetName:   "InsertPostgresTestBAD_OnConflictUpdateColumnNotFound",
-			FieldType:    "github.com/frk/gosql.Update",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_a,c.col_b,c.col_xyz\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     164,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_OnConflictUpdateColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 142,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
+			Col: colInfo{Id: analysis.ColIdent{"col_a", "c"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Update",
+				Tag:  "sql:\"c.col_a,c.col_b,c.col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 146,
+				},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereFieldColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "id",
-			ColQualifier: "c",
-			Predicate:    analysis.IsEQ,
-			Quantifier:   0x0,
-			TargetName:   "SelectPostgresTestBAD_WhereFieldColumnNotFound",
-			FieldType:    "int",
-			FieldName:    "Id",
-			FieldTag:     "sql:\"c.id\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     172,
-		},
-	}, {
-		name: "SelectPostgresTestBAD_WhereBadAlias",
-		err: Error{
-			Code:         ErrBadAlias,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "id",
-			ColQualifier: "x",
-			Predicate:    analysis.IsEQ,
-			TargetName:   "SelectPostgresTestBAD_WhereBadAlias",
-			FieldType:    "int",
-			FieldName:    "Id",
-			FieldTag:     "sql:\"x.id\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     180,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereFieldColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 151,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"id", "c"}},
+			Field: fieldInfo{
+				Name: "Id",
+				Type: "int",
+				Tag:  "sql:\"c.id\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 154,
+				},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereCannotCompareTypes",
-		err: Error{
-			Code:         ErrBadComparisonOperation,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_e",
-			ColQualifier: "c",
-			ColType:      "timestamp without time zone",
-			Predicate:    analysis.IsEQ,
-			TargetName:   "SelectPostgresTestBAD_WhereCannotCompareTypes",
-			FieldType:    "float64",
-			FieldName:    "D",
-			FieldTag:     "sql:\"c.col_e\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     188,
+		err: &dbError{
+			Code: errColumnFieldComparison,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereCannotCompareTypes",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 159,
+				},
+			},
+			Field: fieldInfo{
+				Name: "D",
+				Type: "float64",
+				Tag:  "sql:\"c.col_e ~\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 162,
+				},
+			},
+			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:  colInfo{Id: analysis.ColIdent{"col_e", "c"}, Column: findRelColumn(column_tests_1, "col_e")},
+			Pred: analysis.IsMatch,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnTypeForFuncname",
-		err: Error{
-			Code:         ErrBadProcType,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_d",
-			ColQualifier: "c",
-			ColType:      "double precision",
-			Predicate:    analysis.IsEQ,
-			TargetName:   "SelectPostgresTestBAD_WhereColumnTypeForFuncname",
-			FieldType:    "float64",
-			FieldName:    "D",
-			FieldTag:     "sql:\"c.col_d,@lower\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     196,
+		err: &dbError{
+			Code: errProcedureUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereColumnTypeForFuncname",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 167,
+				},
+			},
+			Field: fieldInfo{
+				Name: "D",
+				Type: "float64",
+				Tag:  "sql:\"c.col_d,@lower\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 170,
+				},
+			},
+			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:  colInfo{Id: analysis.ColIdent{"col_d", "c"}, Column: findRelColumn(column_tests_1, "col_d")},
+			Pred: analysis.IsEQ,
+			Func: "lower",
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "SelectPostgresTestBAD_WhereColumnNotFound",
-			FieldType:    "github.com/frk/gosql.Column",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_xyz istrue\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     204,
-		},
-	}, {
-		name: "SelectPostgresTestBAD_WhereColumnNotFoundBadAlias",
-		err: Error{
-			Code:         ErrBadAlias,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "col_a",
-			ColQualifier: "x",
-			TargetName:   "SelectPostgresTestBAD_WhereColumnNotFoundBadAlias",
-			FieldType:    "github.com/frk/gosql.Column",
-			FieldName:    "_",
-			FieldTag:     "sql:\"x.col_a = 123\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     212,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 175,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  "sql:\"c.col_xyz istrue\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 178,
+				},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnBadBoolOp",
-		err: Error{
-			Code:         ErrBadUnaryPredicateType,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_a",
-			ColQualifier: "c",
-			ColType:      "integer",
-			Predicate:    analysis.IsTrue,
-			TargetName:   "SelectPostgresTestBAD_WhereColumnBadBoolOp",
-			FieldType:    "github.com/frk/gosql.Column",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_a istrue\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     220,
+		err: &dbError{
+			Code: errPredicateOperandBool,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereColumnBadBoolOp",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 183,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  "sql:\"c.col_a istrue\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 186,
+				},
+			},
+			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:  colInfo{Id: analysis.ColIdent{"col_a", "c"}, Column: findRelColumn(column_tests_1, "col_a")},
+			Pred: analysis.IsTrue,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnNotFoundRHS",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "SelectPostgresTestBAD_WhereColumnNotFoundRHS",
-			FieldType:    "github.com/frk/gosql.Column",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_a = c.col_xyz\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     236,
-		},
-	}, {
-		name: "SelectPostgresTestBAD_WhereColumnNotFoundRHSBadAlias",
-		err: Error{
-			Code:         ErrBadAlias,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "col_a",
-			ColQualifier: "x",
-			TargetName:   "SelectPostgresTestBAD_WhereColumnNotFoundRHSBadAlias",
-			FieldType:    "github.com/frk/gosql.Column",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_a = x.col_a\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     244,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereColumnNotFoundRHS",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 199,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  "sql:\"c.col_a = c.col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 202,
+				},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnBadLiteralExpression",
-		err: Error{
-			Code:       ErrBadLiteralExpression,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			LitExpr:    "123abc",
-			TargetName: "SelectPostgresTestBAD_WhereColumnBadLiteralExpression",
-			FieldType:  "github.com/frk/gosql.Column",
-			FieldName:  "_",
-			FieldTag:   "sql:\"c.col_a = 123abc\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   252,
+		err: &dbError{
+			Code: errPredicateLiteralExpr,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereColumnBadLiteralExpression",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 207,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  `sql:"c.col_a = 123abc"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 210,
+				},
+			},
+			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:    colInfo{Id: analysis.ColIdent{"col_a", "c"}, Column: findRelColumn(column_tests_1, "col_a")},
+			RHSLit: exprInfo{Expr: "123abc"},
+			Pred:   analysis.IsEQ,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnBadTypeForQuantifier",
-		err: Error{
-			Code:       ErrBadComparisonOperation,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			ColName:    "col_a",
-			ColType:    "integer",
-			Col2Name:   "col_b",
-			Col2Type:   "text",
-			Predicate:  analysis.IsIn,
-			TargetName: "SelectPostgresTestBAD_WhereColumnBadTypeForQuantifier",
-			FieldType:  "github.com/frk/gosql.Column",
-			FieldName:  "_",
-			FieldTag:   "sql:\"c.col_a isin c.col_b\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   260,
+		err: &dbError{
+			Code: errPredicateOperandArray,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereColumnBadTypeForQuantifier",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 215,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  `sql:"c.col_a isin c.col_b"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 218,
+				},
+			},
+			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:    colInfo{Id: analysis.ColIdent{"col_a", "c"}, Column: findRelColumn(column_tests_1, "col_a")},
+			RHSCol: colInfo{Id: analysis.ColIdent{"col_b", "c"}, Column: findRelColumn(column_tests_1, "col_b")},
+			Pred:   analysis.IsIn,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereColumnBadTypeComparison",
-		err: Error{
-			Code:       ErrBadComparisonOperation,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			ColName:    "col_a",
-			ColType:    "integer",
-			Col2Name:   "col_b",
-			Col2Type:   "text",
-			Predicate:  analysis.IsEQ,
-			TargetName: "SelectPostgresTestBAD_WhereColumnBadTypeComparison",
-			FieldType:  "github.com/frk/gosql.Column",
-			FieldName:  "_",
-			FieldTag:   "sql:\"c.col_a = c.col_b\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   268,
+		err: &dbError{
+			Code: errColumnComparison,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereColumnBadTypeComparison",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 223,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  `sql:"c.col_a = c.col_b"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 226,
+				},
+			},
+			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:    colInfo{Id: analysis.ColIdent{"col_a", "c"}, Column: findRelColumn(column_tests_1, "col_a")},
+			RHSCol: colInfo{Id: analysis.ColIdent{"col_b", "c"}, Column: findRelColumn(column_tests_1, "col_b")},
+			Pred:   analysis.IsEQ,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereBetweenColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "SelectPostgresTestBAD_WhereBetweenColumnNotFound",
-			FieldType:    "struct{_ github.com/frk/gosql.Column \"sql:\\\"c.col_a,x\\\"\"; _ github.com/frk/gosql.Column \"sql:\\\"c.col_c,y\\\"\"}",
-			FieldName:    "a",
-			FieldTag:     "sql:\"c.col_xyz isbetween\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     276,
-		},
-	}, {
-		name: "SelectPostgresTestBAD_WhereBetweenRelationNotFound",
-		err: Error{
-			Code:         ErrBadAlias,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "col_a",
-			ColQualifier: "x",
-			TargetName:   "SelectPostgresTestBAD_WhereBetweenRelationNotFound",
-			FieldType:    "struct{_ github.com/frk/gosql.Column \"sql:\\\"c.col_b,x\\\"\"; _ github.com/frk/gosql.Column \"sql:\\\"c.col_c,y\\\"\"}",
-			FieldName:    "a",
-			FieldTag:     "sql:\"x.col_a isbetween\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     287,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereBetweenColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 231,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
+			Field: fieldInfo{
+				Name: "a",
+				Type: `struct{_ github.com/frk/gosql.Column "sql:\"c.col_a,x\""; _ github.com/frk/gosql.Column "sql:\"c.col_c,y\""}`,
+				Tag:  "sql:\"c.col_xyz isbetween\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 234,
+				},
+			},
+			WBField: fieldInfo{
+				Name: "a",
+				Type: `struct{_ github.com/frk/gosql.Column "sql:\"c.col_a,x\""; _ github.com/frk/gosql.Column "sql:\"c.col_c,y\""}`,
+				Tag:  `sql:"c.col_xyz isbetween"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 234,
+				},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereBetweenArgColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "SelectPostgresTestBAD_WhereBetweenArgColumnNotFound",
-			FieldType:    "github.com/frk/gosql.Column",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_xyz,x\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     299,
-		},
-	}, {
-		name: "SelectPostgresTestBAD_WhereBetweenArgRelationNotFound",
-		err: Error{
-			Code:         ErrBadAlias,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "col_b",
-			ColQualifier: "x",
-			TargetName:   "SelectPostgresTestBAD_WhereBetweenArgRelationNotFound",
-			FieldType:    "github.com/frk/gosql.Column",
-			FieldName:    "_",
-			FieldTag:     "sql:\"x.col_b,x\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     310,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereBetweenArgColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 242,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  "sql:\"c.col_xyz,x\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 246,
+				},
+			},
+			WBField: fieldInfo{
+				Name: "a",
+				Type: `struct{_ github.com/frk/gosql.Column "sql:\"c.col_xyz,x\""; _ github.com/frk/gosql.Column "sql:\"c.col_c,y\""}`,
+				Tag:  `sql:"c.col_a isbetween"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 245,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_WhereBetweenComparisonBadArgType",
-		err: Error{
-			Code:         ErrBadComparisonOperation,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_a",
-			ColQualifier: "c",
-			ColType:      "integer",
-			Predicate:    analysis.IsBetween,
-			TargetName:   "SelectPostgresTestBAD_WhereBetweenComparisonBadArgType",
-			FieldType:    "bool",
-			FieldName:    "y",
-			FieldTag:     "sql:\"y\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     322,
+		err: &dbError{
+			Code: errBetweenFieldComparison,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereBetweenComparisonBadArgType",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 253,
+				},
+			},
+			Field: fieldInfo{
+				Name: "y",
+				Type: "bool",
+				Tag:  "sql:\"y\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 258,
+				},
+			},
+			WBField: fieldInfo{
+				Name: "a",
+				Type: `struct{x int "sql:\"x\""; y bool "sql:\"y\""}`,
+				Tag:  `sql:"c.col_a isbetween"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 256,
+				},
+			},
+			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:  colInfo{Id: analysis.ColIdent{"col_a", "c"}, Column: findRelColumn(column_tests_1, "col_a")},
+			Pred: analysis.IsLTE,
 		},
 	}, {
 		name: "SelectPostgresTestBAD_OrderByColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "SelectPostgresTestBAD_OrderByColumnNotFound",
-			FieldType:    "github.com/frk/gosql.OrderBy",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_a,c.col_xyz\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     330,
-		},
-	}, {
-		name: "SelectPostgresTestBAD_OrderByRelationNotFound",
-		err: Error{
-			Code:         ErrNoRelation,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "col_a",
-			ColQualifier: "x",
-			TargetName:   "SelectPostgresTestBAD_OrderByRelationNotFound",
-			FieldType:    "github.com/frk/gosql.OrderBy",
-			FieldName:    "_",
-			FieldTag:     "sql:\"x.col_a\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     336,
-		},
-	}, {
-		name: "InsertPostgresTestBAD_DefaultBadRelationAlias",
-		err: Error{
-			Code:         ErrBadColumnQualifier,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_b",
-			ColQualifier: "x",
-			TargetName:   "InsertPostgresTestBAD_DefaultBadRelationAlias",
-			FieldType:    "github.com/frk/gosql.Default",
-			FieldName:    "_",
-			FieldTag:     "sql:\"x.col_b\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     342,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_OrderByColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 264,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.OrderBy",
+				Tag:  "sql:\"c.col_a,c.col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 266,
+				},
+			},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_DefaultColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "InsertPostgresTestBAD_DefaultColumnNotFound",
-			FieldType:    "github.com/frk/gosql.Default",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_xyz\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     348,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_DefaultColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 270,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Default",
+				Tag:  "sql:\"c.col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 272,
+				},
+			},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_DefaultNotSet",
-		err: Error{
-			Code:         ErrNoColumnDefault,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_b",
-			ColQualifier: "c",
-			ColType:      "text",
-			TargetName:   "InsertPostgresTestBAD_DefaultNotSet",
-			FieldType:    "github.com/frk/gosql.Default",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_b\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     354,
-		},
-	}, {
-		name: "InsertPostgresTestBAD_ForceColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "InsertPostgresTestBAD_ForceColumnNotFound",
-			FieldType:    "github.com/frk/gosql.Force",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_xyz\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     360,
-		},
-	}, {
-		name: "InsertPostgresTestBAD_ForceRelationNotFound",
-		err: Error{
-			Code:         ErrNoRelation,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "col_a",
-			ColQualifier: "x",
-			TargetName:   "InsertPostgresTestBAD_ForceRelationNotFound",
-			FieldType:    "github.com/frk/gosql.Force",
-			FieldName:    "_",
-			FieldTag:     "sql:\"x.col_a\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     366,
+		err: &dbError{
+			Code: errColumnDefaultUnset,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_DefaultNotSet",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 276,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Default",
+				Tag:  `sql:"c.col_b"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 278,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_b", "c"}, Column: findRelColumn(column_tests_1, "col_b")},
 		},
 	}, {
 		name: "UpdatePostgresTestBAD_ReturnColumnNotFound",
-		err: Error{
-			Code:         ErrNoColumn,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_xyz",
-			ColQualifier: "c",
-			TargetName:   "UpdatePostgresTestBAD_ReturnColumnNotFound",
-			FieldType:    "github.com/frk/gosql.Return",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_xyz\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     372,
-		},
-	}, {
-		name: "UpdatePostgresTestBAD_ReturnRelationNotFound",
-		err: Error{
-			Code:         ErrNoRelation,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			ColName:      "col_a",
-			ColQualifier: "x",
-			TargetName:   "UpdatePostgresTestBAD_ReturnRelationNotFound",
-			FieldType:    "github.com/frk/gosql.Return",
-			FieldName:    "_",
-			FieldTag:     "sql:\"x.col_a\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     378,
-		},
-	}, {
-		name: "UpdatePostgresTestBAD_ReturnFieldNotFound",
-		err: Error{
-			Code:         ErrNoColumnField,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_d",
-			ColQualifier: "c",
-			TargetName:   "UpdatePostgresTestBAD_ReturnFieldNotFound",
-			FieldType:    "github.com/frk/gosql.Return",
-			FieldName:    "_",
-			FieldTag:     "sql:\"c.col_d\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     384,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "UpdatePostgresTestBAD_ReturnColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 282,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Return",
+				Tag:  "sql:\"c.col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 284,
+				},
+			},
 		},
 	}, {
 		name: "FilterPostgresTestBAD_TextSearchColumnNotFound",
-		err: Error{
-			Code:       ErrNoColumn,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			TargetName: "FilterPostgresTestBAD_TextSearchColumnNotFound",
-			FieldType:  "github.com/frk/gosql.TextSearch",
-			FieldName:  "_",
-			FieldTag:   "sql:\"c.col_xyz\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   390,
-		},
-	}, {
-		name: "FilterPostgresTestBAD_TextSearchRelationNotFound",
-		err: Error{
-			Code:         ErrBadColumnQualifier,
-			PkgPath:      "path/to/test",
-			DBName:       "gosql_test_db",
-			RelName:      "column_tests_1",
-			RelSchema:    "public",
-			ColName:      "col_b",
-			ColQualifier: "x",
-			TargetName:   "FilterPostgresTestBAD_TextSearchRelationNotFound",
-			FieldType:    "github.com/frk/gosql.TextSearch",
-			FieldName:    "_",
-			FieldTag:     "sql:\"x.col_b\"",
-			FileName:     "../testdata/postgres_bad.go",
-			FileLine:     396,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "FilterPostgresTestBAD_TextSearchColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 288,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", "c"}},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.TextSearch",
+				Tag:  "sql:\"c.col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 290,
+				},
+			},
 		},
 	}, {
 		name: "FilterPostgresTestBAD_TextSearchBadColumnType",
-		err: Error{
-			Code:       ErrBadColumnType,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			ColName:    "col_b",
-			ColType:    "text",
-			TargetName: "FilterPostgresTestBAD_TextSearchBadColumnType",
-			FieldType:  "github.com/frk/gosql.TextSearch",
-			FieldName:  "_",
-			FieldTag:   "sql:\"c.col_b\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   402,
+		err: &dbError{
+			Code: errColumnTextSearchType,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "FilterPostgresTestBAD_TextSearchBadColumnType",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 294,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_b", "c"}, Column: findRelColumn(column_tests_1, "col_b")},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.TextSearch",
+				Tag:  "sql:\"c.col_b\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 296,
+				},
+			},
 		},
 	}, {
 		name: "SelectPostgresTestBAD_RelationColumnNotFound",
-		err: Error{
-			Code:       ErrNoColumn,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			ColName:    "col_xyz",
-			TargetName: "SelectPostgresTestBAD_RelationColumnNotFound",
-			FieldType:  "string",
-			FieldName:  "Xyz",
-			FieldTag:   "sql:\"col_xyz\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   408,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_RelationColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 300,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", ""}},
+			Field: fieldInfo{
+				Name: "Xyz",
+				Type: "string",
+				Tag:  "sql:\"col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 302,
+				},
+			},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_RelationColumnNotFound",
-		err: Error{
-			Code:       ErrNoColumn,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			ColName:    "col_xyz",
-			TargetName: "InsertPostgresTestBAD_RelationColumnNotFound",
-			FieldType:  "string",
-			FieldName:  "XYZ",
-			FieldTag:   "sql:\"col_xyz\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   415,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_RelationColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 307,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", ""}},
+			Field: fieldInfo{
+				Name: "XYZ",
+				Type: "string",
+				Tag:  "sql:\"col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 309,
+				},
+			},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_BadFieldToColumnType",
-		err: Error{
-			Code:       ErrBadFieldWriteType,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			ColName:    "col_c",
-			ColType:    "boolean",
-			TargetName: "InsertPostgresTestBAD_BadFieldToColumnType",
-			FieldType:  "int",
-			FieldName:  "B",
-			FieldTag:   "sql:\"col_c\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   436,
+		err: &dbError{
+			Code: errColumnFieldTypeWrite,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_BadFieldToColumnType",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 328,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_c", ""}, Column: findRelColumn(column_tests_1, "col_c")},
+			Field: fieldInfo{
+				Name: "B",
+				Type: "int",
+				Tag:  `sql:"col_c"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 330,
+				},
+			},
 		},
 	}, {
 		name: "InsertPostgresTestBAD_ResultColumnNotFound",
-		err: Error{
-			Code:       ErrNoColumn,
-			PkgPath:    "path/to/test",
-			DBName:     "gosql_test_db",
-			RelName:    "column_tests_1",
-			RelSchema:  "public",
-			ColName:    "col_xyz",
-			TargetName: "InsertPostgresTestBAD_ResultColumnNotFound",
-			FieldType:  "int",
-			FieldName:  "A",
-			FieldTag:   "sql:\"col_xyz\"",
-			FileName:   "../testdata/postgres_bad.go",
-			FileLine:   444,
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_ResultColumnNotFound",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 335,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", ""}},
+			Field: fieldInfo{
+				Name: "A",
+				Type: "int",
+				Tag:  "sql:\"col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 338,
+				},
+			},
+		},
+	}, {
+		name: "SelectPostgresTestBAD_NoSchema",
+		err: &dbError{
+			Code: errRelationUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_NoSchema",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 343,
+				},
+			},
+			Field: fieldInfo{
+				Name: "Columns",
+				Type: "path/to/test.CT1",
+				Tag:  `rel:"noschema.column_tests_1:c"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 344,
+				},
+			},
+			Rel: relInfo{
+				Id: analysis.RelIdent{"column_tests_1", "c", "noschema"},
+			},
+		},
+	}, {
+		name: "SelectPostgresTestBAD_RelationColumnNotFound2",
+		err: &dbError{
+			Code: errColumnUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_RelationColumnNotFound2",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 348,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_xyz", ""}},
+			Field: fieldInfo{
+				Name: "XYZ",
+				Type: "string",
+				Tag:  "sql:\"col_xyz\"",
+				File: fileInfo{
+					Name: "../testdata/types.go",
+					Line: 29,
+				},
+			},
+		},
+	}, {
+		name: "FilterPostgresTestBAD_BadFieldWriteType",
+		err: &dbError{
+			Code: errColumnFieldTypeWrite,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "FilterPostgresTestBAD_BadFieldWriteType",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 353,
+				},
+			},
+			Field: fieldInfo{
+				Name: "Metadata",
+				Type: "func()",
+				Tag:  `sql:"metadata2"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 355,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"test_user", "", "public"}, Relation: test_user},
+			Col: colInfo{Column: findRelColumn(test_user, "metadata2")},
+		},
+	}, {
+		name: "FilterPostgresTestBAD_BadFieldWriteType2",
+		err: &dbError{
+			Code: errColumnFieldTypeWrite,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "FilterPostgresTestBAD_BadFieldWriteType2",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 360,
+				},
+			},
+			Field: fieldInfo{
+				Name: "Envelope",
+				Type: "chan struct{}",
+				Tag:  `sql:"envelope"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 362,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"test_user", "", "public"}, Relation: test_user},
+			Col: colInfo{Column: findRelColumn(test_user, "envelope")},
+		},
+	}, {
+		name: "FilterPostgresTestBAD_BadFieldWriteType3",
+		err: &dbError{
+			Code: errColumnFieldTypeWrite,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "FilterPostgresTestBAD_BadFieldWriteType3",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 367,
+				},
+			},
+			Field: fieldInfo{
+				Name: "Lines",
+				Type: "float64",
+				Tag:  `sql:"col_linearr"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 369,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"pgsql_test", "", "public"}, Relation: pgsql_test},
+			Col: colInfo{Column: findRelColumn(pgsql_test, "col_linearr")},
+		},
+	}, {
+		name: "SelectPostgresTestBAD_WhereLiteralBadTypeForQuantifier",
+		err: &dbError{
+			Code: errPredicateOperandArray,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereLiteralBadTypeForQuantifier",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 374,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  `sql:"c.col_a notin 'foo bar'"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 377,
+				},
+			},
+			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:    colInfo{Id: analysis.ColIdent{"col_a", "c"}, Column: findRelColumn(column_tests_1, "col_a")},
+			RHSLit: exprInfo{Expr: "'foo bar'", Type: testdb.DB.catalog.Types[oid.Unknown]},
+			Pred:   analysis.NotIn,
+		},
+	}, {
+		name: "SelectPostgresTestBAD_WhereUnknownFunc",
+		err: &dbError{
+			Code: errProcedureUnknown,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_WhereUnknownFunc",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 382,
+				},
+			},
+			Field: fieldInfo{
+				Name: "D",
+				Type: "float64",
+				Tag:  `sql:"c.col_d,@unknown_func"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 385,
+				},
+			},
+			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:  colInfo{Id: analysis.ColIdent{"col_d", "c"}, Column: findRelColumn(column_tests_1, "col_d")},
+			Pred: analysis.IsEQ,
+			Func: "unknown_func",
+		},
+	}, {
+		name: "InsertPostgresTestBAD_DefaultOption",
+		err: &dbError{
+			Code: errColumnDefaultUnset,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_DefaultOption",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 390,
+				},
+			},
+			Field: fieldInfo{
+				Name: "B",
+				Type: "string",
+				Tag:  `sql:"col_b,default"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 392,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_b", ""}, Column: findRelColumn(column_tests_1, "col_b")},
+		},
+	}, {
+		name: "SelectPostgresTestBAD_ColumnTypeToBadField",
+		err: &dbError{
+			Code: errColumnFieldTypeRead,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_ColumnTypeToBadField",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 397,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col: colInfo{Id: analysis.ColIdent{"col_c", ""}, Column: findRelColumn(column_tests_1, "col_c")},
+			Field: fieldInfo{
+				Name: "B",
+				Type: "int",
+				Tag:  `sql:"col_c"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 399,
+				},
+			},
+		},
+	}, {
+		name: "SelectPostgresTestBAD_ColumnTypeToBadField2",
+		err: &dbError{
+			Code: errColumnFieldTypeRead,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_ColumnTypeToBadField2",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 404,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"test_user", "", "public"}, Relation: test_user},
+			Col: colInfo{Id: analysis.ColIdent{"envelope", ""}, Column: findRelColumn(test_user, "envelope")},
+			Field: fieldInfo{
+				Name: "Envelope",
+				Type: "chan struct{}",
+				Tag:  `sql:"envelope"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 406,
+				},
+			},
+		},
+	}, {
+		name: "SelectPostgresTestBAD_ColumnTypeToBadField3",
+		err: &dbError{
+			Code: errColumnFieldTypeRead,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_ColumnTypeToBadField3",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 411,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"pgsql_test", "", "public"}, Relation: pgsql_test},
+			Col: colInfo{Id: analysis.ColIdent{"col_linearr", ""}, Column: findRelColumn(pgsql_test, "col_linearr")},
+			Field: fieldInfo{
+				Name: "Lines",
+				Type: "float64",
+				Tag:  `sql:"col_linearr"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 413,
+				},
+			},
+		},
+	}, {
+		name: "SelectPostgresTestBAD_BadBetweenColumnComparison",
+		err: &dbError{
+			Code: errBetweenColumnComparison,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "SelectPostgresTestBAD_BadBetweenColumnComparison",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 418,
+				},
+			},
+			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
+			Col:    colInfo{Id: analysis.ColIdent{"col_a", "c"}, Column: findRelColumn(column_tests_1, "col_a")},
+			RHSCol: colInfo{Id: analysis.ColIdent{"col_c", "c"}, Column: findRelColumn(column_tests_1, "col_c")},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  `sql:"c.col_c,y"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 423,
+				},
+			},
+			WBField: fieldInfo{
+				Name: "a",
+				Type: `struct{_ github.com/frk/gosql.Column "sql:\"c.col_d,x\""; _ github.com/frk/gosql.Column "sql:\"c.col_c,y\""}`,
+				Tag:  `sql:"c.col_a isbetween"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 421,
+				},
+			},
+			Pred: analysis.IsLTE,
+		},
+	}, {
+		name: "InsertPostgresTestBAD_OnConflictIndexColumnsNotUnique",
+		err: &dbError{
+			Code: errOnConflictIndexColumnsNotUnique,
+			DB:   test_dbinfo,
+			Target: targetInfo{
+				Pkg:  "path/to/test",
+				Name: "InsertPostgresTestBAD_OnConflictIndexColumnsNotUnique",
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 429,
+				},
+			},
+			Field: fieldInfo{
+				Name: "_",
+				Type: "github.com/frk/gosql.Column",
+				Tag:  `sql:"c.col_indkey1,c.col_indkey2,c.col_indkey3"`,
+				File: fileInfo{
+					Name: "../testdata/postgres_bad.go",
+					Line: 432,
+				},
+			},
+			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
 		},
 	}}
 	for _, tt := range tests {
@@ -927,8 +1461,49 @@ func TestCheck(t *testing.T) {
 			if e := compare.Compare(err, tt.err); e != nil {
 				t.Errorf("%v - %#v %v", e, err, err)
 			}
-
 			_ = info
+
+			if tt.printerr && err != nil {
+				fmt.Println(err)
+			}
 		})
 	}
+}
+
+type anTargetStruct struct {
+	ts analysis.TargetStruct
+}
+
+// helper func to retrieve analysis info on specific test type
+func _analyzeTargetStruct(name string) anTargetStruct {
+	named, pos := testutil.FindNamedType(name, tdata)
+	if named == nil {
+		panic(name + " not found")
+	}
+
+	info := new(analysis.Info)
+	ts, err := analysis.Run(tdata.Fset, named, pos, info)
+	if err != nil {
+		panic(err)
+	}
+
+	return anTargetStruct{ts}
+}
+
+func (a anTargetStruct) relField() *analysis.RelField {
+	switch v := a.ts.(type) {
+	case *analysis.QueryStruct:
+		return v.Rel
+	case *analysis.FilterStruct:
+		return v.Rel
+	}
+	return nil
+}
+
+func (a anTargetStruct) resultField() *analysis.ResultField {
+	switch v := a.ts.(type) {
+	case *analysis.QueryStruct:
+		return v.Result
+	}
+	return nil
 }

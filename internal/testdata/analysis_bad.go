@@ -766,3 +766,207 @@ type DeleteAnalysisTestBAD_ListPredicate struct {
 		a int `sql:"column_a isin"`
 	}
 }
+
+//BAD: DELETE with conflicting relation name
+type DeleteAnalysisTestBAD_ConflictingRelationName struct {
+	Rel   T `rel:"relation_a"`
+	Using struct {
+		_ gosql.Relation `sql:"relation_d:d"`
+		_ gosql.LeftJoin `sql:"relation_a,id = d.a_id"`
+	}
+	Where struct {
+		_ gosql.Column `sql:"a.id = d.a_id"`
+	}
+}
+
+//BAD: DELETE with conflicting relation alias
+type DeleteAnalysisTestBAD_ConflictingRelationAlias struct {
+	Rel   T `rel:"relation_a:a"`
+	Using struct {
+		_ gosql.Relation `sql:"relation_b:b"`
+		_ gosql.LeftJoin `sql:"relation_c:a,a.id = b.c_id"`
+	}
+	Where struct {
+		_ gosql.Column `sql:"a.id = b.a_id"`
+	}
+}
+
+//BAD: Filter with conflicting rel tag
+type FilterAnalysisTestBAD_ConflictingRelTag struct {
+	_ T                `rel:"relation_a:a"`
+	_ gosql.TextSearch `rel:"a.ts_document"`
+}
+
+//BAD: Filter with illegal iterator type for rel field
+type FilterAnalysisTestBAD_IllegalIteratorType struct {
+	_ func(*T) error   `rel:"relation_a:a"`
+	_ gosql.TextSearch `sql:"a.ts_document"`
+}
+
+//BAD: Select with conflicting relation name
+type SelectAnalysisTestBAD_ConflictingRelName struct {
+	Join struct {
+		_ gosql.LeftJoin `sql:"relation_a,relation_a.foo istrue"`
+	}
+	Rel T `rel:"relation_a"`
+}
+
+//BAD: Select with conflicting relation alias
+type SelectAnalysisTestBAD_ConflictingRelAlias struct {
+	Join struct {
+		_ gosql.LeftJoin `sql:"relation_b:a,a.foo istrue"`
+	}
+	Rel T `rel:"relation_a:a"`
+}
+
+//BAD: Update with conflicting relation name
+type UpdateAnalysisTestBAD_ConflictingRelationName struct {
+	Rel  T `rel:"relation_a"`
+	From struct {
+		_ gosql.Relation `sql:"relation_a"`
+		_ gosql.LeftJoin `sql:"relation_d:d,d.id = relation_a.d_id"`
+	}
+	Where struct {
+		Value string `sql:"d.col_value"`
+	}
+}
+
+//BAD: Update with conflicting relation alias
+type UpdateAnalysisTestBAD_ConflictingRelationAlias struct {
+	Rel  T `rel:"relation_a:a"`
+	From struct {
+		_ gosql.Relation `sql:"relation_b:a"`
+		_ gosql.LeftJoin `sql:"relation_c:c,c.id = a.c_id"`
+	}
+	Where struct {
+		Value string `sql:"c.col_value"`
+	}
+}
+
+//BAD: Select with join condition containing unknown qualifier
+type SelectAnalysisTestBAD_UnknownColumnQualifier struct {
+	Rel  T `rel:"relation_a:a"`
+	Join struct {
+		_ gosql.LeftJoin `sql:"relation_b:b,b.id = c.b_id"`
+	}
+}
+
+//BAD: Select with join condition containing unknown qualifier
+type SelectAnalysisTestBAD_UnknownColumnQualifier2 struct {
+	Rel  T `rel:"relation_a"`
+	Join struct {
+		_ gosql.LeftJoin `sql:"relation_b,relation_b.id = relation_c.b_id"`
+	}
+}
+
+//BAD: textsearch relation not found (bad alias)
+type FilterAnalysisTestBAD_UnknownColumnQualifierInTextSearch struct {
+	_ CT1              `rel:"column_tests_1:c"`
+	_ gosql.TextSearch `sql:"x.col_b"`
+}
+
+//BAD: Unknown column qualifier in gosql.Return directive
+type UpdateAnalysisTestBAD_UnknownColumnQualifierInReturn struct {
+	Rel CT1          `rel:"column_tests_1:c"`
+	_   gosql.Return `sql:"x.col_a"`
+}
+
+//BAD: Unknown column qualifier in gosql.LeftJoin directive
+type SelectAnalysisTestBAD_UnknownColumnQualifierInJoin struct {
+	Columns CT1 `rel:"column_tests_1:a"`
+	Join    struct {
+		_ gosql.LeftJoin `sql:"column_tests_2:b,x.col_foo = a.col_a"`
+	}
+}
+
+//BAD: Unknown column qualifier in gosql.LeftJoin directive (2)
+type SelectAnalysisTestBAD_UnknownColumnQualifierInJoin2 struct {
+	Columns CT1 `rel:"column_tests_1:a"`
+	Join    struct {
+		_ gosql.LeftJoin `sql:"column_tests_2:b,b.col_foo = x.col_a"`
+	}
+}
+
+//BAD: Unknown column qualifier in gosql.Force directive
+type InsertAnalysisTestBAD_UnknownColumnQualifierInForce struct {
+	Rel CT1         `rel:"column_tests_1:c"`
+	_   gosql.Force `sql:"x.col_a"`
+}
+
+//BAD: Unknown column qualifier in Where field
+type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereField struct {
+	Rel   CT1 `rel:"column_tests_1:c"`
+	Where struct {
+		Id int `sql:"x.id"`
+	}
+}
+
+//BAD: Unknown column qualifier in Where gosql.Column directive
+type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn struct {
+	Rel   CT1 `rel:"column_tests_1:c"`
+	Where struct {
+		_ gosql.Column `sql:"x.col_a = 123"`
+	}
+}
+
+//BAD: Unknown column qualifier in Where gosql.Column directive (2)
+type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn2 struct {
+	Rel   CT1 `rel:"column_tests_1:c"`
+	Where struct {
+		_ gosql.Column `sql:"c.col_a = x.col_a"`
+	}
+}
+
+//BAD: Unknown column qualifier in gosql.OrderBy directive
+type SelectAnalysisTestBAD_UnknownColumnQualifierInOrderBy struct {
+	Rel CT1           `rel:"column_tests_1:c"`
+	_   gosql.OrderBy `sql:"x.col_a"`
+}
+
+//BAD: Unknown column qualifier in Between struct tag
+type SelectAnalysisTestBAD_UnknownColumnQualifierInBetween struct {
+	Rel   CT1 `rel:"column_tests_1:c"`
+	Where struct {
+		a struct {
+			_ gosql.Column `sql:"c.col_b,x"`
+			_ gosql.Column `sql:"c.col_c,y"`
+		} `sql:"x.col_a isbetween"`
+	}
+}
+
+//BAD: Unknown column qualifier in Between struct gosql.Column
+type SelectAnalysisTestBAD_UnknownColumnQualifierInBetweenColumn struct {
+	Rel   CT1 `rel:"column_tests_1:c"`
+	Where struct {
+		a struct {
+			_ gosql.Column `sql:"x.col_b,x"`
+			_ gosql.Column `sql:"c.col_c,y"`
+		} `sql:"c.col_a isbetween"`
+	}
+}
+
+//BAD: Unknown column qualifier in gosql.Default alias
+type InsertAnalysisTestBAD_UnknownColumnQualifierInDefault struct {
+	Rel CT1           `rel:"column_tests_1:c"`
+	_   gosql.Default `sql:"x.col_b"`
+}
+
+//BAD: Join conditional operand on the wrong side
+type SelectAnalysisTestBAD_JoinConditionalLHSOperand struct {
+	Columns CT1 `rel:"column_tests_1:a"`
+	Join    struct {
+		_ gosql.LeftJoin `sql:"column_tests_2:b,a.col_b = b.col_bar"`
+	}
+}
+
+//BAD: Insert with "field-less" column in Return directive
+type InsertAnalysisTestBAD_ReturnColumnNoField struct {
+	Rel T2           `rel:"relation_a:a"`
+	_   gosql.Return `sql:"a.foo,a.bar,a.baz,a.quux"`
+}
+
+//BAD: Update with "field-less" column in Force directive
+type UpdateAnalysisTestBAD_ForceColumnNoField struct {
+	Rel T2          `rel:"relation_a:a"`
+	_   gosql.Force `sql:"a.foo,a.bar,a.baz,a.quux"`
+}

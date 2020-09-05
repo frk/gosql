@@ -147,10 +147,10 @@ type DeleteAnalysisTestOK13 struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
 		_ gosql.Column `sql:"column_a <> column_b"`
-		_ gosql.Column `sql:"t.column_c=u.column_d"`
-		_ gosql.Column `sql:"t.column_e>123"`
-		_ gosql.Column `sql:"t.column_f = 'active'"`
-		_ gosql.Column `sql:"t.column_g <> true"`
+		_ gosql.Column `sql:"column_c=column_d"`
+		_ gosql.Column `sql:"column_e>123"`
+		_ gosql.Column `sql:"column_f = 'active'"`
+		_ gosql.Column `sql:"column_g <> true"`
 	}
 }
 
@@ -285,13 +285,13 @@ type DeleteAnalysisTestOK_Return struct {
 
 //OK: Insert with Return directive
 type InsertAnalysisTestOK_Return struct {
-	Rel T            `rel:"relation_a:a"`
+	Rel T2           `rel:"relation_a:a"`
 	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
 }
 
 //OK: Update with Return directive
 type UpdateAnalysisTestOK_Return struct {
-	Rel T            `rel:"relation_a:a"`
+	Rel T2           `rel:"relation_a:a"`
 	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
 }
 
@@ -315,7 +315,7 @@ type InsertAnalysisTestOK_Force struct {
 
 //OK: Update with Force directive
 type UpdateAnalysisTestOK_Force struct {
-	Rel struct{}    `rel:"relation_a:a"`
+	Rel T2          `rel:"relation_a:a"`
 	_   gosql.Force `sql:"a.foo,a.bar,a.baz"`
 }
 

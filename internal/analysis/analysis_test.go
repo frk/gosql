@@ -18,14 +18,14 @@ func init() {
 var tdata = testutil.ParseTestdata("../testdata")
 
 func testRunAnalysis(name string, t *testing.T) (TargetStruct, error) {
-	named := testutil.FindNamedType(name, tdata)
+	named, pos := testutil.FindNamedType(name, tdata)
 	if named == nil {
 		// Stop the test if no type with the given name was found.
 		t.Fatal(name, " not found")
 		return nil, nil
 	}
 
-	ts, err := Run(tdata.Fset, named, &Info{})
+	ts, err := Run(tdata.Fset, named, pos, &Info{})
 	if err != nil {
 		return nil, err
 	}
@@ -100,22 +100,15 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}
 
-	dummyrecord := RelType{
-		Base: TypeInfo{
-			Name:     "T",
-			Kind:     TypeKindStruct,
-			PkgPath:  "path/to/test",
-			PkgName:  "testdata",
-			PkgLocal: "testdata",
-		},
-		Fields: []*FieldInfo{{
-			Type:       TypeInfo{Kind: TypeKindString},
-			Name:       "F",
-			IsExported: true,
-			Tag:        tagutil.Tag{"sql": {"f"}},
-			ColIdent:   ColIdent{Name: "f"},
-		}},
-	}
+	reltypeT := makeReltypeT()
+	reltypeT2 := makeReltypeT2()
+	reltypeCT1 := makeReltypeCT1()
+	reltypeTs := makeReltypeT()
+	reltypeTs.IsSlice = true
+	reltypeA0 := RelType{Base: TypeInfo{Kind: TypeKindStruct}} // anon empty
+	notstructs := makeReltypeNS()
+	notstructs.IsPointer = true
+	notstructs.IsSlice = true
 
 	tests := []struct {
 		Name     string
@@ -124,20 +117,22 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		printerr bool
 	}{{
 		Name: "InsertAnalysisTestBAD_NoDataField",
-		err: &Error{
+		err: &anError{
 			Code:       errMissingRelField,
 			PkgPath:    "path/to/test",
 			TargetName: "InsertAnalysisTestBAD_NoDataField",
+			RelType:    RelType{},
 			FileName:   "../testdata/analysis_bad.go",
 			FileLine:   11,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD3",
-		err: &Error{
+		err: &anError{
 			Code:          errBadRelType,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD3",
-			BlockName:     "",
+			RelType:       RelType{Base: TypeInfo{Kind: TypeKindString}},
+			RelField:      "User",
 			FieldType:     "string",
 			FieldTypeKind: "string",
 			FieldName:     "User",
@@ -148,10 +143,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 	}, {
 
 		Name: "DeleteAnalysisTestBAD_BadRelId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadRelIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_BadRelId",
+			RelType:       RelType{},
 			BlockName:     "",
 			FieldType:     "path/to/test.T",
 			FieldTypeKind: "struct",
@@ -163,10 +159,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_MultipleRelTags",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingRelTag,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_MultipleRelTags",
+			RelType:       reltypeT,
+			RelField:      "Rel1",
 			BlockName:     "",
 			FieldType:     "path/to/test.T",
 			FieldTypeKind: "struct",
@@ -177,66 +175,73 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalCountField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
+			TargetName:    "DeleteAnalysisTestBAD_IllegalCountField",
+			RelType:       RelType{},
+			RelField:      "Count",
 			BlockName:     "",
 			FieldType:     "int",
 			FieldTypeKind: "int",
 			FieldName:     "Count",
 			TagString:     `rel:"relation_a:a"`,
-			TargetName:    "DeleteAnalysisTestBAD_IllegalCountField",
 			PkgPath:       "path/to/test",
 			FileLine:      33,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_IllegalExistsField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
-			BlockName:     "",
+			TargetName:    "UpdateAnalysisTestBAD_IllegalExistsField",
+			RelType:       RelType{},
+			RelField:      "Exists",
 			FieldType:     "bool",
 			FieldTypeKind: "bool",
 			FieldName:     "Exists",
 			TagString:     `rel:"relation_a:a"`,
-			TargetName:    "UpdateAnalysisTestBAD_IllegalExistsField",
 			PkgPath:       "path/to/test",
 			FileLine:      38,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_IllegalNotExistsField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
-			BlockName:     "",
+			TargetName:    "InsertAnalysisTestBAD_IllegalNotExistsField",
+			RelType:       RelType{},
+			RelField:      "NotExists",
 			FieldType:     "bool",
 			FieldTypeKind: "bool",
 			FieldName:     "NotExists",
 			TagString:     `rel:"relation_a:a"`,
-			TargetName:    "InsertAnalysisTestBAD_IllegalNotExistsField",
 			PkgPath:       "path/to/test",
 			FileLine:      43,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalRelationDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
-			BlockName:     "",
+			TargetName:    "SelectAnalysisTestBAD_IllegalRelationDirective",
+			RelType:       RelType{},
+			RelField:      "_",
 			FieldType:     "github.com/frk/gosql.Relation",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `rel:"relation_a:a"`,
-			TargetName:    "SelectAnalysisTestBAD_IllegalRelationDirective",
 			PkgPath:       "path/to/test",
 			FileLine:      48,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnnamedBaseStructType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadRelType,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_UnnamedBaseStructType",
+			RelType:       RelType{IsSlice: true, IsPointer: true},
+			RelField:      "Rel",
 			FieldType:     "[]*struct{}",
 			FieldTypeKind: "slice",
 			FieldName:     "Rel",
@@ -245,36 +250,41 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalAllDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
-			BlockName:     "",
+			TargetName:    "SelectAnalysisTestBAD_IllegalAllDirective",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			FieldType:     "github.com/frk/gosql.All",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
-			TargetName:    "SelectAnalysisTestBAD_IllegalAllDirective",
 			PkgPath:       "path/to/test",
 			FileLine:      59,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_IllegalAllDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.All",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TargetName:    "InsertAnalysisTestBAD_IllegalAllDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      65,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ConflictWhereProducer",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingWhere,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_ConflictWhereProducer",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.All",
 			FieldTypeKind: "struct",
@@ -284,7 +294,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalDefaultDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Default",
@@ -292,25 +302,29 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"*"`,
 			TargetName:    "DeleteAnalysisTestBAD_IllegalDefaultDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      80,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_EmptyDefaultDirectiveCollist",
-		err: &Error{
+		err: &anError{
 			Code:          errMissingTagColumnList,
 			FieldType:     "github.com/frk/gosql.Default",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TargetName:    "UpdateAnalysisTestBAD_EmptyDefaultDirectiveCollist",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      86,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalForceDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Force",
@@ -318,31 +332,38 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"*"`,
 			TargetName:    "SelectAnalysisTestBAD_IllegalForceDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      92,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadForceDirectiveColId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_BadForceDirectiveColId",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Force",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:"a.id,1234"`,
+			TagExpr:       "a.id,1234",
 			TagError:      "1234",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      98,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictResultProducer",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingResultTarget,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_ConflictResultProducer",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Return",
 			FieldTypeKind: "struct",
@@ -353,19 +374,21 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_EmptyReturnDirectiveCollist",
-		err: &Error{
+		err: &anError{
 			Code:          errMissingTagColumnList,
 			FieldType:     "github.com/frk/gosql.Return",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TargetName:    "UpdateAnalysisTestBAD_EmptyReturnDirectiveCollist",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      117,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_IllegalLimitField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Limit",
@@ -373,13 +396,15 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"10"`,
 			TargetName:    "InsertAnalysisTestBAD_IllegalLimitField",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      123,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_IllegalOffsetField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Offset",
@@ -387,13 +412,15 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"2"`,
 			TargetName:    "UpdateAnalysisTestBAD_IllegalOffsetField",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      129,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_IllegalOrderByDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.OrderBy",
@@ -401,13 +428,15 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"a.id"`,
 			TargetName:    "InsertAnalysisTestBAD_IllegalOrderByDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      135,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalOverrideDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Override",
@@ -415,119 +444,139 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"user"`,
 			TargetName:    "DeleteAnalysisTestBAD_IllegalOverrideDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      141,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalTextSearchDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.TextSearch",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TargetName:    "SelectAnalysisTestBAD_IllegalTextSearchDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      147,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalColumnDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TargetName:    "SelectAnalysisTestBAD_IllegalColumnDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      153,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_IllegalWhereBlock",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "struct{Id int \"sql:\\\"id\\\"\"}",
 			FieldTypeKind: "struct",
 			FieldName:     "Where",
 			TargetName:    "InsertAnalysisTestBAD_IllegalWhereBlock",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      159,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_IllegalJoinBlock",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "struct{_ github.com/frk/gosql.Relation}",
 			FieldTypeKind: "struct",
 			FieldName:     "Join",
 			TargetName:    "UpdateAnalysisTestBAD_IllegalJoinBlock",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      167,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalFromBlock",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "struct{_ github.com/frk/gosql.Relation}",
 			FieldTypeKind: "struct",
 			FieldName:     "From",
 			TargetName:    "DeleteAnalysisTestBAD_IllegalFromBlock",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      175,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalUsingBlock",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "struct{_ github.com/frk/gosql.Relation}",
 			FieldTypeKind: "struct",
 			FieldName:     "Using",
 			TargetName:    "SelectAnalysisTestBAD_IllegalUsingBlock",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      183,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_IllegalOnConflictBlock",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "struct{}",
 			FieldTypeKind: "struct",
 			FieldName:     "OnConflict",
 			TargetName:    "UpdateAnalysisTestBAD_IllegalOnConflictBlock",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      191,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalResultField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			BlockName:     "",
 			FieldType:     "path/to/test.T",
 			FieldTypeKind: "struct",
 			FieldName:     "Result",
 			TargetName:    "SelectAnalysisTestBAD_IllegalResultField",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      199,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_ConflictLimitProducer",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingFieldOrDirective,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_ConflictLimitProducer",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "int",
 			FieldTypeKind: "int",
@@ -537,10 +586,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_ConflictOffsetProducer",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingFieldOrDirective,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_ConflictOffsetProducer",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Offset",
 			FieldTypeKind: "struct",
@@ -551,36 +602,42 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalRowsAffectedField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
+			TargetName:    "SelectAnalysisTestBAD_IllegalRowsAffectedField",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "int",
 			FieldTypeKind: "int",
 			FieldName:     "RowsAffected",
-			TargetName:    "SelectAnalysisTestBAD_IllegalRowsAffectedField",
 			PkgPath:       "path/to/test",
 			FileLine:      219,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_IllegalFilterField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
+			TargetName:    "InsertAnalysisTestBAD_IllegalFilterField",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Filter",
 			FieldTypeKind: "struct",
 			FieldName:     "F",
-			TargetName:    "InsertAnalysisTestBAD_IllegalFilterField",
 			PkgPath:       "path/to/test",
 			FileLine:      225,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_ConflictWhereProducer",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingWhere,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_ConflictWhereProducer",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Filter",
 			FieldTypeKind: "struct",
@@ -590,10 +647,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictErrorHandler",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingFieldOrDirective,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_ConflictErrorHandler",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "path/to/test.myerrorhandler",
 			FieldTypeKind: "struct",
@@ -603,10 +662,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithTooManyMethods",
-		err: &Error{
+		err: &anError{
 			Code:          errBadIterTypeInterface,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_IteratorWithTooManyMethods",
+			RelType:       RelType{},
+			RelField:      "Rel",
 			FieldType:     "path/to/test.badIterator",
 			FieldTypeKind: "interface",
 			FieldName:     "Rel",
@@ -615,10 +676,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithBadSignature",
-		err: &Error{
+		err: &anError{
 			Code:          errBadIterTypeFunc,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_IteratorWithBadSignature",
+			RelType:       RelType{},
+			RelField:      "Rel",
 			FieldType:     "func(*github.com/frk/gosql/internal/testdata/common.User) int",
 			FieldTypeKind: "func",
 			FieldName:     "Rel",
@@ -627,10 +690,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithBadSignatureIface",
-		err: &Error{
+		err: &anError{
 			Code:          errBadIterTypeInterface,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_IteratorWithBadSignatureIface",
+			RelType:       RelType{},
+			RelField:      "Rel",
 			FieldType:     "path/to/test.badIterator2",
 			FieldTypeKind: "interface",
 			FieldName:     "Rel",
@@ -639,10 +704,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithUnexportedMethod",
-		err: &Error{
+		err: &anError{
 			Code:          errBadIterTypeInterface,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_IteratorWithUnexportedMethod",
+			RelType:       RelType{},
+			RelField:      "Rel",
 			FieldType:     "github.com/frk/gosql/internal/testdata/common.BadIterator",
 			FieldTypeKind: "interface",
 			FieldName:     "Rel",
@@ -651,10 +718,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithUnnamedArgument",
-		err: &Error{
+		err: &anError{
 			Code:          errBadIterTypeFunc,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_IteratorWithUnnamedArgument",
+			RelType:       RelType{IsPointer: true},
+			RelField:      "Rel",
 			FieldType:     "func(*struct{}) error",
 			FieldTypeKind: "func",
 			FieldName:     "Rel",
@@ -663,10 +732,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithNonStructArgument",
-		err: &Error{
+		err: &anError{
 			Code:          errBadIterTypeFunc,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_IteratorWithNonStructArgument",
+			RelType:       RelType{IsPointer: true},
+			RelField:      "Rel",
 			FieldType:     "func(*path/to/test.notstruct) error",
 			FieldTypeKind: "func",
 			FieldName:     "Rel",
@@ -675,10 +746,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadRelfiedlStructBaseType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadRelType,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_BadRelfiedlStructBaseType",
+			RelType:       notstructs,
+			RelField:      "Rel",
 			FieldType:     "[]*path/to/test.notstruct",
 			FieldTypeKind: "slice",
 			FieldName:     "Rel",
@@ -687,10 +760,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadRelTypeFieldColId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_BadRelTypeFieldColId",
+			RelType:       reltypeA0,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "string",
 			FieldTypeKind: "string",
@@ -702,10 +777,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ConflictWhereProducer2",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingWhere,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_ConflictWhereProducer2",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "struct{Id int \"sql:\\\"id\\\"\"}",
 			FieldTypeKind: "struct",
@@ -715,10 +792,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadWhereBlockType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadFieldTypeStruct,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_BadWhereBlockType",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "[]string",
 			FieldTypeKind: "slice",
@@ -728,10 +807,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBoolTagValue",
-		err: &Error{
+		err: &anError{
 			Code:          errBadBoolTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadBoolTagValue",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "string",
 			FieldTypeKind: "string",
@@ -743,10 +824,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadNestedWhereBlockType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadFieldTypeStruct,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadNestedWhereBlockType",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "path/to/test.notstruct",
 			FieldTypeKind: "string",
@@ -756,26 +839,30 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadColumnExpressionLHS",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadColumnExpressionLHS",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:"123 = x"`,
+			TagExpr:       "123 = x",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      334,
 		},
 	}, {
-		Name:     "SelectAnalysisTestBAD_BadColumnPredicateCombo",
-		printerr: true,
-		err: &Error{
+		Name: "SelectAnalysisTestBAD_BadColumnPredicateCombo",
+		err: &anError{
 			Code:          errIllegalPredicateQuantifier,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadColumnPredicateCombo",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
@@ -788,25 +875,30 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadColumnExpressionLHS",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_BadColumnExpressionLHS",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:"123 isnull"`,
+			TagExpr:       "123 isnull",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      350,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadUnaryOp",
-		err: &Error{
+		err: &anError{
 			Code:          errBadDirectiveBooleanExpr,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_BadUnaryOp",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
@@ -817,12 +909,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FileLine:      358,
 		},
 	}, {
-		Name:     "UpdateAnalysisTestBAD_ExtraQuantifier",
-		printerr: true,
-		err: &Error{
+		Name: "UpdateAnalysisTestBAD_ExtraQuantifier",
+		err: &anError{
 			Code:          errIllegalPredicateQuantifier,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_ExtraQuantifier",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
@@ -835,10 +928,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBetweenFieldType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadBetweenPredicate,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadBetweenFieldType",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "path/to/test.notstruct",
 			FieldTypeKind: "string",
@@ -849,10 +944,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBetweenFieldType2",
-		err: &Error{
+		err: &anError{
 			Code:          errBadBetweenPredicate,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadBetweenFieldType2",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "struct{x int; y int; z int}",
 			FieldTypeKind: "struct",
@@ -863,25 +960,30 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBetweenArgColId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadBetweenArgColId",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "between",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:"123,y"`,
+			TagExpr:       "123",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      394,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_NoBetweenXYArg",
-		err: &Error{
+		err: &anError{
 			Code:          errBadBetweenPredicate,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_NoBetweenXYArg",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "struct{_ github.com/frk/gosql.Column \"sql:\\\"a.bar\\\"\"; _ github.com/frk/gosql.Column \"sql:\\\"a.baz,y\\\"\"}",
 			FieldTypeKind: "struct",
@@ -892,41 +994,48 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBetweenColId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadBetweenColId",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "struct{_ github.com/frk/gosql.Column \"sql:\\\"a.bar,x\\\"\"; _ github.com/frk/gosql.Column \"sql:\\\"a.baz,y\\\"\"}",
 			FieldTypeKind: "struct",
 			FieldName:     "between",
 			TagString:     `sql:"123 isbetween"`,
+			TagExpr:       "123 isbetween",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      414,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadWhereFieldColId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_BadWhereFieldColId",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "int",
 			FieldTypeKind: "int",
 			FieldName:     "Id",
 			TagString:     `sql:"123"`,
+			TagExpr:       "123",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      425,
 		},
 	}, {
-		Name:     "DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo",
-		printerr: true,
-		err: &Error{
+		Name: "DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo",
+		err: &anError{
 			Code:          errIllegalPredicateQuantifier,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "[]int",
 			FieldTypeKind: "slice",
@@ -939,10 +1048,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalWhereFieldUnaryPredicate",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalUnaryPredicate,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_IllegalWhereFieldUnaryPredicate",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "int",
 			FieldTypeKind: "int",
@@ -955,10 +1066,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadWhereFieldTypeForQuantifier",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalFieldQuantifier,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_BadWhereFieldTypeForQuantifier",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "int",
 			FieldTypeKind: "int",
@@ -971,10 +1084,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinBlockType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadFieldTypeStruct,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadJoinBlockType",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "path/to/test.notstruct",
 			FieldTypeKind: "string",
@@ -984,9 +1099,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalJoinBlockRelationDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalStructDirective,
 			TargetName:    "SelectAnalysisTestBAD_IllegalJoinBlockRelationDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Join",
 			FieldType:     "github.com/frk/gosql.Relation",
 			FieldTypeKind: "struct",
@@ -998,10 +1115,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictRelationDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingRelationDirective,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_ConflictRelationDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Using",
 			FieldType:     "github.com/frk/gosql.Relation",
 			FieldTypeKind: "struct",
@@ -1012,10 +1131,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadFromRelationRelId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadRelIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_BadFromRelationRelId",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "From",
 			FieldType:     "github.com/frk/gosql.Relation",
 			FieldTypeKind: "struct",
@@ -1027,10 +1148,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinDirectiveRelId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadRelIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadJoinDirectiveRelId",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Join",
 			FieldType:     "github.com/frk/gosql.LeftJoin",
 			FieldTypeKind: "struct",
@@ -1042,25 +1165,30 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionColId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadJoinDirectiveExpressionColId",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Join",
 			FieldType:     "github.com/frk/gosql.LeftJoin",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:"relation_b:b,123 = b.foo"`,
+			TagExpr:       "123 = b.foo",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      496,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicate",
-		err: &Error{
+		err: &anError{
 			Code:          errBadDirectiveBooleanExpr,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicate",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Join",
 			FieldType:     "github.com/frk/gosql.LeftJoin",
 			FieldTypeKind: "struct",
@@ -1071,12 +1199,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FileLine:      504,
 		},
 	}, {
-		Name:     "SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier",
-		printerr: true,
-		err: &Error{
+		Name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier",
+		err: &anError{
 			Code:          errIllegalPredicateQuantifier,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Join",
 			FieldType:     "github.com/frk/gosql.LeftJoin",
 			FieldTypeKind: "struct",
@@ -1088,12 +1217,13 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FileLine:      512,
 		},
 	}, {
-		Name:     "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicateCombo",
-		printerr: true,
-		err: &Error{
+		Name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicateCombo",
+		err: &anError{
 			Code:          errIllegalPredicateQuantifier,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicateCombo",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Join",
 			FieldType:     "github.com/frk/gosql.LeftJoin",
 			FieldTypeKind: "struct",
@@ -1106,10 +1236,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalJoinBlockDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalStructDirective,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_IllegalJoinBlockDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Using",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
@@ -1120,10 +1252,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictBlockType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadFieldTypeStruct,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_BadOnConflictBlockType",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "path/to/test.notstruct",
 			FieldTypeKind: "string",
@@ -1133,10 +1267,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingOnConfictTarget,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
@@ -1147,10 +1283,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer2",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingOnConfictTarget,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer2",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Index",
 			FieldTypeKind: "struct",
@@ -1161,10 +1299,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer3",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingOnConfictTarget,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer3",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Constraint",
 			FieldTypeKind: "struct",
@@ -1175,10 +1315,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingOnConfictAction,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Ignore",
 			FieldTypeKind: "struct",
@@ -1188,10 +1330,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer2",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingOnConfictAction,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer2",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Update",
 			FieldTypeKind: "struct",
@@ -1202,10 +1346,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictColumnTargetValue",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_BadOnConflictColumnTargetValue",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
@@ -1217,10 +1363,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictIndexTargetIdent",
-		err: &Error{
+		err: &anError{
 			Code:          errBadIdentTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_BadOnConflictIndexTargetIdent",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Index",
 			FieldTypeKind: "struct",
@@ -1231,10 +1379,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictConstraintTargetIdent",
-		err: &Error{
+		err: &anError{
 			Code:          errBadIdentTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_BadOnConflictConstraintTargetIdent",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Constraint",
 			FieldTypeKind: "struct",
@@ -1245,10 +1395,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictUpdateActionCollist",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_BadOnConflictUpdateActionCollist",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.Update",
 			FieldTypeKind: "struct",
@@ -1260,9 +1412,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_IllegalOnConflictDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalStructDirective,
 			TargetName:    "InsertAnalysisTestBAD_IllegalOnConflictDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "OnConflict",
 			FieldType:     "github.com/frk/gosql.LeftJoin",
 			FieldTypeKind: "struct",
@@ -1274,10 +1428,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_NoOnConflictTarget",
-		err: &Error{
+		err: &anError{
 			Code:          errMissingOnConflictTarget,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_NoOnConflictTarget",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			FieldType:     "struct{_ github.com/frk/gosql.Update \"sql:\\\"a.foo,a.bar\\\"\"}",
 			FieldTypeKind: "struct",
 			FieldName:     "OnConflict",
@@ -1286,9 +1442,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadLimitFieldType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadFieldTypeInt,
 			TargetName:    "SelectAnalysisTestBAD_BadLimitFieldType",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			FieldType:     "string",
 			FieldTypeKind: "string",
 			FieldName:     "Limit",
@@ -1299,9 +1457,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_NoLimitDirectiveValue",
-		err: &Error{
+		err: &anError{
 			Code:          errMissingTagValue,
 			TargetName:    "SelectAnalysisTestBAD_NoLimitDirectiveValue",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			FieldType:     "github.com/frk/gosql.Limit",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
@@ -1312,10 +1472,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadLimitDirectiveValue",
-		err: &Error{
+		err: &anError{
 			Code:          errBadUIntegerTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadLimitDirectiveValue",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			FieldType:     "github.com/frk/gosql.Limit",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
@@ -1326,36 +1488,42 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadOffsetFieldType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadFieldTypeInt,
+			TargetName:    "SelectAnalysisTestBAD_BadOffsetFieldType",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			FieldType:     "string",
 			FieldTypeKind: "string",
 			FieldName:     "Offset",
 			TagString:     `sql:"123"`,
-			TargetName:    "SelectAnalysisTestBAD_BadOffsetFieldType",
 			PkgPath:       "path/to/test",
 			FileLine:      655,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_NoOffsetDirectiveValue",
-		err: &Error{
+		err: &anError{
 			Code:          errMissingTagValue,
 			FieldType:     "github.com/frk/gosql.Offset",
+			TargetName:    "SelectAnalysisTestBAD_NoOffsetDirectiveValue",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:""`,
-			TargetName:    "SelectAnalysisTestBAD_NoOffsetDirectiveValue",
 			PkgPath:       "path/to/test",
 			FileLine:      661,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadOffsetDirectiveValue",
-		err: &Error{
+		err: &anError{
 			Code:          errBadUIntegerTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadOffsetDirectiveValue",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			FieldType:     "github.com/frk/gosql.Offset",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
@@ -1366,22 +1534,26 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_EmptyOrderByDirectiveCollist",
-		err: &Error{
+		err: &anError{
 			Code:          errMissingTagColumnList,
+			TargetName:    "SelectAnalysisTestBAD_EmptyOrderByDirectiveCollist",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			FieldType:     "github.com/frk/gosql.OrderBy",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
-			TargetName:    "SelectAnalysisTestBAD_EmptyOrderByDirectiveCollist",
 			PkgPath:       "path/to/test",
 			FileLine:      673,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadOrderByDirectiveNullsOrderValue",
-		err: &Error{
+		err: &anError{
 			Code:          errBadNullsOrderTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadOrderByDirectiveNullsOrderValue",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.OrderBy",
 			FieldTypeKind: "struct",
@@ -1393,25 +1565,30 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadOrderByDirectiveCollist",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_BadOrderByDirectiveCollist",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.OrderBy",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:"-a.id:nullsfirst,a.1234"`,
+			TagExpr:       "a.1234",
 			TagError:      "a.1234",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      685,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOverrideDirectiveKindValue",
-		err: &Error{
+		err: &anError{
 			Code:          errBadOverrideTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "InsertAnalysisTestBAD_BadOverrideDirectiveKindValue",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Override",
 			FieldTypeKind: "struct",
@@ -1423,10 +1600,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ConflictResultProducer",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingResultTarget,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_ConflictResultProducer",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "[]path/to/test.T",
 			FieldTypeKind: "slice",
@@ -1436,10 +1615,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadResultFieldType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadRelType,
 			PkgPath:       "path/to/test",
 			TargetName:    "UpdateAnalysisTestBAD_BadResultFieldType",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			FieldType:     "[]path/to/test.notstruct",
 			FieldTypeKind: "slice",
 			FieldName:     "Result",
@@ -1448,10 +1629,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictResultProducer2",
-		err: &Error{
+		err: &anError{
 			Code:          errConflictingResultTarget,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_ConflictResultProducer2",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "int",
 			FieldTypeKind: "int",
@@ -1461,21 +1644,25 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadRowsAffecteFieldType",
-		err: &Error{
+		err: &anError{
 			Code:          errBadFieldTypeInt,
+			TargetName:    "DeleteAnalysisTestBAD_BadRowsAffecteFieldType",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			FieldType:     "string",
 			FieldTypeKind: "string",
 			FieldName:     "RowsAffected",
-			TargetName:    "DeleteAnalysisTestBAD_BadRowsAffecteFieldType",
 			PkgPath:       "path/to/test",
 			FileLine:      717,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_IllegalAllDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalSliceUpdateModifier,
 			TargetName:    "UpdateAnalysisTestBAD_IllegalAllDirective",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FieldType:     "github.com/frk/gosql.All",
 			FieldTypeKind: "struct",
@@ -1485,9 +1672,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_IllegalWhereStruct",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalSliceUpdateModifier,
 			TargetName:    "UpdateAnalysisTestBAD_IllegalWhereStruct",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FieldType:     `struct{Name string "sql:\"name\""}`,
 			FieldTypeKind: "struct",
@@ -1497,9 +1686,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_IllegalFilterField",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalSliceUpdateModifier,
 			TargetName:    "UpdateAnalysisTestBAD_IllegalFilterField",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FieldType:     "github.com/frk/gosql.Filter",
 			FieldTypeKind: "struct",
@@ -1509,10 +1700,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalUnaryPredicateInExpression",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalUnaryPredicate,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_IllegalUnaryPredicateInExpression",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "github.com/frk/gosql.Column",
 			FieldTypeKind: "struct",
@@ -1525,10 +1718,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalUnaryPredicateInJoinDirectiveExpression",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalUnaryPredicate,
 			PkgPath:       "path/to/test",
 			TargetName:    "SelectAnalysisTestBAD_IllegalUnaryPredicateInJoinDirectiveExpression",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Join",
 			FieldType:     "github.com/frk/gosql.LeftJoin",
 			FieldTypeKind: "struct",
@@ -1541,10 +1736,12 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ListPredicate",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalListPredicate,
 			PkgPath:       "path/to/test",
 			TargetName:    "DeleteAnalysisTestBAD_ListPredicate",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "Where",
 			FieldType:     "int",
 			FieldTypeKind: "int",
@@ -1554,6 +1751,402 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagError:      "isin",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      766,
+		},
+	}, {
+		Name: "DeleteAnalysisTestBAD_ConflictingRelationName",
+		err: &anError{
+			Code:          errConflictingRelName,
+			PkgPath:       "path/to/test",
+			TargetName:    "DeleteAnalysisTestBAD_ConflictingRelationName",
+			RelType:       reltypeT,
+			RelField:      "Rel",
+			BlockName:     "Using",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"relation_a,id = d.a_id"`,
+			TagExpr:       "",
+			TagError:      "relation_a",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      775,
+		},
+	}, {
+		Name: "DeleteAnalysisTestBAD_ConflictingRelationAlias",
+		err: &anError{
+			Code:          errConflictingRelAlias,
+			PkgPath:       "path/to/test",
+			TargetName:    "DeleteAnalysisTestBAD_ConflictingRelationAlias",
+			RelType:       reltypeT,
+			RelField:      "Rel",
+			BlockName:     "Using",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"relation_c:a,a.id = b.c_id"`,
+			TagExpr:       "",
+			TagError:      "a",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      787,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_ConflictingRelName",
+		err: &anError{
+			Code:          errConflictingRelName,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_ConflictingRelName",
+			RelType:       reltypeT,
+			RelField:      "Rel",
+			BlockName:     "Join",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"relation_a,relation_a.foo istrue"`,
+			TagExpr:       "",
+			TagError:      "relation_a",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      809,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_ConflictingRelAlias",
+		err: &anError{
+			Code:          errConflictingRelAlias,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_ConflictingRelAlias",
+			RelType:       reltypeT,
+			RelField:      "Rel",
+			BlockName:     "Join",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"relation_b:a,a.foo istrue"`,
+			TagExpr:       "",
+			TagError:      "a",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      817,
+		},
+	}, {
+		Name: "UpdateAnalysisTestBAD_ConflictingRelationName",
+		err: &anError{
+			Code:          errConflictingRelName,
+			PkgPath:       "path/to/test",
+			TargetName:    "UpdateAnalysisTestBAD_ConflictingRelationName",
+			RelType:       reltypeT,
+			RelField:      "Rel",
+			BlockName:     "From",
+			FieldType:     "github.com/frk/gosql.Relation",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"relation_a"`,
+			TagExpr:       "",
+			TagError:      "relation_a",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      826,
+		},
+	}, {
+		Name: "UpdateAnalysisTestBAD_ConflictingRelationAlias",
+		err: &anError{
+			Code:          errConflictingRelAlias,
+			PkgPath:       "path/to/test",
+			TargetName:    "UpdateAnalysisTestBAD_ConflictingRelationAlias",
+			RelType:       reltypeT,
+			RelField:      "Rel",
+			BlockName:     "From",
+			FieldType:     "github.com/frk/gosql.Relation",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"relation_b:a"`,
+			TagExpr:       "",
+			TagError:      "a",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      838,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifier",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifier",
+			RelType:       reltypeT,
+			RelField:      "Rel",
+			BlockName:     "Join",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"relation_b:b,b.id = c.b_id"`,
+			TagExpr:       "b.id = c.b_id",
+			TagError:      "c",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      850,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifier2",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifier2",
+			RelType:       reltypeT,
+			RelField:      "Rel",
+			BlockName:     "Join",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"relation_b,relation_b.id = relation_c.b_id"`,
+			TagExpr:       "relation_b.id = relation_c.b_id",
+			TagError:      "relation_c",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      858,
+		},
+	}, {
+		Name: "UpdateAnalysisTestBAD_UnknownColumnQualifierInReturn",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "UpdateAnalysisTestBAD_UnknownColumnQualifierInReturn",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "",
+			FieldType:     "github.com/frk/gosql.Return",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"x.col_a"`,
+			TagExpr:       "x.col_a",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      871,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInJoin",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifierInJoin",
+			RelType:       reltypeCT1,
+			RelField:      "Columns",
+			BlockName:     "Join",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"column_tests_2:b,x.col_foo = a.col_a"`,
+			TagExpr:       "x.col_foo = a.col_a",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      878,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInJoin2",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifierInJoin2",
+			RelType:       reltypeCT1,
+			RelField:      "Columns",
+			BlockName:     "Join",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"column_tests_2:b,b.col_foo = x.col_a"`,
+			TagExpr:       "b.col_foo = x.col_a",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      886,
+		},
+	}, {
+		Name: "InsertAnalysisTestBAD_UnknownColumnQualifierInForce",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "InsertAnalysisTestBAD_UnknownColumnQualifierInForce",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "",
+			FieldType:     "github.com/frk/gosql.Force",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"x.col_a"`,
+			TagExpr:       "x.col_a",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      893,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereField",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereField",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "Where",
+			FieldType:     "int",
+			FieldTypeKind: "int",
+			FieldName:     "Id",
+			TagString:     `sql:"x.id"`,
+			TagExpr:       "x.id",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      900,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "Where",
+			FieldType:     "github.com/frk/gosql.Column",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"x.col_a = 123"`,
+			TagExpr:       "x.col_a = 123",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      908,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn2",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn2",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "Where",
+			FieldType:     "github.com/frk/gosql.Column",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"c.col_a = x.col_a"`,
+			TagExpr:       "c.col_a = x.col_a",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      916,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInOrderBy",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifierInOrderBy",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "",
+			FieldType:     "github.com/frk/gosql.OrderBy",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"x.col_a"`,
+			TagExpr:       "x.col_a",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      923,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInBetween",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifierInBetween",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "Where",
+			FieldType:     `struct{_ github.com/frk/gosql.Column "sql:\"c.col_b,x\""; _ github.com/frk/gosql.Column "sql:\"c.col_c,y\""}`,
+			FieldTypeKind: "struct",
+			FieldName:     "a",
+			TagString:     `sql:"x.col_a isbetween"`,
+			TagExpr:       "x.col_a isbetween",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      930,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInBetweenColumn",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_UnknownColumnQualifierInBetweenColumn",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "a",
+			FieldType:     "github.com/frk/gosql.Column",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"x.col_b,x"`,
+			TagExpr:       "x.col_b",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      942,
+		},
+	}, {
+		Name: "InsertAnalysisTestBAD_UnknownColumnQualifierInDefault",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "InsertAnalysisTestBAD_UnknownColumnQualifierInDefault",
+			RelType:       reltypeCT1,
+			RelField:      "Rel",
+			BlockName:     "",
+			FieldType:     "github.com/frk/gosql.Default",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"x.col_b"`,
+			TagExpr:       "x.col_b",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      951,
+		},
+	}, {
+		Name: "SelectAnalysisTestBAD_JoinConditionalLHSOperand",
+		err: &anError{
+			Code:          errBadJoinConditionLHS,
+			PkgPath:       "path/to/test",
+			TargetName:    "SelectAnalysisTestBAD_JoinConditionalLHSOperand",
+			RelType:       reltypeCT1,
+			RelField:      "Columns",
+			BlockName:     "Join",
+			FieldType:     "github.com/frk/gosql.LeftJoin",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"column_tests_2:b,a.col_b = b.col_bar"`,
+			TagExpr:       "a.col_b = b.col_bar",
+			TagError:      "a.col_b",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      958,
+		},
+	}, {
+		Name:     "InsertAnalysisTestBAD_ReturnColumnNoField",
+		printerr: true,
+		err: &anError{
+			Code:          errColumnFieldUnknown,
+			PkgPath:       "path/to/test",
+			TargetName:    "InsertAnalysisTestBAD_ReturnColumnNoField",
+			RelType:       reltypeT2,
+			RelField:      "Rel",
+			FieldType:     "github.com/frk/gosql.Return",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"a.foo,a.bar,a.baz,a.quux"`,
+			TagExpr:       "a.foo,a.bar,a.baz,a.quux",
+			TagError:      "a.quux",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      965,
+		},
+	}, {
+		Name:     "UpdateAnalysisTestBAD_ForceColumnNoField",
+		printerr: true,
+		err: &anError{
+			Code:          errColumnFieldUnknown,
+			PkgPath:       "path/to/test",
+			TargetName:    "UpdateAnalysisTestBAD_ForceColumnNoField",
+			RelType:       reltypeT2,
+			RelField:      "Rel",
+			FieldType:     "github.com/frk/gosql.Force",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"a.foo,a.bar,a.baz,a.quux"`,
+			TagExpr:       "a.foo,a.bar,a.baz,a.quux",
+			TagError:      "a.quux",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      971,
 		},
 	}, {
 		Name: "InsertAnalysisTestOK1",
@@ -1954,25 +2547,25 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				},
 				&WhereBoolTag{BoolAnd},
 				&WhereColumnDirective{
-					LHSColIdent: ColIdent{Name: "column_c", Qualifier: "t"},
-					RHSColIdent: ColIdent{Name: "column_d", Qualifier: "u"},
+					LHSColIdent: ColIdent{Name: "column_c"},
+					RHSColIdent: ColIdent{Name: "column_d"},
 					Predicate:   IsEQ,
 				},
 				&WhereBoolTag{BoolAnd},
 				&WhereColumnDirective{
-					LHSColIdent: ColIdent{Name: "column_e", Qualifier: "t"},
+					LHSColIdent: ColIdent{Name: "column_e"},
 					RHSLiteral:  "123",
 					Predicate:   IsGT,
 				},
 				&WhereBoolTag{BoolAnd},
 				&WhereColumnDirective{
-					LHSColIdent: ColIdent{Name: "column_f", Qualifier: "t"},
+					LHSColIdent: ColIdent{Name: "column_f"},
 					RHSLiteral:  "'active'",
 					Predicate:   IsEQ,
 				},
 				&WhereBoolTag{BoolAnd},
 				&WhereColumnDirective{
-					LHSColIdent: ColIdent{Name: "column_g", Qualifier: "t"},
+					LHSColIdent: ColIdent{Name: "column_g"},
 					RHSLiteral:  "true",
 					Predicate:   NotEQ,
 				},
@@ -2454,7 +3047,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			Rel: &RelField{
 				FieldName: "Rel",
 				Id:        RelIdent{Name: "relation_a", Alias: "a"},
-				Type:      dummyrecord,
+				Type:      reltypeT,
 			},
 			Return: &ReturnDirective{ColIdentList{All: true}},
 		},
@@ -2466,7 +3059,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			Rel: &RelField{
 				FieldName: "Rel",
 				Id:        RelIdent{Name: "relation_a", Alias: "a"},
-				Type:      dummyrecord,
+				Type:      reltypeT2,
 			},
 			Return: &ReturnDirective{ColIdentList{Items: []ColIdent{
 				{Qualifier: "a", Name: "foo"},
@@ -2482,7 +3075,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			Rel: &RelField{
 				FieldName: "Rel",
 				Id:        RelIdent{Name: "relation_a", Alias: "a"},
-				Type:      dummyrecord,
+				Type:      reltypeT2,
 			},
 			Return: &ReturnDirective{ColIdentList{Items: []ColIdent{
 				{Qualifier: "a", Name: "foo"},
@@ -2538,7 +3131,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			Rel: &RelField{
 				FieldName: "Rel",
 				Id:        RelIdent{Name: "relation_a", Alias: "a"},
-				Type:      RelType{Base: TypeInfo{Kind: TypeKindStruct}},
+				Type:      reltypeT2,
 			},
 			Force: &ForceDirective{ColIdentList{Items: []ColIdent{
 				{Qualifier: "a", Name: "foo"},
@@ -3169,12 +3762,14 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			}
 
 			if e := compare.Compare(err, tt.err); e != nil {
-				t.Errorf("%v - %#v %v", e, err, err)
+				//t.Errorf("%v - %#v %v", e, err, err)
+				t.Errorf("%v", e)
 			}
 			if e := compare.Compare(got, tt.want); e != nil {
 				t.Error(e)
 			}
 
+			//tt.printerr = true
 			if tt.printerr && err != nil {
 				fmt.Println(err)
 			}
@@ -3183,22 +3778,11 @@ func TestAnalysis_queryStruct(t *testing.T) {
 }
 
 func TestAnalysis_filterStruct(t *testing.T) {
-	dummyrecord := RelType{
-		Base: TypeInfo{
-			Name:     "T",
-			Kind:     TypeKindStruct,
-			PkgPath:  "path/to/test",
-			PkgName:  "testdata",
-			PkgLocal: "testdata",
-		},
-		Fields: []*FieldInfo{{
-			Type:       TypeInfo{Kind: TypeKindString},
-			Name:       "F",
-			IsExported: true,
-			Tag:        tagutil.Tag{"sql": {"f"}},
-			ColIdent:   ColIdent{Name: "f"},
-		}},
-	}
+	reltypeT := makeReltypeT()
+	reltypeCT1 := makeReltypeCT1()
+	reltypeTi := makeReltypeT()
+	reltypeTi.IsPointer = true
+	reltypeTi.IsIter = true
 
 	tests := []struct {
 		Name     string
@@ -3207,30 +3791,87 @@ func TestAnalysis_filterStruct(t *testing.T) {
 		printerr bool
 	}{{
 		Name: "FilterAnalysisTestBAD_IllegalReturnDirective",
-		err: &Error{
+		err: &anError{
 			Code:          errIllegalQueryField,
 			FieldType:     "github.com/frk/gosql.Return",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TargetName:    "FilterAnalysisTestBAD_IllegalReturnDirective",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FileLine:      104,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
 		Name: "FilterAnalysisTestBAD_BadTextSearchDirectiveColId",
-		err: &Error{
+		err: &anError{
 			Code:          errBadColIdTagValue,
 			PkgPath:       "path/to/test",
 			TargetName:    "FilterAnalysisTestBAD_BadTextSearchDirectiveColId",
+			RelType:       reltypeT,
+			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.TextSearch",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:"123"`,
+			TagExpr:       "123",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      723,
+		},
+	}, {
+		Name: "FilterAnalysisTestBAD_ConflictingRelTag",
+		err: &anError{
+			Code:          errConflictingRelTag,
+			PkgPath:       "path/to/test",
+			TargetName:    "FilterAnalysisTestBAD_ConflictingRelTag",
+			RelType:       reltypeT,
+			RelField:      "_",
+			BlockName:     "",
+			FieldType:     "github.com/frk/gosql.TextSearch",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `rel:"a.ts_document"`,
+			TagError:      "",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      797,
+		},
+	}, {
+		Name: "FilterAnalysisTestBAD_IllegalIteratorType",
+		err: &anError{
+			Code:          errIllegalIteratorField,
+			PkgPath:       "path/to/test",
+			TargetName:    "FilterAnalysisTestBAD_IllegalIteratorType",
+			RelType:       reltypeTi,
+			RelField:      "_",
+			BlockName:     "",
+			FieldType:     "func(*path/to/test.T) error",
+			FieldTypeKind: "func",
+			FieldName:     "_",
+			TagString:     `rel:"relation_a:a"`,
+			TagError:      "",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      802,
+		},
+	}, {
+		Name: "FilterAnalysisTestBAD_UnknownColumnQualifierInTextSearch",
+		err: &anError{
+			Code:          errUnknownColumnQualifier,
+			PkgPath:       "path/to/test",
+			TargetName:    "FilterAnalysisTestBAD_UnknownColumnQualifierInTextSearch",
+			RelType:       reltypeCT1,
+			RelField:      "_",
+			BlockName:     "",
+			FieldType:     "github.com/frk/gosql.TextSearch",
+			FieldTypeKind: "struct",
+			FieldName:     "_",
+			TagString:     `sql:"x.col_b"`,
+			TagExpr:       "x.col_b",
+			TagError:      "x",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      865,
 		},
 	}, {
 		Name: "FilterAnalysisTestOK_TextSearchDirective",
@@ -3239,7 +3880,7 @@ func TestAnalysis_filterStruct(t *testing.T) {
 			Rel: &RelField{
 				FieldName: "_",
 				Id:        RelIdent{Name: "relation_a", Alias: "a"},
-				Type:      dummyrecord,
+				Type:      reltypeT,
 			},
 			TextSearch: &TextSearchDirective{ColIdent{Qualifier: "a", Name: "ts_document"}},
 		},
@@ -3254,12 +3895,14 @@ func TestAnalysis_filterStruct(t *testing.T) {
 			}
 
 			if e := compare.Compare(err, tt.err); e != nil {
-				t.Errorf("%v - %#v %v", e, err, err)
+				//t.Errorf("%v - %#v %v", e, err, err)
+				t.Errorf("%v", e)
 			}
 			if e := compare.Compare(got, tt.want); e != nil {
 				t.Error(e)
 			}
 
+			//tt.printerr = true
 			if tt.printerr && err != nil {
 				fmt.Println(err)
 			}
@@ -3362,4 +4005,119 @@ func TestTypeinfo_string(t *testing.T) {
 			}
 		}
 	}
+}
+
+func makeReltypeNS() RelType {
+	return RelType{
+		Base: TypeInfo{
+			Name:     "notstruct",
+			Kind:     TypeKindString,
+			PkgPath:  "path/to/test",
+			PkgName:  "testdata",
+			PkgLocal: "testdata",
+		},
+	}
+
+}
+func makeReltypeT() RelType {
+	return RelType{
+		Base: TypeInfo{
+			Name:     "T",
+			Kind:     TypeKindStruct,
+			PkgPath:  "path/to/test",
+			PkgName:  "testdata",
+			PkgLocal: "testdata",
+		},
+		Fields: []*FieldInfo{{
+			Type:       TypeInfo{Kind: TypeKindString},
+			Name:       "F",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"f"}},
+			ColIdent:   ColIdent{Name: "f"},
+		}},
+	}
+}
+
+func makeReltypeT2() RelType {
+	return RelType{
+		Base: TypeInfo{
+			Name:     "T2",
+			Kind:     TypeKindStruct,
+			PkgPath:  "path/to/test",
+			PkgName:  "testdata",
+			PkgLocal: "testdata",
+		},
+		Fields: []*FieldInfo{{
+			Type:       TypeInfo{Kind: TypeKindInt},
+			Name:       "Foo",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"foo"}},
+			ColIdent:   ColIdent{Name: "foo"},
+		}, {
+			Type:       TypeInfo{Kind: TypeKindString},
+			Name:       "Bar",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"bar"}},
+			ColIdent:   ColIdent{Name: "bar"},
+		}, {
+			Type:       TypeInfo{Kind: TypeKindBool},
+			Name:       "Baz",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"baz"}},
+			ColIdent:   ColIdent{Name: "baz"},
+		}},
+	}
+}
+
+func makeReltypeCT1() RelType {
+	return RelType{
+		Base: TypeInfo{
+			Name:     "CT1",
+			Kind:     TypeKindStruct,
+			PkgPath:  "path/to/test",
+			PkgName:  "testdata",
+			PkgLocal: "testdata",
+		},
+		Fields: []*FieldInfo{{
+			Type:       TypeInfo{Kind: TypeKindInt},
+			Name:       "A",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"col_a"}},
+			ColIdent:   ColIdent{Name: "col_a"},
+		}, {
+			Type:       TypeInfo{Kind: TypeKindString},
+			Name:       "B",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"col_b"}},
+			ColIdent:   ColIdent{Name: "col_b"},
+		}, {
+			Type:       TypeInfo{Kind: TypeKindBool},
+			Name:       "C",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"col_c"}},
+			ColIdent:   ColIdent{Name: "col_c"},
+		}, {
+			Type:       TypeInfo{Kind: TypeKindFloat64},
+			Name:       "D",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"col_d"}},
+			ColIdent:   ColIdent{Name: "col_d"},
+		}, {
+			Type: TypeInfo{
+				Name:              "Time",
+				Kind:              TypeKindStruct,
+				PkgPath:           "time",
+				PkgName:           "time",
+				PkgLocal:          "time",
+				IsImported:        true,
+				IsJSONMarshaler:   true,
+				IsJSONUnmarshaler: true,
+			},
+			Name:       "E",
+			IsExported: true,
+			Tag:        tagutil.Tag{"sql": {"col_e"}},
+			ColIdent:   ColIdent{Name: "col_e"},
+		}},
+	}
+
 }

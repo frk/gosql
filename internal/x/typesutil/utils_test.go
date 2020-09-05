@@ -25,7 +25,7 @@ func TestGetDirectiveName(t *testing.T) {
 	}
 
 	name := "GetDirectiveNameTest"
-	named := testutil.FindNamedType(name, tdata)
+	named, _ := testutil.FindNamedType(name, tdata)
 	if named == nil {
 		t.Errorf("%q named type not found", name)
 		return

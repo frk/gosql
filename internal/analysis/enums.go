@@ -235,6 +235,14 @@ const (
 	QuantAll                    // ALL
 )
 
+var quantifiers = [...]string{
+	QuantAny:  "any",
+	QuantSome: "some",
+	QuantAll:  "all",
+}
+
+func (q Quantifier) String() string { return quantifiers[q] }
+
 // stringToQuantifier is a map of string literals to supported quantifiers. Used for parsing of tags.
 var stringToQuantifier = map[string]Quantifier{
 	"any":  QuantAny,
@@ -273,10 +281,10 @@ const (
 	NotSimilar // IS NOT SIMILAR TO
 	_pattern_pred_end
 
-	_list_pred_start
+	_seq_pred_start
 	IsIn  // IN
 	NotIn // NOT IN
-	_list_pred_end
+	_seq_pred_end
 
 	_range_pred_start
 	IsBetween      // BETWEEN x AND y
@@ -359,6 +367,8 @@ var predicateAdjectives = []string{
 	"unknown",
 }
 
+func (p Predicate) String() string { return predicates[p] }
+
 // IsBinary reports whether or not the predicate represents a binary comparison.
 func (p Predicate) IsBinary() bool { return _binary_pred_start < p && p < _binary_pred_end }
 
@@ -374,8 +384,8 @@ func (p Predicate) IsPatternMatch() bool { return _pattern_pred_start < p && p <
 // IsRange reports whether or not the predicate represents a range comparison.
 func (p Predicate) IsRange() bool { return _range_pred_start < p && p < _range_pred_end }
 
-// IsList reports whether or not the predicate represents an list comparison.
-func (p Predicate) IsList() bool { return _list_pred_start < p && p < _list_pred_end }
+// IsArray reports whether or not the predicate represents an array comparison.
+func (p Predicate) IsArray() bool { return _seq_pred_start < p && p < _seq_pred_end }
 
 // IsUnary reports whether or not the predicate represents a unary comparison.
 func (p Predicate) IsUnary() bool { return p.IsNull() || p.IsBoolean() }

@@ -5,7 +5,6 @@ package postgres
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -29,38 +28,61 @@ var _ = log.Println
 type DB struct {
 	// The underlying *sql.DB pool handle.
 	*sql.DB
-	// The url used to open connections to the database.
+	// The DSN used to open connections to the database.
 	// Used also as the key for caching the loaded Catalog.
-	url string
+	dsn string
 	// The name of the current database. (intended mainly for error reporting)
 	name string
+	// The name of the current user. (intended mainly for error reporting)
+	user string
+	// The search_path setting (original).
+	searchpath string
 	// The version number of the current database.
 	version int
 	// The catalog for the target database.
 	catalog *Catalog
 }
 
-// Open opens a new connection pool to the url specified postgres
+// Open opens a new connection pool to the dsn specified postgres
 // database and loads the catalog information.
-func Open(url string) (*DB, error) {
-	conn, err := sql.Open("postgres", url)
+func Open(dsn string) (*DB, error) {
+	conn, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return nil, err
+		return nil, &dbError{Code: errDatabaseOpen, DB: dbInfo{DSN: dsn}, Err: err}
 	} else if err := conn.Ping(); err != nil {
-		return nil, err
+		return nil, &dbError{Code: errDatabaseOpen, DB: dbInfo{DSN: dsn}, Err: err}
 	}
 
-	db := &DB{DB: conn, url: url}
-	if err := db.QueryRow(`SELECT current_database()`).Scan(&db.name); err != nil {
-		return nil, err
+	db := &DB{DB: conn, dsn: dsn}
+	if err := db.QueryRow(`SELECT current_database(), current_user`).Scan(&db.name, &db.user); err != nil {
+		return nil, &dbError{Code: errDatabaseInit, DB: dbInfo{DSN: dsn}, Err: err}
+	}
+	if err := db.QueryRow(`SHOW search_path`).Scan(&db.searchpath); err != nil {
+		return nil, &dbError{Code: errDatabaseInit, DB: dbInfo{DSN: dsn}, Err: err}
 	}
 	if err := db.QueryRow(`SHOW server_version_num`).Scan(&db.version); err != nil {
-		return nil, err
+		return nil, &dbError{Code: errDatabaseInit, DB: dbInfo{DSN: dsn}, Err: err}
 	}
-	if db.catalog, err = loadCatalog(db, url); err != nil {
+
+	if db.catalog, err = loadCatalog(db, dsn); err != nil {
 		return nil, err
 	}
 	return db, nil
+}
+
+func (db *DB) Close() error {
+	if db.DB == nil {
+		return nil
+	}
+	return db.DB.Close()
+}
+
+func (db *DB) dbError(e dbError) *dbError {
+	e.DB.DSN = db.dsn
+	e.DB.Name = db.name
+	e.DB.User = db.user
+	e.DB.SearchPath = db.searchpath
+	return &e
 }
 
 // checker maintains the state of the type checker.
@@ -77,10 +99,58 @@ type checker struct {
 	// A map of column qualifier (alias or relname or "") to the
 	// relation denoted by said qualifier.
 	relMap map[string]*Relation
-	// Map to hold the set of joined relations.
-	joinMap map[analysis.RelIdent]*Relation
-	// The result ...
+	// The result info
 	res *TargetInfo
+
+	// set only during the type checking of WhereBetweenStruct; unset otherwise
+	wb *analysis.WhereBetweenStruct
+}
+
+func (c *checker) dbError(e dbError, ptr analysis.FieldPtr) *dbError {
+	e.DB = dbInfo{DSN: c.db.dsn, Name: c.db.name, User: c.db.user, SearchPath: c.db.searchpath}
+
+	tpos := c.info.FileSet.Position(c.info.TypeNamePos)
+	e.Target.Pkg = c.info.PkgPath
+	e.Target.Name = c.info.TypeName
+	e.Target.File.Name = tpos.Filename
+	e.Target.File.Line = tpos.Line
+
+	// get rel from column
+	if e.Rel.Relation == nil && e.Col.Column != nil {
+		e.Rel.Relation = e.Col.Column.Relation
+	} else if e.Rel.Relation == nil && len(e.Col.Id.Name) > 0 {
+		e.Rel.Relation = c.relMap[e.Col.Id.Qualifier]
+	}
+
+	// get rel from rel id, or relid from rel
+	if e.Rel.Relation == nil && len(e.Rel.Id.Name) > 0 {
+		e.Rel.Relation = c.relMap[e.Rel.Id.Name]
+	} else if e.Rel.Id.Name == "" && e.Rel.Relation != nil {
+		e.Rel.Id = analysis.RelIdent{Name: e.Rel.Relation.Name, Qualifier: e.Rel.Relation.Schema}
+	}
+
+	// get field & source info from FieldPtr
+	if f, ok := c.info.FieldMap[ptr]; ok {
+		fpos := c.info.FileSet.Position(f.Var.Pos())
+		e.Field.Name = f.Var.Name()
+		e.Field.Type = f.Var.Type().String()
+		e.Field.Tag = f.Tag
+		e.Field.File.Name = fpos.Filename
+		e.Field.File.Line = fpos.Line
+	}
+
+	// get field & source info for WhereBetweenStruct, if present
+	if c.wb != nil {
+		if f, ok := c.info.FieldMap[c.wb]; ok {
+			fpos := c.info.FileSet.Position(f.Var.Pos())
+			e.WBField.Name = f.Var.Name()
+			e.WBField.Type = f.Var.Type().String()
+			e.WBField.Tag = f.Tag
+			e.WBField.File.Name = fpos.Filename
+			e.WBField.File.Line = fpos.Line
+		}
+	}
+	return &e
 }
 
 // TargetInfo is the result of type-checking a TargetStruct instance.
@@ -102,7 +172,6 @@ type TargetInfo struct {
 func Check(db *DB, ts analysis.TargetStruct, info *analysis.Info) (_ *TargetInfo, err error) {
 	c := &checker{db: db, info: info}
 	c.relMap = make(map[string]*Relation)
-	c.joinMap = make(map[analysis.RelIdent]*Relation)
 	c.res = new(TargetInfo)
 	c.res.Struct = ts
 	c.res.Info = info
@@ -126,23 +195,6 @@ func Check(db *DB, ts analysis.TargetStruct, info *analysis.Info) (_ *TargetInfo
 		}
 	}
 	return c.res, nil
-}
-
-// error constructs and returns a new Error value.
-func (c *checker) error(ecode ErrorCode, fptr analysis.FieldPtr) error {
-	e := Error{Code: ecode}
-	e.PkgPath = c.info.PkgPath
-	e.TargetName = c.info.TypeName
-	e.DBName = c.db.name
-
-	if f, ok := c.info.FieldMap[fptr]; ok {
-		p := c.info.FileSet.Position(f.Var.Pos())
-		e.FieldType = f.Var.Type().String()
-		e.FieldName = f.Var.Name()
-		e.FileName = p.Filename
-		e.FileLine = p.Line
-	}
-	return e
 }
 
 // typeCheckFilterStruct type-checks the given FilterStruct.
@@ -176,16 +228,12 @@ func typeCheckFilterTextSearchDirective(c *checker, fs *analysis.FilterStruct) e
 		return nil
 	}
 
-	// TODO this should be caught by analysis
-	if len(fs.TextSearch.Qualifier) > 0 && fs.TextSearch.Qualifier != c.rid.Alias {
-		return c.error2(eopt{c: ErrBadColumnQualifier, rel: c.rel, rid: c.rid,
-			cid: fs.TextSearch.ColIdent, ptr: fs.TextSearch})
-	}
-
 	if col := findRelColumn(c.rel, fs.TextSearch.Name); col == nil {
-		return c.error2(eopt{c: ErrNoColumn, rel: c.rel, ptr: fs.TextSearch})
+		return c.dbError(dbError{Code: errColumnUnknown, Rel: relInfo{Relation: c.rel},
+			Col: colInfo{Id: fs.TextSearch.ColIdent}}, fs.TextSearch)
 	} else if col.Type.OID != oid.TSVector {
-		return c.error2(eopt{c: ErrBadColumnType, rel: c.rel, col: col, ptr: fs.TextSearch})
+		return c.dbError(dbError{Code: errColumnTextSearchType, Rel: relInfo{Relation: c.rel},
+			Col: colInfo{Id: fs.TextSearch.ColIdent, Column: col}}, fs.TextSearch)
 	}
 	return nil
 }
@@ -243,8 +291,8 @@ func typeCheckQueryForceDirective(c *checker, qs *analysis.QueryStruct) error {
 	c.force = qs.Force
 
 	for _, cid := range qs.Force.Items {
-		if ecode := checkColumnExists(c, cid); ecode > 0 {
-			return c.error2(eopt{c: ecode, cid: cid, ptr: qs.Force})
+		if _, ecode := findColumn(c, cid); ecode > 0 {
+			return c.dbError(dbError{Code: ecode, Col: colInfo{Id: cid}}, qs.Force)
 		}
 	}
 	return nil
@@ -263,20 +311,12 @@ func typeCheckQueryDefaultDirective(c *checker, qs *analysis.QueryStruct) error 
 	}
 
 	for _, cid := range qs.Default.Items {
-		if len(cid.Qualifier) > 0 {
-			rid := qs.Rel.Id
-			if cid.Qualifier != rid.Alias && cid.Qualifier != rid.Name {
-				return c.error2(eopt{c: ErrBadColumnQualifier, rel: c.rel,
-					rid: rid, cid: cid, ptr: qs.Default})
-			}
-		}
-
 		if col := findRelColumn(c.rel, cid.Name); col == nil {
-			return c.error2(eopt{c: ErrNoColumn, rel: c.rel,
-				cid: cid, ptr: qs.Default})
+			return c.dbError(dbError{Code: errColumnUnknown,
+				Rel: relInfo{Relation: c.rel}, Col: colInfo{Id: cid}}, qs.Default)
 		} else if !col.HasDefault {
-			return c.error2(eopt{c: ErrNoColumnDefault, rel: c.rel,
-				cid: cid, col: col, ptr: qs.Default})
+			return c.dbError(dbError{Code: errColumnDefaultUnset,
+				Rel: relInfo{Relation: c.rel}, Col: colInfo{Id: cid, Column: col}}, qs.Default)
 		}
 	}
 	return nil
@@ -292,8 +332,8 @@ func typeCheckQueryOrderByDirective(c *checker, qs *analysis.QueryStruct) error 
 	}
 
 	for _, item := range qs.OrderBy.Items {
-		if ecode := checkColumnExists(c, item.ColIdent); ecode > 0 {
-			return c.error2(eopt{c: ecode, cid: item.ColIdent, ptr: qs.OrderBy})
+		if _, ecode := findColumn(c, item.ColIdent); ecode > 0 {
+			return c.dbError(dbError{Code: ecode, Col: colInfo{Id: item.ColIdent}}, qs.OrderBy)
 		}
 	}
 	return nil
@@ -330,7 +370,7 @@ func typeCheckQueryReturnDirective(c *checker, qs *analysis.QueryStruct) error {
 		strict = true
 		for _, cid := range qs.Return.Items {
 			if f, ecode := findQueryColumnField(c, qs, cid, strict); ecode > 0 {
-				return c.error2(eopt{c: ecode, cid: cid, ptr: qs.Return})
+				return c.dbError(dbError{Code: ecode, Col: colInfo{Id: cid}}, qs.Return)
 			} else if f != nil {
 				fields = append(fields, f)
 			}
@@ -422,22 +462,13 @@ func typeCheckQueryJoinStruct(c *checker, qs *analysis.QueryStruct) error {
 				cond.Value = item.Value
 				conds[i] = cond
 			case *analysis.JoinConditionTagItem:
-				// A join condition's left-hand-side column MUST always
-				// reference a column of the relation being joined, so to
-				// avoid confusion make sure that item.LHSColIdent has either
-				// no qualifier or, if it has one, it matches the alias of
-				// the joined table.
-				if len(item.LHSColIdent.Qualifier) > 0 && item.LHSColIdent.Qualifier != dir.RelIdent.Alias {
-					return c.error2(eopt{c: ErrBadAlias, rid: dir.RelIdent, cid: item.LHSColIdent, ptr: dir})
-				}
-
 				cond := new(ColumnConditional)
 				cond.LHSColIdent = item.LHSColIdent
 				cond.RHSColIdent = item.RHSColIdent
 				cond.RHSLiteral = item.RHSLiteral
 				cond.Predicate = item.Predicate
 				cond.Quantifier = item.Quantifier
-				if err := typeCheckColumnConditional(c, cond, rel, dir); err != nil {
+				if err := typeCheckColumnConditional(c, cond, rel, dir.RelIdent, dir); err != nil {
 					return err
 				}
 				conds[i] = cond
@@ -496,7 +527,7 @@ func typeCheckWhereItem(c *checker, item analysis.WhereItem) (WhereConditional, 
 		column.RHSLiteral = wi.RHSLiteral
 		column.Predicate = wi.Predicate
 		column.Quantifier = wi.Quantifier
-		if err := typeCheckColumnConditional(c, column, nil, wi); err != nil {
+		if err := typeCheckColumnConditional(c, column, nil, analysis.RelIdent{}, wi); err != nil {
 			return nil, err
 		}
 		return column, nil
@@ -508,9 +539,19 @@ func typeCheckWhereItem(c *checker, item analysis.WhereItem) (WhereConditional, 
 		field.Predicate = wi.Predicate
 		field.Quantifier = wi.Quantifier
 		field.FuncName = wi.FuncName
+
+		if field.Column == nil {
+			col, ecode := findColumn(c, field.ColIdent)
+			if ecode > 0 {
+				return nil, c.dbError(dbError{Code: ecode, Col: colInfo{Id: field.ColIdent}}, wi)
+			}
+			field.Column = col
+		}
+
 		if ecode := typeCheckFieldConditional(c, field); ecode > 0 {
-			return nil, c.error2(eopt{c: ecode, cid: wi.ColIdent, col: field.Column,
-				pre: wi.Predicate, qua: wi.Quantifier, ptr: wi})
+			return nil, c.dbError(dbError{Code: ecode,
+				Col:  colInfo{Id: wi.ColIdent, Column: field.Column},
+				Pred: wi.Predicate, Quant: wi.Quantifier, Func: field.FuncName}, wi)
 		}
 		return field, nil
 	case *analysis.WhereBetweenStruct:
@@ -529,20 +570,81 @@ func typeCheckWhereItem(c *checker, item analysis.WhereItem) (WhereConditional, 
 //
 // CHECKLIST:
 //  ✅ The column denoting the primary predicand MUST be present in one of the loaded relations.
-//  ✅ Both range-bound predicands MUST be comparable to the primary predicand's column.
+//  ✅ Both range-bound predicands MUST be comparable to the primary column predicand.
+//
+// - If the bound is a *analysis.BetweenColumnDirective:
+//  ✅ The denoted column MUST be present in one of the loaded relations.
+//  ✅ The found column MUST be comparable to the provided acol column.
+//
+// - If the bound is a *analysis.BetweenStructField:
 func typeCheckWhereBetweenStruct(c *checker, wb *analysis.WhereBetweenStruct) (*BetweenConditional, error) {
+	c.wb = wb
+	defer func() { c.wb = nil }()
+
 	col, ecode := findColumn(c, wb.ColIdent)
 	if ecode > 0 {
-		return nil, c.error2(eopt{c: ecode, cid: wb.ColIdent, ptr: wb})
+		return nil, c.dbError(dbError{Code: ecode, Col: colInfo{Id: wb.ColIdent}}, wb)
 	}
 
-	lower, err := typeCheckBetweenRangeBound(c, col, wb, wb.LowerBound)
-	if err != nil {
-		return nil, err
+	rangeInfo := [2]*struct {
+		out  RangeBound          // result of type checker
+		in   analysis.RangeBound // input from analyzer
+		pred analysis.Predicate  // synonymous predicate
+	}{{}, {}}
+	rangeInfo[0].in = wb.LowerBound
+	rangeInfo[1].in = wb.UpperBound
+
+	// Set the predicate here for the purposes of type-checking the comparison.
+	if wb.Predicate.IsOneOf(analysis.NotBetween, analysis.NotBetweenSym, analysis.NotBetweenAsym) {
+		// "a NOT BETWEEN x AND y" is equivalent to "a < x OR a > y"
+		rangeInfo[0].pred = analysis.IsLT
+		rangeInfo[1].pred = analysis.IsGT
+	} else {
+		// "a BETWEEN x AND y" is equivalent to "a >= x AND a <= y"
+		rangeInfo[0].pred = analysis.IsGTE
+		rangeInfo[1].pred = analysis.IsLTE
 	}
-	upper, err := typeCheckBetweenRangeBound(c, col, wb, wb.UpperBound)
-	if err != nil {
-		return nil, err
+
+	for _, r := range rangeInfo {
+		switch b := r.in.(type) {
+		default:
+			panic("shouldn't reach")
+		case *analysis.BetweenColumnDirective:
+			column := new(ColumnConditional)
+			column.LHSColIdent = wb.ColIdent
+			column.LHSColumn = col
+			column.RHSColIdent = b.ColIdent
+			column.Predicate = r.pred
+			if err := typeCheckColumnConditional(c, column, nil, analysis.RelIdent{}, b); err != nil {
+				if e, ok := err.(*dbError); ok && e.Code == errColumnComparison {
+					return nil, c.dbError(dbError{Code: errBetweenColumnComparison,
+						Col:    colInfo{Id: wb.ColIdent, Column: col},
+						RHSCol: colInfo{Id: b.ColIdent, Column: column.RHSColumn},
+						Pred:   r.pred}, b)
+				}
+
+				return nil, err
+			}
+			r.out = column
+		case *analysis.BetweenStructField:
+			field := new(FieldConditional)
+			field.FieldName = b.Name
+			field.FieldType = b.Type
+			field.ColIdent = wb.ColIdent
+			field.Column = col
+			field.Predicate = r.pred
+			if ecode := typeCheckFieldConditional(c, field); ecode > 0 {
+				if ecode == errColumnFieldComparison {
+					return nil, c.dbError(dbError{Code: errBetweenFieldComparison,
+						Col:  colInfo{Id: wb.ColIdent, Column: col},
+						Pred: r.pred, Func: field.FuncName}, b)
+				}
+				return nil, c.dbError(dbError{Code: ecode,
+					Col:  colInfo{Id: wb.ColIdent, Column: col},
+					Pred: r.pred, Func: field.FuncName}, b)
+			}
+			r.out = field
+		}
 	}
 
 	cond := new(BetweenConditional)
@@ -550,60 +652,9 @@ func typeCheckWhereBetweenStruct(c *checker, wb *analysis.WhereBetweenStruct) (*
 	cond.ColIdent = wb.ColIdent
 	cond.Column = col
 	cond.Predicate = wb.Predicate
-	cond.LowerBound = lower
-	cond.UpperBound = upper
+	cond.LowerBound = rangeInfo[0].out
+	cond.UpperBound = rangeInfo[1].out
 	return cond, nil
-}
-
-// typeCheckBetweenRangeBound type-checks the given between-specific RangeBound
-// and returns the result.
-//
-// CHECKLIST:
-// - If the bound is a *analysis.BetweenColumnDirective:
-//  ✅ The denoted column MUST be present in one of the loaded relations.
-//  ✅ The found column MUST be comparable to the provided acol column.
-//
-// - If the bound is a *analysis.BetweenStructField:
-//
-func typeCheckBetweenRangeBound(c *checker, acol *Column, wb *analysis.WhereBetweenStruct, rb analysis.RangeBound) (RangeBound, error) {
-	var pred analysis.Predicate
-
-	// Switch the predicate here for the purposes of type-checking the comparison.
-	if wb.Predicate.IsOneOf(analysis.NotBetween, analysis.NotBetweenSym, analysis.NotBetweenAsym) {
-		// "a NOT BETWEEN x AND y" is equivalent to "a < x OR a > y"
-		pred = analysis.IsGT
-	} else {
-		// "a BETWEEN x AND y" is equivalent to "a >= x AND a <= y"
-		pred = analysis.IsGTE
-	}
-
-	switch b := rb.(type) {
-	case *analysis.BetweenColumnDirective:
-		column := new(ColumnConditional)
-		column.LHSColIdent = wb.ColIdent
-		column.LHSColumn = acol
-		column.RHSColIdent = b.ColIdent
-		column.Predicate = pred
-		if err := typeCheckColumnConditional(c, column, nil, b); err != nil {
-			return nil, err
-		}
-		return column, nil
-	case *analysis.BetweenStructField:
-		field := new(FieldConditional)
-		field.FieldName = b.Name
-		field.FieldType = b.Type
-		field.ColIdent = wb.ColIdent
-		field.Column = acol
-		field.Predicate = pred
-		if ecode := typeCheckFieldConditional(c, field); ecode > 0 {
-			return nil, c.error2(eopt{c: ecode, cid: wb.ColIdent,
-				col: acol, pre: wb.Predicate, ptr: b})
-		}
-		return field, nil
-	default:
-		panic("shouldn't reach")
-	}
-	return nil, nil
 }
 
 // typeCheckFieldConditional
@@ -620,15 +671,7 @@ func typeCheckBetweenRangeBound(c *checker, acol *Column, wb *analysis.WhereBetw
 //     match the function's argument type, the field's type MUST be compatible with the
 //     function's argument type, and the result type of both instances of the function
 //     MUST be comparable given the predicate operator, (be mindful of function overloading).
-func typeCheckFieldConditional(c *checker, cond *FieldConditional) ErrorCode {
-	if cond.Column == nil {
-		col, ecode := findColumn(c, cond.ColIdent)
-		if ecode > 0 {
-			return ecode
-		}
-		cond.Column = col
-	}
-
+func typeCheckFieldConditional(c *checker, cond *FieldConditional) dbErrorCode {
 	if len(cond.FuncName) > 0 {
 		return typeCheckFieldConditionalWithFunc(c, cond)
 	}
@@ -642,12 +685,13 @@ func typeCheckFieldConditional(c *checker, cond *FieldConditional) ErrorCode {
 
 	if cond.Predicate.IsArray() || cond.Quantifier > 0 {
 		id, ok := oid.TypeToArray[cond.Column.Type.OID]
-		if !ok {
-			return ErrBadColumnType
+		if ok {
+			ctyp, ok = c.db.catalog.Types[id]
 		}
-		ctyp, ok = c.db.catalog.Types[id]
-		if !ok {
-			return ErrBadColumnType
+		if !ok && cond.Predicate.IsArray() {
+			return errPredicateOperandArray
+		} else if !ok && cond.Quantifier > 0 {
+			return errPredicateOperandQuantifier
 		}
 	}
 
@@ -681,17 +725,17 @@ func typeCheckFieldConditional(c *checker, cond *FieldConditional) ErrorCode {
 		}
 	}
 	if comp == nil {
-		return ErrBadComparisonOperation
+		return errColumnFieldComparison
 	}
 
 	cond.Valuer = comp.valuer
 	return 0
 }
 
-func typeCheckFieldConditionalWithFunc(c *checker, cond *FieldConditional) ErrorCode {
+func typeCheckFieldConditionalWithFunc(c *checker, cond *FieldConditional) dbErrorCode {
 	procs, ok := c.db.catalog.Procs[string(cond.FuncName)]
 	if !ok {
-		return ErrNoProc
+		return errProcedureUnknown
 	}
 
 	// - 1. produce a set of LR proc return type & comparison op
@@ -716,7 +760,7 @@ func typeCheckFieldConditionalWithFunc(c *checker, cond *FieldConditional) Error
 				continue
 			}
 
-			if typeCheckComparison(c, lrettyp, rrettyp, cond.Predicate, cond.Quantifier) {
+			if typeCheckComparison(c, lrettyp, rrettyp, cond.Predicate, cond.Quantifier) == 0 {
 				largtyp, ok := c.db.catalog.Types[l.ArgType]
 				if !ok {
 					continue
@@ -738,7 +782,7 @@ func typeCheckFieldConditionalWithFunc(c *checker, cond *FieldConditional) Error
 			}
 		}
 	}
-	return ErrBadProcType
+	return errProcedureUnknown
 }
 
 // typeCheckColumnConditional
@@ -760,18 +804,22 @@ func typeCheckFieldConditionalWithFunc(c *checker, cond *FieldConditional) Error
 //  ✅ The RHS column or literal expression MUST be quantifiable.
 //
 //  ✅ The LHS and RHS types MUST be comparable with the given predicate and quantifier.
-func typeCheckColumnConditional(c *checker, cond *ColumnConditional, rel *Relation, ptr analysis.FieldPtr) error {
+func typeCheckColumnConditional(c *checker, cond *ColumnConditional, rel *Relation, rid analysis.RelIdent, ptr analysis.FieldPtr) error {
 	if cond.LHSColumn == nil {
 		if rel != nil {
 			col := findRelColumn(rel, cond.LHSColIdent.Name)
 			if col == nil {
-				return c.error2(eopt{c: ErrNoColumn, rel: rel, cid: cond.LHSColIdent, ptr: ptr})
+				return c.dbError(dbError{Code: errColumnUnknown,
+					Rel: relInfo{Id: rid, Relation: rel},
+					Col: colInfo{Id: cond.LHSColIdent}}, ptr)
 			}
 			cond.LHSColumn = col
 		} else {
 			col, ecode := findColumn(c, cond.LHSColIdent)
 			if ecode > 0 {
-				return c.error2(eopt{c: ecode, cid: cond.LHSColIdent, ptr: ptr})
+				return c.dbError(dbError{Code: ecode,
+					Rel: relInfo{Id: rid, Relation: rel},
+					Col: colInfo{Id: cond.LHSColIdent}}, ptr)
 			}
 			cond.LHSColumn = col
 		}
@@ -779,12 +827,12 @@ func typeCheckColumnConditional(c *checker, cond *ColumnConditional, rel *Relati
 
 	if cond.Predicate.IsUnary() {
 		if cond.Predicate.IsBoolean() && cond.LHSColumn.Type.OID != oid.Bool {
-			return c.error2(eopt{c: ErrBadUnaryPredicateType, pre: cond.Predicate,
-				cid: cond.LHSColIdent, col: cond.LHSColumn, ptr: ptr})
+			return c.dbError(dbError{Code: errPredicateOperandBool,
+				Col: colInfo{Id: cond.LHSColIdent, Column: cond.LHSColumn}, Pred: cond.Predicate}, ptr)
 		}
 		if cond.Predicate.IsNull() && cond.LHSColumn.HasNotNull {
-			return c.error2(eopt{c: ErrBadUnaryPredicateType, pre: cond.Predicate,
-				cid: cond.LHSColIdent, col: cond.LHSColumn, ptr: ptr})
+			return c.dbError(dbError{Code: errPredicateOperandNull,
+				Col: colInfo{Id: cond.LHSColIdent, Column: cond.LHSColumn}, Pred: cond.Predicate}, ptr)
 		}
 		return nil
 	}
@@ -792,22 +840,32 @@ func typeCheckColumnConditional(c *checker, cond *ColumnConditional, rel *Relati
 	if len(cond.RHSColIdent.Name) > 0 {
 		col, ecode := findColumn(c, cond.RHSColIdent)
 		if ecode > 0 {
-			return c.error2(eopt{c: ecode, cid: cond.RHSColIdent, ptr: ptr})
+			return c.dbError(dbError{Code: ecode, Col: colInfo{Id: cond.RHSColIdent}}, ptr)
 		}
 		cond.RHSColumn = col
 		cond.RHSType = col.Type
 	} else if len(cond.RHSLiteral) > 0 {
 		typ, ecode := typeOfLiteral(c, cond.RHSLiteral)
 		if ecode > 0 {
-			return c.error2(eopt{c: ecode, lit: cond.RHSLiteral, ptr: ptr})
+			return c.dbError(dbError{Code: ecode,
+				Col:    colInfo{Id: cond.LHSColIdent, Column: cond.LHSColumn},
+				RHSLit: exprInfo{Expr: cond.RHSLiteral},
+				Pred:   cond.Predicate, Quant: cond.Quantifier}, ptr)
 		}
 		cond.RHSType = typ
 	}
 
-	if !typeCheckComparison(c, cond.LHSColumn.Type, cond.RHSType, cond.Predicate, cond.Quantifier) {
-		return c.error2(eopt{c: ErrBadComparisonOperation, pre: cond.Predicate,
-			qua: cond.Quantifier, col: cond.LHSColumn, lit: cond.RHSLiteral,
-			col2: cond.RHSColumn, typ2: cond.RHSType, ptr: ptr})
+	if ecode := typeCheckComparison(c, cond.LHSColumn.Type, cond.RHSType, cond.Predicate, cond.Quantifier); ecode > 0 {
+		var rhsCol colInfo
+		var rhsLit exprInfo
+		if len(cond.RHSColIdent.Name) > 0 {
+			rhsCol = colInfo{Id: cond.RHSColIdent, Column: cond.RHSColumn}
+		} else {
+			rhsLit = exprInfo{Expr: cond.RHSLiteral, Type: cond.RHSType}
+		}
+		return c.dbError(dbError{Code: ecode,
+			Col:    colInfo{Id: cond.LHSColIdent, Column: cond.LHSColumn},
+			RHSCol: rhsCol, RHSLit: rhsLit, Pred: cond.Predicate, Quant: cond.Quantifier}, ptr)
 	}
 	return nil
 }
@@ -821,26 +879,48 @@ func typeCheckColumnConditional(c *checker, cond *ColumnConditional, rel *Relati
 //  ✅ ACCEPT if the LHS type belongs to the string category and the RHS type is unknown.
 //  ✅ ACCEPT if the combination of LHS type, RHS type, and the predicate has
 //     an entry in the pg_operator table.
-func typeCheckComparison(c *checker, ltyp *Type, rtyp *Type, pred analysis.Predicate, qua analysis.Quantifier) bool {
+func typeCheckComparison(c *checker, ltyp *Type, rtyp *Type, pred analysis.Predicate, qua analysis.Quantifier) dbErrorCode {
 	if pred.IsArray() || qua > 0 {
 		if rtyp.Category != TypeCategoryArray {
-			return false
+			if pred.IsArray() {
+				return errPredicateOperandArray
+			}
+			return errPredicateOperandQuantifier
 		}
 		rtyp = c.db.catalog.Types[rtyp.Elem]
 	}
 
 	if ltyp.Category == TypeCategoryString && rtyp.OID == oid.Unknown {
-		return true
+		return 0
 	}
 
-	var key OpKey
-	key.Left = ltyp.OID
-	key.Right = rtyp.OID
-	key.Name = predicateToOprname[pred]
-	if _, ok := c.db.catalog.Operators[key]; ok {
-		return true
+	// if operator exists, accept
+	opkey := OpKey{Left: ltyp.OID, Right: rtyp.OID, Name: predicateToOprname[pred]}
+	if _, ok := c.db.catalog.Operators[opkey]; ok {
+		return 0
 	}
-	return false
+
+	// if L & R are not the same type, try *implicit* casting.
+	if opkey.Left != opkey.Right {
+		castkey := CastKey{Source: opkey.Left, Target: opkey.Right}
+		if cast := c.db.catalog.Casts[castkey]; cast != nil && cast.Context == CastContextImplicit {
+			k := OpKey{Left: cast.Target, Right: cast.Target, Name: opkey.Name}
+			if _, ok := c.db.catalog.Operators[k]; ok {
+				return 0
+			}
+		}
+
+		// switch target & source
+		castkey = CastKey{Source: opkey.Right, Target: opkey.Left}
+		if cast := c.db.catalog.Casts[castkey]; cast != nil && cast.Context == CastContextImplicit {
+			k := OpKey{Left: cast.Target, Right: cast.Target, Name: opkey.Name}
+			if _, ok := c.db.catalog.Operators[k]; ok {
+				return 0
+			}
+		}
+	}
+
+	return errColumnComparison
 }
 
 // typeCheckQueryOnConflictStruct
@@ -870,19 +950,24 @@ func typeCheckQueryOnConflictStruct(c *checker, qs *analysis.QueryStruct) error 
 		for _, cid := range qs.OnConflict.Column.ColIdents {
 			col := findRelColumn(c.rel, cid.Name)
 			if col == nil {
-				return c.error2(eopt{c: ErrNoColumn, rel: c.rel,
-					cid: cid, ptr: qs.OnConflict.Column})
+				return c.dbError(dbError{Code: errColumnUnknown,
+					Rel: relInfo{Relation: c.rel}, Col: colInfo{Id: cid}},
+					qs.OnConflict.Column)
 			}
 			attnums = append(attnums, col.Num)
 		}
 
+		var exists, isunique bool
 		for _, ind := range c.rel.Indexes {
-			if !ind.IsUnique && !ind.IsPrimary {
-				continue
-			}
 			if !matchNumbers(ind.Key, attnums) {
 				continue
 			}
+			exists = true
+
+			if !ind.IsUnique && !ind.IsPrimary {
+				continue
+			}
+			isunique = true
 
 			target := new(ConflictIndex)
 			target.Expression = ind.Expression
@@ -890,18 +975,25 @@ func typeCheckQueryOnConflictStruct(c *checker, qs *analysis.QueryStruct) error 
 			info.Target = target
 			break
 		}
-		if info.Target == nil {
-			return c.error2(eopt{c: ErrNoUniqueIndex, rel: c.rel,
-				ptr: qs.OnConflict.Column})
+
+		if !exists {
+			return c.dbError(dbError{Code: errOnConflictIndexColumnsUnknown,
+				Rel: relInfo{Relation: c.rel}}, qs.OnConflict.Column)
+		} else if !isunique {
+			return c.dbError(dbError{Code: errOnConflictIndexColumnsNotUnique,
+				Rel: relInfo{Relation: c.rel}}, qs.OnConflict.Column)
 		}
 	}
 
 	// check that the index exists and is unique.
 	if qs.OnConflict.Index != nil {
 		ind := findRelIndex(c.rel, qs.OnConflict.Index.Name)
-		if ind == nil || (!ind.IsUnique && !ind.IsPrimary) {
-			return c.error2(eopt{c: ErrNoUniqueIndex, rel: c.rel,
-				ptr: qs.OnConflict.Index})
+		if ind == nil {
+			return c.dbError(dbError{Code: errOnConflictIndexUnknown,
+				Rel: relInfo{Relation: c.rel}}, qs.OnConflict.Index)
+		} else if !ind.IsUnique && !ind.IsPrimary {
+			return c.dbError(dbError{Code: errOnConflictIndexNotUnique,
+				Rel: relInfo{Relation: c.rel}}, qs.OnConflict.Index)
 		}
 
 		target := new(ConflictIndex)
@@ -913,9 +1005,12 @@ func typeCheckQueryOnConflictStruct(c *checker, qs *analysis.QueryStruct) error 
 	// check that the constraint exists and is unique.
 	if qs.OnConflict.Constraint != nil {
 		con := findRelConstraint(c.rel, qs.OnConflict.Constraint.Name)
-		if con == nil || (con.Type != ConstraintTypePKey && con.Type != ConstraintTypeUnique) {
-			return c.error2(eopt{c: ErrNoUniqueConstraint, rel: c.rel,
-				ptr: qs.OnConflict.Constraint})
+		if con == nil {
+			return c.dbError(dbError{Code: errOnConflictConstraintUnknown,
+				Rel: relInfo{Relation: c.rel}}, qs.OnConflict.Constraint)
+		} else if con.Type != ConstraintTypePKey && con.Type != ConstraintTypeUnique {
+			return c.dbError(dbError{Code: errOnConflictConstraintNotUnique,
+				Rel: relInfo{Relation: c.rel}}, qs.OnConflict.Constraint)
 		}
 
 		target := new(ConflictConstraint)
@@ -935,8 +1030,9 @@ func typeCheckQueryOnConflictStruct(c *checker, qs *analysis.QueryStruct) error 
 			for _, cid := range qs.OnConflict.Update.Items {
 				col := findRelColumn(c.rel, cid.Name)
 				if col == nil {
-					return c.error2(eopt{c: ErrNoColumn, rel: c.rel,
-						cid: cid, ptr: qs.OnConflict.Update})
+					return c.dbError(dbError{Code: errColumnUnknown,
+						Rel: relInfo{Relation: c.rel}, Col: colInfo{Id: cid}},
+						qs.OnConflict.Update)
 				}
 				info.Update = append(info.Update, col)
 			}
@@ -974,15 +1070,16 @@ func typeCheckQueryOnConflictStruct(c *checker, qs *analysis.QueryStruct) error 
 func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 	col := findRelColumn(c.rel, f.ColIdent.Name)
 	if col == nil && strict {
-		return c.error2(eopt{c: ErrNoColumn, cid: f.ColIdent, rel: c.rel, ptr: f})
+		return c.dbError(dbError{Code: errColumnUnknown, Col: colInfo{Id: f.ColIdent},
+			Rel: relInfo{Relation: c.rel}}, f)
 	} else if col == nil && !strict {
 		return nil
 	}
 
-	check := func(f *analysis.FieldInfo, col *Column) (scanner string, ecode ErrorCode) {
+	check := func(f *analysis.FieldInfo, col *Column) (scanner string, ecode dbErrorCode) {
 		// non-empty interface, reject
 		if f.Type.Kind == analysis.TypeKindInterface && !f.Type.IsEmptyInterface {
-			return "", ErrBadFieldReadType
+			return "", errColumnFieldTypeRead
 		}
 
 		// implements sql.Scanner & non-interface, accept as is
@@ -994,11 +1091,11 @@ func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 			if !f.Type.ImplementsJSONUnmarshaler() {
 				// chan, func, or complex, reject
 				if f.Type.IsJSONIllegal() {
-					return "", ErrBadFieldReadType
+					return "", errColumnFieldTypeRead
 				}
 
 				// []byte type, accept as is
-				if f.Type.IsSlice(analysis.TypeKindByte) {
+				if f.Type.IsSliceKind(analysis.TypeKindByte) {
 					return "", 0
 				}
 
@@ -1020,11 +1117,11 @@ func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 		if col.Type.OID == oid.XML {
 			if !f.Type.ImplementsXMLUnmarshaler() {
 				if f.Type.IsXMLIllegal() {
-					return "", ErrBadFieldReadType
+					return "", errColumnFieldTypeRead
 				}
 
 				// []byte type, accept as is
-				if f.Type.IsSlice(analysis.TypeKindByte) {
+				if f.Type.IsSliceKind(analysis.TypeKindByte) {
 					return "", 0
 				}
 
@@ -1053,12 +1150,13 @@ func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 		// } else if col.Type.Type == TypeTypeComposite {
 		// 	// ...
 		// }
-		return "", ErrBadFieldReadType
+		return "", errColumnFieldTypeRead
 	}
 
 	scanner, ecode := check(f, col)
 	if ecode > 0 {
-		return c.error2(eopt{c: ecode, col: col, rel: c.rel, ptr: f})
+		return c.dbError(dbError{Code: ecode, Rel: relInfo{Relation: c.rel},
+			Col: colInfo{Id: f.ColIdent, Column: col}}, f) // TODO test
 	}
 
 	read := new(FieldRead)
@@ -1107,15 +1205,16 @@ func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 	col := findRelColumn(c.rel, f.ColIdent.Name)
 	if col == nil && strict {
-		return c.error2(eopt{c: ErrNoColumn, cid: f.ColIdent, rel: c.rel, ptr: f})
+		return c.dbError(dbError{Code: errColumnUnknown,
+			Col: colInfo{Id: f.ColIdent}, Rel: relInfo{Relation: c.rel}}, f)
 	} else if col == nil && !strict {
 		return nil
 	}
 
-	check := func(f *analysis.FieldInfo, col *Column) (valuer string, ecode ErrorCode) {
+	check := func(f *analysis.FieldInfo, col *Column) (valuer string, ecode dbErrorCode) {
 		// default requested but non available, reject
 		if f.UseDefault && !col.HasDefault {
-			return "", ErrNoColumnDefault
+			return "", errColumnDefaultUnset
 		}
 
 		// implements driver.Valuer, accept as is
@@ -1127,11 +1226,11 @@ func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 			if !f.Type.ImplementsJSONMarshaler() {
 				// chan, func, or complex, reject
 				if f.Type.IsJSONIllegal() {
-					return "", ErrBadFieldWriteType
+					return "", errColumnFieldTypeWrite
 				}
 
 				// []byte type, accept as is
-				if f.Type.IsSlice(analysis.TypeKindByte) {
+				if f.Type.IsSliceKind(analysis.TypeKindByte) {
 					return "", 0
 				}
 
@@ -1146,11 +1245,11 @@ func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 		} else if col.Type.OID == oid.XML {
 			if !f.Type.ImplementsXMLMarshaler() {
 				if f.Type.IsXMLIllegal() {
-					return "", ErrBadFieldWriteType
+					return "", errColumnFieldTypeWrite
 				}
 
 				// []byte type, accept as is
-				if f.Type.IsSlice(analysis.TypeKindByte) {
+				if f.Type.IsSliceKind(analysis.TypeKindByte) {
 					return "", 0
 				}
 
@@ -1179,13 +1278,14 @@ func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 		// } else if col.Type.Type == TypeTypeComposite {
 		// 	// ...
 		// }
-		return "", ErrBadFieldWriteType
+		return "", errColumnFieldTypeWrite
 
 	}
 
 	valuer, ecode := check(f, col)
 	if ecode > 0 {
-		return c.error2(eopt{c: ecode, col: col, rel: c.rel, ptr: f})
+		return c.dbError(dbError{Code: ecode, Rel: relInfo{Relation: c.rel},
+			Col: colInfo{Id: f.ColIdent, Column: col}}, f) // TODO test
 	}
 
 	write := new(FieldWrite)
@@ -1226,30 +1326,34 @@ func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 func typeCheckFieldFilter(c *checker, f *analysis.FieldInfo, strict bool) error {
 	col := findRelColumn(c.rel, f.ColIdent.Name)
 	if col == nil && strict {
-		return c.error2(eopt{c: ErrNoColumn, cid: f.ColIdent, rel: c.rel, ptr: f})
+		// NOTE(mkopriva): at the moment strict is always false so this
+		// branch will not be executed, nevertheless we leave it here in
+		// case strict=true is used sometime later.
+		return c.dbError(dbError{Code: errColumnUnknown,
+			Col: colInfo{Id: f.ColIdent}, Rel: relInfo{Relation: c.rel}}, f)
 	} else if col == nil && !strict {
 		return nil
 	}
 
-	check := func(f *analysis.FieldInfo, col *Column) (valuer string, ecode ErrorCode) {
-		// implements driver.Valuer, accept as is
+	check := func(f *analysis.FieldInfo, col *Column) (valuer string, ecode dbErrorCode) {
+		// implements driver.Valuer? accept as is
 		if f.Type.IsValuer {
 			return "", 0
 		}
 
 		if col.Type.OID == oid.JSON || col.Type.OID == oid.JSONB {
 			if !f.Type.ImplementsJSONMarshaler() {
-				// chan, func, or complex, reject
+				// chan, func, or complex? reject
 				if f.Type.IsJSONIllegal() {
-					return "", ErrBadFieldWriteType
+					return "", errColumnFieldTypeWrite
 				}
 
-				// []byte type, accept as is
-				if f.Type.IsSlice(analysis.TypeKindByte) {
+				// []byte type? accept as is
+				if f.Type.IsSliceKind(analysis.TypeKindByte) {
 					return "", 0
 				}
 
-				// string kind, accept as is
+				// string kind? accept as is
 				if f.Type.Is(analysis.TypeKindString) {
 					return "", 0
 				}
@@ -1261,11 +1365,11 @@ func typeCheckFieldFilter(c *checker, f *analysis.FieldInfo, strict bool) error 
 			if !f.Type.ImplementsXMLMarshaler() {
 				// chan, func, or map, reject
 				if f.Type.IsXMLIllegal() {
-					return "", ErrBadFieldWriteType
+					return "", errColumnFieldTypeWrite
 				}
 
 				// []byte type, accept as is
-				if f.Type.IsSlice(analysis.TypeKindByte) {
+				if f.Type.IsSliceKind(analysis.TypeKindByte) {
 					return "", 0
 				}
 
@@ -1294,12 +1398,12 @@ func typeCheckFieldFilter(c *checker, f *analysis.FieldInfo, strict bool) error 
 		// } else if col.Type.Type == TypeTypeComposite {
 		// 	// ...
 		// }
-		return "", ErrBadFieldWriteType
+		return "", errColumnFieldTypeWrite
 	}
 
 	valuer, ecode := check(f, col)
 	if ecode > 0 {
-		return c.error2(eopt{c: ecode, col: col, rel: c.rel, ptr: f})
+		return c.dbError(dbError{Code: ecode, Col: colInfo{Column: col}, Rel: relInfo{Relation: c.rel}}, f)
 	}
 
 	filter := new(FieldFilter)
@@ -1345,19 +1449,17 @@ func checkTypeCoercion(c *checker, target oid.OID, source oid.OID) bool {
 // If the relation denoted by the column's qualifier doesn't exist, or if the
 // relation exists but the column itself is not present in that relation an
 // error code will be returned instead.
-func findColumn(c *checker, id analysis.ColIdent) (*Column, ErrorCode) {
+func findColumn(c *checker, id analysis.ColIdent) (*Column, dbErrorCode) {
 	if rel, ok := c.relMap[id.Qualifier]; ok {
 		for _, col := range rel.Columns {
 			if col.Name == id.Name {
 				return col, 0 // found
 			}
 		}
-		return nil, ErrNoColumn
+		return nil, errColumnUnknown
 	}
-	if len(id.Qualifier) > 0 {
-		return nil, ErrBadAlias
-	}
-	return nil, ErrNoRelation
+	// NOTE(mkopriva): this should never happend, it ought be caught by analysis.
+	return nil, errColumnQualifierUnknown
 }
 
 // findRelColumn finds and returns the *Column identified by the given name.
@@ -1401,34 +1503,21 @@ func findRelConstraint(rel *Relation, name string) *Constraint {
 // by just the column's name, i.e. the qualifiers are ignored, this means that
 // one could pass in two different cids with the same name and the method
 // would return the same field.
-func findQueryColumnField(c *checker, qs *analysis.QueryStruct, cid analysis.ColIdent, strict bool) (*analysis.FieldInfo, ErrorCode) {
+func findQueryColumnField(c *checker, qs *analysis.QueryStruct, cid analysis.ColIdent, strict bool) (*analysis.FieldInfo, dbErrorCode) {
 	for _, f := range qs.Rel.Type.Fields {
 		if f.ColIdent.Name == cid.Name {
 			if strict {
-				if errcode := checkColumnExists(c, cid); errcode > 0 {
-					return nil, errcode
+				if _, ecode := findColumn(c, cid); ecode > 0 {
+					return nil, ecode
 				}
 			}
 			return f, 0
 		}
 	}
-	return nil, ErrNoColumnField
-}
 
-// checkColumnExists checks whether or not the column, or its relation, denoted by
-// the given id is present in the database. If the column exists 0 will be returned,
-// if the column doesn't exist errNoRelationColumn will be returned, and if the
-// column's relation doesn't exist then errNoDatabaseRelation will be returned.
-func checkColumnExists(c *checker, id analysis.ColIdent) ErrorCode {
-	if rel, ok := c.relMap[id.Qualifier]; ok {
-		for _, col := range rel.Columns {
-			if col.Name == id.Name {
-				return 0 // found
-			}
-		}
-		return ErrNoColumn
-	}
-	return ErrNoRelation
+	// NOTE(mkopriva): this should be caught by anlysis.
+	panic("unreachable")
+	return nil, 0
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1463,7 +1552,7 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 	AND t.typcategory <> 'P'` //`
 	rows, err := db.Query(selectTypes)
 	if err != nil {
-		return nil, err
+		return nil, db.dbError(dbError{Code: errCatalogTypeGet, Err: err})
 	}
 	defer rows.Close()
 
@@ -1480,12 +1569,12 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 			&typ.Elem,
 		)
 		if err != nil {
-			return nil, err
+			return nil, db.dbError(dbError{Code: errCatalogTypeScan, Err: err})
 		}
 		cat.Types[typ.OID] = typ
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, db.dbError(dbError{Code: errCatalogTypeGet, Err: err})
 	}
 
 	const selectOperators = `SELECT
@@ -1498,7 +1587,7 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 	FROM pg_operator o ` //`
 	rows, err = db.Query(selectOperators)
 	if err != nil {
-		return nil, err
+		return nil, db.dbError(dbError{Code: errCatalogOperatorGet, Err: err})
 	}
 	defer rows.Close()
 
@@ -1513,14 +1602,14 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 			&op.Result,
 		)
 		if err != nil {
-			return nil, err
+			return nil, db.dbError(dbError{Code: errCatalogOperatorScan, Err: err})
 		}
 
 		key := OpKey{Name: op.Name, Left: op.Left, Right: op.Right}
 		cat.Operators[key] = op
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, db.dbError(dbError{Code: errCatalogOperatorGet, Err: err})
 	}
 
 	const selectCasts = `SELECT
@@ -1531,7 +1620,7 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 	FROM pg_cast c ` //`
 	rows, err = db.Query(selectCasts)
 	if err != nil {
-		return nil, err
+		return nil, db.dbError(dbError{Code: errCatalogCastGet, Err: err})
 	}
 	defer rows.Close()
 
@@ -1544,14 +1633,14 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 			&cast.Context,
 		)
 		if err != nil {
-			return nil, err
+			return nil, db.dbError(dbError{Code: errCatalogCastScan, Err: err})
 		}
 
 		key := CastKey{Target: cast.Target, Source: cast.Source}
 		cat.Casts[key] = cast
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, db.dbError(dbError{Code: errCatalogCastGet, Err: err})
 	}
 
 	var selectProcs string
@@ -1584,7 +1673,7 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 	}
 	rows, err = db.Query(selectProcs)
 	if err != nil {
-		return nil, err
+		return nil, db.dbError(dbError{Code: errCatalogProcedureGet, Err: err})
 	}
 	defer rows.Close()
 
@@ -1598,20 +1687,18 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 			&proc.IsAgg,
 		)
 		if err != nil {
-			return nil, err
+			return nil, db.dbError(dbError{Code: errCatalogProcedureScan, Err: err})
 		}
 
 		cat.Procs[proc.Name] = append(cat.Procs[proc.Name], proc)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, db.dbError(dbError{Code: errCatalogProcedureGet, Err: err})
 	}
 
 	catalogCache.m[key] = cat
 	return cat, nil
 }
-
-var errNoRelation = errors.New("relation not found")
 
 func loadTargetRelation(c *checker, f *analysis.RelField) error {
 	rid := f.Id
@@ -1635,7 +1722,6 @@ func loadJoinRelation(c *checker, rid analysis.RelIdent, ptr analysis.FieldPtr) 
 	if rel, err = loadRelation(c, c.db, rid, ptr); err != nil {
 		return nil, err
 	}
-	c.joinMap[rid] = rel
 	c.relMap[relIdentKey(rid)] = rel
 	return rel, nil
 }
@@ -1648,24 +1734,22 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 	}
 
 	rel := new(Relation)
-	rel.Name = rid.Name
-	rel.Schema = rid.Qualifier
-	if len(rel.Schema) == 0 {
-		rel.Schema = "public"
-	}
-
 	const selectRelationInfo = `SELECT
 		c.oid
+		, c.relname
 		, c.relkind
+		, ns.nspname
 	FROM pg_class c
-	WHERE c.relname = $1
-	AND c.relnamespace = to_regnamespace($2)` //`
-	row := db.QueryRow(selectRelationInfo, rel.Name, rel.Schema)
-	if err := row.Scan(&rel.OID, &rel.RelKind); err != nil {
+	LEFT JOIN pg_namespace ns ON ns.oid = c.relnamespace
+	WHERE c.oid = to_regclass($1)` //`
+	row := db.QueryRow(selectRelationInfo, rid.QualifiedName())
+	if err := row.Scan(&rel.OID, &rel.Name, &rel.RelKind, &rel.Schema); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, c.error2(eopt{c: ErrNoRelation, rid: rid, ptr: ptr})
+			return nil, c.dbError(dbError{Code: errRelationUnknown,
+				Rel: relInfo{Id: rid}}, ptr)
 		}
-		return nil, err
+		return nil, c.dbError(dbError{Code: errRelationScan,
+			Rel: relInfo{Id: rid}, Err: err}, ptr)
 	}
 
 	const selectRelationColumns = `SELECT
@@ -1689,12 +1773,12 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 	ORDER BY a.attnum` //`
 	rows, err := db.Query(selectRelationColumns, rel.OID)
 	if err != nil {
-		return nil, err
+		return nil, c.dbError(dbError{Code: errRelationColumnGet,
+			Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var typoid oid.OID
 		col := new(Column)
 		err := rows.Scan(
 			&col.Num,
@@ -1704,14 +1788,16 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 			&col.HasDefault,
 			&col.IsPrimary,
 			&col.NumDims,
-			&typoid,
+			&col.TypeOID,
 		)
 		if err != nil {
-			return nil, err
+			return nil, c.dbError(dbError{Code: errRelationColumnScan,
+				Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 		}
 
-		if typ, ok := db.catalog.Types[typoid]; !ok {
-			return nil, c.error2(eopt{c: ErrNoColumnType, rel: rel, col: col, ptr: ptr})
+		if typ, ok := db.catalog.Types[col.TypeOID]; !ok {
+			return nil, c.dbError(dbError{Code: errRelationColumnUnknownType,
+				Rel: relInfo{Id: rid, Relation: rel}, Col: colInfo{Column: col}}, ptr)
 		} else {
 			col.Type = typ
 		}
@@ -1720,7 +1806,8 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 		col.Relation = rel
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, c.dbError(dbError{Code: errRelationColumnGet,
+			Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 	}
 
 	const selectRelationConstraints = `SELECT
@@ -1737,7 +1824,8 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 	ORDER BY c.oid` //`
 	rows, err = db.Query(selectRelationConstraints, rel.OID)
 	if err != nil {
-		return nil, err
+		return nil, c.dbError(dbError{Code: errRelationConstraintGet,
+			Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 	}
 	defer rows.Close()
 
@@ -1753,12 +1841,14 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 			(*pq.Int64Array)(&con.FKey),
 		)
 		if err != nil {
-			return nil, err
+			return nil, c.dbError(dbError{Code: errRelationConstraintScan,
+				Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 		}
 		rel.Constraints = append(rel.Constraints, con)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, c.dbError(dbError{Code: errRelationConstraintGet,
+			Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 	}
 
 	const selectRelationIndexes = `SELECT
@@ -1779,7 +1869,8 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 	ORDER BY i.indexrelid` //`
 	rows, err = db.Query(selectRelationIndexes, rel.OID)
 	if err != nil {
-		return nil, err
+		return nil, c.dbError(dbError{Code: errRelationIndexGet,
+			Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 	}
 	defer rows.Close()
 
@@ -1799,14 +1890,16 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 			&ind.Predicate,
 		)
 		if err != nil {
-			return nil, err
+			return nil, c.dbError(dbError{Code: errRelationIndexScan,
+				Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 		}
 
 		ind.Expression = parseIndexExpr(ind.Definition)
 		rel.Indexes = append(rel.Indexes, ind)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, c.dbError(dbError{Code: errRelationIndexGet,
+			Rel: relInfo{Id: rid, Relation: rel}, Err: err}, ptr)
 	}
 
 	db.catalog.Relations[rid] = rel
@@ -1853,13 +1946,13 @@ func typeCompatibility(c *checker, ctyp *Type, ftyp analysis.TypeInfo, typmod1 b
 }
 
 // typeOfLiteral returns the type of the given literal expression.
-func typeOfLiteral(c *checker, expr string) (*Type, ErrorCode) {
+func typeOfLiteral(c *checker, expr string) (*Type, dbErrorCode) {
 	const pgselectexprtype = `SELECT id::oid FROM pg_typeof(%s) AS id` //`
 
 	var typoid oid.OID
 	row := c.db.QueryRow(fmt.Sprintf(pgselectexprtype, expr))
 	if err := row.Scan(&typoid); err != nil {
-		return nil, ErrBadLiteralExpression
+		return nil, errPredicateLiteralExpr
 	}
 	return c.db.catalog.Types[typoid], 0
 }

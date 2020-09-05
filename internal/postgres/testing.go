@@ -58,12 +58,13 @@ CREATE TABLE column_tests_2 (
 	, col_baz boolean not null default false
 	, col_indkey1 text
 	, col_indkey2 integer
+	, col_indkey3 integer
 	, col_conkey1 text
 	, col_conkey2 integer
 );
 
 CREATE UNIQUE INDEX column_tests_2_unique_index ON column_tests_2 (col_indkey2, col_indkey1);
-CREATE INDEX column_tests_2_nonunique_index ON column_tests_2 (col_indkey2, col_indkey1);
+CREATE INDEX column_tests_2_nonunique_index ON column_tests_2 (col_indkey3, col_indkey2, col_indkey1);
 ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_unique_constraint UNIQUE (col_conkey1, col_conkey2);
 ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_nonunique_constraint FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
 
@@ -92,6 +93,7 @@ CREATE TABLE test_user (
 	, is_active boolean not null default true
 	, metadata1 json not null default '{}'
 	, metadata2 jsonb
+	, envelope xml
 	, _search_document tsvector
 	, created_at timestamptz not null
 	, updated_at timestamptz not null default now()
@@ -298,11 +300,10 @@ CREATE TABLE pgsql_test (
 }
 
 func (t *TestDB) Close() {
-	if t.DB.DB != nil {
-		if err := t.DB.Close(); err != nil {
-			log.Println("error closing test db handle:", err)
-		}
+	if err := t.DB.Close(); err != nil {
+		log.Println("error closing test db handle:", err)
 	}
+
 	if t.root != nil {
 		if _, err := t.root.Exec("DROP DATABASE " + t.DB.name); err != nil {
 			log.Println("error dropping test db:", err)

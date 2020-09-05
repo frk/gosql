@@ -584,6 +584,13 @@ type (
 
 func (id ColIdent) IsEmpty() bool { return id == ColIdent{} }
 
+func (id ColIdent) String() string {
+	if len(id.Qualifier) > 0 {
+		return id.Qualifier + "." + id.Name
+	}
+	return id.Name
+}
+
 func (s *QueryStruct) IsSelectCountOrExists() bool {
 	return s.Kind.isSelect() && s.Kind != QueryKindSelect
 }
@@ -656,6 +663,24 @@ func (s *QueryStruct) OutputIsAfterScanner() bool {
 // IsSingle reports whether or not the RelType represents a non-collection type.
 func (t *RelType) IsSingle() bool {
 	return !t.IsSlice && !t.IsIter && !t.IsArray
+}
+
+// HasFieldWithColumn reports whether or not the RelType has a field with a
+// column identifier whose name matches the given colName.
+func (t *RelType) HasFieldWithColumn(colName string) bool {
+	for _, f := range t.Fields {
+		if f.ColIdent.Name == colName {
+			return true
+		}
+	}
+	return false
+}
+
+func (id *RelIdent) QualifiedName() string {
+	if len(id.Qualifier) > 0 {
+		return id.Qualifier + "." + id.Name
+	}
+	return id.Name
 }
 
 // TargetStruct implementations

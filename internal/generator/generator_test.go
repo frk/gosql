@@ -204,10 +204,10 @@ func TestGenerator(t *testing.T) {
 				fileprefix := "../testdata/generator/" + tt.dirname + "/" + filename
 
 				f := parser.FileWithTargetTypes(dir, fileprefix+"_in.go")
-				for _, named := range f.Targets {
+				for _, target := range f.Targets {
 					// analyze
 					ainfo := &analysis.Info{}
-					tstruct, err := analysis.Run(dir.FileSet, named, ainfo)
+					tstruct, err := analysis.Run(dir.FileSet, target.Named, target.Pos, ainfo)
 					if err != nil {
 						t.Error(err)
 						return

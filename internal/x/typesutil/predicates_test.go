@@ -21,7 +21,7 @@ func TestIsError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -49,7 +49,7 @@ func TestIsEmptyInterface(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -78,7 +78,7 @@ func TestIsTime(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -105,7 +105,7 @@ func TestIsSqlDriverValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -135,7 +135,7 @@ func TestIsDirectiveValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -164,7 +164,7 @@ func TestImplementsScanner(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -194,7 +194,7 @@ func TestImplementsValuer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -221,7 +221,7 @@ func TestImplementsAfterScanner(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -250,7 +250,7 @@ func TestImplementsErrorHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -280,7 +280,7 @@ func TestImplementsErrorInfoHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -306,7 +306,7 @@ func TestImplementsJSONMarshaler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -332,7 +332,7 @@ func TestImplementsJSONUnmarshaler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -358,7 +358,7 @@ func TestImplementsXMLMarshaler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
@@ -384,7 +384,7 @@ func TestImplementsXMLUnmarshaler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			named := testutil.FindNamedType(tt.name, tdata)
+			named, _ := testutil.FindNamedType(tt.name, tdata)
 			if named == nil {
 				t.Errorf("%q named type not found", tt.name)
 				return
