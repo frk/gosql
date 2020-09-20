@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"go/ast"
+	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
@@ -11,8 +12,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-
-	"github.com/frk/gosql/internal/x/typesutil"
 )
 
 var (
@@ -78,7 +77,7 @@ func ParseDirectory(dirpath string) (*Directory, error) {
 	// Type checking of the package's files is done here becaue it is the type
 	// checker that imports, and provides information on, all the referenced types
 	// that we need for the subsequent analysis of the target types.
-	conf := types.Config{Importer: typesutil.NewImporter()}
+	conf := types.Config{Importer: importer.ForCompiler(dir.FileSet, "source", nil)}
 	dir.Info = &types.Info{Defs: make(map[*ast.Ident]types.Object)}
 	if _, err := conf.Check(dir.DirPath, dir.FileSet, astFileList, dir.Info); err != nil {
 		return nil, err

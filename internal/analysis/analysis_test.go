@@ -2113,8 +2113,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FileLine:      958,
 		},
 	}, {
-		Name:     "InsertAnalysisTestBAD_ReturnColumnNoField",
-		printerr: true,
+		Name: "InsertAnalysisTestBAD_ReturnColumnNoField",
 		err: &anError{
 			Code:          errColumnFieldUnknown,
 			PkgPath:       "path/to/test",
@@ -2131,8 +2130,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FileLine:      965,
 		},
 	}, {
-		Name:     "UpdateAnalysisTestBAD_ForceColumnNoField",
-		printerr: true,
+		Name: "UpdateAnalysisTestBAD_ForceColumnNoField",
 		err: &anError{
 			Code:          errColumnFieldUnknown,
 			PkgPath:       "path/to/test",
