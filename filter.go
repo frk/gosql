@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/frk/gosql/internal/x/fqlang"
+	"github.com/frk/gosql/fqlang"
 )
 
 type Filter struct {

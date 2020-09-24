@@ -45,15 +45,22 @@ type DB struct {
 
 // Open opens a new connection pool to the dsn specified postgres
 // database and loads the catalog information.
-func Open(dsn string) (*DB, error) {
+func Open(dsn string) (db *DB, err error) {
 	conn, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return nil, &dbError{Code: errDatabaseOpen, DB: dbInfo{DSN: dsn}, Err: err}
-	} else if err := conn.Ping(); err != nil {
+	}
+	defer func() {
+		if err != nil {
+			conn.Close()
+		}
+	}()
+
+	if err := conn.Ping(); err != nil {
 		return nil, &dbError{Code: errDatabaseOpen, DB: dbInfo{DSN: dsn}, Err: err}
 	}
 
-	db := &DB{DB: conn, dsn: dsn}
+	db = &DB{DB: conn, dsn: dsn}
 	if err := db.QueryRow(`SELECT current_database(), current_user`).Scan(&db.name, &db.user); err != nil {
 		return nil, &dbError{Code: errDatabaseInit, DB: dbInfo{DSN: dsn}, Err: err}
 	}

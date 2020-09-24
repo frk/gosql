@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/frk/gosql/internal/x/typesutil"
+	"github.com/frk/gosql/internal/typesutil"
 	"github.com/frk/tagutil"
 )
 

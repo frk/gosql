@@ -23,10 +23,10 @@ const (
 )
 
 type Config struct {
-	FilterKeyTag       string
-	FilterKeySeparator string
-	FilterKeyBase      bool
-	QuotedIdents       bool
+	FilterColumnKeyTag       string
+	FilterColumnKeySeparator string
+	FilterColumnKeyBase      bool
+	QuoteIdentifiers         bool
 }
 
 func Write(f io.Writer, pkgName string, targets []*postgres.TargetInfo, conf Config) error {
@@ -2142,20 +2142,20 @@ func canDeclareConst(g *generator, qs *analysis.QueryStruct) bool {
 
 // makeFilterKeyFormatter
 func makeFilterKeyFormatter(conf Config) (fn func(*postgres.FieldFilter) string) {
-	if len(conf.FilterKeyTag) > 0 {
-		if !conf.FilterKeyBase {
+	if len(conf.FilterColumnKeyTag) > 0 {
+		if !conf.FilterColumnKeyBase {
 			return func(ff *postgres.FieldFilter) string {
-				return fmtFieldTagJoinedKey(ff, conf.FilterKeyTag, conf.FilterKeySeparator)
+				return fmtFieldTagJoinedKey(ff, conf.FilterColumnKeyTag, conf.FilterColumnKeySeparator)
 			}
 		}
 		return func(ff *postgres.FieldFilter) string {
-			return fmtFieldTagBaseKey(ff, conf.FilterKeyTag)
+			return fmtFieldTagBaseKey(ff, conf.FilterColumnKeyTag)
 		}
 	}
 
-	if !conf.FilterKeyBase {
+	if !conf.FilterColumnKeyBase {
 		return func(ff *postgres.FieldFilter) string {
-			return fmtFieldNameJoinedKey(ff, conf.FilterKeySeparator)
+			return fmtFieldNameJoinedKey(ff, conf.FilterColumnKeySeparator)
 		}
 	}
 	return fmtFieldNameBaseKey
@@ -2193,7 +2193,7 @@ func fmtFieldTagJoinedKey(ff *postgres.FieldFilter, tag, sep string) (key string
 
 // makeColIdentFormatter
 func makeColIdentFormatter(conf Config) (fn func(analysis.ColIdent) string) {
-	if conf.QuotedIdents {
+	if conf.QuoteIdentifiers {
 		return fmtColIdentQuoted
 	}
 	return fmtColIdent

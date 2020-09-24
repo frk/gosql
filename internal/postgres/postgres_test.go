@@ -8,7 +8,7 @@ import (
 	"github.com/frk/compare"
 	"github.com/frk/gosql/internal/analysis"
 	"github.com/frk/gosql/internal/postgres/oid"
-	"github.com/frk/gosql/internal/x/testutil"
+	"github.com/frk/gosql/internal/testutil"
 
 	"github.com/lib/pq"
 )

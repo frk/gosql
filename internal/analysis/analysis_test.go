@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/frk/compare"
-	"github.com/frk/gosql/internal/x/testutil"
+	"github.com/frk/gosql/internal/testutil"
 	"github.com/frk/tagutil"
 )
 

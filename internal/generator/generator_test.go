@@ -2,9 +2,11 @@ package generator
 
 import (
 	"bytes"
+	"fmt"
 	"go/format"
 	"io/ioutil"
 	"log"
+	"path/filepath"
 	"testing"
 
 	"github.com/frk/compare"
@@ -193,39 +195,44 @@ func TestGenerator(t *testing.T) {
 			continue
 		}
 
-		dir, err := parser.ParseDirectory("../testdata/generator/" + tt.dirname)
+		pkgs, err := parser.Parse("../testdata/generator/"+tt.dirname, false, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
+		pkg := pkgs[0]
 
 		for _, filename := range tt.filenames {
 			t.Run(tt.dirname+"/"+filename, func(t *testing.T) {
 				tinfos := []*postgres.TargetInfo{}
 				fileprefix := "../testdata/generator/" + tt.dirname + "/" + filename
 
-				f := parser.FileWithTargetTypes(dir, fileprefix+"_in.go")
+				f, err := getFile(pkg, fileprefix+"_in.go")
+				if err != nil {
+					t.Fatal(err)
+				}
+
 				for _, target := range f.Targets {
 					// analyze
 					ainfo := &analysis.Info{}
-					tstruct, err := analysis.Run(dir.FileSet, target.Named, target.Pos, ainfo)
+					tstruct, err := analysis.Run(pkg.Fset, target.Named, target.Pos, ainfo)
 					if err != nil {
 						t.Error(err)
 						return
 					}
 
 					// type check
-					tinfo, err := postgres.Check(db.DB, tstruct, ainfo)
+					targInfo, err := postgres.Check(db.DB, tstruct, ainfo)
 					if err != nil {
 						t.Error(err)
 						return
 					}
 
-					tinfos = append(tinfos, tinfo)
+					tinfos = append(tinfos, targInfo)
 				}
 
 				buf := new(bytes.Buffer)
-				conf := Config{FilterKeySeparator: ".", QuotedIdents: true}
-				if err := Write(buf, dir.Package.Name, tinfos, conf); err != nil {
+				conf := Config{FilterColumnKeySeparator: ".", QuoteIdentifiers: true}
+				if err := Write(buf, pkg.Name, tinfos, conf); err != nil {
 					t.Error(err)
 					return
 				}
@@ -245,6 +252,21 @@ func TestGenerator(t *testing.T) {
 			})
 		}
 	}
+}
+
+// helper method...
+func getFile(p *parser.Package, filename string) (*parser.File, error) {
+	filename, err := filepath.Abs(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range p.Files {
+		if f.Path == filename {
+			return f, nil
+		}
+	}
+	return nil, fmt.Errorf("file not found: %q", filename)
 }
 
 func formatBytes(buf *bytes.Buffer) []byte {

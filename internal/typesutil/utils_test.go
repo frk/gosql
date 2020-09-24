@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/frk/gosql/internal/x/testutil"
+	"github.com/frk/gosql/internal/testutil"
 )
 
 func TestGetDirectiveName(t *testing.T) {

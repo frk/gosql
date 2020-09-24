@@ -1,18 +1,24 @@
 package parser
 
 import (
-	"fmt"
 	"go/ast"
-	"go/importer"
-	"go/parser"
 	"go/token"
 	"go/types"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
+
+	"golang.org/x/tools/go/packages"
 )
+
+const loadMode = packages.NeedName |
+	packages.NeedFiles |
+	packages.NeedCompiledGoFiles |
+	packages.NeedImports |
+	packages.NeedDeps |
+	packages.NeedTypes |
+	packages.NeedSyntax |
+	packages.NeedTypesInfo
 
 var (
 	// Matches names of types that are valid targets for the generator.
@@ -25,133 +31,110 @@ type Target struct {
 }
 
 type File struct {
-	FilePath  string
-	Directory *Directory
-	Targets   []*Target
+	Path    string
+	Package *Package
+	Targets []*Target
 }
 
-type Directory struct {
-	DirPath string
-	FileSet *token.FileSet
-	Package *ast.Package
-	Info    *types.Info
-	Files   []*File
+type Package struct {
+	Name  string
+	Path  string
+	Fset  *token.FileSet
+	Info  *types.Info
+	Files []*File
 }
 
-// ParseDirectory parses and type-checks the directory at its given path.
-func ParseDirectory(dirpath string) (*Directory, error) {
-	directoryCache.RLock()
-	dir := directoryCache.m[dirpath]
-	directoryCache.RUnlock()
-	if dir != nil {
-		return dir, nil
+// Parse parses Go packages at the given dir / pattern. Only packages that
+// contain files with type declarations that match the standard gosql targets
+// will be included in the returned slice.
+func Parse(dir string, recursive bool, filter func(filePath string) bool) (out []*Package, err error) {
+	// resolve absolute dir path
+	if dir, err = filepath.Abs(dir); err != nil {
+		return nil, err
 	}
 
-	dir = new(Directory)
-	dir.DirPath = dirpath
+	// if no filter was provided, pass all files
+	if filter == nil {
+		filter = func(string) bool { return true }
+	}
 
-	dir.FileSet = token.NewFileSet()
-	pkgList, err := parser.ParseDir(dir.FileSet, dir.DirPath, ignoreTestFiles, parser.ParseComments)
+	// initialize the pattern to use with packages.Load
+	pattern := "."
+	if recursive {
+		pattern = "./..."
+	}
+
+	loadConfig := new(packages.Config)
+	loadConfig.Mode = loadMode
+	loadConfig.Dir = dir
+	loadConfig.Fset = token.NewFileSet()
+	pkgs, err := packages.Load(loadConfig, pattern)
 	if err != nil {
 		return nil, err
-	} else if len(pkgList) != 1 {
-		// This should not happen but it's here just to make sure everything
-		// works as expected.
-		//
-		// Go allows only one package per directory, however it is possible to
-		// have test files declare an additional xxx_test package, but since the
-		// ignoreTestFiles was passed to ParseDir those test files and that
-		// xxx_test package ought to be omitted by the parser.
-		return nil, fmt.Errorf("unexpected number of parsed packages, want 1 got %d", len(pkgList))
 	}
 
-	// Turn the package's map of files into a slice of files for type checking.
-	astFileList := []*ast.File{}
-	for _, pkg := range pkgList {
-		dir.Package = pkg
-		for _, f := range pkg.Files {
-			astFileList = append(astFileList, f)
-		}
-	}
+	// aggregate targets from all files in all packages
+	for _, pkg := range pkgs {
+		p := new(Package)
+		p.Name = pkg.Name
+		p.Path = pkg.PkgPath
+		p.Fset = pkg.Fset
+		p.Info = pkg.TypesInfo
 
-	// Type checking of the package's files is done here becaue it is the type
-	// checker that imports, and provides information on, all the referenced types
-	// that we need for the subsequent analysis of the target types.
-	conf := types.Config{Importer: importer.ForCompiler(dir.FileSet, "source", nil)}
-	dir.Info = &types.Info{Defs: make(map[*ast.Ident]types.Object)}
-	if _, err := conf.Check(dir.DirPath, dir.FileSet, astFileList, dir.Info); err != nil {
-		return nil, err
-	}
-
-	directoryCache.Lock()
-	directoryCache.m[dir.DirPath] = dir
-	directoryCache.Unlock()
-	return dir, nil
-}
-
-// ParseFileDirectories
-func ParseFileDirectories(filepaths ...string) ([]*Directory, error) {
-	dirs := []*Directory{}
-
-	for _, fp := range filepaths {
-		dirpath := filepath.Dir(fp)
-		dir, err := ParseDirectory(dirpath)
-		if err != nil {
-			return nil, err
-		}
-
-		_ = FileWithTargetTypes(dir, fp)
-		dirs = append(dirs, dir)
-	}
-
-	return dirs, nil
-}
-
-// FileWithTargetTypes aggregates *Target instances of all of the target types declared in the file.
-func FileWithTargetTypes(dir *Directory, filepath string) *File {
-	fileCache.RLock()
-	f := fileCache.m[filepath]
-	fileCache.RUnlock()
-	if f != nil {
-		return f
-	}
-
-	f = &File{FilePath: filepath, Directory: dir}
-	dir.Files = append(dir.Files, f)
-
-	for _, decl := range dir.Package.Files[f.FilePath].Decls {
-		genDecl, ok := decl.(*ast.GenDecl)
-		if !ok || genDecl.Tok != token.TYPE || hasIgnoreDirective(genDecl.Doc) {
-			continue
-		}
-
-		for _, spec := range genDecl.Specs {
-			typeSpec, ok := spec.(*ast.TypeSpec)
-			if !ok || !rxTargetName.MatchString(typeSpec.Name.Name) || hasIgnoreDirective(typeSpec.Doc) {
+		for i, syn := range pkg.Syntax {
+			// ignore file?
+			if filePath := pkg.CompiledGoFiles[i]; !filter(filePath) {
 				continue
 			}
 
-			if obj, ok := dir.Info.Defs[typeSpec.Name]; ok {
-				if typeName, ok := obj.(*types.TypeName); ok {
-					if named, ok := typeName.Type().(*types.Named); ok {
-						f.Targets = append(f.Targets, &Target{Named: named, Pos: typeName.Pos()})
-					}
+			f := new(File)
+			f.Path = pkg.CompiledGoFiles[i]
+			f.Package = p
+			for _, dec := range syn.Decls {
+				gd, ok := dec.(*ast.GenDecl)
+				if !ok || gd.Tok != token.TYPE || hasIgnoreDirective(gd.Doc) {
+					continue
 				}
 
+				for _, spec := range gd.Specs {
+					typeSpec, ok := spec.(*ast.TypeSpec)
+					if !ok || !rxTargetName.MatchString(typeSpec.Name.Name) || hasIgnoreDirective(typeSpec.Doc) {
+						continue
+					}
+
+					obj, ok := p.Info.Defs[typeSpec.Name]
+					if !ok {
+						continue
+					}
+					typeName, ok := obj.(*types.TypeName)
+					if !ok {
+						continue
+					}
+					named, ok := typeName.Type().(*types.Named)
+					if !ok {
+						continue
+					}
+
+					target := new(Target)
+					target.Named = named
+					target.Pos = typeName.Pos()
+					f.Targets = append(f.Targets, target)
+				}
 			}
+
+			// add file only if it declares targets
+			if len(f.Targets) > 0 {
+				p.Files = append(p.Files, f)
+			}
+		}
+
+		// add package only if it has files with targets
+		if len(p.Files) > 0 {
+			out = append(out, p)
 		}
 	}
 
-	fileCache.Lock()
-	fileCache.m[f.FilePath] = f
-	fileCache.Unlock()
-	return f
-}
-
-// ignoreTestFiles is intended to be passed in as the filter argument to the
-// parser.ParseDir function so that it can ignore files ending in _test.go.
-func ignoreTestFiles(fi os.FileInfo) bool {
-	return !strings.HasSuffix(fi.Name(), "_test.go")
+	return out, nil
 }
 
 // hasIgnoreDirective reports whether or not the given documentation contains the "gosql:ignore" directive.
@@ -165,13 +148,3 @@ func hasIgnoreDirective(doc *ast.CommentGroup) bool {
 	}
 	return false
 }
-
-var directoryCache = struct {
-	sync.RWMutex
-	m map[string]*Directory
-}{m: make(map[string]*Directory)}
-
-var fileCache = struct {
-	sync.RWMutex
-	m map[string]*File
-}{m: make(map[string]*File)}

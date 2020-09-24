@@ -4,7 +4,7 @@ import (
 	"go/types"
 	"testing"
 
-	"github.com/frk/gosql/internal/x/testutil"
+	"github.com/frk/gosql/internal/testutil"
 )
 
 var tdata = testutil.ParseTestdata("testdata")

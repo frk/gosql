@@ -5,6 +5,17 @@ import (
 	"strings"
 )
 
+// IsString reports whether or not the given type is the builtin "string" type.
+func IsString(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+	pkg := named.Obj().Pkg()
+	name := named.Obj().Name()
+	return pkg == nil && name == "string"
+}
+
 // IsError reports whether or not the given type is the "error" type.
 func IsError(typ types.Type) bool {
 	named, ok := typ.(*types.Named)
@@ -58,6 +69,62 @@ func IsTime(typ types.Type) bool {
 				}
 			}
 		}
+	}
+	return false
+}
+
+// IsSqlResult reports whether or not the given type is the standard "sql.Result" type.
+func IsSqlResult(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+
+	typeName := named.Obj()
+	if pkg := typeName.Pkg(); pkg != nil {
+		path := pkg.Path()
+		name := typeName.Name()
+		return path == "database/sql" && name == "Result"
+	}
+	return false
+}
+
+// IsSqlRowsPtr reports whether or not the given type is the standard "*sql.Rows" type.
+func IsSqlRowsPtr(typ types.Type) bool {
+	ptr, ok := typ.(*types.Pointer)
+	if !ok {
+		return false
+	}
+	named, ok := ptr.Elem().(*types.Named)
+	if !ok {
+		return false
+	}
+
+	typeName := named.Obj()
+	if pkg := typeName.Pkg(); pkg != nil {
+		path := pkg.Path()
+		name := typeName.Name()
+		return path == "database/sql" && name == "Rows"
+	}
+	return false
+}
+
+// IsSqlRowPtr reports whether or not the given type is the standard "*sql.Row" type.
+func IsSqlRowPtr(typ types.Type) bool {
+	ptr, ok := typ.(*types.Pointer)
+	if !ok {
+		return false
+	}
+	named, ok := ptr.Elem().(*types.Named)
+	if !ok {
+		return false
+	}
+
+	typeName := named.Obj()
+	if pkg := typeName.Pkg(); pkg != nil {
+		path := pkg.Path()
+		name := typeName.Name()
+		return path == "database/sql" && name == "Row"
 	}
 	return false
 }
@@ -159,6 +226,64 @@ func ImplementsErrorInfoHandler(named *types.Named) bool {
 	name := argnamed.Obj().Name()
 	path := argnamed.Obj().Pkg().Path()
 	return strings.HasSuffix(path, "github.com/frk/gosql") && name == "ErrorInfo"
+}
+
+// ImplementsGosqlConn reports whether or not the given named type implements the "gosql.Conn" interface.
+func ImplementsGosqlConn(named *types.Named) bool {
+	mm := Methoder(named)
+	if iface, ok := named.Underlying().(*types.Interface); ok {
+		mm = iface
+	}
+
+	var hasExec, hasQuery, hasQueryRow bool
+
+	for i := 0; i < mm.NumMethods(); i++ {
+		m := mm.Method(i)
+		switch m.Name() {
+		case "Exec": // Exec(query string, args ...interface{}) (sql.Result, error)
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 2 || !sig.Variadic() || r.Len() != 2 {
+				return false
+			}
+			if !IsString(p.At(0).Type()) || !IsEmptyInterface(p.At(1).Type()) {
+				return false
+			}
+			if !IsSqlResult(r.At(0).Type()) || !IsError(p.At(1).Type()) {
+				return false
+			}
+			hasExec = true
+		case "Query": // Query(query string, args ...interface{}) (*sql.Rows, error)
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 2 || !sig.Variadic() || r.Len() != 2 {
+				return false
+			}
+			if !IsString(p.At(0).Type()) || !IsEmptyInterface(p.At(1).Type()) {
+				return false
+			}
+			if !IsSqlRowsPtr(r.At(0).Type()) || !IsError(p.At(1).Type()) {
+				return false
+			}
+			hasQuery = true
+		case "QueryRow": // QueryRow(query string, args ...interface{}) *sql.Row
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 2 || !sig.Variadic() || r.Len() != 1 {
+				return false
+			}
+			if !IsString(p.At(0).Type()) || !IsEmptyInterface(p.At(1).Type()) {
+				return false
+			}
+			if !IsSqlRowPtr(r.At(0).Type()) {
+				return false
+			}
+			hasQueryRow = true
+			break
+		}
+	}
+
+	return hasExec && hasQuery && hasQueryRow
 }
 
 // ImplementsScanner reports whether or not the given named type implements the
