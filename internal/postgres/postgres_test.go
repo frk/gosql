@@ -95,6 +95,14 @@ func TestCheck(t *testing.T) {
 		name: "SelectPostgresTestOK_Simple",
 		err:  nil,
 	}, {
+		name:     "SelectPostgresTestOK_Enums",
+		printerr: true,
+		err:      nil,
+	}, {
+		name:     "InsertPostgresTestOK_Enums",
+		printerr: true,
+		err:      nil,
+	}, {
 		name: "SelectPostgresTestBAD_NoRelation",
 		err: &dbError{
 			Code: errRelationUnknown,
@@ -1161,7 +1169,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/types.go",
-					Line: 29,
+					Line: 31,
 				},
 			},
 		},

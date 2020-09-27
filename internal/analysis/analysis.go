@@ -2028,7 +2028,7 @@ func tolower(s string) string {
 //
 
 func (t *TypeInfo) GenericLiteral() LiteralType {
-	if t.Kind.isBasic() {
+	if t.Kind.IsBasic() {
 		if t.IsByte {
 			return "byte"
 		}

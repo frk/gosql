@@ -4,6 +4,8 @@ package testdata
 
 import (
 	"time"
+
+	"github.com/frk/gosql/internal/testdata/common"
 )
 
 // column_tests_1 record
@@ -40,4 +42,12 @@ type T2 struct {
 	Foo int    `sql:"foo"`
 	Bar string `sql:"bar"`
 	Baz bool   `sql:"baz"`
+}
+
+type COLOR_ENUM string
+
+type CT3 struct {
+	ColorText string        `sql:"color_text"`
+	ColorEnum COLOR_ENUM    `sql:"color_enum"`
+	SomeTime  common.MyTime `sql:"some_time"`
 }

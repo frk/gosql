@@ -47,11 +47,11 @@ const (
 	TypeKindRune = TypeKindInt32
 )
 
-func (k TypeKind) isBasic() bool { return _basic_kind_start < k && k < _basic_kind_end }
+func (k TypeKind) IsBasic() bool { return _basic_kind_start < k && k < _basic_kind_end }
 
 // BasicString returns a string representation of k.
 func (k TypeKind) BasicString() string {
-	if k.isBasic() {
+	if k.IsBasic() {
 		return typeKinds[k]
 	}
 	return "<unknown>"

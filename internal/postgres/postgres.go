@@ -690,6 +690,15 @@ func typeCheckFieldConditional(c *checker, cond *FieldConditional) dbErrorCode {
 		oprname = predicateToOprname[cond.Predicate]
 	)
 
+	// XXX(mkopriva): not sure this is the correct approach ...
+	// The checker can either trust the user to provide a value in the correct
+	// format, or it could "request" more information by specifying that some
+	// Go types need to implement certain methods that would indicate the pg
+	// type with which they are compatible ...
+	if !ftyp.Kind.IsBasic() && ftyp.IsValuer {
+		ftyp = analysis.TypeInfo{Kind: analysis.TypeKindString}
+	}
+
 	if cond.Predicate.IsArray() || cond.Quantifier > 0 {
 		id, ok := oid.TypeToArray[cond.Column.Type.OID]
 		if ok {
@@ -783,7 +792,17 @@ func typeCheckFieldConditionalWithFunc(c *checker, cond *FieldConditional) dbErr
 
 	for _, p := range pairs {
 		if checkTypeCoercion(c, p.L.OID, cond.Column.Type.OID) {
-			if comp := typeCompatibility(c, p.R, cond.FieldType, false); comp != nil {
+			// XXX(mkopriva): not sure this is the correct approach ...
+			// The checker can either trust the user to provide a value in the correct
+			// format, or it could "request" more information by specifying that some
+			// Go types need to implement certain methods that would indicate the pg
+			// type with which they are compatible ...
+			ftyp := cond.FieldType
+			if !ftyp.Kind.IsBasic() && ftyp.IsValuer {
+				ftyp = analysis.TypeInfo{Kind: analysis.TypeKindString}
+			}
+
+			if comp := typeCompatibility(c, p.R, ftyp, false); comp != nil {
 				cond.Valuer = comp.valuer
 				return 0
 			}
@@ -1929,9 +1948,13 @@ func skipFieldRead(c *checker, fr *FieldRead) bool {
 
 // typeCompatibility
 func typeCompatibility(c *checker, ctyp *Type, ftyp analysis.TypeInfo, typmod1 bool) *compentry {
-	// type table entry exists, accept
-	key := compkey{oid: ctyp.OID, typmod1: typmod1}
 	lit := ftyp.GenericLiteral()
+	key := compkey{oid: ctyp.OID, typmod1: typmod1}
+	if ctyp.Type == TypeTypeEnum { // enumlabels are basically text
+		key.oid = oid.Text
+	}
+
+	// type table entry exists, accept
 	if comp, ok := compatibility.oid2literal[key][lit]; ok {
 		return &comp
 	}

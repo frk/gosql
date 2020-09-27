@@ -201,6 +201,7 @@ func TestGenerator(t *testing.T) {
 		}
 		pkg := pkgs[0]
 
+		numFails := 0
 		for _, filename := range tt.filenames {
 			t.Run(tt.dirname+"/"+filename, func(t *testing.T) {
 				tinfos := []*postgres.TargetInfo{}
@@ -248,8 +249,13 @@ func TestGenerator(t *testing.T) {
 				// compare
 				if err := compare.Compare(got, want); err != nil {
 					t.Error(err)
+					numFails += 1
 				}
 			})
+		}
+
+		if numFails > 0 {
+			fmt.Println("numFails::", numFails)
 		}
 	}
 }

@@ -282,7 +282,10 @@ func buildQueryInputTargetValues(g *generator, qs *analysis.QueryStruct) {
 			continue
 		}
 
-		g.inputVals = append(g.inputVals, makeParamSpec(g, fw.Field))
+		var expr SQL.ValueExpr
+		expr = makeParamSpec(g, fw.Field)
+		expr = addNULLIFCallExpr(expr, fw.Field, fw.Column, fw.Valuer)
+		g.inputVals = append(g.inputVals, expr)
 	}
 
 	if qs.IsUpdateSlice() {
@@ -597,6 +600,23 @@ func addCoalesceCallExpr(x SQL.ValueExpr, f *analysis.FieldInfo, c *postgres.Col
 			coalesce.A = x
 			coalesce.B = cast
 			return coalesce
+		}
+	}
+	return x
+}
+
+// addNULLIFCallExpr
+func addNULLIFCallExpr(x SQL.ValueExpr, f *analysis.FieldInfo, c *postgres.Column, valuer string) SQL.ValueExpr {
+	if c.IsNULLable() && (f.Type.IsValuer == false && valuer == "") {
+		if lit, ok := c.Type.ZeroValueLiteral(); ok {
+			nullif := SQL.NULLIF{}
+			nullif.Value = x
+			nullif.Expr = SQL.Literal{lit}
+
+			cast := SQL.CastExpr{}
+			cast.Expr = nullif
+			cast.Type = c.Type.NameFmt
+			return cast
 		}
 	}
 	return x
@@ -1412,7 +1432,21 @@ func buildQueryStringForSliceInsertOrUpdate(g *generator, qs *analysis.QueryStru
 			concatExpr := GO.BinaryExpr{Op: GO.BinaryAdd}
 			concatExpr.X = GO.RawStringLit(sep)
 			concatExpr.Y = GO.IndexExpr{X: ordinalParams, Index: binExpr}
+
+			if _, ok := val.(SQL.NULLIF); ok {
+				concatExpr.X = GO.RawStringLit(sep + `NULLIF(`)
+				concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
+				concatExpr.Y = GO.RawStringLit(`)`)
+			} else if cast, ok := val.(SQL.CastExpr); ok {
+				if _, ok := cast.Expr.(SQL.NULLIF); ok {
+					concatExpr.X = GO.RawStringLit(sep + `NULLIF(`)
+					concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
+					concatExpr.Y = GO.RawStringLit(`)::` + cast.Type)
+				}
+			}
+
 			strConcatExprList[i] = concatExpr
+
 		}
 	}
 

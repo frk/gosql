@@ -1,6 +1,7 @@
 package common
 
 import (
+	"database/sql/driver"
 	"time"
 
 	"github.com/frk/gosql"
@@ -122,3 +123,16 @@ func (ErrorHandler) HandleError(err error) error { return err }
 type ErrorInfoHandler struct{}
 
 func (ErrorInfoHandler) HandleErrorInfo(info *gosql.ErrorInfo) error { return nil }
+
+type MyTime struct {
+	time.Time
+}
+
+func (t MyTime) Value() (driver.Value, error) {
+	return t.Time, nil
+}
+
+func (t MyTime) Scan(src interface{}) error {
+	// ....
+	return nil
+}

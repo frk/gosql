@@ -23,10 +23,10 @@ func (q *InsertOnConflictColumnUpdateReturningSliceQuery) Exec(c gosql.Conn) err
 		params[pos+2] = v.Fruit
 		params[pos+3] = v.Value
 
-		queryString += `(` + gosql.OrdinalParameters[pos+0] +
-			`, ` + gosql.OrdinalParameters[pos+1] +
-			`, ` + gosql.OrdinalParameters[pos+2] +
-			`, ` + gosql.OrdinalParameters[pos+3] +
+		queryString += `(NULLIF(` + gosql.OrdinalParameters[pos+0] + `)::integer` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+1] + `)::text` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+2] + `)::text` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+3] + `)::double precision` +
 			`),`
 	}
 

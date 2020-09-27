@@ -15,8 +15,8 @@ func (q *UpdatePKeyCompositeSingleQuery) Exec(c gosql.Conn) error {
 	) = (
 		$1
 		, $2
-		, $3
-		, $4
+		, NULLIF($3, '')::text
+		, NULLIF($4, 0)::double precision
 	)
 	WHERE p."id" = $5 AND p."key" = $1 AND p."name" = $2` // `
 

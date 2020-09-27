@@ -13,10 +13,10 @@ func (q *InsertOnConflictIndexIgnoreSingle1Query) Exec(c gosql.Conn) error {
 		, "fruit"
 		, "value"
 	) VALUES (
-		$1
-		, $2
-		, $3
-		, $4
+		NULLIF($1, 0)::integer
+		, NULLIF($2, '')::text
+		, NULLIF($3, '')::text
+		, NULLIF($4, 0)::double precision
 	)
 	ON CONFLICT (lower(name), upper(fruit) COLLATE "C" text_pattern_ops)
 	DO NOTHING` // `

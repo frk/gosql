@@ -28,12 +28,6 @@ func (t *TestDB) Init() (err error) {
 		return err
 	}
 
-	url := "postgres:///" + dbname + "?sslmode=disable"
-	if t.DB, err = Open(url); err != nil {
-		t.root.Close()
-		return err
-	}
-
 	// populate test db
 	const populatedbquery = `
 CREATE TABLE relation_test (
@@ -67,6 +61,18 @@ CREATE UNIQUE INDEX column_tests_2_unique_index ON column_tests_2 (col_indkey2, 
 CREATE INDEX column_tests_2_nonunique_index ON column_tests_2 (col_indkey3, col_indkey2, col_indkey1);
 ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_unique_constraint UNIQUE (col_conkey1, col_conkey2);
 ALTER TABLE column_tests_2 ADD CONSTRAINT column_tests_2_nonunique_constraint FOREIGN KEY (col_conkey1) REFERENCES column_tests_1 (col_b);
+
+CREATE TYPE color_enum AS ENUM (
+	'red'
+	, 'green'
+	, 'blue'
+);
+
+CREATE TABLE column_tests_3 (
+	color_text text
+	, color_enum color_enum
+	, some_time timestamp not null
+);
 
 CREATE TABLE column_type_tests (
 	col_bool bool
@@ -293,7 +299,23 @@ CREATE TABLE pgsql_test (
 );
 ` //`
 
-	if _, err = t.DB.Exec(populatedbquery); err != nil {
+	dsn := "postgres:///" + dbname + "?sslmode=disable"
+
+	// open a new connection just for populating the db before it's loaded
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.root.Close()
+		return err
+	}
+	defer db.Close()
+	if _, err = db.Exec(populatedbquery); err != nil {
+		t.root.Close()
+		return err
+	}
+
+	// Open the db and load the catalog
+	if t.DB, err = Open(dsn); err != nil {
+		t.root.Close()
 		return err
 	}
 	return nil
