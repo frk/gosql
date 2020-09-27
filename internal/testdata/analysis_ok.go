@@ -3,6 +3,7 @@
 package testdata
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"math/big"
@@ -617,4 +618,16 @@ type SelectAnalysisTestOK_FieldTypesEmptyInterfaces struct {
 		f3 donothing    `sql:"c3"`
 		f4 *donothing   `sql:"c4"`
 	} `rel:"relation_a:a"`
+}
+
+//OK: test of context.Context field analysis
+type SelectAnalysisTestOK_WithContext struct {
+	context.Context
+	UserRec *common.User `rel:"users_table"`
+}
+
+//OK: test of context.Context field analysis
+type SelectAnalysisTestOK_WithContextNamed struct {
+	Ctx     context.Context
+	UserRec *common.User `rel:"users_table"`
 }

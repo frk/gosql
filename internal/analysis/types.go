@@ -46,6 +46,8 @@ type (
 		ErrorHandler *ErrorHandlerField
 		// Info on the gosql.Filter field of the query struct type, or nil.
 		Filter *FilterField
+		// Info on the context.Context field of the query struct type, or nil.
+		Context *ContextField
 		// Info on the gosql.All directive field of the query struct type, or nil.
 		All *AllDirective
 	}
@@ -435,6 +437,12 @@ type (
 
 	// FilterField is the result of analyzing a query struct's gosql.Filter type field.
 	FilterField struct {
+		// Name of the field (case preserved).
+		Name string
+	}
+
+	// ContextField is the result of analyzing a query struct's context.Context type field.
+	ContextField struct {
 		// Name of the field (case preserved).
 		Name string
 	}

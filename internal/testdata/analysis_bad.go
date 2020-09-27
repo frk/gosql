@@ -3,6 +3,8 @@
 package testdata
 
 import (
+	"context"
+
 	"github.com/frk/gosql"
 	"github.com/frk/gosql/internal/testdata/common"
 )
@@ -969,4 +971,11 @@ type InsertAnalysisTestBAD_ReturnColumnNoField struct {
 type UpdateAnalysisTestBAD_ForceColumnNoField struct {
 	Rel T2          `rel:"relation_a:a"`
 	_   gosql.Force `sql:"a.foo,a.bar,a.baz,a.quux"`
+}
+
+//BAD: conflicting context field
+type InsertAnalysisTestBAD_WithContextConflict struct {
+	context.Context
+	Rel []T `rel:"relation_a:a"`
+	ctx context.Context
 }

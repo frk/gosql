@@ -384,6 +384,10 @@ func analyzeQueryStructField(a *analysis, f *types.Var, tag string) error {
 			if err := analyzeErrorHandlerField(a, f, tag, true); err != nil {
 				return err
 			}
+		case typesutil.IsContext(f.Type()):
+			if err := analyzeContextField(a, f, tag); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -1430,6 +1434,17 @@ func analyzeErrorHandlerField(a *analysis, f *types.Var, tag string, isInfo bool
 	a.query.ErrorHandler.Name = f.Name()
 	a.query.ErrorHandler.IsInfo = isInfo
 	a.info.FieldMap[a.query.ErrorHandler] = FieldVar{Var: f, Tag: tag}
+	return nil
+}
+
+func analyzeContextField(a *analysis, f *types.Var, tag string) error {
+	if a.query.Context != nil {
+		return a.error(errConflictingFieldOrDirective, f, "", tag, "", "")
+	}
+
+	a.query.Context = new(ContextField)
+	a.query.Context.Name = f.Name()
+	a.info.FieldMap[a.query.Context] = FieldVar{Var: f, Tag: tag}
 	return nil
 }
 

@@ -1673,6 +1673,7 @@ func buildQueryFilterParams(g *generator, qs *analysis.QueryStruct) {
 
 // buildQueryCallExec
 func buildQueryCallExec(g *generator, qs *analysis.QueryStruct) {
+
 	var (
 		resVar   = GO.Ident{"_"}
 		errVar   = GO.Ident{"err"}
@@ -1681,6 +1682,9 @@ func buildQueryCallExec(g *generator, qs *analysis.QueryStruct) {
 	)
 	if qs.RowsAffected != nil {
 		resVar = GO.Ident{"res"}
+	}
+	if qs.Context != nil {
+		execFunc = GO.QualifiedIdent{"c", "ExecContext"}
 	}
 
 	assign := GO.AssignStmt{Token: GO.AssignDefine}
@@ -1695,6 +1699,9 @@ func buildQueryCallQueryRow(g *generator, qs *analysis.QueryStruct) {
 		queryRowFunc = GO.QualifiedIdent{"c", "QueryRow"}
 		inArgs       = makeInputArgsList(g, qs)
 	)
+	if qs.Context != nil {
+		queryRowFunc = GO.QualifiedIdent{"c", "QueryRowContext"}
+	}
 
 	assign := GO.AssignStmt{Token: GO.AssignDefine}
 	assign.Lhs = GO.Ident{"row"}
@@ -1713,6 +1720,9 @@ func buildQueryCallQuery(g *generator, qs *analysis.QueryStruct) {
 		stmtList      = GO.StmtList{}
 		inArgs        = makeInputArgsList(g, qs)
 	)
+	if qs.Context != nil {
+		queryFunc = GO.QualifiedIdent{"c", "QueryContext"}
+	}
 
 	// query call, err check, defer statement
 	assign := GO.AssignStmt{Token: GO.AssignDefine}
@@ -2055,6 +2065,12 @@ func makeErrorReturnStmt(g *generator, qs *analysis.QueryStruct, errExpr GO.Expr
 // makeInputArgsList
 func makeInputArgsList(g *generator, qs *analysis.QueryStruct) GO.ArgsList {
 	argsList := GO.ArgsList{List: GO.Ident{"queryString"}}
+	if qs.Context != nil {
+		argsList = GO.ArgsList{List: GO.ExprList{
+			GO.QualifiedIdent{"q", qs.Context.Name},
+			GO.Ident{"queryString"},
+		}}
+	}
 
 	if len(g.inputSliceArgs) > 0 || qs.Filter != nil || (qs.IsInsertOrUpdateSlice() && len(g.inputArgs) > 0) {
 		argsList.AddExprs(GO.Ident{"params"})

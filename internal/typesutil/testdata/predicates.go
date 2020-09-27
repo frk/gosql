@@ -1,6 +1,7 @@
 package testdata
 
 import (
+	"context"
 	"database/sql/driver"
 	"encoding/xml"
 	"time"
@@ -344,4 +345,21 @@ type ImplementsXMLUnmarshalerTest3 struct{}
 
 func (ImplementsXMLUnmarshalerTest3) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
 	return nil
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Var is not context.Context type, should return false
+type IsContextTest1 struct {
+	Var string
+}
+
+// Var is not context.Context type, should return false
+type IsContextTest2 struct {
+	Var []error
+}
+
+// Var is context.Context type, should return true
+type IsContextTest3 struct {
+	Var context.Context
 }

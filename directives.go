@@ -8,7 +8,7 @@ type directive struct {
 }
 
 type (
-	// The Column directive has two potential use cases:
+	// The Column directive has two use cases:
 	//
 	// (1) It can be used in a Where block to produce column specific predicates
 	// for a WHERE clause condition. The type of the predicate that can be produced

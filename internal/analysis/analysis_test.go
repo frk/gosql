@@ -123,7 +123,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TargetName: "InsertAnalysisTestBAD_NoDataField",
 			RelType:    RelType{},
 			FileName:   "../testdata/analysis_bad.go",
-			FileLine:   11,
+			FileLine:   13,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD3",
@@ -138,7 +138,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "User",
 			TagString:     "",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      17,
+			FileLine:      19,
 		},
 	}, {
 
@@ -155,7 +155,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `rel:"foo.123:bar"`,
 			TagError:      "foo.123:bar",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      22,
+			FileLine:      24,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_MultipleRelTags",
@@ -171,7 +171,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "Rel2",
 			TagString:     `rel:""`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      28,
+			FileLine:      30,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalCountField",
@@ -186,7 +186,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "Count",
 			TagString:     `rel:"relation_a:a"`,
 			PkgPath:       "path/to/test",
-			FileLine:      33,
+			FileLine:      35,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -201,7 +201,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "Exists",
 			TagString:     `rel:"relation_a:a"`,
 			PkgPath:       "path/to/test",
-			FileLine:      38,
+			FileLine:      40,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -216,7 +216,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "NotExists",
 			TagString:     `rel:"relation_a:a"`,
 			PkgPath:       "path/to/test",
-			FileLine:      43,
+			FileLine:      45,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -231,7 +231,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `rel:"relation_a:a"`,
 			PkgPath:       "path/to/test",
-			FileLine:      48,
+			FileLine:      50,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -246,7 +246,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "slice",
 			FieldName:     "Rel",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      53,
+			FileLine:      55,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalAllDirective",
@@ -259,7 +259,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			PkgPath:       "path/to/test",
-			FileLine:      59,
+			FileLine:      61,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -274,7 +274,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      65,
+			FileLine:      67,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -290,7 +290,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      74,
+			FileLine:      76,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalDefaultDirective",
@@ -305,7 +305,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      80,
+			FileLine:      82,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -319,7 +319,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      86,
+			FileLine:      88,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -335,7 +335,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      92,
+			FileLine:      94,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -354,7 +354,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "a.id,1234",
 			TagError:      "1234",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      98,
+			FileLine:      100,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictResultProducer",
@@ -370,7 +370,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"a.id"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      111,
+			FileLine:      113,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_EmptyReturnDirectiveCollist",
@@ -383,7 +383,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      117,
+			FileLine:      119,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -399,7 +399,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      123,
+			FileLine:      125,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -415,7 +415,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      129,
+			FileLine:      131,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -431,7 +431,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      135,
+			FileLine:      137,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -447,7 +447,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      141,
+			FileLine:      143,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -462,7 +462,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      147,
+			FileLine:      149,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -476,7 +476,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      153,
+			FileLine:      155,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -491,7 +491,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      159,
+			FileLine:      161,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -506,7 +506,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      167,
+			FileLine:      169,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -521,7 +521,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      175,
+			FileLine:      177,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -536,7 +536,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      183,
+			FileLine:      185,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -551,7 +551,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      191,
+			FileLine:      193,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -566,7 +566,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      199,
+			FileLine:      201,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -582,7 +582,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "int",
 			FieldName:     "Limit",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      206,
+			FileLine:      208,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_ConflictOffsetProducer",
@@ -598,7 +598,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"2"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      213,
+			FileLine:      215,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalRowsAffectedField",
@@ -612,7 +612,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "int",
 			FieldName:     "RowsAffected",
 			PkgPath:       "path/to/test",
-			FileLine:      219,
+			FileLine:      221,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -627,7 +627,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "F",
 			PkgPath:       "path/to/test",
-			FileLine:      225,
+			FileLine:      227,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -643,7 +643,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "F",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      234,
+			FileLine:      236,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictErrorHandler",
@@ -658,7 +658,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "erh",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      241,
+			FileLine:      243,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithTooManyMethods",
@@ -672,7 +672,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "interface",
 			FieldName:     "Rel",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      255,
+			FileLine:      257,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithBadSignature",
@@ -686,7 +686,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "func",
 			FieldName:     "Rel",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      260,
+			FileLine:      262,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithBadSignatureIface",
@@ -700,7 +700,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "interface",
 			FieldName:     "Rel",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      265,
+			FileLine:      267,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithUnexportedMethod",
@@ -714,7 +714,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "interface",
 			FieldName:     "Rel",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      270,
+			FileLine:      272,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithUnnamedArgument",
@@ -728,7 +728,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "func",
 			FieldName:     "Rel",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      275,
+			FileLine:      277,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IteratorWithNonStructArgument",
@@ -742,7 +742,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "func",
 			FieldName:     "Rel",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      280,
+			FileLine:      282,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadRelfiedlStructBaseType",
@@ -756,7 +756,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "slice",
 			FieldName:     "Rel",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      287,
+			FileLine:      289,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadRelTypeFieldColId",
@@ -773,7 +773,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"1234"`,
 			TagError:      "1234",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      293,
+			FileLine:      295,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ConflictWhereProducer2",
@@ -788,7 +788,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "Where",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      301,
+			FileLine:      303,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadWhereBlockType",
@@ -803,7 +803,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "slice",
 			FieldName:     "Where",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      309,
+			FileLine:      311,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBoolTagValue",
@@ -820,7 +820,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"name" bool:"abc"`,
 			TagError:      "abc",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      317,
+			FileLine:      319,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadNestedWhereBlockType",
@@ -835,7 +835,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "string",
 			FieldName:     "X",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      326,
+			FileLine:      328,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadColumnExpressionLHS",
@@ -853,7 +853,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "123 = x",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      334,
+			FileLine:      336,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadColumnPredicateCombo",
@@ -871,7 +871,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       `x isin any y`,
 			TagError:      "any",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      342,
+			FileLine:      344,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadColumnExpressionLHS",
@@ -889,7 +889,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "123 isnull",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      350,
+			FileLine:      352,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadUnaryOp",
@@ -906,7 +906,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"x <="`,
 			TagError:      "x <=",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      358,
+			FileLine:      360,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ExtraQuantifier",
@@ -924,7 +924,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       `x isnull any`,
 			TagError:      "any",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      366,
+			FileLine:      368,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBetweenFieldType",
@@ -940,7 +940,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "between",
 			TagString:     `sql:"a.foo isbetween"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      374,
+			FileLine:      376,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBetweenFieldType2",
@@ -956,7 +956,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "between",
 			TagString:     `sql:"a.foo isbetween"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      382,
+			FileLine:      384,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBetweenArgColId",
@@ -974,7 +974,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "123",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      394,
+			FileLine:      396,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_NoBetweenXYArg",
@@ -990,7 +990,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "between",
 			TagString:     `sql:"a.foo isbetween"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      403,
+			FileLine:      405,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadBetweenColId",
@@ -1008,7 +1008,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "123 isbetween",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      414,
+			FileLine:      416,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadWhereFieldColId",
@@ -1026,7 +1026,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "123",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      425,
+			FileLine:      427,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo",
@@ -1044,7 +1044,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       `a.id notin any`,
 			TagError:      "any",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      433,
+			FileLine:      435,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalWhereFieldUnaryPredicate",
@@ -1062,7 +1062,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       `a.id istrue`,
 			TagError:      `istrue`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      441,
+			FileLine:      443,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadWhereFieldTypeForQuantifier",
@@ -1080,7 +1080,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       `a.id = any`,
 			TagError:      "any",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      449,
+			FileLine:      451,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinBlockType",
@@ -1095,7 +1095,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "string",
 			FieldName:     "Join",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      456,
+			FileLine:      458,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalJoinBlockRelationDirective",
@@ -1110,7 +1110,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"foobar"`,
 			PkgPath:       "path/to/test",
-			FileLine:      463,
+			FileLine:      465,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1127,7 +1127,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"bar"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      472,
+			FileLine:      474,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadFromRelationRelId",
@@ -1144,7 +1144,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"123"`,
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      480,
+			FileLine:      482,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinDirectiveRelId",
@@ -1161,7 +1161,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"123"`,
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      488,
+			FileLine:      490,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionColId",
@@ -1179,7 +1179,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "123 = b.foo",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      496,
+			FileLine:      498,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicate",
@@ -1196,7 +1196,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"relation_b:b,b.foo ="`,
 			TagError:      "b.foo =",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      504,
+			FileLine:      506,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier",
@@ -1214,7 +1214,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       `b.foo isnull any`,
 			TagError:      "any",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      512,
+			FileLine:      514,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicateCombo",
@@ -1232,7 +1232,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       `b.foo isin any a.bar`,
 			TagError:      "any",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      520,
+			FileLine:      522,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_IllegalJoinBlockDirective",
@@ -1247,7 +1247,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			TagString:     `sql:"a.foo"`,
-			FileLine:      528,
+			FileLine:      530,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1263,7 +1263,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "string",
 			FieldName:     "OnConflict",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      535,
+			FileLine:      537,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer",
@@ -1279,7 +1279,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"a.id"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      543,
+			FileLine:      545,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer2",
@@ -1295,7 +1295,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"some_index"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      552,
+			FileLine:      554,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer3",
@@ -1311,7 +1311,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"some_constraint"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      561,
+			FileLine:      563,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer",
@@ -1326,7 +1326,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      571,
+			FileLine:      573,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer2",
@@ -1342,7 +1342,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"a.foo"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      581,
+			FileLine:      583,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictColumnTargetValue",
@@ -1359,7 +1359,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"a.id,a.1234"`,
 			TagError:      "a.1234",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      589,
+			FileLine:      591,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictIndexTargetIdent",
@@ -1375,7 +1375,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"1234"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      597,
+			FileLine:      599,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictConstraintTargetIdent",
@@ -1391,7 +1391,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"1234"`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      605,
+			FileLine:      607,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOnConflictUpdateActionCollist",
@@ -1408,7 +1408,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"a.id,a.1234"`,
 			TagError:      "a.1234",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      614,
+			FileLine:      616,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_IllegalOnConflictDirective",
@@ -1423,7 +1423,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:"relation_b:b,b.id=a.id"`,
 			PkgPath:       "path/to/test",
-			FileLine:      622,
+			FileLine:      624,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1438,7 +1438,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "OnConflict",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      629,
+			FileLine:      631,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadLimitFieldType",
@@ -1453,7 +1453,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"123"`,
 			PkgPath:       "path/to/test",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      637,
+			FileLine:      639,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_NoLimitDirectiveValue",
@@ -1467,7 +1467,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:""`,
 			PkgPath:       "path/to/test",
-			FileLine:      643,
+			FileLine:      645,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1484,7 +1484,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"abc"`,
 			TagError:      `abc`,
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      649,
+			FileLine:      651,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadOffsetFieldType",
@@ -1498,7 +1498,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "Offset",
 			TagString:     `sql:"123"`,
 			PkgPath:       "path/to/test",
-			FileLine:      655,
+			FileLine:      657,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1513,7 +1513,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldName:     "_",
 			TagString:     `sql:""`,
 			PkgPath:       "path/to/test",
-			FileLine:      661,
+			FileLine:      663,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1530,7 +1530,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"abc"`,
 			TagError:      "abc",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      667,
+			FileLine:      669,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_EmptyOrderByDirectiveCollist",
@@ -1543,7 +1543,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "struct",
 			FieldName:     "_",
 			PkgPath:       "path/to/test",
-			FileLine:      673,
+			FileLine:      675,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1561,7 +1561,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     "a.id:nullsthird",
 			TagError:      "nullsthird",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      679,
+			FileLine:      681,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_BadOrderByDirectiveCollist",
@@ -1579,7 +1579,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "a.1234",
 			TagError:      "a.1234",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      685,
+			FileLine:      687,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_BadOverrideDirectiveKindValue",
@@ -1596,7 +1596,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagString:     `sql:"foo"`,
 			TagError:      "foo",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      691,
+			FileLine:      693,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ConflictResultProducer",
@@ -1611,7 +1611,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "slice",
 			FieldName:     "Result",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      698,
+			FileLine:      700,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_BadResultFieldType",
@@ -1625,7 +1625,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "slice",
 			FieldName:     "Result",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      704,
+			FileLine:      706,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictResultProducer2",
@@ -1640,7 +1640,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "int",
 			FieldName:     "RowsAffected",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      711,
+			FileLine:      713,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_BadRowsAffecteFieldType",
@@ -1653,7 +1653,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldTypeKind: "string",
 			FieldName:     "RowsAffected",
 			PkgPath:       "path/to/test",
-			FileLine:      717,
+			FileLine:      719,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1667,7 +1667,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldType:     "github.com/frk/gosql.All",
 			FieldTypeKind: "struct",
 			FieldName:     "_",
-			FileLine:      729,
+			FileLine:      731,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1681,7 +1681,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldType:     `struct{Name string "sql:\"name\""}`,
 			FieldTypeKind: "struct",
 			FieldName:     "Where",
-			FileLine:      735,
+			FileLine:      737,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1695,7 +1695,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			FieldType:     "github.com/frk/gosql.Filter",
 			FieldTypeKind: "struct",
 			FieldName:     "F",
-			FileLine:      743,
+			FileLine:      745,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -1714,7 +1714,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "a.id isfalse a.foo",
 			TagError:      "isfalse",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      750,
+			FileLine:      752,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_IllegalUnaryPredicateInJoinDirectiveExpression",
@@ -1732,7 +1732,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "b.foo istrue a.bar",
 			TagError:      "istrue",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      758,
+			FileLine:      760,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ListPredicate",
@@ -1750,7 +1750,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "column_a isin",
 			TagError:      "isin",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      766,
+			FileLine:      768,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictingRelationName",
@@ -1768,7 +1768,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "",
 			TagError:      "relation_a",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      775,
+			FileLine:      777,
 		},
 	}, {
 		Name: "DeleteAnalysisTestBAD_ConflictingRelationAlias",
@@ -1786,7 +1786,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "",
 			TagError:      "a",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      787,
+			FileLine:      789,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_ConflictingRelName",
@@ -1804,7 +1804,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "",
 			TagError:      "relation_a",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      809,
+			FileLine:      811,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_ConflictingRelAlias",
@@ -1822,7 +1822,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "",
 			TagError:      "a",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      817,
+			FileLine:      819,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ConflictingRelationName",
@@ -1840,7 +1840,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "",
 			TagError:      "relation_a",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      826,
+			FileLine:      828,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ConflictingRelationAlias",
@@ -1858,7 +1858,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "",
 			TagError:      "a",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      838,
+			FileLine:      840,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifier",
@@ -1876,7 +1876,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "b.id = c.b_id",
 			TagError:      "c",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      850,
+			FileLine:      852,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifier2",
@@ -1894,7 +1894,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "relation_b.id = relation_c.b_id",
 			TagError:      "relation_c",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      858,
+			FileLine:      860,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_UnknownColumnQualifierInReturn",
@@ -1912,7 +1912,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.col_a",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      871,
+			FileLine:      873,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInJoin",
@@ -1930,7 +1930,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.col_foo = a.col_a",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      878,
+			FileLine:      880,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInJoin2",
@@ -1948,7 +1948,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "b.col_foo = x.col_a",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      886,
+			FileLine:      888,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_UnknownColumnQualifierInForce",
@@ -1966,7 +1966,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.col_a",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      893,
+			FileLine:      895,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereField",
@@ -1984,7 +1984,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.id",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      900,
+			FileLine:      902,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn",
@@ -2002,7 +2002,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.col_a = 123",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      908,
+			FileLine:      910,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn2",
@@ -2020,7 +2020,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "c.col_a = x.col_a",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      916,
+			FileLine:      918,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInOrderBy",
@@ -2038,7 +2038,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.col_a",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      923,
+			FileLine:      925,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInBetween",
@@ -2056,7 +2056,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.col_a isbetween",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      930,
+			FileLine:      932,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_UnknownColumnQualifierInBetweenColumn",
@@ -2074,7 +2074,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.col_b",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      942,
+			FileLine:      944,
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_UnknownColumnQualifierInDefault",
@@ -2092,7 +2092,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "x.col_b",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      951,
+			FileLine:      953,
 		},
 	}, {
 		Name: "SelectAnalysisTestBAD_JoinConditionalLHSOperand",
@@ -2110,7 +2110,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "a.col_b = b.col_bar",
 			TagError:      "a.col_b",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      958,
+			FileLine:      960, // XXX
 		},
 	}, {
 		Name: "InsertAnalysisTestBAD_ReturnColumnNoField",
@@ -2127,7 +2127,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "a.foo,a.bar,a.baz,a.quux",
 			TagError:      "a.quux",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      965,
+			FileLine:      967,
 		},
 	}, {
 		Name: "UpdateAnalysisTestBAD_ForceColumnNoField",
@@ -2144,7 +2144,21 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			TagExpr:       "a.foo,a.bar,a.baz,a.quux",
 			TagError:      "a.quux",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      971,
+			FileLine:      973,
+		},
+	}, {
+		Name: "InsertAnalysisTestBAD_WithContextConflict",
+		err: &anError{
+			Code:          errConflictingFieldOrDirective,
+			PkgPath:       "path/to/test",
+			TargetName:    "InsertAnalysisTestBAD_WithContextConflict",
+			RelType:       reltypeTs,
+			RelField:      "Rel",
+			FieldType:     "context.Context",
+			FieldTypeKind: "interface",
+			FieldName:     "ctx",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      980,
 		},
 	}, {
 		Name: "InsertAnalysisTestOK1",
@@ -3749,6 +3763,38 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				},
 			},
 		},
+	}, {
+		Name: "SelectAnalysisTestOK_WithContext",
+		want: &QueryStruct{
+			TypeName: "SelectAnalysisTestOK_WithContext",
+			Kind:     QueryKindSelect,
+			Rel: &RelField{
+				FieldName: "UserRec",
+				Id:        RelIdent{Name: "users_table"},
+				Type: RelType{
+					Base:      commonUserTypeinfo,
+					Fields:    commonUserFields,
+					IsPointer: true,
+				},
+			},
+			Context: &ContextField{Name: "Context"},
+		},
+	}, {
+		Name: "SelectAnalysisTestOK_WithContextNamed",
+		want: &QueryStruct{
+			TypeName: "SelectAnalysisTestOK_WithContextNamed",
+			Kind:     QueryKindSelect,
+			Rel: &RelField{
+				FieldName: "UserRec",
+				Id:        RelIdent{Name: "users_table"},
+				Type: RelType{
+					Base:      commonUserTypeinfo,
+					Fields:    commonUserFields,
+					IsPointer: true,
+				},
+			},
+			Context: &ContextField{Name: "Ctx"},
+		},
 	}}
 
 	for _, tt := range tests {
@@ -3798,7 +3844,7 @@ func TestAnalysis_filterStruct(t *testing.T) {
 			RelType:       reltypeT,
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
-			FileLine:      104,
+			FileLine:      106,
 			FileName:      "../testdata/analysis_bad.go",
 		},
 	}, {
@@ -3817,7 +3863,7 @@ func TestAnalysis_filterStruct(t *testing.T) {
 			TagExpr:       "123",
 			TagError:      "123",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      723,
+			FileLine:      725,
 		},
 	}, {
 		Name: "FilterAnalysisTestBAD_ConflictingRelTag",
@@ -3834,7 +3880,7 @@ func TestAnalysis_filterStruct(t *testing.T) {
 			TagString:     `rel:"a.ts_document"`,
 			TagError:      "",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      797,
+			FileLine:      799,
 		},
 	}, {
 		Name: "FilterAnalysisTestBAD_IllegalIteratorType",
@@ -3851,7 +3897,7 @@ func TestAnalysis_filterStruct(t *testing.T) {
 			TagString:     `rel:"relation_a:a"`,
 			TagError:      "",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      802,
+			FileLine:      804,
 		},
 	}, {
 		Name: "FilterAnalysisTestBAD_UnknownColumnQualifierInTextSearch",
@@ -3869,7 +3915,7 @@ func TestAnalysis_filterStruct(t *testing.T) {
 			TagExpr:       "x.col_b",
 			TagError:      "x",
 			FileName:      "../testdata/analysis_bad.go",
-			FileLine:      865,
+			FileLine:      867,
 		},
 	}, {
 		Name: "FilterAnalysisTestOK_TextSearchDirective",

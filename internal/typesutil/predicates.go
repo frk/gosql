@@ -36,6 +36,22 @@ func IsEmptyInterface(typ types.Type) bool {
 	return iface.NumMethods() == 0
 }
 
+// IsContext reports whether or not the given type is the standard "context.Context" type.
+func IsContext(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+
+	typeName := named.Obj()
+	if pkg := typeName.Pkg(); pkg != nil {
+		path := pkg.Path()
+		name := typeName.Name()
+		return path == "context" && name == "Context"
+	}
+	return false
+}
+
 // IsTime reports whether or not the given type is the "time.Time" type.
 // IsTime returns true also for types that embed "time.Time" directly, this
 // is to provide support for custom timestamp types.

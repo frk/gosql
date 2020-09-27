@@ -49,11 +49,12 @@ func TestGenerator(t *testing.T) {
 			"returning_single_afterscan",
 			"returning_single_all",
 			"returning_single_collist",
+			"returning_slice_all",
 			"returning_slice_afterscan",
+			"returning_slice_collist",
+			"returning_slice_context",
 			"returning_slice_errorhandler",
 			"returning_slice_errorinfohandler",
-			"returning_slice_all",
-			"returning_slice_collist",
 			"rowsaffected",
 			"rowsaffected_errorhandler",
 			"rowsaffected_errorinfohandler",
@@ -147,6 +148,8 @@ func TestGenerator(t *testing.T) {
 			"returning_all_slice",
 			"returning_collist_single",
 			"returning_collist_slice",
+			"returning_context_single",
+			"returning_context_slice",
 			"returning_errorhandler_slice",
 			"returning_errorinfohandler_slice",
 			"rowsaffected_errorhandler_single",
@@ -201,7 +204,6 @@ func TestGenerator(t *testing.T) {
 		}
 		pkg := pkgs[0]
 
-		numFails := 0
 		for _, filename := range tt.filenames {
 			t.Run(tt.dirname+"/"+filename, func(t *testing.T) {
 				tinfos := []*postgres.TargetInfo{}
@@ -249,13 +251,8 @@ func TestGenerator(t *testing.T) {
 				// compare
 				if err := compare.Compare(got, want); err != nil {
 					t.Error(err)
-					numFails += 1
 				}
 			})
-		}
-
-		if numFails > 0 {
-			fmt.Println("numFails::", numFails)
 		}
 	}
 }
