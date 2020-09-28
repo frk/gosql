@@ -5,6 +5,10 @@ import (
 	"database/sql"
 )
 
+type Query interface {
+	Exec(c Conn) error
+}
+
 type Conn interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
@@ -13,8 +17,4 @@ type Conn interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
-}
-
-type Query interface {
-	Exec(c Conn) error
 }

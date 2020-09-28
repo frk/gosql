@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/frk/gosql/fqlang"
+	"github.com/frk/fql"
 )
 
 type Filter struct {
@@ -19,30 +19,30 @@ type Filter struct {
 // UnmarshalFQL
 func (f *Filter) UnmarshalFQL(fqlString string, colmap map[string]string, strict bool) error {
 	fqlString = strings.Trim(fqlString, ";,")
-	z := fqlang.NewTokenizer(fqlString)
+	z := fql.NewTokenizer(fqlString)
 	for {
 		tok, err := z.Next()
 		if err != nil {
-			if err != fqlang.EOF {
+			if err != fql.EOF {
 				return err
 			}
 			break
 		}
 
 		switch tok {
-		case fqlang.LPAREN:
+		case fql.LPAREN:
 			f.GroupStart()
-		case fqlang.RPAREN:
+		case fql.RPAREN:
 			f.GroupEnd()
-		case fqlang.AND:
+		case fql.AND:
 			f.AND()
-		case fqlang.OR:
+		case fql.OR:
 			f.OR()
-		case fqlang.RULE:
+		case fql.RULE:
 			rule := z.Rule()
 			if col, ok := colmap[rule.Key]; ok {
 				val := rule.Val
-				if val == fqlang.Null {
+				if val == fql.Null {
 					val = nil
 				}
 
@@ -263,11 +263,11 @@ func formatTSQuery(s string) (out string) {
 }
 
 // maps FQL comparison operators to SQL ones.
-var cmpop2string = map[fqlang.CmpOp]string{
-	fqlang.CmpEq: "=",
-	fqlang.CmpNe: "<>",
-	fqlang.CmpGt: ">",
-	fqlang.CmpLt: "<",
-	fqlang.CmpGe: ">=",
-	fqlang.CmpLe: "<=",
+var cmpop2string = map[fql.CmpOp]string{
+	fql.CmpEq: "=",
+	fql.CmpNe: "<>",
+	fql.CmpGt: ">",
+	fql.CmpLt: "<",
+	fql.CmpGe: ">=",
+	fql.CmpLe: "<=",
 }

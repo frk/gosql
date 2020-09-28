@@ -12,6 +12,8 @@ github.com/frk/compare v0.0.5-0.20200415165933-37e37ff6db89 h1:Vnw+e53rzbrRcr2Qi
 github.com/frk/compare v0.0.5-0.20200415165933-37e37ff6db89/go.mod h1:5bwv6/gZd3HD/UngMXbki5nvp6aJBTiWmXozSqE1uPc=
 github.com/frk/compare v0.0.6 h1:iltAyhxsNb2lAl5666vr+mZGyIkVV0S/wx0qVlkNklM=
 github.com/frk/compare v0.0.6/go.mod h1:5bwv6/gZd3HD/UngMXbki5nvp6aJBTiWmXozSqE1uPc=
+github.com/frk/fql v0.0.1 h1:vsgsHBd0mCs3S2XxY348Q2nv49nRBzM/j879YdKJrM0=
+github.com/frk/fql v0.0.1/go.mod h1:WsLcfryEdyH/Km6f8Q5LMESkCMSC/xWpxc+JemzJdnQ=
 github.com/frk/tagutil v0.0.0-20190626082652-a41f4c5605cc h1:IitUeNUJbCFLBm6xSpbcP0+SdAI+ye6h5nSKn0L7O7c=
 github.com/frk/tagutil v0.0.0-20190626082652-a41f4c5605cc/go.mod h1:p9oLIpN9tDmOBisei3Ihy46DiCGsuykaIVV4Rxb6qYo=
 github.com/lib/pq v1.2.0 h1:LXpIM/LZ5xGFhOpXAQUIMM1HdyqzVYM13zNdjCEEcA0=
