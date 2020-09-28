@@ -26,7 +26,7 @@ func (q *DeleteWithResultSingleErrorInfoHandlerQuery) Exec(c gosql.Conn) error {
 		&q.Result.CreatedAt,
 	)
 	if err != nil {
-		return q.eh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithResultSingleErrorInfoHandlerQuery", SpecValue: q})
+		return q.eh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithResultSingleErrorInfoHandlerQuery", QueryValue: q})
 	}
 	return nil
 }

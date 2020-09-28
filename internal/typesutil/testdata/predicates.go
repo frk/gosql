@@ -363,3 +363,74 @@ type IsContextTest2 struct {
 type IsContextTest3 struct {
 	Var context.Context
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Var is not string type, should return false
+type IsStringTest1 struct {
+	Var error
+}
+
+// Var is not string type, should return false
+type IsStringTest2 struct {
+	Var []string
+}
+
+// Var is string type, should return true
+type IsStringTest3 struct {
+	Var string
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Var is not string map type, should return false
+type IsStringMapTest1 struct {
+	Var string
+}
+
+// Var is not string map type, should return false
+type IsStringMapTest2 struct {
+	Var map[int]string
+}
+
+// Var is not string map type, should return false
+type IsStringMapTest3 struct {
+	Var map[string]int
+}
+
+// Var is not string map type, should return false
+type IsStringMapTest4 struct {
+	Var []map[string]string
+}
+
+// Var is string map type, should return true
+type IsStringMapTest5 struct {
+	Var map[string]string
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+// Var is not niladic func type, should return false
+type IsNiladicFuncTest1 struct {
+	Var func() error
+}
+
+// Var is not niladic func type, should return false
+type IsNiladicFuncTest2 struct {
+	Var func(int)
+}
+
+// Var is not niladic func type, should return false
+type IsNiladicFuncTest3 struct {
+	Var func(...interface{})
+}
+
+// Var is not niladic func type, should return false
+type IsNiladicFuncTest4 struct {
+	Var []func()
+}
+
+// Var is niladic func type, should return true
+type IsNiladicFuncTest5 struct {
+	Var func()
+}

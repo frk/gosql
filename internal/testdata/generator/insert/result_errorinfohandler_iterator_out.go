@@ -40,7 +40,7 @@ func (q *InsertResultErrorInfoHandlerIteratorQuery) Exec(c gosql.Conn) error {
 
 	rows, err := c.Query(queryString, params...)
 	if err != nil {
-		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertResultErrorInfoHandlerIteratorQuery", SpecValue: q})
+		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertResultErrorInfoHandlerIteratorQuery", QueryValue: q})
 	}
 	defer rows.Close()
 
@@ -53,16 +53,16 @@ func (q *InsertResultErrorInfoHandlerIteratorQuery) Exec(c gosql.Conn) error {
 			&v.CreatedAt,
 		)
 		if err != nil {
-			return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertResultErrorInfoHandlerIteratorQuery", SpecValue: q})
+			return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertResultErrorInfoHandlerIteratorQuery", QueryValue: q})
 		}
 
 		v.AfterScan()
 		if err := q.result.NextUser(v); err != nil {
-			return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertResultErrorInfoHandlerIteratorQuery", SpecValue: q})
+			return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertResultErrorInfoHandlerIteratorQuery", QueryValue: q})
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertResultErrorInfoHandlerIteratorQuery", SpecValue: q})
+		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertResultErrorInfoHandlerIteratorQuery", QueryValue: q})
 	}
 	return nil
 }

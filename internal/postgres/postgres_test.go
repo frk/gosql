@@ -112,7 +112,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_NoRelation",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 10,
+					Line: 11,
 				},
 			},
 			Field: fieldInfo{
@@ -121,7 +121,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `rel:"norel"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 11,
+					Line: 12,
 				},
 			},
 			Rel: relInfo{
@@ -138,7 +138,7 @@ func TestCheck(t *testing.T) {
 				Name: "DeletePostgresTestBAD_JoinNoRelation",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 15,
+					Line: 16,
 				},
 			},
 			Field: fieldInfo{
@@ -147,7 +147,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"norel:b"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 18,
+					Line: 19,
 				},
 			},
 			Rel: relInfo{
@@ -164,7 +164,7 @@ func TestCheck(t *testing.T) {
 				Name: "DeletePostgresTestBAD_JoinNoRelation2",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 26,
+					Line: 27,
 				},
 			},
 			Field: fieldInfo{
@@ -173,7 +173,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"norel:c,c.b_id = b.id"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 30,
+					Line: 31,
 				},
 			},
 			Rel: relInfo{
@@ -190,7 +190,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_JoinNoColumn",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 38,
+					Line: 39,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "b", ""}, Relation: column_tests_2},
@@ -201,7 +201,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"column_tests_2:b,b.nocol = a.nocol"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 41,
+					Line: 42,
 				},
 			},
 		},
@@ -215,7 +215,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_JoinNoColumn2",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 46,
+					Line: 47,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -226,7 +226,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"column_tests_2:b,b.col_foo = a.nocol"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 49,
+					Line: 50,
 				},
 			},
 		},
@@ -240,7 +240,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_JoinBadUnaryBoolColumn",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 54,
+					Line: 55,
 				},
 			},
 			Field: fieldInfo{
@@ -249,7 +249,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"column_tests_2:b,b.col_foo istrue"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 57,
+					Line: 58,
 				},
 			},
 			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
@@ -266,7 +266,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_JoinBadUnaryNullColumn",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 62,
+					Line: 63,
 				},
 			},
 			Field: fieldInfo{
@@ -275,7 +275,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"column_tests_2:b,b.col_baz isnull"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 65,
+					Line: 66,
 				},
 			},
 			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
@@ -292,7 +292,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_JoinBadLiteralExpression",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 70,
+					Line: 71,
 				},
 			},
 			Field: fieldInfo{
@@ -301,7 +301,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"column_tests_2:b,b.col_baz = 'foo'bar "`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 73,
+					Line: 74,
 				},
 			},
 			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
@@ -319,7 +319,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_JoinBadQuantifierColumnType",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 78,
+					Line: 79,
 				},
 			},
 			Field: fieldInfo{
@@ -328,7 +328,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"column_tests_2:b,b.col_foo >any a.col_a"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 81,
+					Line: 82,
 				},
 			},
 			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
@@ -347,7 +347,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_JoinBadComparisonOperandType",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 86,
+					Line: 87,
 				},
 			},
 			Field: fieldInfo{
@@ -356,7 +356,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"column_tests_2:b,b.col_baz < 'baz'"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 89,
+					Line: 90,
 				},
 			},
 			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
@@ -374,7 +374,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_OnConflictNoColumn",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 94,
+					Line: 95,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -385,7 +385,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 97,
+					Line: 98,
 				},
 			},
 		},
@@ -399,7 +399,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_OnConflictColumnNoIndexMatch",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 102,
+					Line: 103,
 				},
 			},
 			Field: fieldInfo{
@@ -408,7 +408,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_a,c.col_b"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 105,
+					Line: 106,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -423,7 +423,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_OnConflictNoIndex",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 110,
+					Line: 111,
 				},
 			},
 			Field: fieldInfo{
@@ -432,7 +432,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"some_index\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 113,
+					Line: 114,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -447,7 +447,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_OnConflictNoUniqueIndex",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 118,
+					Line: 119,
 				},
 			},
 			Field: fieldInfo{
@@ -456,7 +456,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"column_tests_2_nonunique_index\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 121,
+					Line: 122,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
@@ -471,7 +471,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_OnConflictNoConstraint",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 126,
+					Line: 127,
 				},
 			},
 			Field: fieldInfo{
@@ -480,7 +480,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"some_constraint\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 129,
+					Line: 130,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -495,7 +495,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_OnConflictNoUniqueConstraint",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 134,
+					Line: 135,
 				},
 			},
 			Field: fieldInfo{
@@ -504,7 +504,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"column_tests_2_nonunique_constraint\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 137,
+					Line: 138,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
@@ -519,7 +519,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_OnConflictUpdateColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 142,
+					Line: 143,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},
@@ -530,7 +530,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_a,c.col_b,c.col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 146,
+					Line: 147,
 				},
 			},
 		},
@@ -544,7 +544,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereFieldColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 151,
+					Line: 152,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -555,7 +555,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.id\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 154,
+					Line: 155,
 				},
 			},
 		},
@@ -569,7 +569,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereCannotCompareTypes",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 159,
+					Line: 160,
 				},
 			},
 			Field: fieldInfo{
@@ -578,7 +578,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_e ~\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 162,
+					Line: 163,
 				},
 			},
 			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -595,7 +595,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereColumnTypeForFuncname",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 167,
+					Line: 168,
 				},
 			},
 			Field: fieldInfo{
@@ -604,7 +604,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_d,@lower\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 170,
+					Line: 171,
 				},
 			},
 			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -622,7 +622,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 175,
+					Line: 176,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -633,7 +633,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_xyz istrue\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 178,
+					Line: 179,
 				},
 			},
 		},
@@ -647,7 +647,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereColumnBadBoolOp",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 183,
+					Line: 184,
 				},
 			},
 			Field: fieldInfo{
@@ -656,7 +656,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_a istrue\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 186,
+					Line: 187,
 				},
 			},
 			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -673,7 +673,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereColumnNotFoundRHS",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 199,
+					Line: 200,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -684,7 +684,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_a = c.col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 202,
+					Line: 203,
 				},
 			},
 		},
@@ -698,7 +698,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereColumnBadLiteralExpression",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 207,
+					Line: 208,
 				},
 			},
 			Field: fieldInfo{
@@ -707,7 +707,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_a = 123abc"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 210,
+					Line: 211,
 				},
 			},
 			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -725,7 +725,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereColumnBadTypeForQuantifier",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 215,
+					Line: 216,
 				},
 			},
 			Field: fieldInfo{
@@ -734,7 +734,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_a isin c.col_b"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 218,
+					Line: 219,
 				},
 			},
 			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -752,7 +752,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereColumnBadTypeComparison",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 223,
+					Line: 224,
 				},
 			},
 			Field: fieldInfo{
@@ -761,7 +761,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_a = c.col_b"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 226,
+					Line: 227,
 				},
 			},
 			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -779,7 +779,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereBetweenColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 231,
+					Line: 232,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -790,7 +790,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_xyz isbetween\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 234,
+					Line: 235,
 				},
 			},
 			WBField: fieldInfo{
@@ -799,7 +799,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_xyz isbetween"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 234,
+					Line: 235,
 				},
 			},
 		},
@@ -813,7 +813,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereBetweenArgColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 242,
+					Line: 243,
 				},
 			},
 			Field: fieldInfo{
@@ -822,7 +822,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_xyz,x\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 246,
+					Line: 247,
 				},
 			},
 			WBField: fieldInfo{
@@ -831,7 +831,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_a isbetween"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 245,
+					Line: 246,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -847,7 +847,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereBetweenComparisonBadArgType",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 253,
+					Line: 254,
 				},
 			},
 			Field: fieldInfo{
@@ -856,7 +856,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"y\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 258,
+					Line: 259,
 				},
 			},
 			WBField: fieldInfo{
@@ -865,7 +865,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_a isbetween"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 256,
+					Line: 257,
 				},
 			},
 			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -882,7 +882,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_OrderByColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 264,
+					Line: 265,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -893,7 +893,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_a,c.col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 266,
+					Line: 267,
 				},
 			},
 		},
@@ -907,7 +907,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_DefaultColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 270,
+					Line: 271,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -918,7 +918,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 272,
+					Line: 273,
 				},
 			},
 		},
@@ -932,7 +932,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_DefaultNotSet",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 276,
+					Line: 277,
 				},
 			},
 			Field: fieldInfo{
@@ -941,7 +941,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_b"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 278,
+					Line: 279,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -957,7 +957,7 @@ func TestCheck(t *testing.T) {
 				Name: "UpdatePostgresTestBAD_ReturnColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 282,
+					Line: 283,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -968,7 +968,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 284,
+					Line: 285,
 				},
 			},
 		},
@@ -982,7 +982,7 @@ func TestCheck(t *testing.T) {
 				Name: "FilterPostgresTestBAD_TextSearchColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 288,
+					Line: 289,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -993,7 +993,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 290,
+					Line: 291,
 				},
 			},
 		},
@@ -1007,7 +1007,7 @@ func TestCheck(t *testing.T) {
 				Name: "FilterPostgresTestBAD_TextSearchBadColumnType",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 294,
+					Line: 296,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1018,7 +1018,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"c.col_b\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 296,
+					Line: 298,
 				},
 			},
 		},
@@ -1032,7 +1032,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_RelationColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 300,
+					Line: 303,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1043,7 +1043,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 302,
+					Line: 305,
 				},
 			},
 		},
@@ -1057,7 +1057,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_RelationColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 307,
+					Line: 310,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1068,7 +1068,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 309,
+					Line: 312,
 				},
 			},
 		},
@@ -1082,7 +1082,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_BadFieldToColumnType",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 328,
+					Line: 331,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1093,7 +1093,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"col_c"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 330,
+					Line: 333,
 				},
 			},
 		},
@@ -1107,7 +1107,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_ResultColumnNotFound",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 335,
+					Line: 338,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1118,7 +1118,7 @@ func TestCheck(t *testing.T) {
 				Tag:  "sql:\"col_xyz\"",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 338,
+					Line: 341,
 				},
 			},
 		},
@@ -1132,7 +1132,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_NoSchema",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 343,
+					Line: 346,
 				},
 			},
 			Field: fieldInfo{
@@ -1141,7 +1141,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `rel:"noschema.column_tests_1:c"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 344,
+					Line: 347,
 				},
 			},
 			Rel: relInfo{
@@ -1158,7 +1158,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_RelationColumnNotFound2",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 348,
+					Line: 351,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1183,7 +1183,7 @@ func TestCheck(t *testing.T) {
 				Name: "FilterPostgresTestBAD_BadFieldWriteType",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 353,
+					Line: 356,
 				},
 			},
 			Field: fieldInfo{
@@ -1192,7 +1192,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"metadata2"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 355,
+					Line: 358,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"test_user", "", "public"}, Relation: test_user},
@@ -1208,7 +1208,7 @@ func TestCheck(t *testing.T) {
 				Name: "FilterPostgresTestBAD_BadFieldWriteType2",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 360,
+					Line: 364,
 				},
 			},
 			Field: fieldInfo{
@@ -1217,7 +1217,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"envelope"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 362,
+					Line: 366,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"test_user", "", "public"}, Relation: test_user},
@@ -1233,7 +1233,7 @@ func TestCheck(t *testing.T) {
 				Name: "FilterPostgresTestBAD_BadFieldWriteType3",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 367,
+					Line: 372,
 				},
 			},
 			Field: fieldInfo{
@@ -1242,7 +1242,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"col_linearr"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 369,
+					Line: 374,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"pgsql_test", "", "public"}, Relation: pgsql_test},
@@ -1258,7 +1258,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereLiteralBadTypeForQuantifier",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 374,
+					Line: 380,
 				},
 			},
 			Field: fieldInfo{
@@ -1267,7 +1267,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_a notin 'foo bar'"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 377,
+					Line: 383,
 				},
 			},
 			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1285,7 +1285,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_WhereUnknownFunc",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 382,
+					Line: 388,
 				},
 			},
 			Field: fieldInfo{
@@ -1294,7 +1294,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_d,@unknown_func"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 385,
+					Line: 391,
 				},
 			},
 			Rel:  relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1312,7 +1312,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_DefaultOption",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 390,
+					Line: 396,
 				},
 			},
 			Field: fieldInfo{
@@ -1321,7 +1321,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"col_b,default"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 392,
+					Line: 398,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1337,7 +1337,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_ColumnTypeToBadField",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 397,
+					Line: 403,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1348,7 +1348,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"col_c"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 399,
+					Line: 405,
 				},
 			},
 		},
@@ -1362,7 +1362,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_ColumnTypeToBadField2",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 404,
+					Line: 410,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"test_user", "", "public"}, Relation: test_user},
@@ -1373,7 +1373,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"envelope"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 406,
+					Line: 412,
 				},
 			},
 		},
@@ -1387,7 +1387,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_ColumnTypeToBadField3",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 411,
+					Line: 417,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"pgsql_test", "", "public"}, Relation: pgsql_test},
@@ -1398,7 +1398,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"col_linearr"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 413,
+					Line: 419,
 				},
 			},
 		},
@@ -1412,7 +1412,7 @@ func TestCheck(t *testing.T) {
 				Name: "SelectPostgresTestBAD_BadBetweenColumnComparison",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 418,
+					Line: 424,
 				},
 			},
 			Rel:    relInfo{Id: analysis.RelIdent{"column_tests_1", "", "public"}, Relation: column_tests_1},
@@ -1424,7 +1424,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_c,y"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 423,
+					Line: 429,
 				},
 			},
 			WBField: fieldInfo{
@@ -1433,7 +1433,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_a isbetween"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 421,
+					Line: 427,
 				},
 			},
 			Pred: analysis.IsLTE,
@@ -1448,7 +1448,7 @@ func TestCheck(t *testing.T) {
 				Name: "InsertPostgresTestBAD_OnConflictIndexColumnsNotUnique",
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 429,
+					Line: 435,
 				},
 			},
 			Field: fieldInfo{
@@ -1457,7 +1457,7 @@ func TestCheck(t *testing.T) {
 				Tag:  `sql:"c.col_indkey1,c.col_indkey2,c.col_indkey3"`,
 				File: fileInfo{
 					Name: "../testdata/postgres_bad.go",
-					Line: 432,
+					Line: 438,
 				},
 			},
 			Rel: relInfo{Id: analysis.RelIdent{"column_tests_2", "", "public"}, Relation: column_tests_2},

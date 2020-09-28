@@ -60,6 +60,8 @@ type (
 		Rel *RelField
 		// Info on the gosql.TextSearch directive field of the filter struct type, or nil.
 		TextSearch *TextSearchDirective
+		// Info on the field that implements the gosql.FilterConstructor interface.
+		FilterConstructor *FilterConstructorField
 	}
 
 	TargetStruct interface {
@@ -443,6 +445,13 @@ type (
 
 	// ContextField is the result of analyzing a query struct's context.Context type field.
 	ContextField struct {
+		// Name of the field (case preserved).
+		Name string
+	}
+
+	// FilterConstructorField is the result of analyzing a filter struct's
+	// field that implements the gosql.FilterConstructor interface.
+	FilterConstructorField struct {
 		// Name of the field (case preserved).
 		Name string
 	}

@@ -215,10 +215,12 @@ const (
 	errConflictingResultTarget
 	errConflictingRelationDirective
 	errConflictingFieldOrDirective
+	errConflictingFilterConstructor
 	errMissingRelField
 	errMissingTagValue
 	errMissingTagColumnList
 	errMissingOnConflictTarget
+	errMissingFilterConstructor
 	errBadIdentTagValue
 	errBadColIdTagValue
 	errBadRelIdTagValue
@@ -395,6 +397,12 @@ var error_template_string = `
     {{end -}}
 {{ end }}
 
+{{ define "` + errConflictingFilterConstructor.name() + `" -}}
+{{Wb .FileAndLine}}: {{Y "Conflicting filter constructor field."}}
+    The field {{R .FieldName}} (type {{R .FieldTypeShort}}) in {{Wb .TargetName}} is in conflict with another field that implements the "gosql.FilterConstructor" interface.
+    {{Wb "FIX:"}} Make sure that the {{R .TargetName}} struct type has {{Wu "exactly one"}} field that implements the "gosql.FilterConstructor" interface.
+{{ end }}
+
 {{ define "` + errMissingRelField.name() + `" -}}
 {{Wb .FileAndLine}}: {{Y "Missing \"rel\" field."}}
     The {{R .TargetName}} struct type has no field with the "rel" tag.
@@ -420,6 +428,12 @@ var error_template_string = `
         - The {{Ci "gosql.Column"}} directive.
         - The {{Ci "gosql.Index"}} directive.
         - The {{Ci "gosql.Constraint"}} directive.
+{{ end }}
+
+{{ define "` + errMissingFilterConstructor.name() + `" -}}
+{{Wb .FileAndLine}}: {{Y "Missing filter constructor field."}}
+    The {{R .TargetName}} struct type has no field that implements the "gosql.FilterConstructor" interface.
+    {{Wb "FIX:"}} Make sure that the {{R .TargetName}} struct type has {{Wu "exactly one"}} field that implements the "gosql.FilterConstructor" interface.
 {{ end }}
 
 {{ define "` + errBadIdentTagValue.name() + `" -}}

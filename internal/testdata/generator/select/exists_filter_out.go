@@ -10,10 +10,9 @@ func (q *SelectExistsWithFilterQuery) Exec(c gosql.Conn) error {
 	var queryString = `SELECT EXISTS(SELECT 1 FROM "test_user" AS u
 	` // `
 
-	queryString += q.Filter.ToSQL()
-	queryString += `)`
+	filterString, params := q.Filter.ToSQL()
+	queryString += filterString + `)`
 
-	params := q.Filter.Params()
 	row := c.QueryRow(queryString, params...)
 	return row.Scan(&q.Exists)
 }

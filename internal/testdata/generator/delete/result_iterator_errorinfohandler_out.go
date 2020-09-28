@@ -18,7 +18,7 @@ func (q *DeleteWithResultIteratorErrorInfoHandlerQuery) Exec(c gosql.Conn) error
 
 	rows, err := c.Query(queryString, q.Where.CreatedBefore)
 	if err != nil {
-		return q.errhandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithResultIteratorErrorInfoHandlerQuery", SpecValue: q})
+		return q.errhandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithResultIteratorErrorInfoHandlerQuery", QueryValue: q})
 	}
 	defer rows.Close()
 
@@ -31,16 +31,16 @@ func (q *DeleteWithResultIteratorErrorInfoHandlerQuery) Exec(c gosql.Conn) error
 			&v.CreatedAt,
 		)
 		if err != nil {
-			return q.errhandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithResultIteratorErrorInfoHandlerQuery", SpecValue: q})
+			return q.errhandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithResultIteratorErrorInfoHandlerQuery", QueryValue: q})
 		}
 
 		v.AfterScan()
 		if err := q.Result.NextUser(v); err != nil {
-			return q.errhandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithResultIteratorErrorInfoHandlerQuery", SpecValue: q})
+			return q.errhandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithResultIteratorErrorInfoHandlerQuery", QueryValue: q})
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return q.errhandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithResultIteratorErrorInfoHandlerQuery", SpecValue: q})
+		return q.errhandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithResultIteratorErrorInfoHandlerQuery", QueryValue: q})
 	}
 	return nil
 }

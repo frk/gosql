@@ -35,6 +35,7 @@ func Write(f io.Writer, pkgName string, targets []*postgres.TargetInfo, conf Con
 		imports      = new(GO.ImportDecl)
 		fmtFilterKey = makeFilterKeyFormatter(conf)
 		fmtColIdent  = makeColIdentFormatter(conf)
+		importGosql  bool
 	)
 	for _, info := range targets {
 		g := new(generator)
@@ -50,12 +51,15 @@ func Write(f io.Writer, pkgName string, targets []*postgres.TargetInfo, conf Con
 		switch s := info.Struct.(type) {
 		case *analysis.QueryStruct:
 			buildQueryCode(g, s)
+			importGosql = true
 		case *analysis.FilterStruct:
 			buildFilterCode(g, s)
 		}
 	}
 
-	imports.Specs = append(imports.Specs, GO.ImportSpec{Path: gosqlPkgPath})
+	if importGosql {
+		imports.Specs = append(imports.Specs, GO.ImportSpec{Path: gosqlPkgPath})
+	}
 	sortImports(imports)
 
 	file.PkgName = pkgName
@@ -629,12 +633,10 @@ func addNULLIFCallExpr(x SQL.ValueExpr, f *analysis.FieldInfo, c *postgres.Colum
 // buildFilterCode builds code for the given FilterStruct.
 func buildFilterCode(g *generator, fs *analysis.FilterStruct) {
 	mapid := buildFilterColumnMap(g, fs)
-	buildFilterMethodTextSearch(g, fs)
-	buildFilterMethodUnmarshalFQL(g, fs, mapid)
-	buildFilterMethodUnmarshalSort(g, fs, mapid)
+	buildFilterMethodInit(g, fs, mapid)
 	buildFilterMethodsForColumns(g, fs, mapid)
-	buildFilterMethodBoolOp(g, fs, "AND")
-	buildFilterMethodBoolOp(g, fs, "OR")
+	buildFilterMethodBoolOp(g, fs, "And")
+	buildFilterMethodBoolOp(g, fs, "Or")
 }
 
 // buildFilterColumnMap
@@ -668,55 +670,26 @@ func buildFilterColumnMap(g *generator, fs *analysis.FilterStruct) (mapid GO.Ide
 	return mapid
 }
 
-// buildFilterMethodTextSearch
-func buildFilterMethodTextSearch(g *generator, fs *analysis.FilterStruct) {
-	methodecl := GO.MethodDecl{}
-	methodecl.Recv.Name.Name = "f"
-	methodecl.Recv.Type = GO.PointerRecvType{fs.TypeName}
-	methodecl.Name.Name = "TextSearch"
-	methodecl.Type.Params = GO.ParamList{{Names: GO.Ident{"v"}, Type: GO.Ident{"string"}}}
+// buildFilterMethodInit
+func buildFilterMethodInit(g *generator, fs *analysis.FilterStruct, mapid GO.Ident) {
+	var (
+		recv = GO.Ident{"f"}                       // receiver's name
+		ctor = GO.Ident{fs.FilterConstructor.Name} // filter constructor field's name
+		selx = GO.SelectorExpr{X: GO.SelectorExpr{X: recv, Sel: ctor}, Sel: GO.Ident{"Init"}}
+	)
+
+	args := GO.ExprList{mapid, GO.StringLit("")}
 	if ts := fs.TextSearch; ts != nil {
-		methodecl.Body.List = []GO.StmtNode{GO.ExprStmt{GO.CallExpr{
-			Fun: GO.Ident{"f.Filter.TextSearch"},
-			Args: GO.ArgsList{List: GO.ExprList{
-				GO.RawStringLit(g.fmtColIdent(ts.ColIdent)),
-				GO.Ident{"v"}}},
-		}}}
-	} else {
-		methodecl.Body.List = []GO.StmtNode{GO.LineComment{" No search document specified."}}
+		args[1] = GO.RawStringLit(g.fmtColIdent(ts.ColIdent))
 	}
 
-	g.file.Decls = append(g.file.Decls, methodecl)
-}
-
-// buildFilterMethodUnmarshalFQL
-func buildFilterMethodUnmarshalFQL(g *generator, fs *analysis.FilterStruct, mapid GO.Ident) {
 	methodecl := GO.MethodDecl{}
-	methodecl.Recv.Name.Name = "f"
+	methodecl.Recv.Name = recv
 	methodecl.Recv.Type = GO.PointerRecvType{fs.TypeName}
-	methodecl.Name.Name = "UnmarshalFQL"
-	methodecl.Type.Params = GO.ParamList{{Names: GO.Ident{"fqlString"}, Type: GO.Ident{"string"}}}
-	methodecl.Type.Results = GO.ParamList{{Type: GO.Ident{"error"}}}
-	methodecl.Body.List = []GO.StmtNode{GO.ReturnStmt{GO.CallExpr{
-		Fun:  GO.Ident{"f.Filter.UnmarshalFQL"},
-		Args: GO.ArgsList{List: GO.ExprList{GO.Ident{"fqlString"}, mapid, GO.False}},
-	}}}
-
-	g.file.Decls = append(g.file.Decls, methodecl)
-}
-
-// buildFilterMethodUnmarshalSort
-func buildFilterMethodUnmarshalSort(g *generator, fs *analysis.FilterStruct, mapid GO.Ident) {
-	methodecl := GO.MethodDecl{}
-	methodecl.Recv.Name.Name = "f"
-	methodecl.Recv.Type = GO.PointerRecvType{fs.TypeName}
-	methodecl.Name.Name = "UnmarshalSort"
-	methodecl.Type.Params = GO.ParamList{{Names: GO.Ident{"sortString"}, Type: GO.Ident{"string"}}}
-	methodecl.Type.Results = GO.ParamList{{Type: GO.Ident{"error"}}}
-	methodecl.Body.List = []GO.StmtNode{GO.ReturnStmt{GO.CallExpr{
-		Fun:  GO.Ident{"f.Filter.UnmarshalSort"},
-		Args: GO.ArgsList{List: GO.ExprList{GO.Ident{"sortString"}, mapid, GO.False}},
-	}}}
+	methodecl.Name.Name = "Init"
+	methodecl.Body.List = []GO.StmtNode{GO.ExprStmt{
+		GO.CallExpr{Fun: selx, Args: GO.ArgsList{List: args}},
+	}}
 
 	g.file.Decls = append(g.file.Decls, methodecl)
 }
@@ -724,9 +697,11 @@ func buildFilterMethodUnmarshalSort(g *generator, fs *analysis.FilterStruct, map
 // buildFilterMethodsForColumns
 func buildFilterMethodsForColumns(g *generator, fs *analysis.FilterStruct, mapid GO.Ident) {
 	var (
-		recv  = GO.Ident{"f"}   // the receiver name
-		oper  = GO.Ident{"op"}  // the operator argument name
-		value = GO.Ident{"val"} // the value argument name
+		recv  = GO.Ident{"f"}                       // the receiver name
+		oper  = GO.Ident{"op"}                      // the operator argument name
+		value = GO.Ident{"val"}                     // the value argument name
+		ctor  = GO.Ident{fs.FilterConstructor.Name} // filter constructor field's name
+		selx  = GO.SelectorExpr{X: GO.SelectorExpr{X: recv, Sel: ctor}, Sel: GO.Ident{"Col"}}
 	)
 
 	for _, ff := range g.info.Filters {
@@ -772,7 +747,7 @@ func buildFilterMethodsForColumns(g *generator, fs *analysis.FilterStruct, mapid
 		// the method's body
 		methodecl.Body.List = []GO.StmtNode{
 			GO.ExprStmt{GO.CallExpr{
-				Fun: GO.Ident{"f.Filter.Col"},
+				Fun: selx,
 				Args: GO.ArgsList{List: GO.ExprList{
 					GO.RawStringLit(g.fmtColIdent(ff.ColIdent)),
 					oper, value}},
@@ -787,10 +762,12 @@ func buildFilterMethodsForColumns(g *generator, fs *analysis.FilterStruct, mapid
 // buildFilterMethodBoolOp
 func buildFilterMethodBoolOp(g *generator, fs *analysis.FilterStruct, name string) {
 	var (
-		recv  = GO.Ident{"f"}                   // method's receiver name
-		rtyp  = GO.PointerRecvType{fs.TypeName} // method's reciever type
-		nest  = GO.Ident{"nest"}                // method's argument name
-		ftype = GO.PointerType{GO.QualifiedIdent{"gosql", "Filter"}}
+		nilVal = GO.Ident{"nil"}
+		recv   = GO.Ident{"f"}                       // method's receiver name
+		rtyp   = GO.PointerRecvType{fs.TypeName}     // method's reciever type
+		nest   = GO.Ident{"nest"}                    // method's argument name
+		ctor   = GO.Ident{fs.FilterConstructor.Name} // filter constructor field's name
+		selx   = GO.SelectorExpr{X: GO.SelectorExpr{X: recv, Sel: ctor}, Sel: GO.Ident{name}}
 	)
 
 	methodecl := GO.MethodDecl{}
@@ -800,26 +777,29 @@ func buildFilterMethodBoolOp(g *generator, fs *analysis.FilterStruct, name strin
 
 	// the method's input and output arguments
 	methodecl.Type.Params = GO.ParamList{
-		{Names: nest, Type: GO.FuncType{Params: GO.ParamList{{Type: rtyp}}}, Variadic: true},
+		{Names: nest, Type: GO.FuncType{Params: GO.ParamList{{Type: rtyp}}}},
 	}
 	methodecl.Type.Results = GO.ParamList{{Type: rtyp}}
 
 	// the method's body
 	methodecl.Body.List = []GO.StmtNode{
 		GO.IfStmt{
-			Cond: GO.BinaryExpr{X: GO.CallLenExpr{nest}, Op: GO.BinaryEql, Y: GO.IntLit(0)},
+			Cond: GO.BinaryExpr{X: nest, Op: GO.BinaryEql, Y: nilVal},
 			Body: GO.BlockStmt{[]GO.StmtNode{
-				GO.ExprStmt{GO.CallExpr{Fun: GO.Ident{"f.Filter." + name}}},
+				GO.ExprStmt{GO.CallExpr{
+					Fun:  selx,
+					Args: GO.ArgsList{List: nilVal},
+				}},
 				GO.ReturnStmt{recv},
 			}},
 		},
 		GO.ExprStmt{GO.CallExpr{
-			Fun: GO.Ident{"f.Filter." + name},
+			Fun: selx,
 			Args: GO.ArgsList{List: GO.ExprList{GO.FuncLit{
-				Type: GO.FuncType{Params: GO.ParamList{{Names: GO.Ident{"_"}, Type: ftype}}},
+				Type: GO.FuncType{},
 				Body: GO.BlockStmt{[]GO.StmtNode{
 					GO.ExprStmt{GO.CallExpr{
-						Fun:  GO.IndexExpr{X: nest, Index: GO.IntLit(0)},
+						Fun:  nest,
 						Args: GO.ArgsList{List: recv},
 					}},
 				}},
@@ -1584,20 +1564,37 @@ func buildQueryStringForSliceArgs(g *generator, qs *analysis.QueryStruct) {
 // buildQueryStringForFilter
 func buildQueryStringForFilter(g *generator, qs *analysis.QueryStruct) {
 	var (
-		stmtList       = GO.StmtList{GO.DeclStmt{g.queryStringDecl}, GO.NL{}}
-		queryStringVar = GO.Ident{"queryString"}
-		filterField    = GO.QualifiedIdent{"q", qs.Filter.Name}
+		stmtList        = GO.StmtList{GO.DeclStmt{g.queryStringDecl}, GO.NL{}}
+		queryStringVar  = GO.Ident{"queryString"}
+		filterStringVar = GO.Ident{"filterString"}
+		paramsVar       = GO.Ident{"params"}
+		filterField     = GO.QualifiedIdent{"q", qs.Filter.Name}
 	)
 
 	// produce:
-	//	queryString += q.Filter.ToSQL()
+	//	filterString, params := q.Filter.ToSQL()
 	callExpr := GO.CallExpr{}
 	callExpr.Fun = GO.SelectorExpr{X: filterField, Sel: GO.Ident{"ToSQL"}}
 
-	assign := GO.AssignStmt{Token: GO.AssignAdd}
-	assign.Lhs = queryStringVar
+	assign := GO.AssignStmt{Token: GO.AssignDefine}
+	assign.Lhs = GO.ExprList{filterStringVar, paramsVar}
 	assign.Rhs = callExpr
 	stmtList = append(stmtList, assign)
+
+	rhsExpr := GO.ExprNode(filterStringVar)
+	if g.closeFilter {
+		// produce:
+		//	filterString + `)`
+		binAdd := GO.BinaryExpr{Op: GO.BinaryAdd}
+		binAdd.X = filterStringVar
+		binAdd.Y = GO.RawStringLit(`)`)
+		rhsExpr = binAdd
+	}
+
+	assign2 := GO.AssignStmt{Token: GO.AssignAdd}
+	assign2.Lhs = queryStringVar
+	assign2.Rhs = rhsExpr
+	stmtList = append(stmtList, assign2)
 
 	if g.sqlTailNode != nil {
 		// produce:
@@ -1608,66 +1605,34 @@ func buildQueryStringForFilter(g *generator, qs *analysis.QueryStruct) {
 		stmtList = append(stmtList, assign)
 	}
 
-	if g.closeFilter {
-		// produce:
-		//	queryString += `)`
-		assign := GO.AssignStmt{Token: GO.AssignAdd}
-		assign.Lhs = queryStringVar
-		assign.Rhs = GO.RawStringLit(`)`)
-		stmtList = append(stmtList, assign)
-	}
-
 	stmtList = append(stmtList, GO.NL{})
 	g.queryStringStmt = stmtList
 }
 
 func buildQueryFilterParams(g *generator, qs *analysis.QueryStruct) {
-	if qs.Filter == nil {
+	if qs.Filter == nil || qs.Kind != analysis.QueryKindUpdate {
 		g.queryFilterParams = GO.NoOp{}
 		return
 	}
 
 	var (
 		stmtList       = GO.StmtList{}
-		filterField    = GO.QualifiedIdent{"q", qs.Filter.Name}
 		paramsVar      = GO.Ident{"params"}
 		ifaceSliceType = GO.Ident{"[]interface{}"}
 	)
 
-	if qs.Kind == analysis.QueryKindUpdate {
-		// produce:
-		//	params := []interface{}{ ... }
-		//	params = append(params, q.Filter.Params()...)
-		assign := GO.AssignStmt{Token: GO.AssignDefine}
-		assign.Lhs = paramsVar
-		assign.Rhs = GO.SliceLit{Type: ifaceSliceType, Elems: GO.ExprList(g.inputArgs)}
-		stmtList = append(stmtList, assign)
-
-		paramsCall := GO.CallExpr{}
-		paramsCall.Fun = GO.SelectorExpr{X: filterField, Sel: GO.Ident{"Params"}}
-
-		appendCall := GO.CallExpr{Fun: GO.Ident{"append"}}
-		appendCall.Args = GO.ArgsList{List: GO.ExprList{paramsVar, paramsCall}, Ellipsis: true}
-
-		assign = GO.AssignStmt{Token: GO.Assign}
-		assign.Token = GO.Assign
-		assign.Lhs = paramsVar
-		assign.Rhs = appendCall
-		stmtList = append(stmtList, assign, GO.NL{})
-
-		g.queryFilterParams = stmtList
-		return
-	}
-
 	// produce:
-	//	params := q.Filter.Params()
-	paramsCall := GO.CallExpr{}
-	paramsCall.Fun = GO.SelectorExpr{X: filterField, Sel: GO.Ident{"Params"}}
+	//	params = append([]interface{}{ ... }, params...)
+	argsList := GO.SliceLit{Type: ifaceSliceType, Elems: GO.ExprList(g.inputArgs)}
 
-	assign := GO.AssignStmt{Token: GO.AssignDefine}
+	appendCall := GO.CallExpr{Fun: GO.Ident{"append"}}
+	appendCall.Args = GO.ArgsList{List: GO.ExprList{argsList, paramsVar}, Ellipsis: true}
+
+	assign := GO.AssignStmt{Token: GO.Assign}
 	assign.Lhs = paramsVar
-	assign.Rhs = paramsCall
-	stmtList = append(stmtList, assign)
+	assign.Rhs = appendCall
+	stmtList = append(stmtList, assign, GO.NL{})
+
 	g.queryFilterParams = stmtList
 }
 
@@ -2025,10 +1990,10 @@ func makeErrorReturnStmt(g *generator, qs *analysis.QueryStruct, errExpr GO.Expr
 		literal := GO.StructLit{Type: errorInfoType, Compact: true}
 		literal.Elems = []GO.FieldElement{
 			{"Error", errVar},
-			{"Query", queryStringVar},
-			{"SpecKind", GO.StringLit(qs.Kind.String())},
-			{"SpecName", GO.StringLit(qs.TypeName)},
-			{"SpecValue", GO.Ident{"q"}},
+			{"QueryString", queryStringVar},
+			{"QueryKind", GO.StringLit(qs.Kind.String())},
+			{"QueryName", GO.StringLit(qs.TypeName)},
+			{"QueryValue", GO.Ident{"q"}},
 		}
 
 		callExpr := GO.CallExpr{}

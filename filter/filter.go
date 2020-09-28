@@ -1,4 +1,4 @@
-package gosql
+package filter
 
 import (
 	"strconv"
@@ -14,6 +14,100 @@ type Filter struct {
 	offset   int64
 	params   []interface{}
 	canAndor bool
+
+	colmap map[string]string
+	tscol  string
+}
+
+func (f *Filter) Init(colmap map[string]string, tscol string) {
+	f.colmap = colmap
+	f.tscol = tscol
+}
+
+func (f *Filter) Col(column string, op string, value interface{}) *Filter {
+	if f.canAndor {
+		f.where += ` AND `
+	}
+
+	var comparison string
+	switch value {
+	case nil:
+		switch op {
+		case "=":
+			comparison = `IS NULL`
+		case "<>":
+			comparison = `IS NOT NULL`
+		}
+	case true:
+		switch op {
+		case "=":
+			comparison = `IS TRUE`
+		case "<>":
+			comparison = `IS NOT TRUE`
+		}
+	case false:
+		switch op {
+		case "=":
+			comparison = `IS FALSE`
+		case "<>":
+			comparison = `IS NOT FALSE`
+		}
+	default:
+		f.params = append(f.params, value)
+		comparison = op + ` $` + strconv.Itoa(len(f.params))
+	}
+
+	f.where += column + ` ` + comparison
+	f.canAndor = true
+	return f
+}
+
+func (f *Filter) And(nest func()) {
+	if !f.canAndor {
+		return
+	}
+
+	f.where += ` AND `
+	f.canAndor = false
+	if nest != nil {
+		f.where += `(`
+		nest()
+		f.where += `)`
+		f.canAndor = true
+	}
+}
+
+func (f *Filter) Or(nest func()) {
+	if !f.canAndor {
+		return
+	}
+
+	f.where += ` OR `
+	f.canAndor = false
+	if nest != nil {
+		f.where += `(`
+		nest()
+		f.where += `)`
+		f.canAndor = true
+	}
+}
+
+func (f *Filter) Limit(count int64) {
+	if count > 0 {
+		f.limit = count
+	}
+}
+
+func (f *Filter) Offset(start int64) {
+	if start > 0 {
+		f.offset = start
+	}
+}
+
+func (f *Filter) Page(page int64) {
+	if page > 0 && f.limit >= 0 {
+		f.offset = f.limit * (page - 1)
+	}
 }
 
 // UnmarshalFQL
@@ -35,9 +129,9 @@ func (f *Filter) UnmarshalFQL(fqlString string, colmap map[string]string, strict
 		case fql.RPAREN:
 			f.GroupEnd()
 		case fql.AND:
-			f.AND()
+			f.And(nil)
 		case fql.OR:
-			f.OR()
+			f.Or(nil)
 		case fql.RULE:
 			rule := z.Rule()
 			if col, ok := colmap[rule.Key]; ok {
@@ -97,44 +191,6 @@ func (f *Filter) TextSearch(document, value string) *Filter {
 	return f
 }
 
-func (f *Filter) Col(column, operator string, value interface{}) *Filter {
-	if f.canAndor {
-		f.where += ` AND `
-	}
-
-	var comparison string
-	switch value {
-	case nil:
-		switch operator {
-		case "=":
-			comparison = `IS NULL`
-		case "<>":
-			comparison = `IS NOT NULL`
-		}
-	case true:
-		switch operator {
-		case "=":
-			comparison = `IS TRUE`
-		case "<>":
-			comparison = `IS NOT TRUE`
-		}
-	case false:
-		switch operator {
-		case "=":
-			comparison = `IS FALSE`
-		case "<>":
-			comparison = `IS NOT FALSE`
-		}
-	default:
-		f.params = append(f.params, value)
-		comparison = operator + ` $` + strconv.Itoa(len(f.params))
-	}
-
-	f.where += column + ` ` + comparison
-	f.canAndor = true
-	return f
-}
-
 func (f *Filter) OrderBy(column string, desc, nullsfirst bool) {
 	if len(f.orderby) > 0 {
 		f.orderby += `, `
@@ -152,38 +208,6 @@ func (f *Filter) OrderBy(column string, desc, nullsfirst bool) {
 	} else {
 		f.orderby += ` NULLS LAST`
 	}
-}
-
-func (f *Filter) AND(nest ...func(*Filter)) *Filter {
-	if !f.canAndor {
-		return f
-	}
-
-	f.where += ` AND `
-	f.canAndor = false
-	if len(nest) > 0 {
-		f.where += `(`
-		nest[0](f)
-		f.where += `)`
-		f.canAndor = true
-	}
-	return f
-}
-
-func (f *Filter) OR(nest ...func(*Filter)) *Filter {
-	if !f.canAndor {
-		return f
-	}
-
-	f.where += ` OR `
-	f.canAndor = false
-	if len(nest) > 0 {
-		f.where += `(`
-		nest[0](f)
-		f.where += `)`
-		f.canAndor = true
-	}
-	return f
 }
 
 // Params returns a slice of the collected params which should be passed
@@ -213,24 +237,6 @@ func (f *Filter) ToSQLWhereClause() (out string) {
 		out += ` WHERE ` + f.where
 	}
 	return out
-}
-
-func (f *Filter) Limit(count int64) {
-	if count > 0 {
-		f.limit = count
-	}
-}
-
-func (f *Filter) Offset(start int64) {
-	if start > 0 {
-		f.offset = start
-	}
-}
-
-func (f *Filter) Page(page int64) {
-	if page > 0 && f.limit >= 0 {
-		f.offset = f.limit * (page - 1)
-	}
 }
 
 func (f *Filter) GroupStart() *Filter {

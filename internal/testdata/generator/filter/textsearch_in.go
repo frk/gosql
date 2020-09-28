@@ -6,7 +6,7 @@ import (
 )
 
 type FilterTextSearchRecords struct {
-	User *common.User2 `rel:"test_user:u"`
-	gosql.Filter
-	_ gosql.TextSearch `sql:"u._search_document"`
+	User *common.User2    `rel:"test_user:u"`
+	_    gosql.TextSearch `sql:"u._search_document"`
+	common.FilterMaker
 }

@@ -22,7 +22,8 @@ func (q *UpdateFilterResultSliceQuery) Exec(c gosql.Conn) error {
 		, $5
 	)` // `
 
-	queryString += q.Filter.ToSQL()
+	filterString, params := q.Filter.ToSQL()
+	queryString += filterString
 	queryString += ` RETURNING
 	u."id"
 	, u."email"
@@ -31,14 +32,13 @@ func (q *UpdateFilterResultSliceQuery) Exec(c gosql.Conn) error {
 	, u."created_at"
 	, u."updated_at"` // `
 
-	params := []interface{}{
+	params = append([]interface{}{
 		q.User.Email,
 		q.User.FullName,
 		q.User.IsActive,
 		q.User.CreatedAt,
 		q.User.UpdatedAt,
-	}
-	params = append(params, q.Filter.Params()...)
+	}, params...)
 
 	rows, err := c.Query(queryString, params...)
 	if err != nil {

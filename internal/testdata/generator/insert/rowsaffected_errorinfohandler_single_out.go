@@ -26,11 +26,11 @@ func (q *InsertRowsAffectedErrorInfoHandlerSingleQuery) Exec(c gosql.Conn) error
 		q.User.UpdatedAt,
 	)
 	if err != nil {
-		return q.ErrorInfoHandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertRowsAffectedErrorInfoHandlerSingleQuery", SpecValue: q})
+		return q.ErrorInfoHandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertRowsAffectedErrorInfoHandlerSingleQuery", QueryValue: q})
 	}
 	i64, err := res.RowsAffected()
 	if err != nil {
-		return q.ErrorInfoHandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertRowsAffectedErrorInfoHandlerSingleQuery", SpecValue: q})
+		return q.ErrorInfoHandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertRowsAffectedErrorInfoHandlerSingleQuery", QueryValue: q})
 	}
 
 	q.RowsAffected = int(i64)

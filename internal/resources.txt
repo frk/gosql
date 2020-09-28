@@ -1,5 +1,0 @@
-Examples of insert-on-conflict queries and related indexes from postgres' regression tests:
-- https://github.com/postgres/postgres/blob/71a05b22326088ce59c7ed12cc4160adec634940/src/test/regress/sql/insert_conflict.sql
-
-How to retrieve pg_index list of index_columns and index_expressions
-- https://www.postgresql.org/message-id/204ADCAA-853B-4B5A-A080-4DFA0470B790%40justatheory.com

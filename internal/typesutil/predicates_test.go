@@ -36,6 +36,33 @@ func TestIsError(t *testing.T) {
 	}
 }
 
+func TestIsString(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "IsStringTest1", want: false},
+		{name: "IsStringTest2", want: false},
+		{name: "IsStringTest3", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named, _ := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
+			got := IsString(typ)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsEmptyInterface(t *testing.T) {
 	tests := []struct {
 		name string
@@ -418,6 +445,64 @@ func TestIsContext(t *testing.T) {
 
 			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
 			got := IsContext(typ)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsStringMap(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "IsStringMapTest1", want: false},
+		{name: "IsStringMapTest2", want: false},
+		{name: "IsStringMapTest3", want: false},
+		{name: "IsStringMapTest4", want: false},
+		{name: "IsStringMapTest5", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named, _ := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
+			got := IsStringMap(typ)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsNiladicFunc(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "IsNiladicFuncTest1", want: false},
+		{name: "IsNiladicFuncTest2", want: false},
+		{name: "IsNiladicFuncTest3", want: false},
+		{name: "IsNiladicFuncTest4", want: false},
+		{name: "IsNiladicFuncTest5", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named, _ := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			typ := (named.Underlying().(*types.Struct)).Field(0).Type()
+			got := IsNiladicFunc(typ)
 			if got != tt.want {
 				t.Errorf("got=%t; want=%t", got, tt.want)
 			}

@@ -979,3 +979,17 @@ type InsertAnalysisTestBAD_WithContextConflict struct {
 	Rel []T `rel:"relation_a:a"`
 	ctx context.Context
 }
+
+//OK: Filter with missing constructor
+type FilterAnalysisTestBAD_NoFilterConstructor struct {
+	_ T                `rel:"relation_a:a"`
+	_ gosql.TextSearch `sql:"a.ts_document"`
+}
+
+//OK: Filter with conflicting constructors
+type FilterAnalysisTestBAD_ConflictingFilterConstructor struct {
+	_ T                `rel:"relation_a:a"`
+	_ gosql.TextSearch `sql:"a.ts_document"`
+	common.FilterMaker
+	maker common.FilterMaker
+}

@@ -4,6 +4,7 @@ package testdata
 
 import (
 	"github.com/frk/gosql"
+	"github.com/frk/gosql/internal/testdata/common"
 )
 
 //BAD: relation does not exist
@@ -288,12 +289,14 @@ type UpdatePostgresTestBAD_ReturnColumnNotFound struct {
 type FilterPostgresTestBAD_TextSearchColumnNotFound struct {
 	_ CT1              `rel:"column_tests_1:c"`
 	_ gosql.TextSearch `sql:"c.col_xyz"`
+	common.FilterMaker
 }
 
 //BAD: textsearch bad column type
 type FilterPostgresTestBAD_TextSearchBadColumnType struct {
 	_ CT1              `rel:"column_tests_1:c"`
 	_ gosql.TextSearch `sql:"c.col_b"`
+	common.FilterMaker
 }
 
 //BAD: target relation column not found
@@ -354,6 +357,7 @@ type FilterPostgresTestBAD_BadFieldWriteType struct {
 	_ struct {
 		Metadata func() `sql:"metadata2"`
 	} `rel:"test_user:c"`
+	common.FilterMaker
 }
 
 //BAD: field-to-column type not compatibile
@@ -361,6 +365,7 @@ type FilterPostgresTestBAD_BadFieldWriteType2 struct {
 	_ struct {
 		Envelope chan struct{} `sql:"envelope"`
 	} `rel:"test_user:c"`
+	common.FilterMaker
 }
 
 //BAD: field-to-column type not compatibile
@@ -368,6 +373,7 @@ type FilterPostgresTestBAD_BadFieldWriteType3 struct {
 	_ struct {
 		Lines float64 `sql:"col_linearr"`
 	} `rel:"pgsql_test:t"`
+	common.FilterMaker
 }
 
 //BAD: whereblock wrong column type for quantifier

@@ -21,16 +21,16 @@ func (q *UpdateFilterSingleQuery) Exec(c gosql.Conn) error {
 		, $5
 	)` // `
 
-	queryString += q.Filter.ToSQL()
+	filterString, params := q.Filter.ToSQL()
+	queryString += filterString
 
-	params := []interface{}{
+	params = append([]interface{}{
 		q.User.Email,
 		q.User.FullName,
 		q.User.IsActive,
 		q.User.CreatedAt,
 		q.User.UpdatedAt,
-	}
-	params = append(params, q.Filter.Params()...)
+	}, params...)
 
 	_, err := c.Exec(queryString, params...)
 	return err

@@ -40,7 +40,7 @@ func (q *InsertResultErrorInfoHandlerSingleQuery) Exec(c gosql.Conn) error {
 		&q.Result.CreatedAt,
 	)
 	if err != nil {
-		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertResultErrorInfoHandlerSingleQuery", SpecValue: q})
+		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertResultErrorInfoHandlerSingleQuery", QueryValue: q})
 	}
 
 	q.Result.AfterScan()

@@ -35,7 +35,7 @@ func (q *InsertReturningErrorInfoHandlerSliceQuery) Exec(c gosql.Conn) error {
 
 	rows, err := c.Query(queryString, params...)
 	if err != nil {
-		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertReturningErrorInfoHandlerSliceQuery", SpecValue: q})
+		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertReturningErrorInfoHandlerSliceQuery", QueryValue: q})
 	}
 	defer rows.Close()
 
@@ -43,13 +43,13 @@ func (q *InsertReturningErrorInfoHandlerSliceQuery) Exec(c gosql.Conn) error {
 	for rows.Next() {
 		err := rows.Scan(&q.Users[i].Id)
 		if err != nil {
-			return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertReturningErrorInfoHandlerSliceQuery", SpecValue: q})
+			return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertReturningErrorInfoHandlerSliceQuery", QueryValue: q})
 		}
 
 		i += 1
 	}
 	if err := rows.Err(); err != nil {
-		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Insert", SpecName: "InsertReturningErrorInfoHandlerSliceQuery", SpecValue: q})
+		return q.erh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Insert", QueryName: "InsertReturningErrorInfoHandlerSliceQuery", QueryValue: q})
 	}
 	return nil
 }

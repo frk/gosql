@@ -16,9 +16,9 @@ func (q *SelectWithFilterSliceQuery) Exec(c gosql.Conn) error {
 	FROM "test_user" AS u
 	` // `
 
-	queryString += q.Filter.ToSQL()
+	filterString, params := q.Filter.ToSQL()
+	queryString += filterString
 
-	params := q.Filter.Params()
 	rows, err := c.Query(queryString, params...)
 	if err != nil {
 		return err

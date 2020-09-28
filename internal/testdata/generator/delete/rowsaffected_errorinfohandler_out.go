@@ -12,11 +12,11 @@ func (q *DeleteWithRowsAffectedErrorInfoHandlerQuery) Exec(c gosql.Conn) error {
 
 	res, err := c.Exec(queryString, q.Where.CreatedBefore)
 	if err != nil {
-		return q.ErrorInfoHandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithRowsAffectedErrorInfoHandlerQuery", SpecValue: q})
+		return q.ErrorInfoHandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithRowsAffectedErrorInfoHandlerQuery", QueryValue: q})
 	}
 	i64, err := res.RowsAffected()
 	if err != nil {
-		return q.ErrorInfoHandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithRowsAffectedErrorInfoHandlerQuery", SpecValue: q})
+		return q.ErrorInfoHandler.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithRowsAffectedErrorInfoHandlerQuery", QueryValue: q})
 	}
 
 	q.RowsAffected = int(i64)

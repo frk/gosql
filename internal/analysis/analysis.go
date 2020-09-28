@@ -182,8 +182,8 @@ func analyzeFilterStruct(a *analysis, structType *types.Struct) (*FilterStruct, 
 		// TODO(mkopriva): allow for embedding a struct with "common feature fields",
 		// and make sure to also allow imported and local-unexported struct types.
 
-		// fields with gosql directive types
 		if dirname := typesutil.GetDirectiveName(fvar); fvar.Name() == "_" && len(dirname) > 0 {
+			// fields with gosql directive types
 			if strings.ToLower(dirname) == "textsearch" {
 				if err := analyzeTextSearchDirective(a, fvar, ftag); err != nil {
 					return nil, err
@@ -191,11 +191,21 @@ func analyzeFilterStruct(a *analysis, structType *types.Struct) (*FilterStruct, 
 			} else {
 				return nil, a.error(errIllegalQueryField, fvar, "", "", "", "")
 			}
+		} else {
+			// fields with specific names / types
+			if typesutil.ImplementsGosqlFilterConstructor(fvar.Type()) {
+				if err := analyzeFilterConstructorField(a, fvar, ftag); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 
 	if a.filter.Rel == nil {
 		return nil, a.error(errMissingRelField, nil, "", "", "", "") // TODO test
+	}
+	if a.filter.FilterConstructor == nil {
+		return nil, a.error(errMissingFilterConstructor, nil, "", "", "", "") // TODO test
 	}
 	return a.filter, nil
 }
@@ -1047,7 +1057,7 @@ func analyzeJoinStruct(a *analysis, f *types.Var, tag string) (err error) {
 			if err := analyzeJoinStructRelationDirective(a, join, fvar, ftag); err != nil {
 				return err
 			}
-		case "leftjoin", "rightjoin", "fulljoin", "crossjoin":
+		case "leftjoin", "rightjoin", "fulljoin", "crossjoin", "innerjoin":
 			if err := analyzeJoinStructJoinDirective(a, join, dirName, fvar, ftag); err != nil {
 				return err
 			}
@@ -1462,6 +1472,17 @@ func analyzeFilterField(a *analysis, f *types.Var, tag string) error {
 	a.query.Filter = new(FilterField)
 	a.query.Filter.Name = f.Name()
 	a.info.FieldMap[a.query.Filter] = FieldVar{Var: f, Tag: tag}
+	return nil
+}
+
+func analyzeFilterConstructorField(a *analysis, f *types.Var, tag string) error {
+	if a.filter.FilterConstructor != nil {
+		return a.error(errConflictingFilterConstructor, f, "", tag, "", "")
+	}
+
+	a.filter.FilterConstructor = new(FilterConstructorField)
+	a.filter.FilterConstructor.Name = f.Name()
+	a.info.FieldMap[a.filter.FilterConstructor] = FieldVar{Var: f, Tag: tag}
 	return nil
 }
 

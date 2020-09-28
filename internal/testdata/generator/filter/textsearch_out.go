@@ -4,8 +4,6 @@ package testdata
 
 import (
 	"time"
-
-	"github.com/frk/gosql"
 )
 
 var _FilterTextSearchRecords_colmap = map[string]string{
@@ -15,56 +13,48 @@ var _FilterTextSearchRecords_colmap = map[string]string{
 	"CreatedAt": `u."created_at"`,
 }
 
-func (f *FilterTextSearchRecords) TextSearch(v string) {
-	f.Filter.TextSearch(`u."_search_document"`, v)
-}
-
-func (f *FilterTextSearchRecords) UnmarshalFQL(fqlString string) error {
-	return f.Filter.UnmarshalFQL(fqlString, _FilterTextSearchRecords_colmap, false)
-}
-
-func (f *FilterTextSearchRecords) UnmarshalSort(sortString string) error {
-	return f.Filter.UnmarshalSort(sortString, _FilterTextSearchRecords_colmap, false)
+func (f *FilterTextSearchRecords) Init() {
+	f.FilterMaker.Init(_FilterTextSearchRecords_colmap, `u."_search_document"`)
 }
 
 func (f *FilterTextSearchRecords) Id(op string, val int) *FilterTextSearchRecords {
-	f.Filter.Col(`u."id"`, op, val)
+	f.FilterMaker.Col(`u."id"`, op, val)
 	return f
 }
 
 func (f *FilterTextSearchRecords) Email(op string, val string) *FilterTextSearchRecords {
-	f.Filter.Col(`u."email"`, op, val)
+	f.FilterMaker.Col(`u."email"`, op, val)
 	return f
 }
 
 func (f *FilterTextSearchRecords) FullName(op string, val string) *FilterTextSearchRecords {
-	f.Filter.Col(`u."full_name"`, op, val)
+	f.FilterMaker.Col(`u."full_name"`, op, val)
 	return f
 }
 
 func (f *FilterTextSearchRecords) CreatedAt(op string, val time.Time) *FilterTextSearchRecords {
-	f.Filter.Col(`u."created_at"`, op, val)
+	f.FilterMaker.Col(`u."created_at"`, op, val)
 	return f
 }
 
-func (f *FilterTextSearchRecords) AND(nest ...func(*FilterTextSearchRecords)) *FilterTextSearchRecords {
-	if len(nest) == 0 {
-		f.Filter.AND()
+func (f *FilterTextSearchRecords) And(nest func(*FilterTextSearchRecords)) *FilterTextSearchRecords {
+	if nest == nil {
+		f.FilterMaker.And(nil)
 		return f
 	}
-	f.Filter.AND(func(_ *gosql.Filter) {
-		nest[0](f)
+	f.FilterMaker.And(func() {
+		nest(f)
 	})
 	return f
 }
 
-func (f *FilterTextSearchRecords) OR(nest ...func(*FilterTextSearchRecords)) *FilterTextSearchRecords {
-	if len(nest) == 0 {
-		f.Filter.OR()
+func (f *FilterTextSearchRecords) Or(nest func(*FilterTextSearchRecords)) *FilterTextSearchRecords {
+	if nest == nil {
+		f.FilterMaker.Or(nil)
 		return f
 	}
-	f.Filter.OR(func(_ *gosql.Filter) {
-		nest[0](f)
+	f.FilterMaker.Or(func() {
+		nest(f)
 	})
 	return f
 }

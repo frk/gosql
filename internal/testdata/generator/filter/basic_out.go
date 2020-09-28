@@ -4,8 +4,6 @@ package testdata
 
 import (
 	"time"
-
-	"github.com/frk/gosql"
 )
 
 var _FilterBasicRecords_colmap = map[string]string{
@@ -15,16 +13,8 @@ var _FilterBasicRecords_colmap = map[string]string{
 	"CreatedAt": `"created_at"`,
 }
 
-func (f *FilterBasicRecords) TextSearch(v string) {
-	// No search document specified.
-}
-
-func (f *FilterBasicRecords) UnmarshalFQL(fqlString string) error {
-	return f.Filter.UnmarshalFQL(fqlString, _FilterBasicRecords_colmap, false)
-}
-
-func (f *FilterBasicRecords) UnmarshalSort(sortString string) error {
-	return f.Filter.UnmarshalSort(sortString, _FilterBasicRecords_colmap, false)
+func (f *FilterBasicRecords) Init() {
+	f.Filter.Init(_FilterBasicRecords_colmap, "")
 }
 
 func (f *FilterBasicRecords) Id(op string, val int) *FilterBasicRecords {
@@ -47,24 +37,24 @@ func (f *FilterBasicRecords) CreatedAt(op string, val time.Time) *FilterBasicRec
 	return f
 }
 
-func (f *FilterBasicRecords) AND(nest ...func(*FilterBasicRecords)) *FilterBasicRecords {
-	if len(nest) == 0 {
-		f.Filter.AND()
+func (f *FilterBasicRecords) And(nest func(*FilterBasicRecords)) *FilterBasicRecords {
+	if nest == nil {
+		f.Filter.And(nil)
 		return f
 	}
-	f.Filter.AND(func(_ *gosql.Filter) {
-		nest[0](f)
+	f.Filter.And(func() {
+		nest(f)
 	})
 	return f
 }
 
-func (f *FilterBasicRecords) OR(nest ...func(*FilterBasicRecords)) *FilterBasicRecords {
-	if len(nest) == 0 {
-		f.Filter.OR()
+func (f *FilterBasicRecords) Or(nest func(*FilterBasicRecords)) *FilterBasicRecords {
+	if nest == nil {
+		f.Filter.Or(nil)
 		return f
 	}
-	f.Filter.OR(func(_ *gosql.Filter) {
-		nest[0](f)
+	f.Filter.Or(func() {
+		nest(f)
 	})
 	return f
 }

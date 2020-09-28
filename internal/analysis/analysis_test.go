@@ -624,7 +624,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Filter",
-			FieldTypeKind: "struct",
+			FieldTypeKind: "interface",
 			FieldName:     "F",
 			PkgPath:       "path/to/test",
 			FileLine:      227,
@@ -640,7 +640,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelField:      "Rel",
 			BlockName:     "",
 			FieldType:     "github.com/frk/gosql.Filter",
-			FieldTypeKind: "struct",
+			FieldTypeKind: "interface",
 			FieldName:     "F",
 			FileName:      "../testdata/analysis_bad.go",
 			FileLine:      236,
@@ -1693,7 +1693,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 			RelField:      "Rel",
 			PkgPath:       "path/to/test",
 			FieldType:     "github.com/frk/gosql.Filter",
-			FieldTypeKind: "struct",
+			FieldTypeKind: "interface",
 			FieldName:     "F",
 			FileLine:      745,
 			FileName:      "../testdata/analysis_bad.go",
@@ -3918,6 +3918,31 @@ func TestAnalysis_filterStruct(t *testing.T) {
 			FileLine:      867,
 		},
 	}, {
+		Name: "FilterAnalysisTestBAD_NoFilterConstructor",
+		err: &anError{
+			Code:       errMissingFilterConstructor,
+			PkgPath:    "path/to/test",
+			TargetName: "FilterAnalysisTestBAD_NoFilterConstructor",
+			RelType:    reltypeT,
+			RelField:   "_",
+			FileName:   "../testdata/analysis_bad.go",
+			FileLine:   984,
+		},
+	}, {
+		Name: "FilterAnalysisTestBAD_ConflictingFilterConstructor",
+		err: &anError{
+			Code:          errConflictingFilterConstructor,
+			PkgPath:       "path/to/test",
+			TargetName:    "FilterAnalysisTestBAD_ConflictingFilterConstructor",
+			RelType:       reltypeT,
+			RelField:      "_",
+			FieldType:     "github.com/frk/gosql/internal/testdata/common.FilterMaker",
+			FieldTypeKind: "struct",
+			FieldName:     "maker",
+			FileName:      "../testdata/analysis_bad.go",
+			FileLine:      994,
+		},
+	}, {
 		Name: "FilterAnalysisTestOK_TextSearchDirective",
 		want: &FilterStruct{
 			TypeName: "FilterAnalysisTestOK_TextSearchDirective",
@@ -3926,7 +3951,8 @@ func TestAnalysis_filterStruct(t *testing.T) {
 				Id:        RelIdent{Name: "relation_a", Alias: "a"},
 				Type:      reltypeT,
 			},
-			TextSearch: &TextSearchDirective{ColIdent{Qualifier: "a", Name: "ts_document"}},
+			TextSearch:        &TextSearchDirective{ColIdent{Qualifier: "a", Name: "ts_document"}},
+			FilterConstructor: &FilterConstructorField{"FilterMaker"},
 		},
 	}}
 

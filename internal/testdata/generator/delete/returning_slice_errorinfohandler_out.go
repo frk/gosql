@@ -18,7 +18,7 @@ func (q *DeleteWithReturningSliceErrorInfoHandlerQuery) Exec(c gosql.Conn) error
 
 	rows, err := c.Query(queryString, q.Where.CreatedBefore)
 	if err != nil {
-		return q.eh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithReturningSliceErrorInfoHandlerQuery", SpecValue: q})
+		return q.eh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithReturningSliceErrorInfoHandlerQuery", QueryValue: q})
 	}
 	defer rows.Close()
 
@@ -31,13 +31,13 @@ func (q *DeleteWithReturningSliceErrorInfoHandlerQuery) Exec(c gosql.Conn) error
 			&v.CreatedAt,
 		)
 		if err != nil {
-			return q.eh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithReturningSliceErrorInfoHandlerQuery", SpecValue: q})
+			return q.eh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithReturningSliceErrorInfoHandlerQuery", QueryValue: q})
 		}
 
 		q.Users = append(q.Users, v)
 	}
 	if err := rows.Err(); err != nil {
-		return q.eh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, Query: queryString, SpecKind: "Delete", SpecName: "DeleteWithReturningSliceErrorInfoHandlerQuery", SpecValue: q})
+		return q.eh.HandleErrorInfo(&gosql.ErrorInfo{Error: err, QueryString: queryString, QueryKind: "Delete", QueryName: "DeleteWithReturningSliceErrorInfoHandlerQuery", QueryValue: q})
 	}
 	return nil
 }

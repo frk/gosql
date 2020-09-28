@@ -7,13 +7,35 @@ import (
 
 // IsString reports whether or not the given type is the builtin "string" type.
 func IsString(typ types.Type) bool {
-	named, ok := typ.(*types.Named)
+	basic, ok := typ.(*types.Basic)
 	if !ok {
 		return false
 	}
-	pkg := named.Obj().Pkg()
-	name := named.Obj().Name()
-	return pkg == nil && name == "string"
+	return basic.Kind() == types.String && basic.Name() == "string"
+}
+
+// IsStringMap reports whether or not the given type is the "map[string]string" type.
+func IsStringMap(typ types.Type) bool {
+	m, ok := typ.(*types.Map)
+	if !ok {
+		return false
+	}
+	if k, ok := m.Key().(*types.Basic); !ok || k.Kind() != types.String || k.Name() != "string" {
+		return false
+	}
+	if e, ok := m.Elem().(*types.Basic); !ok || e.Kind() != types.String || e.Name() != "string" {
+		return false
+	}
+	return true
+}
+
+// IsNiladicFunc reports whether or not the given type is the "func()" type.
+func IsNiladicFunc(typ types.Type) bool {
+	sig, ok := typ.(*types.Signature)
+	if !ok {
+		return false
+	}
+	return sig.Params().Len() == 0 && sig.Results().Len() == 0
 }
 
 // IsError reports whether or not the given type is the "error" type.
@@ -300,6 +322,72 @@ func ImplementsGosqlConn(named *types.Named) bool {
 	}
 
 	return hasExec && hasQuery && hasQueryRow
+}
+
+// ImplementsGosqlFilterConstructor reports whether or not the given named
+// type implements the "gosql.FilterConstructor" interface.
+func ImplementsGosqlFilterConstructor(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+
+	mm := Methoder(named)
+	if iface, ok := named.Underlying().(*types.Interface); ok {
+		mm = iface
+	}
+
+	var hasInit, hasCol, hasAnd, hasOr bool
+
+	for i := 0; i < mm.NumMethods(); i++ {
+		m := mm.Method(i)
+		switch m.Name() {
+		case "Init": // Init(colmap map[string]string, tscol string)
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 2 || r.Len() != 0 {
+				return false
+			}
+			if !IsStringMap(p.At(0).Type()) || !IsString(p.At(1).Type()) {
+				return false
+			}
+			hasInit = true
+		case "Col": // Col(column string, op string, value interface{})
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 3 || r.Len() != 0 {
+				return false
+			}
+			if !IsString(p.At(0).Type()) || !IsString(p.At(1).Type()) || !IsEmptyInterface(p.At(2).Type()) {
+				return false
+			}
+			hasCol = true
+		case "And": // And(nest func())
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 1 || r.Len() != 0 {
+				return false
+			}
+			if !IsNiladicFunc(p.At(0).Type()) {
+				return false
+			}
+			hasAnd = true
+			break
+		case "Or": // Or(nest func())
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 1 || r.Len() != 0 {
+				return false
+			}
+			if !IsNiladicFunc(p.At(0).Type()) {
+				return false
+			}
+			hasOr = true
+			break
+		}
+	}
+
+	return hasInit && hasCol && hasAnd && hasOr
 }
 
 // ImplementsScanner reports whether or not the given named type implements the

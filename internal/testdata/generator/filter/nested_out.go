@@ -2,10 +2,6 @@
 
 package testdata
 
-import (
-	"github.com/frk/gosql"
-)
-
 var _FilterNestedRecords_colmap = map[string]string{
 	"FOO.Bar.Baz.Val": `n."foo_bar_baz_val"`,
 	"FOO.Baz.Val":     `n."foo_baz_val"`,
@@ -13,56 +9,48 @@ var _FilterNestedRecords_colmap = map[string]string{
 	"Foo.Baz.Val":     `n."foo2_baz_val"`,
 }
 
-func (f *FilterNestedRecords) TextSearch(v string) {
-	// No search document specified.
-}
-
-func (f *FilterNestedRecords) UnmarshalFQL(fqlString string) error {
-	return f.Filter.UnmarshalFQL(fqlString, _FilterNestedRecords_colmap, false)
-}
-
-func (f *FilterNestedRecords) UnmarshalSort(sortString string) error {
-	return f.Filter.UnmarshalSort(sortString, _FilterNestedRecords_colmap, false)
+func (f *FilterNestedRecords) Init() {
+	f.FilterMaker.Init(_FilterNestedRecords_colmap, "")
 }
 
 func (f *FilterNestedRecords) FOOBarBazVal(op string, val string) *FilterNestedRecords {
-	f.Filter.Col(`n."foo_bar_baz_val"`, op, val)
+	f.FilterMaker.Col(`n."foo_bar_baz_val"`, op, val)
 	return f
 }
 
 func (f *FilterNestedRecords) FOOBazVal(op string, val string) *FilterNestedRecords {
-	f.Filter.Col(`n."foo_baz_val"`, op, val)
+	f.FilterMaker.Col(`n."foo_baz_val"`, op, val)
 	return f
 }
 
 func (f *FilterNestedRecords) FooBarBazVal(op string, val string) *FilterNestedRecords {
-	f.Filter.Col(`n."foo2_bar_baz_val"`, op, val)
+	f.FilterMaker.Col(`n."foo2_bar_baz_val"`, op, val)
 	return f
 }
 
 func (f *FilterNestedRecords) FooBazVal(op string, val string) *FilterNestedRecords {
-	f.Filter.Col(`n."foo2_baz_val"`, op, val)
+	f.FilterMaker.Col(`n."foo2_baz_val"`, op, val)
 	return f
 }
 
-func (f *FilterNestedRecords) AND(nest ...func(*FilterNestedRecords)) *FilterNestedRecords {
-	if len(nest) == 0 {
-		f.Filter.AND()
+func (f *FilterNestedRecords) And(nest func(*FilterNestedRecords)) *FilterNestedRecords {
+	if nest == nil {
+		f.FilterMaker.And(nil)
 		return f
 	}
-	f.Filter.AND(func(_ *gosql.Filter) {
-		nest[0](f)
+	f.FilterMaker.And(func() {
+		nest(f)
 	})
 	return f
 }
 
-func (f *FilterNestedRecords) OR(nest ...func(*FilterNestedRecords)) *FilterNestedRecords {
-	if len(nest) == 0 {
-		f.Filter.OR()
+func (f *FilterNestedRecords) Or(nest func(*FilterNestedRecords)) *FilterNestedRecords {
+	if nest == nil {
+		f.FilterMaker.Or(nil)
 		return f
 	}
-	f.Filter.OR(func(_ *gosql.Filter) {
-		nest[0](f)
+	f.FilterMaker.Or(func() {
+		nest(f)
 	})
 	return f
 }

@@ -1,4 +1,4 @@
-package gosql
+package filter
 
 import (
 	"testing"

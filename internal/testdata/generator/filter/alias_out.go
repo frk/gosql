@@ -4,8 +4,6 @@ package testdata
 
 import (
 	"time"
-
-	"github.com/frk/gosql"
 )
 
 var _FilterBasicAliasRecords_colmap = map[string]string{
@@ -15,56 +13,48 @@ var _FilterBasicAliasRecords_colmap = map[string]string{
 	"CreatedAt": `u."created_at"`,
 }
 
-func (f *FilterBasicAliasRecords) TextSearch(v string) {
-	// No search document specified.
-}
-
-func (f *FilterBasicAliasRecords) UnmarshalFQL(fqlString string) error {
-	return f.Filter.UnmarshalFQL(fqlString, _FilterBasicAliasRecords_colmap, false)
-}
-
-func (f *FilterBasicAliasRecords) UnmarshalSort(sortString string) error {
-	return f.Filter.UnmarshalSort(sortString, _FilterBasicAliasRecords_colmap, false)
+func (f *FilterBasicAliasRecords) Init() {
+	f.FilterMaker.Init(_FilterBasicAliasRecords_colmap, "")
 }
 
 func (f *FilterBasicAliasRecords) Id(op string, val int) *FilterBasicAliasRecords {
-	f.Filter.Col(`u."id"`, op, val)
+	f.FilterMaker.Col(`u."id"`, op, val)
 	return f
 }
 
 func (f *FilterBasicAliasRecords) Email(op string, val string) *FilterBasicAliasRecords {
-	f.Filter.Col(`u."email"`, op, val)
+	f.FilterMaker.Col(`u."email"`, op, val)
 	return f
 }
 
 func (f *FilterBasicAliasRecords) FullName(op string, val string) *FilterBasicAliasRecords {
-	f.Filter.Col(`u."full_name"`, op, val)
+	f.FilterMaker.Col(`u."full_name"`, op, val)
 	return f
 }
 
 func (f *FilterBasicAliasRecords) CreatedAt(op string, val time.Time) *FilterBasicAliasRecords {
-	f.Filter.Col(`u."created_at"`, op, val)
+	f.FilterMaker.Col(`u."created_at"`, op, val)
 	return f
 }
 
-func (f *FilterBasicAliasRecords) AND(nest ...func(*FilterBasicAliasRecords)) *FilterBasicAliasRecords {
-	if len(nest) == 0 {
-		f.Filter.AND()
+func (f *FilterBasicAliasRecords) And(nest func(*FilterBasicAliasRecords)) *FilterBasicAliasRecords {
+	if nest == nil {
+		f.FilterMaker.And(nil)
 		return f
 	}
-	f.Filter.AND(func(_ *gosql.Filter) {
-		nest[0](f)
+	f.FilterMaker.And(func() {
+		nest(f)
 	})
 	return f
 }
 
-func (f *FilterBasicAliasRecords) OR(nest ...func(*FilterBasicAliasRecords)) *FilterBasicAliasRecords {
-	if len(nest) == 0 {
-		f.Filter.OR()
+func (f *FilterBasicAliasRecords) Or(nest func(*FilterBasicAliasRecords)) *FilterBasicAliasRecords {
+	if nest == nil {
+		f.FilterMaker.Or(nil)
 		return f
 	}
-	f.Filter.OR(func(_ *gosql.Filter) {
-		nest[0](f)
+	f.FilterMaker.Or(func() {
+		nest(f)
 	})
 	return f
 }
