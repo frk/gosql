@@ -209,7 +209,7 @@ type (
 	// can be produced depends on the `sql` tag value supplied to the directive.
 	// The expected format for the directive's tag value is:
 	//
-	//	`sql:"{ column [ predicate-type [ quantifier ] { column | literal } ] }"`
+	//	`sql:"{ column_ident [ predicate-type [ quantifier ] { column_ident | literal } ] }"`
 	//
 	// (2) It can be used in an "on_conflict struct" to specify the resulting
 	// ON CONFLICT clause's conflict_target as a list of column names that have
@@ -217,7 +217,7 @@ type (
 	// in the directive's `sql` tag.
 	// The expected format for the directive's tag value is:
 	//
-	//	`sql:"{ column [ , column ] }"`
+	//	`sql:"{ column_ident [ , column_ident ] }"`
 	Column directive
 
 	// The CrossJoin directive can be used to produce the CROSS JOIN clause.
@@ -227,7 +227,7 @@ type (
 	//
 	// The expected format for the directive's tag value is:
 	//
-	//	`sql:"{ relation_ident [ , column_comparison_expr [ { "," | ";" } column_comparison_expr ] ] }"`
+	//	`sql:"{ relation_ident [ , column_comparison_expr [ { ',' | ';' } column_comparison_expr ] ] }"`
 	CrossJoin directive
 
 	// The InnerJoin directive can be used to produce the INNER JOIN clause.
@@ -237,7 +237,7 @@ type (
 	//
 	// The expected format for the directive's tag value is:
 	//
-	//	`sql:"{ relation_ident [ , column_comparison_expr [ { "," | ";" } column_comparison_expr ] ] }"`
+	//	`sql:"{ relation_ident [ , column_comparison_expr [ { ',' | ';' } column_comparison_expr ] ] }"`
 	InnerJoin directive
 
 	// The LeftJoin directive can be used to produce the LEFT JOIN clause.
@@ -247,7 +247,7 @@ type (
 	//
 	// The expected format for the directive's tag value is:
 	//
-	//	`sql:"{ relation_ident [ , column_comparison_expr [ { "," | ";" } column_comparison_expr ] ] }"`
+	//	`sql:"{ relation_ident [ , column_comparison_expr [ { ',' | ';' } column_comparison_expr ] ] }"`
 	LeftJoin directive
 
 	// The RightJoin directive can be used to produce the RIGHT JOIN clause.
@@ -257,7 +257,7 @@ type (
 	//
 	// The expected format for the directive's tag value is:
 	//
-	//	`sql:"{ relation_ident [ , column_comparison_expr [ { "," | ";" } column_comparison_expr ] ] }"`
+	//	`sql:"{ relation_ident [ , column_comparison_expr [ { ',' | ';' } column_comparison_expr ] ] }"`
 	RightJoin directive
 
 	// The FullJoin directive can be used to produce the FULL JOIN clause.
@@ -267,7 +267,7 @@ type (
 	//
 	// The expected format for the directive's tag value is:
 	//
-	//	`sql:"{ relation_ident [ , column_comparison_expr [ { "," | ";" } column_comparison_expr ] ] }"`
+	//	`sql:"{ relation_ident [ , column_comparison_expr [ { ',' | ';' } column_comparison_expr ] ] }"`
 	FullJoin directive
 
 	// The Return directive can be used to produce a postgres RETURNING clause.
@@ -276,7 +276,7 @@ type (
 	// and DeleteXxx query types.
 	// The expected format for the directive's tag value is:
 	//
-	//	{ "*" | column [ , column ] }
+	//	`sql:"{ '*' | column_ident [ , column_ident ] }"`
 	Return directive
 
 	// The Force directive can be used to override column specific settings
@@ -289,73 +289,95 @@ type (
 	// then the tool will include the column in the generated SQL query.
 	// The expected format for the directive's tag value is:
 	//
-	//	{ "*" | column [ , column ] }
+	//	`sql:"{ '*' | column_ident [ , column_ident ] }"`
 	Force directive
 
 	// The Default directive can be used to produce the DEFAULT marker instead
-	// of an ordinal parameter for the specified column.
-	//
-	// This can be used to specify those columns of an INSERT/UPDATE query that should
-	// have their value set to their default as defined by the database table.
+	// of an ordinal parameter for the specified column. The Default directive
+	// can be used in InsertXxx and UpdateXxx query types.
 	// The expected format for the directive's tag value is:
 	//
-	//	{ "*" | column [ , column ] }
+	//	`sql:"{ '*' | column_ident [ , column_ident ] }"`
 	Default directive
 
-	// The Limit directive can be used inside a Select TypeSpec to produce
+	// The Limit directive can be used inside a SelectXxx query type to produce
 	// a LIMIT clause for the SELECT query. The limit value must be specified
 	// in the directive field's `sql` tag.
+	// The expected format for the directive's tag value is:
+	//
+	//	`sql:"{ uint64 }"`
 	Limit directive
 
-	// The Offset directive can be used inside a Select TypeSpec to produce
+	// The Offset directive can be used inside a SelectXxx query type to produce
 	// an OFFSET clause for the SELECT query. The offset value must be specified
 	// in the directive field's `sql` tag.
+	// The expected format for the directive's tag value is:
+	//
+	//	`sql:"{ uint64 }"`
 	Offset directive
 
-	// The OrderBy directive can be used inside a Select TypeSpec to produce
-	// an ORDER BY clause for the SELECT query. The list of columns by which
-	// to order should be specified in the directive's tag.
+	// The OrderBy directive can be used inside a SelectXxx query type to produce
+	// an ORDER BY clause for the SELECT query. The list of columns by which to
+	// order should be specified in the directive's tag.
+	// The expected format for the directive's tag value is:
 	//
-	// The expected format for each item in the directive's tag is:
-	// [ - ][ qualifier. ]column_name[ :nullsfirst | :nullslast ]
+	//	`sql:"{ order_by_item [ , order_by_item ] }"`
 	//
-	// The optional preceding "-" produces the DESC sort direction option, if
-	// no "-" is provided ASC is produced instead.
-	// The optional :nullsfirst and :nullslast produce the NULLS FIRST and
-	// NULLS LAST options respectively.
+	// and the expected format of the order_by_item is:
+	//
+	//	[ - ]column_ident[ :nullsfirst | :nullslast ]
+	//
+	// The optional preceding "-" produces the DESC sort direction option,
+	// if no "-" is provided ASC is produced instead. The optional ":nullsfirst"
+	// and ":nullslast" produce the NULLS FIRST and NULLS LAST options respectively.
 	OrderBy directive
 
-	// The Override directive can be used in an Insert TypeSpec to produce
-	// the OVERRIDING { SYSTEM | USER } VALUE clause.
+	// The Override directive can be used in an InsertXxx query type to produce
+	// the OVERRIDING { SYSTEM | USER } VALUE clause of an INSERT query.
+	// The expected format for the directive's tag value is:
+	//
+	//	`sql:"{ 'user' | 'system' }"`
 	Override directive
 
-	// The TextSearch directive can be used in a Filter TypeSpec to specify
-	// the document column that will be used for full-text search.
+	// The TextSearch directive can be used in a FilterXxx filter type to
+	// specify the ts_vector column that can be used for full-text search.
+	// The expected format for the directive's tag value is:
+	//
+	//	`sql:"{ column_ident }"`
 	TextSearch directive
 
-	// The Index directive can be used in an OnConflict block to specify
-	// the resulting ON CONFLICT clause's conflict_target using the name
-	// of a unique index. The index name should be should be provided in
-	// the directive's `sql` tag.
+	// The Index directive can be used in an "on_conflict struct" to specify the
+	// resulting ON CONFLICT clause's conflict_target using the identifier of a
+	// unique index. The index name should be provided in the directive's "sql" tag.
+	// The expected format for the directive's tag value is:
 	//
-	// NOTE(mkopriva): The index name will be used by the db check to retrive the index
-	// expression and the generator will use that to produce the conflict target.
+	//	`sql:"{ index_ident }"`
+	//
+	// The tool will use the index identifier to retrive the index expression
+	// which then will be used verbatim to produce the conflict target.
 	Index directive
 
-	// The Constraint directive can be used in an OnConflict block to specify
-	// the resulting ON CONFLICT clause's conflict_target using the name of
-	// a table constraint. The constraint's name should be should be provided
-	// in the directive's `sql` tag.
+	// The Constraint directive can be used in an "on_conflict struct" to specify
+	// the resulting ON CONFLICT clause's conflict_target using the identifier of
+	// a table constraint. The constraint's identifier should be provided in the
+	// directive's "sql" tag.
+	// The expected format for the directive's tag value is:
+	//
+	//	`sql:"{ constraint_ident }"`
 	Constraint directive
 
-	// The Ignore directive can be used in an OnConflict block to produce
-	// the DO NOTHING action of the resulting ON CONFLICT clause.
+	// The Ignore directive can be used in an "on_conflict struct" to produce
+	// the DO NOTHING action of the resulting ON CONFLICT clause. The Ignore
+	// directive does not accept any tags.
 	Ignore directive
 
-	// The Update directive can be used in an OnConflict block to produce
+	// The Update directive can be used in an "on_conflict struct" to produce
 	// the DO UPDATE SET action of the resulting ON CONFLICT clause. The
 	// columns to be updated by the produced action should be listed in
-	// the directive's `sql` tag.
+	// the directive's "sql" tag.
+	// The expected format for the directive's tag value is:
+	//
+	//	`sql:"{ '*' | column_ident [ , column_ident ] }"`
 	Update directive
 )
 

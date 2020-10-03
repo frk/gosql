@@ -349,8 +349,8 @@ func analyzeQueryStructDirective(a *analysis, f *types.Var, tag string, dirname 
 		"default":  analyzeDefaultDirective,
 		"force":    analyzeForceDirective,
 		"return":   analyzeReturnDirective,
-		"limit":    analyzeLimitField,
-		"offset":   analyzeOffsetField,
+		"limit":    analyzeLimitFieldOrDirective,
+		"offset":   analyzeOffsetFieldOrDirective,
 		"orderby":  analyzeOrderByDirective,
 		"override": analyzeOverrideDirective,
 	}
@@ -371,8 +371,8 @@ func analyzeQueryStructField(a *analysis, f *types.Var, tag string) error {
 		"using":        analyzeJoinStruct,
 		"onconflict":   analyzeOnConflictStruct,
 		"result":       analyzeResultField,
-		"limit":        analyzeLimitField,
-		"offset":       analyzeOffsetField,
+		"limit":        analyzeLimitFieldOrDirective,
+		"offset":       analyzeOffsetFieldOrDirective,
 		"rowsaffected": analyzeRowsAffectedField,
 	}
 	if afunc, ok := analyzers[tolower(f.Name())]; ok {
@@ -1365,10 +1365,10 @@ func analyzeOnConflictUpdateDirective(a *analysis, oc *OnConflictStruct, f *type
 // Plain Field Analysis
 //
 
-// analyzeLimitField analyzes the given field, which is expected to be either
+// analyzeLimitFieldOrDirective analyzes the given field, which is expected to be either
 // the gosql.Limit directive or a plain integer field. The tag argument, if not
 // empty, is expected to hold a positive integer.
-func analyzeLimitField(a *analysis, f *types.Var, tag string) error {
+func analyzeLimitFieldOrDirective(a *analysis, f *types.Var, tag string) error {
 	if !a.query.Kind.isSelect() {
 		return a.error(errIllegalQueryField, f, "", tag, "", "")
 	}
@@ -1400,10 +1400,10 @@ func analyzeLimitField(a *analysis, f *types.Var, tag string) error {
 	return nil
 }
 
-// analyzeOffsetField analyzes the given field, which is expected to be either
+// analyzeOffsetFieldOrDirective analyzes the given field, which is expected to be either
 // the gosql.Offset directive or a plain integer field. The tag argument,
 // if not empty, is expected to hold a positive integer.
-func analyzeOffsetField(a *analysis, f *types.Var, tag string) error {
+func analyzeOffsetFieldOrDirective(a *analysis, f *types.Var, tag string) error {
 	if !a.query.Kind.isSelect() {
 		return a.error(errIllegalQueryField, f, "", tag, "", "")
 	}
