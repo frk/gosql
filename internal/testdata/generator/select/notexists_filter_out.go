@@ -10,7 +10,7 @@ func (q *SelectNotExistsWithFilterQuery) Exec(c gosql.Conn) error {
 	var queryString = `SELECT NOT EXISTS(SELECT 1 FROM "test_user" AS u
 	` // `
 
-	filterString, params := q.Filter.ToSQL()
+	filterString, params := q.Filter.ToSQL(0)
 	queryString += filterString + `)`
 
 	row := c.QueryRow(queryString, params...)

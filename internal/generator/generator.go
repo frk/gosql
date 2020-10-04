@@ -1572,9 +1572,10 @@ func buildQueryStringForFilter(g *generator, qs *analysis.QueryStruct) {
 	)
 
 	// produce:
-	//	filterString, params := q.Filter.ToSQL()
+	//	filterString, params := q.Filter.ToSQL(N)
 	callExpr := GO.CallExpr{}
 	callExpr.Fun = GO.SelectorExpr{X: filterField, Sel: GO.Ident{"ToSQL"}}
+	callExpr.Args = GO.ArgsList{List: GO.IntLit(len(g.inputArgs))}
 
 	assign := GO.AssignStmt{Token: GO.AssignDefine}
 	assign.Lhs = GO.ExprList{filterStringVar, paramsVar}

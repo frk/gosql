@@ -16,7 +16,7 @@ func (q *SelectWithFilterIteratorQuery) Exec(c gosql.Conn) error {
 	FROM "test_user" AS u
 	` // `
 
-	filterString, params := q.Filter.ToSQL()
+	filterString, params := q.Filter.ToSQL(0)
 	queryString += filterString
 
 	rows, err := c.Query(queryString, params...)

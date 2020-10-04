@@ -10,7 +10,7 @@ func (q *SelectCountWithFilterQuery) Exec(c gosql.Conn) error {
 	var queryString = `SELECT COUNT(*) FROM "test_user" AS u
 	` // `
 
-	filterString, params := q.Filter.ToSQL()
+	filterString, params := q.Filter.ToSQL(0)
 	queryString += filterString
 
 	row := c.QueryRow(queryString, params...)

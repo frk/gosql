@@ -22,7 +22,7 @@ func (q *UpdateFilterResultSliceQuery) Exec(c gosql.Conn) error {
 		, $5
 	)` // `
 
-	filterString, params := q.Filter.ToSQL()
+	filterString, params := q.Filter.ToSQL(5)
 	queryString += filterString
 	queryString += ` RETURNING
 	u."id"
