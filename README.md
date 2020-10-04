@@ -1,6 +1,6 @@
 # work in progress
 
-[`godoc`](http://godoc.org/github.com/frk/gosql)
+[`godoc`](http://godoc.org/github.com/frk/gosql), [`pkg.go.dev`](https://pkg.go.dev/github.com/frk/gosql)
 
 -------------------
 
