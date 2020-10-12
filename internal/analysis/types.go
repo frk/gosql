@@ -64,6 +64,7 @@ type (
 		FilterConstructor *FilterConstructorField
 	}
 
+	// The TargetStruct interface is implemented by the QueryStruct and FilterStruct types.
 	TargetStruct interface {
 		// GetRelField should return the RelField of the target relation.
 		GetRelField() *RelField
@@ -323,7 +324,12 @@ type (
 		ColIdent ColIdent
 	}
 
-	WhereItem  interface{ whereItem() }
+	// The WhereItem interface is implemented by the WhereStruct, WhereBoolTag,
+	// WhereStructField, WhereColumnDirective, and WhereBetweenStruct types.
+	WhereItem interface{ whereItem() }
+
+	// The RangeBound interface is implemented by the BetweenStructField
+	// and BetweenColumnDirective types.
 	RangeBound interface{ rangeBound() }
 )
 
@@ -359,6 +365,8 @@ type (
 	// JoinConditionTagItem is the conditional expression parsed from a join directive's `sql` tag.
 	JoinConditionTagItem WhereColumnDirective
 
+	// The JoinTagItem interface is implemented by the JoinBoolTagItem
+	// and JoinConditionTagItem types.
 	JoinTagItem interface{ joinTagItem() }
 )
 
@@ -700,13 +708,21 @@ func (id *RelIdent) QualifiedName() string {
 	return id.Name
 }
 
-// TargetStruct implementations
-func (s *QueryStruct) GetRelField() *RelField  { return s.Rel }
+// GetRelField (implements TargetStruct) returns the RelField of the QueryStruct.
+func (s *QueryStruct) GetRelField() *RelField { return s.Rel }
+
+// GetRelField (implements TargetStruct) returns the RelField of the FilterStruct.
 func (s *FilterStruct) GetRelField() *RelField { return s.Rel }
-func (s *QueryStruct) GetRelIdent() RelIdent   { return s.Rel.Id }
-func (s *FilterStruct) GetRelIdent() RelIdent  { return s.Rel.Id }
-func (*QueryStruct) targetStruct()             {}
-func (*FilterStruct) targetStruct()            {}
+
+// GetRelIdent (implements TargetStruct) returns the RelIdent of the QueryStruct.
+func (s *QueryStruct) GetRelIdent() RelIdent { return s.Rel.Id }
+
+// GetRelIdent (implements TargetStruct) returns the RelIdent of the FilterStruct.
+func (s *FilterStruct) GetRelIdent() RelIdent { return s.Rel.Id }
+
+// TargetStruct implementations
+func (*QueryStruct) targetStruct()  {}
+func (*FilterStruct) targetStruct() {}
 
 // whereItem implementations
 func (*WhereStruct) whereItem()          {}
