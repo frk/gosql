@@ -44,7 +44,7 @@ The -o flag specifies the format to be used for generating the name of the outpu
 The format can contain one (and only one) "%s" placeholder which the tool will replace
 with the input file's base name, if no placeholder is present then the input file's base
 name will be prefixed to the format.
-If left unspecified, the format "%s_gosql.go" will by used by default.
+If left unspecified, the format "%s_gosql.go" will be used by default.
 
 
 The -qid flag instructs the generator to quote postgres identifiers like
@@ -56,17 +56,17 @@ for constructing the column keys of a FilterXxx type. A valid tag must begin wit
 letter (A-z) or an underscore (_), subsequent characters in the tag can be letters,
 underscores, and digits (0-9). If set to "" (empty string), the generator will default
 to use the field names instead of struct tags to construct the column keys.
-If left unspecified, the tag "json" will by used by default.
+If left unspecified, the tag "json" will be used by default.
 
 
 The -fckbase flag if set, instructs the generator to use only the base of a tag/field
 chain to construct the column keys of a FilterXxx type.
-If left unspecified, the value false will by used by default.
+If left unspecified, the value false will be used by default.
 
 
 The -fcksep flag specifies the separator to be used to join a chain of tag/field values
 for constructing the column keys of a FilterXxx type. The separator can be at most one byte long.
-If left unspecified, the separator "." will by used by default.
+If left unspecified, the separator "." will be used by default.
 
 
 The -argtype flag specifies the Go type to be used as the argument for the generated
@@ -77,6 +77,6 @@ represented by it must implement the following interface:
         Query(query string, args ...interface{}) (*sql.Rows, error)
         QueryRow(query string, args ...interface{}) *sql.Row
     }
-If left unspecified, the type gosql.Conn will used by default.
+If left unspecified, the type gosql.Conn will be used by default.
 
 ` //`

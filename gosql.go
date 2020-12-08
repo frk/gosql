@@ -136,7 +136,7 @@ type ErrorHandler interface {
 	// it will be passed in to the method as the inErr parameter and, in its
 	// stead, the outErr result value will be returned from Exec.
 	//
-	// Note that HandleError could be invoked regardless of whether an error
+	// NOTE that HandleError could be invoked regardless of whether an error
 	// occured or not which means that in some cases the passed in error value
 	// will be nil, therefore the implementation needs to mindful of that.
 	HandleError(inErr error) (outErr error)

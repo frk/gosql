@@ -45,7 +45,7 @@ type Config struct {
 	// tool will replace with the input file's base name, if no placeholder is
 	// present then the input file's base name will be prefixed to the format.
 	//
-	// If not provided, the format "%s_gosql.go" will by used by default.
+	// If not provided, the format "%s_gosql.go" will be used by default.
 	OutputFileNameFormat String `json:"output_file_name_format"`
 	// If set to true, the generator will quote postgres identifiers like
 	// column names, table names, etc.
@@ -57,30 +57,30 @@ type Config struct {
 	// If set to "" (empty string), the generator will default to use the
 	// field names instead of struct tags to construct the column keys.
 	//
-	// If not provided, the tag "json" will by used by default.
+	// If not provided, the tag "json" will be used by default.
 	FilterColumnKeyTag String `json:"filter_column_key_tag"`
 	// If set, instructs the generator to use only the base of a tag/field
 	// chain to construct the column keys of a FilterXxx type.
 	//
-	// If not provided, `false` will by used by default.
+	// If not provided, `false` will be used by default.
 	FilterColumnKeyBase Bool `json:"filter_column_key_base"`
 	// The separator to be used to join a chain of tag/field values for
 	// constructing the column keys of a FilterXxx type. The separator can
 	// be at most one byte long.
 	//
-	// If not provided, the separator "." will by used by default.
+	// If not provided, the separator "." will be used by default.
 	FilterColumnKeySeparator String `json:"filter_column_key_separator"`
 	// The Go type to be used as the argument for the generated methods.
 	//
 	// The string value must be of the format "[*]package/path.TypeName" and
 	// the type represented by it must implement the following interface:
-	// {
-	//	Exec(query string, args ...interface{}) (sql.Result, error)
-	//	Query(query string, args ...interface{}) (*sql.Rows, error)
-	//	QueryRow(query string, args ...interface{}) *sql.Row
-	// }
+	//	{
+	// 	     Exec(query string, args ...interface{}) (sql.Result, error)
+	// 	     Query(query string, args ...interface{}) (*sql.Rows, error)
+	// 	     QueryRow(query string, args ...interface{}) *sql.Row
+	// 	}
 	//
-	// If not provided, the type gosql.Conn will used by default.
+	// If not provided, the type gosql.Conn will be used by default.
 	MethodArgumentType String `json:"method_argument_type"`
 
 	// holds the compiled expressions of the InputFileRegexps slice.
@@ -303,7 +303,6 @@ func checkMethodArgumentType(argtype string) (err error) {
 		return fmt.Errorf("failed to load package of method argument type: %q -- %v", argtype, err)
 	}
 
-theLoop:
 	for _, syn := range pkgs[0].Syntax {
 		for _, dec := range syn.Decls {
 			gd, ok := dec.(*ast.GenDecl)
@@ -335,11 +334,14 @@ theLoop:
 				if !typesutil.ImplementsGosqlConn(named) {
 					return fmt.Errorf("bad method argument type: %q", argtype)
 				}
-				break theLoop
+
+				// all good
+				return nil
 			}
 		}
 	}
-	return nil
+
+	return fmt.Errorf("could not find method argument type: %q", argtype)
 }
 
 // String implements both the flag.Value and the json.Unmarshal interfaces
