@@ -29,3 +29,14 @@ type SelectPostgresTestOK_Enums struct {
 type InsertPostgresTestOK_Enums struct {
 	Rel []*CT3 `rel:"column_tests_3"`
 }
+
+type SelectPostgresTestOK_CustomTypePointer struct {
+	Rel   CT3b `rel:"column_tests_3"`
+	Where struct {
+		SomeTime common.MyTime `sql:"some_time <"`
+	}
+}
+
+type InsertPostgresTestOK_CustomTypePointer struct {
+	Rel []*CT3b `rel:"column_tests_3"`
+}

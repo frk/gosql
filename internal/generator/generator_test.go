@@ -101,6 +101,7 @@ func TestGenerator(t *testing.T) {
 			"whereblock_modifierfunc_single",
 			"whereblock_nested",
 			"whereblock_single",
+			"whereblock_single2",
 			"whereblock_slice",
 		},
 	}, {
@@ -108,6 +109,7 @@ func TestGenerator(t *testing.T) {
 		dirname: "insert",
 		filenames: []string{
 			"basic_single",
+			"basic_single2",
 			"basic_slice",
 			"default_all_returning_single",
 			"default_all_returning_slice",

@@ -51,3 +51,9 @@ type CT3 struct {
 	ColorEnum COLOR_ENUM    `sql:"color_enum"`
 	SomeTime  common.MyTime `sql:"some_time"`
 }
+
+type CT3b struct {
+	ColorText string         `sql:"color_text"`
+	ColorEnum COLOR_ENUM     `sql:"color_enum"`
+	SomeTime  *common.MyTime `sql:"some_time"`
+}

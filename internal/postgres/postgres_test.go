@@ -103,6 +103,14 @@ func TestCheck(t *testing.T) {
 		printerr: true,
 		err:      nil,
 	}, {
+		name:     "SelectPostgresTestOK_CustomTypePointer",
+		printerr: true,
+		err:      nil,
+	}, {
+		name:     "InsertPostgresTestOK_CustomTypePointer",
+		printerr: true,
+		err:      nil,
+	}, {
 		name: "SelectPostgresTestBAD_NoRelation",
 		err: &dbError{
 			Code: errRelationUnknown,

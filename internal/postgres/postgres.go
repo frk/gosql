@@ -1109,7 +1109,7 @@ func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 		}
 
 		// implements sql.Scanner & non-interface, accept as is
-		if f.Type.IsScanner && f.Type.Kind != analysis.TypeKindInterface {
+		if f.Type.ImplementsScanner() {
 			return "", 0
 		}
 
@@ -1244,7 +1244,7 @@ func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 		}
 
 		// implements driver.Valuer, accept as is
-		if f.Type.IsValuer {
+		if f.Type.ImplementsValuer() {
 			return "", 0
 		}
 
