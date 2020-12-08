@@ -509,3 +509,27 @@ func TestIsNiladicFunc(t *testing.T) {
 		})
 	}
 }
+
+func TestImplementsGosqlConn(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "ImplementsGosqlConnTest1", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			named, _ := testutil.FindNamedType(tt.name, tdata)
+			if named == nil {
+				t.Errorf("%q named type not found", tt.name)
+				return
+			}
+
+			got := ImplementsGosqlConn(named)
+			if got != tt.want {
+				t.Errorf("got=%t; want=%t", got, tt.want)
+			}
+		})
+	}
+}

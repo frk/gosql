@@ -1,0 +1,18 @@
+{
+	"database_dsn": "postgres:///?sslmode=disable",
+	"working_directory": "/path/to/project",
+	"recursive": true,
+	"input_files": [
+		"./path/to/sql/file_1.go",
+		"./path/to/sql/file_2.go"
+	],
+	"input_file_regexps": [
+		"\/sql\/\w+\.go$"
+	],
+	"output_file_name_format": "%s_gosql.go",
+	"quote_identifiers": true,
+	"filter_column_key_tag": "json",
+	"filter_column_key_base": false,
+	"filter_column_key_separator": ".",
+	"method_argument_type": "module/path.QuerierType"
+}

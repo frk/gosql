@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/frk/gosql/internal/generator"
 	"github.com/frk/gosql/internal/typesutil"
 
 	"golang.org/x/tools/go/packages"
@@ -76,8 +77,11 @@ type Config struct {
 	// the type represented by it must implement the following interface:
 	//	{
 	// 	     Exec(query string, args ...interface{}) (sql.Result, error)
+	// 	     ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	// 	     Query(query string, args ...interface{}) (*sql.Rows, error)
+	// 	     QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
 	// 	     QueryRow(query string, args ...interface{}) *sql.Row
+	// 	     QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 	// 	}
 	//
 	// If not provided, the type gosql.Conn will be used by default.
@@ -85,6 +89,9 @@ type Config struct {
 
 	// holds the compiled expressions of the InputFileRegexps slice.
 	compiledInputFileRegexps []*regexp.Regexp
+
+	// parsed MethodArgumentType value.
+	customConnType generator.ConnType
 }
 
 var DefaultConfig = Config{
@@ -246,7 +253,7 @@ func (c *Config) validate() (err error) {
 
 	// check that the method argument type implements the required interface
 	if c.MethodArgumentType.Value != "gosql.Conn" {
-		if err := checkMethodArgumentType(c.MethodArgumentType.Value); err != nil {
+		if err := checkMethodArgumentType(c.MethodArgumentType.Value, c); err != nil {
 			return err
 		}
 	}
@@ -288,17 +295,29 @@ func examineDir(path string) (isRoot bool, confName string, err error) {
 	return isRoot, confName, nil
 }
 
-func checkMethodArgumentType(argtype string) (err error) {
-	// split into import path and type name
-	var importPath, typeIdent string
+func checkMethodArgumentType(argtype string, c *Config) (err error) {
+	// split into package path and type name
+	var isPtr bool
+	var pkgPath, typeName string
 	if i := strings.LastIndex(argtype, "."); i < 0 {
 		return fmt.Errorf("bad method argument type: %q", argtype)
 	} else {
-		importPath, typeIdent = argtype[:i], argtype[i+1:]
+		pkgPath, typeName = argtype[:i], argtype[i+1:]
+		if len(pkgPath) > 0 && pkgPath[0] == '*' {
+			pkgPath = pkgPath[1:]
+			isPtr = true
+		}
 	}
 
-	cfg := &packages.Config{Mode: packages.NeedTypesInfo}
-	pkgs, err := packages.Load(cfg, importPath)
+	cfg := &packages.Config{Mode: packages.NeedName |
+		packages.NeedFiles |
+		packages.NeedCompiledGoFiles |
+		packages.NeedSyntax |
+		packages.NeedTypes |
+		packages.NeedImports |
+		packages.NeedDeps |
+		packages.NeedTypesInfo}
+	pkgs, err := packages.Load(cfg, pkgPath)
 	if err != nil {
 		return fmt.Errorf("failed to load package of method argument type: %q -- %v", argtype, err)
 	}
@@ -312,7 +331,7 @@ func checkMethodArgumentType(argtype string) (err error) {
 
 			for _, spec := range gd.Specs {
 				typeSpec, ok := spec.(*ast.TypeSpec)
-				if !ok || typeSpec.Name.Name != typeIdent {
+				if !ok || typeSpec.Name.Name != typeName {
 					continue
 				}
 
@@ -332,10 +351,15 @@ func checkMethodArgumentType(argtype string) (err error) {
 				}
 
 				if !typesutil.ImplementsGosqlConn(named) {
-					return fmt.Errorf("bad method argument type: %q", argtype)
+					return fmt.Errorf("bad method argument type: %q --"+
+						" does not implement the \"github.com/frk/gosql.Conn\" interface.", argtype)
 				}
 
 				// all good
+				c.customConnType.Name = typeSpec.Name.Name
+				c.customConnType.PkgPath = pkgPath
+				c.customConnType.PkgName = pkgs[0].Name
+				c.customConnType.IsPtr = isPtr
 				return nil
 			}
 		}

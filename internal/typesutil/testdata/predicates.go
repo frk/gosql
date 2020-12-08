@@ -2,6 +2,7 @@ package testdata
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/xml"
 	"time"
@@ -433,4 +434,32 @@ type IsNiladicFuncTest4 struct {
 // Var is niladic func type, should return true
 type IsNiladicFuncTest5 struct {
 	Var func()
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+type ImplementsGosqlConnTest1 struct{}
+
+func (*ImplementsGosqlConnTest1) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return nil, nil
+}
+
+func (*ImplementsGosqlConnTest1) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return nil, nil
+}
+
+func (*ImplementsGosqlConnTest1) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return nil, nil
+}
+
+func (*ImplementsGosqlConnTest1) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return nil, nil
+}
+
+func (*ImplementsGosqlConnTest1) QueryRow(query string, args ...interface{}) *sql.Row {
+	return nil
+}
+
+func (*ImplementsGosqlConnTest1) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return nil
 }

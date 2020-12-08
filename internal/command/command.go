@@ -48,6 +48,7 @@ func (cmd *Command) Run() error {
 	gcfg.FilterColumnKeyBase = cmd.FilterColumnKeyBase.Value
 	gcfg.FilterColumnKeySeparator = cmd.FilterColumnKeySeparator.Value
 	gcfg.QuoteIdentifiers = cmd.QuoteIdentifiers.Value
+	gcfg.ConnType = cmd.customConnType
 
 	db, err := postgres.Open(cmd.DatabaseDSN.Value)
 	if err != nil {

@@ -58,6 +58,14 @@ func IsEmptyInterface(typ types.Type) bool {
 	return iface.NumMethods() == 0
 }
 
+// IsEmptyInterfaceSlice reports whether or not the given type is the "[]interface{}" type.
+func IsEmptyInterfaceSlice(typ types.Type) bool {
+	if s, ok := typ.(*types.Slice); ok {
+		return IsEmptyInterface(s.Elem())
+	}
+	return false
+}
+
 // IsContext reports whether or not the given type is the standard "context.Context" type.
 func IsContext(typ types.Type) bool {
 	named, ok := typ.(*types.Named)
@@ -274,6 +282,7 @@ func ImplementsGosqlConn(named *types.Named) bool {
 	}
 
 	var hasExec, hasQuery, hasQueryRow bool
+	var hasExecContext, hasQueryContext, hasQueryRowContext bool
 
 	for i := 0; i < mm.NumMethods(); i++ {
 		m := mm.Method(i)
@@ -284,10 +293,10 @@ func ImplementsGosqlConn(named *types.Named) bool {
 			if p.Len() != 2 || !sig.Variadic() || r.Len() != 2 {
 				return false
 			}
-			if !IsString(p.At(0).Type()) || !IsEmptyInterface(p.At(1).Type()) {
+			if !IsString(p.At(0).Type()) || !IsEmptyInterfaceSlice(p.At(1).Type()) {
 				return false
 			}
-			if !IsSqlResult(r.At(0).Type()) || !IsError(p.At(1).Type()) {
+			if !IsSqlResult(r.At(0).Type()) || !IsError(r.At(1).Type()) {
 				return false
 			}
 			hasExec = true
@@ -297,10 +306,10 @@ func ImplementsGosqlConn(named *types.Named) bool {
 			if p.Len() != 2 || !sig.Variadic() || r.Len() != 2 {
 				return false
 			}
-			if !IsString(p.At(0).Type()) || !IsEmptyInterface(p.At(1).Type()) {
+			if !IsString(p.At(0).Type()) || !IsEmptyInterfaceSlice(p.At(1).Type()) {
 				return false
 			}
-			if !IsSqlRowsPtr(r.At(0).Type()) || !IsError(p.At(1).Type()) {
+			if !IsSqlRowsPtr(r.At(0).Type()) || !IsError(r.At(1).Type()) {
 				return false
 			}
 			hasQuery = true
@@ -310,18 +319,57 @@ func ImplementsGosqlConn(named *types.Named) bool {
 			if p.Len() != 2 || !sig.Variadic() || r.Len() != 1 {
 				return false
 			}
-			if !IsString(p.At(0).Type()) || !IsEmptyInterface(p.At(1).Type()) {
+			if !IsString(p.At(0).Type()) || !IsEmptyInterfaceSlice(p.At(1).Type()) {
 				return false
 			}
 			if !IsSqlRowPtr(r.At(0).Type()) {
 				return false
 			}
 			hasQueryRow = true
-			break
+		case "ExecContext": // ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 3 || !sig.Variadic() || r.Len() != 2 {
+				return false
+			}
+			if !IsContext(p.At(0).Type()) || !IsString(p.At(1).Type()) || !IsEmptyInterfaceSlice(p.At(2).Type()) {
+				return false
+			}
+			if !IsSqlResult(r.At(0).Type()) || !IsError(r.At(1).Type()) {
+				return false
+			}
+			hasExecContext = true
+		case "QueryContext": // QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 3 || !sig.Variadic() || r.Len() != 2 {
+				return false
+			}
+			if !IsContext(p.At(0).Type()) || !IsString(p.At(1).Type()) || !IsEmptyInterfaceSlice(p.At(2).Type()) {
+				return false
+			}
+			if !IsSqlRowsPtr(r.At(0).Type()) || !IsError(r.At(1).Type()) {
+				return false
+			}
+			hasQueryContext = true
+		case "QueryRowContext": // QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 3 || !sig.Variadic() || r.Len() != 1 {
+				return false
+			}
+			if !IsContext(p.At(0).Type()) || !IsString(p.At(1).Type()) || !IsEmptyInterfaceSlice(p.At(2).Type()) {
+				return false
+			}
+			if !IsSqlRowPtr(r.At(0).Type()) {
+				return false
+			}
+			hasQueryRowContext = true
 		}
 	}
 
-	return hasExec && hasQuery && hasQueryRow
+	return hasExec && hasQuery && hasQueryRow &&
+		hasExecContext && hasQueryContext && hasQueryRowContext
 }
 
 // ImplementsGosqlFilterConstructor reports whether or not the given named

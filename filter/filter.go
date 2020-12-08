@@ -223,14 +223,13 @@ func (f *Filter) Col(column string, op string, value interface{}) {
 }
 
 // TextSearch prepares a new, text-search predicate for the WHERE clause.
-func (f *Filter) TextSearch(value string) *Filter {
+func (f *Filter) TextSearch(value string) {
 	if len(f.tscol) > 0 {
 		if f.canAndOr() {
 			f.where = append(f.where, sqlAnd{})
 		}
 		f.where = append(f.where, sqlTextSearch{col: f.tscol, val: value})
 	}
-	return f
 }
 
 // And adds the AND logical operator argument for the WHERE clause. If the
