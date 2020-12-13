@@ -1363,7 +1363,7 @@ func typeCheckFieldFilter(c *checker, f *analysis.FieldInfo, strict bool) error 
 
 	check := func(f *analysis.FieldInfo, col *Column) (valuer string, ecode dbErrorCode) {
 		// implements driver.Valuer? accept as is
-		if f.Type.IsValuer {
+		if f.Type.ImplementsValuer() {
 			return "", 0
 		}
 

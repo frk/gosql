@@ -356,6 +356,20 @@ type (
 	}
 )
 
+func (w FieldWrite) NeedsNULLIF() bool {
+	return w.Column.IsNULLable() && w.Field.Type.Kind != analysis.TypeKindPtr &&
+		!w.Field.Type.ImplementsValuer() && w.Valuer == ""
+}
+
+func (r FieldRead) NeedsCOALESCE() bool {
+	if r.Field.UseCoalesce {
+		return true
+	}
+
+	return r.Column.IsNULLable() && r.Field.Type.Kind != analysis.TypeKindPtr &&
+		!r.Field.Type.ImplementsScanner() && r.Scanner == ""
+}
+
 func (t Type) is(oids ...oid.OID) bool {
 	for _, id := range oids {
 		if t.OID == id {

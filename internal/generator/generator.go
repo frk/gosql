@@ -330,7 +330,9 @@ func buildQueryInputTargetValues(g *generator, qs *analysis.QueryStruct) {
 
 		var expr SQL.ValueExpr
 		expr = makeParamSpec(g, fw.Field)
-		expr = addNULLIFCallExpr(expr, fw.Field, fw.Column, fw.Valuer)
+		if fw.NeedsNULLIF() {
+			expr = addNULLIFCallExpr(expr, fw.Column)
+		}
 		g.inputVals = append(g.inputVals, expr)
 	}
 
@@ -586,7 +588,9 @@ func buildQueryOutputSourceColumns(g *generator, qs *analysis.QueryStruct) {
 	for _, fr := range g.info.Reads {
 		var expr SQL.ValueExpr
 		expr = makeColRef(fr.ColIdent)
-		expr = addCoalesceCallExpr(expr, fr.Field, fr.Column, fr.Scanner)
+		if fr.NeedsCOALESCE() {
+			expr = addCoalesceCallExpr(expr, fr.Column)
+		}
 		g.outputVals = append(g.outputVals, expr)
 	}
 }
@@ -637,35 +641,31 @@ func addConverterCallExpr(g *generator, x GO.ExprNode, converter string) GO.Expr
 }
 
 // addCoalesceCallExpr
-func addCoalesceCallExpr(x SQL.ValueExpr, f *analysis.FieldInfo, c *postgres.Column, scanner string) SQL.ValueExpr {
-	if f.UseCoalesce || c.IsNULLable() && (f.Type.IsScanner == false && scanner == "") {
-		if lit, ok := c.Type.ZeroValueLiteral(); ok {
-			cast := SQL.CastExpr{}
-			cast.Expr = SQL.Literal{lit}
-			cast.Type = c.Type.NameFmt
+func addCoalesceCallExpr(x SQL.ValueExpr, c *postgres.Column) SQL.ValueExpr {
+	if lit, ok := c.Type.ZeroValueLiteral(); ok {
+		cast := SQL.CastExpr{}
+		cast.Expr = SQL.Literal{lit}
+		cast.Type = c.Type.NameFmt
 
-			coalesce := SQL.Coalesce{}
-			coalesce.A = x
-			coalesce.B = cast
-			return coalesce
-		}
+		coalesce := SQL.Coalesce{}
+		coalesce.A = x
+		coalesce.B = cast
+		return coalesce
 	}
 	return x
 }
 
 // addNULLIFCallExpr
-func addNULLIFCallExpr(x SQL.ValueExpr, f *analysis.FieldInfo, c *postgres.Column, valuer string) SQL.ValueExpr {
-	if c.IsNULLable() && (f.Type.IsValuer == false && valuer == "") {
-		if lit, ok := c.Type.ZeroValueLiteral(); ok {
-			nullif := SQL.NULLIF{}
-			nullif.Value = x
-			nullif.Expr = SQL.Literal{lit}
+func addNULLIFCallExpr(x SQL.ValueExpr, c *postgres.Column) SQL.ValueExpr {
+	if lit, ok := c.Type.ZeroValueLiteral(); ok {
+		nullif := SQL.NULLIF{}
+		nullif.Value = x
+		nullif.Expr = SQL.Literal{lit}
 
-			cast := SQL.CastExpr{}
-			cast.Expr = nullif
-			cast.Type = c.Type.NameFmt
-			return cast
-		}
+		cast := SQL.CastExpr{}
+		cast.Expr = nullif
+		cast.Type = c.Type.NameFmt
+		return cast
 	}
 	return x
 }
