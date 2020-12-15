@@ -99,6 +99,8 @@ type checker struct {
 	// The force directive, or nil. Used primarily for resolving which
 	// field read / writes to skip and which not to.
 	force *analysis.ForceDirective
+	// TODO
+	optional *analysis.OptionalDirective
 	// The identifier of the target relation.
 	rid analysis.RelIdent
 	// The target relation.
@@ -247,6 +249,8 @@ func typeCheckFilterTextSearchDirective(c *checker, fs *analysis.FilterStruct) e
 
 // typeCheckQueryStruct type-checks the given QueryStruct.
 func typeCheckQueryStruct(c *checker, qs *analysis.QueryStruct) error {
+	c.optional = qs.Optional
+
 	checks := []func(*checker, *analysis.QueryStruct) error{
 		typeCheckQueryJoinStruct,
 		typeCheckQueryForceDirective,
@@ -428,7 +432,8 @@ func typeCheckQueryRelField(c *checker, qs *analysis.QueryStruct) error {
 
 	if qs.Kind == analysis.QueryKindSelect {
 		for _, f := range qs.Rel.Type.Fields {
-			if err := typeCheckFieldRead(c, f, true); err != nil {
+			strict := (c.optional == nil || !c.optional.Contains(f.ColIdent))
+			if err := typeCheckFieldRead(c, f, strict); err != nil {
 				return err
 			}
 		}
@@ -699,6 +704,10 @@ func typeCheckFieldConditional(c *checker, cond *FieldConditional) dbErrorCode {
 		ftyp = analysis.TypeInfo{Kind: analysis.TypeKindString}
 	}
 
+	if ctyp.Type == TypeTypeEnum { // enum labels are basically text
+		coid = oid.Text
+	}
+
 	if cond.Predicate.IsArray() || cond.Quantifier > 0 {
 		id, ok := oid.TypeToArray[cond.Column.Type.OID]
 		if ok {
@@ -916,7 +925,7 @@ func typeCheckComparison(c *checker, ltyp *Type, rtyp *Type, pred analysis.Predi
 		rtyp = c.db.catalog.Types[rtyp.Elem]
 	}
 
-	if ltyp.Category == TypeCategoryString && rtyp.OID == oid.Unknown {
+	if (ltyp.Category == TypeCategoryString || ltyp.Type == TypeTypeEnum) && rtyp.OID == oid.Unknown {
 		return 0
 	}
 
@@ -1950,7 +1959,7 @@ func skipFieldRead(c *checker, fr *FieldRead) bool {
 func typeCompatibility(c *checker, ctyp *Type, ftyp analysis.TypeInfo, typmod1 bool) *compentry {
 	lit := ftyp.GenericLiteral()
 	key := compkey{oid: ctyp.OID, typmod1: typmod1}
-	if ctyp.Type == TypeTypeEnum { // enumlabels are basically text
+	if ctyp.Type == TypeTypeEnum { // enum labels are basically text
 		key.oid = oid.Text
 	}
 

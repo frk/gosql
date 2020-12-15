@@ -348,6 +348,7 @@ func analyzeQueryStructDirective(a *analysis, f *types.Var, tag string, dirname 
 		"all":      analyzeAllDirective,
 		"default":  analyzeDefaultDirective,
 		"force":    analyzeForceDirective,
+		"optional": analyzeOptionalDirective,
 		"return":   analyzeReturnDirective,
 		"limit":    analyzeLimitFieldOrDirective,
 		"offset":   analyzeOffsetFieldOrDirective,
@@ -1664,6 +1665,33 @@ func analyzeDefaultDirective(a *analysis, f *types.Var, tag string) error {
 
 func analyzeForceDirective(a *analysis, f *types.Var, tag string) error {
 	if a.query.Kind != QueryKindInsert && a.query.Kind != QueryKindUpdate {
+		// TODO test
+		return a.error(errIllegalQueryField, f, "", tag, "", "")
+	}
+
+	t := tagutil.New(tag)
+	list, ecode, eval := parseColIdentList(a, t["sql"])
+	if ecode > 0 {
+		// TODO test
+		return a.error(ecode, f, "", tag, t.Get("sql"), eval)
+	}
+
+	// Make sure that the column ids have a matching field.
+	for _, id := range list.Items {
+		if !a.query.Rel.Type.HasFieldWithColumn(id.Name) {
+			// TODO test
+			return a.error(errColumnFieldUnknown, f, "", tag, t.Get("sql"), id.String())
+		}
+	}
+
+	a.query.Force = new(ForceDirective)
+	a.query.Force.ColIdentList = list
+	a.info.FieldMap[a.query.Force] = FieldVar{Var: f, Tag: tag}
+	return nil
+}
+
+func analyzeOptionalDirective(a *analysis, f *types.Var, tag string) error {
+	if !a.query.Kind.isSelect() {
 		return a.error(errIllegalQueryField, f, "", tag, "", "")
 	}
 
@@ -1680,9 +1708,9 @@ func analyzeForceDirective(a *analysis, f *types.Var, tag string) error {
 		}
 	}
 
-	a.query.Force = new(ForceDirective)
-	a.query.Force.ColIdentList = list
-	a.info.FieldMap[a.query.Force] = FieldVar{Var: f, Tag: tag}
+	a.query.Optional = new(OptionalDirective)
+	a.query.Optional.ColIdentList = list
+	a.info.FieldMap[a.query.Optional] = FieldVar{Var: f, Tag: tag}
 	return nil
 }
 

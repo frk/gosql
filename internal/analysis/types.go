@@ -37,6 +37,8 @@ type (
 		RowsAffected *RowsAffectedField
 		// Info on the gosql.Force directive field of the query struct type, or nil.
 		Force *ForceDirective
+		// Info on the gosql.Optional directive field of the query struct type, or nil.
+		Optional *OptionalDirective
 		// Info on the gosql.Default directive field of the query struct type, or nil.
 		Default *DefaultDirective
 		// Info on the gosql.Return directive field of the query struct type, or nil.
@@ -519,6 +521,12 @@ type (
 
 	// ForceDirective is the result of analyzing the "_ gosql.Force" directive.
 	ForceDirective struct {
+		// The list of column identifiers as parsed from the `sql` tag of the directive.
+		ColIdentList
+	}
+
+	// OptionalDirective is the result of analyzing the "_ gosql.Optional" directive.
+	OptionalDirective struct {
 		// The list of column identifiers as parsed from the `sql` tag of the directive.
 		ColIdentList
 	}

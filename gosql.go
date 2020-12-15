@@ -300,6 +300,13 @@ type (
 	//	`sql:"{ '*' | column_ident [ , column_ident ] }"`
 	Force directive
 
+	// The Optional directive can be used to tell the tool to queries with
+	// types whose fields do not have a corresponding column in the target
+	// relation.
+	//
+	// TODO add more details and / or example
+	Optional directive
+
 	// The Default directive can be used to produce the DEFAULT marker instead
 	// of an ordinal parameter for the specified column. The Default directive
 	// can be used in InsertXxx and UpdateXxx query types.
