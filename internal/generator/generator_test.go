@@ -69,6 +69,7 @@ func TestGenerator(t *testing.T) {
 		filenames: []string{
 			"afterscan_single",
 			"afterscan_slice",
+			"coalesce_table",
 			"count_basic",
 			"count_filter",
 			"count_where",

@@ -589,7 +589,7 @@ func buildQueryOutputSourceColumns(g *generator, qs *analysis.QueryStruct) {
 		var expr SQL.ValueExpr
 		expr = makeColRef(fr.ColIdent)
 		if fr.NeedsCOALESCE() {
-			expr = addCoalesceCallExpr(expr, fr.Column)
+			expr = addCoalesceCallExpr(expr, fr.Field.CoalesceValue, fr.Column)
 		}
 		g.outputVals = append(g.outputVals, expr)
 	}
@@ -641,7 +641,17 @@ func addConverterCallExpr(g *generator, x GO.ExprNode, converter string) GO.Expr
 }
 
 // addCoalesceCallExpr
-func addCoalesceCallExpr(x SQL.ValueExpr, c *postgres.Column) SQL.ValueExpr {
+func addCoalesceCallExpr(x SQL.ValueExpr, val string, c *postgres.Column) SQL.ValueExpr {
+	if len(val) > 0 {
+		cast := SQL.CastExpr{}
+		cast.Expr = SQL.Literal{val}
+		cast.Type = c.Type.NameFmt
+
+		coalesce := SQL.Coalesce{}
+		coalesce.A = x
+		coalesce.B = cast
+		return coalesce
+	}
 	if lit, ok := c.Type.ZeroValueLiteral(); ok {
 		cast := SQL.CastExpr{}
 		cast.Expr = SQL.Literal{lit}

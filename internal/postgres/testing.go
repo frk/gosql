@@ -149,6 +149,14 @@ CREATE TABLE test_join4 (
 	, join3_id integer not null REFERENCES test_join3 (id)
 );
 
+CREATE TABLE test_coalesce (
+	col_a text
+	, col_b text not null
+	, col_c integer
+	, col_d timestamp
+	, col_e color_enum
+);
+
 CREATE VIEW view_test AS SELECT
 	col_a
 	, col_b
