@@ -113,7 +113,7 @@ type generator struct {
 	conn ConnType
 	// fmtFilterKey returns a string representation of the given field
 	// filter to be used as the key for a filter's column map.
-	fmtFilterKey func(*postgres.FieldFilter) string
+	fmtFilterKey func(*postgres.FieldFilter) (key string, ok bool)
 	// fmtColIdent returns a string representation of the given column identifier.
 	fmtColIdent func(analysis.ColIdent) string
 	// The set of parameter numbers mapped by their fields. (lazily initialized by makeParamSpec)
@@ -700,8 +700,10 @@ func buildFilterColumnMap(g *generator, fs *analysis.FilterStruct) (mapid GO.Ide
 	elems := make([]GO.KeyElement, 0)
 	keyset := make(map[string]struct{}) // use to ensure unique map keys
 	for _, filter := range g.info.Filters {
-		key := g.fmtFilterKey(filter)
-		if _, ok := keyset[key]; ok {
+		key, ok := g.fmtFilterKey(filter)
+		if !ok {
+			continue
+		} else if _, exists := keyset[key]; exists {
 			continue
 		}
 		keyset[key] = struct{}{}
@@ -2230,20 +2232,20 @@ func canDeclareConst(g *generator, qs *analysis.QueryStruct) bool {
 //
 
 // makeFilterKeyFormatter
-func makeFilterKeyFormatter(conf Config) (fn func(*postgres.FieldFilter) string) {
+func makeFilterKeyFormatter(conf Config) (fn func(*postgres.FieldFilter) (key string, ok bool)) {
 	if len(conf.FilterColumnKeyTag) > 0 {
 		if !conf.FilterColumnKeyBase {
-			return func(ff *postgres.FieldFilter) string {
+			return func(ff *postgres.FieldFilter) (string, bool) {
 				return fmtFieldTagJoinedKey(ff, conf.FilterColumnKeyTag, conf.FilterColumnKeySeparator)
 			}
 		}
-		return func(ff *postgres.FieldFilter) string {
+		return func(ff *postgres.FieldFilter) (string, bool) {
 			return fmtFieldTagBaseKey(ff, conf.FilterColumnKeyTag)
 		}
 	}
 
 	if !conf.FilterColumnKeyBase {
-		return func(ff *postgres.FieldFilter) string {
+		return func(ff *postgres.FieldFilter) (string, bool) {
 			return fmtFieldNameJoinedKey(ff, conf.FilterColumnKeySeparator)
 		}
 	}
@@ -2251,29 +2253,43 @@ func makeFilterKeyFormatter(conf Config) (fn func(*postgres.FieldFilter) string)
 }
 
 // fmtFieldNameBaseKey
-func fmtFieldNameBaseKey(ff *postgres.FieldFilter) string {
-	return ff.Field.Name
+func fmtFieldNameBaseKey(ff *postgres.FieldFilter) (string, bool) {
+	return ff.Field.Name, true
 }
 
 // fmtFieldNameJoinedKey
-func fmtFieldNameJoinedKey(ff *postgres.FieldFilter, sep string) (key string) {
+func fmtFieldNameJoinedKey(ff *postgres.FieldFilter, sep string) (key string, ok bool) {
 	for _, node := range ff.Field.Selector {
 		key += node.Name + sep
 	}
-	return key + ff.Field.Name
+	return key + ff.Field.Name, true
 }
 
 // fmtFieldTagBaseKey
-func fmtFieldTagBaseKey(ff *postgres.FieldFilter, tag string) string {
-	return ff.Field.Tag.First(tag)
+func fmtFieldTagBaseKey(ff *postgres.FieldFilter, tag string) (string, bool) {
+	key := ff.Field.Tag.First(tag)
+	if key == "-" || key == "" {
+		return "", false
+	}
+	return key, true
 }
 
 // fmtFieldTagJoinedKey
-func fmtFieldTagJoinedKey(ff *postgres.FieldFilter, tag, sep string) (key string) {
+func fmtFieldTagJoinedKey(ff *postgres.FieldFilter, tag, sep string) (key string, ok bool) {
 	for _, node := range ff.Field.Selector {
-		key += node.Tag.First(tag) + sep
+		k := node.Tag.First(tag)
+		if k == "-" || k == "" {
+			return "", false
+		}
+
+		key += k + sep
 	}
-	return key + ff.Field.Tag.First(tag)
+
+	k := ff.Field.Tag.First(tag)
+	if k == "-" || k == "" {
+		return "", false
+	}
+	return key + k, true
 }
 
 ////////////////////////////////////////////////////////////////////////////////

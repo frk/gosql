@@ -78,6 +78,18 @@ type User5Iterator interface {
 	NextUser(*User5) error
 }
 
+// for testing filter with json tags
+type User6 struct {
+	Id        int             `sql:"id,ro" json:"id"`
+	Email     string          `sql:"email" json:"email"`
+	FullName  string          `sql:"full_name" json:"fullName"`
+	IsActive  bool            `sql:"is_active" json:"isActive"`
+	Metadata1 ArbitraryStruct `sql:"metadata1,json" json:"-"` // should be omitted from filter map
+	Metadata2 ArbitraryStruct `sql:"metadata2,json" json:""`  // should be omitted from filter map
+	CreatedAt time.Time       `sql:"created_at" json:"createdAt"`
+	UpdatedAt time.Time       `sql:"updated_at" json:"updatedAt"`
+}
+
 type ArbitraryStruct struct {
 	// ...
 }
