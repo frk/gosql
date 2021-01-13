@@ -11,8 +11,8 @@ import (
 
 	"github.com/frk/gosql/internal/analysis"
 	"github.com/frk/gosql/internal/generator"
-	"github.com/frk/gosql/internal/parser"
 	"github.com/frk/gosql/internal/postgres"
+	"github.com/frk/gosql/internal/search"
 )
 
 type Command struct {
@@ -56,8 +56,8 @@ func (cmd *Command) Run() error {
 	}
 	defer db.Close()
 
-	// 1. parse
-	pkgs, err := parser.Parse(cmd.WorkingDirectory.Value, cmd.Recursive.Value, cmd.FileFilterFunc())
+	// 1. search for query types
+	pkgs, err := search.Search(cmd.WorkingDirectory.Value, cmd.Recursive.Value, cmd.FileFilterFunc())
 	if err != nil {
 		return err
 	}
@@ -69,12 +69,12 @@ func (cmd *Command) Run() error {
 		for j, file := range pkg.Files {
 			out := new(outFile)
 			out.path = cmd.outFilePath(file.Path)
-			out.targInfos = make([]*postgres.TargetInfo, len(file.Targets))
+			out.targInfos = make([]*postgres.TargetInfo, len(file.Matches))
 
-			for k, target := range file.Targets {
+			for k, match := range file.Matches {
 				// 2. analyze
 				anInfo := new(analysis.Info)
-				targStruct, err := analysis.Run(pkg.Fset, target.Named, target.Pos, anInfo)
+				targStruct, err := analysis.Run(pkg.Fset, match.Named, match.Pos, anInfo)
 				if err != nil {
 					return err
 				}

@@ -11,8 +11,8 @@ import (
 
 	"github.com/frk/compare"
 	"github.com/frk/gosql/internal/analysis"
-	"github.com/frk/gosql/internal/parser"
 	"github.com/frk/gosql/internal/postgres"
+	"github.com/frk/gosql/internal/search"
 )
 
 func TestGenerator(t *testing.T) {
@@ -213,7 +213,7 @@ func TestGenerator(t *testing.T) {
 			continue
 		}
 
-		pkgs, err := parser.Parse("../testdata/generator/"+tt.dirname, false, nil)
+		pkgs, err := search.Search("../testdata/generator/"+tt.dirname, false, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -229,10 +229,10 @@ func TestGenerator(t *testing.T) {
 					t.Fatal(err)
 				}
 
-				for _, target := range f.Targets {
+				for _, match := range f.Matches {
 					// analyze
 					ainfo := &analysis.Info{}
-					tstruct, err := analysis.Run(pkg.Fset, target.Named, target.Pos, ainfo)
+					tstruct, err := analysis.Run(pkg.Fset, match.Named, match.Pos, ainfo)
 					if err != nil {
 						t.Error(err)
 						return
@@ -279,7 +279,7 @@ func TestGenerator(t *testing.T) {
 }
 
 // helper method...
-func getFile(p *parser.Package, filename string) (*parser.File, error) {
+func getFile(p *search.Package, filename string) (*search.File, error) {
 	filename, err := filepath.Abs(filename)
 	if err != nil {
 		return nil, err

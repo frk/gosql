@@ -1,4 +1,4 @@
-package parser
+package search
 
 import (
 	"go/ast"
@@ -25,17 +25,22 @@ var (
 	rxTargetName = regexp.MustCompile(`^(?i:Select|Insert|Update|Delete|Filter)`)
 )
 
-type Target struct {
+// Match holds information on a matched query struct type.
+type Match struct {
+	// The go/types.Named representation of the matched type.
 	Named *types.Named
-	Pos   token.Pos
+	// The source position of the matched type.
+	Pos token.Pos
 }
 
+// File represents a Go file that contains one or more matching query struct types.
 type File struct {
 	Path    string
 	Package *Package
-	Targets []*Target
+	Matches []*Match
 }
 
+// Package represents a Go package that contains one or more matching query struct types.
 type Package struct {
 	Name  string
 	Path  string
@@ -44,10 +49,8 @@ type Package struct {
 	Files []*File
 }
 
-// Parse parses Go packages at the given dir / pattern. Only packages that
-// contain files with type declarations that match the standard gosql targets
-// will be included in the returned slice.
-func Parse(dir string, recursive bool, filter func(filePath string) bool) (out []*Package, err error) {
+// Search
+func Search(dir string, recursive bool, filter func(filePath string) bool) (out []*Package, err error) {
 	// resolve absolute dir path
 	if dir, err = filepath.Abs(dir); err != nil {
 		return nil, err
@@ -73,7 +76,7 @@ func Parse(dir string, recursive bool, filter func(filePath string) bool) (out [
 		return nil, err
 	}
 
-	// aggregate targets from all files in all packages
+	// aggregate matches from all files in all packages
 	for _, pkg := range pkgs {
 		p := new(Package)
 		p.Name = pkg.Name
@@ -115,20 +118,20 @@ func Parse(dir string, recursive bool, filter func(filePath string) bool) (out [
 						continue
 					}
 
-					target := new(Target)
-					target.Named = named
-					target.Pos = typeName.Pos()
-					f.Targets = append(f.Targets, target)
+					match := new(Match)
+					match.Named = named
+					match.Pos = typeName.Pos()
+					f.Matches = append(f.Matches, match)
 				}
 			}
 
-			// add file only if it declares targets
-			if len(f.Targets) > 0 {
+			// add file only if a match was found
+			if len(f.Matches) > 0 {
 				p.Files = append(p.Files, f)
 			}
 		}
 
-		// add package only if it has files with targets
+		// add package only if it has files with matches
 		if len(p.Files) > 0 {
 			out = append(out, p)
 		}
