@@ -303,6 +303,9 @@ func (c *Constructor) UnmarshalFQL(str string) error {
 
 		switch tok {
 		case fql.LPAREN:
+			if c.canAndOr() {
+				c.filter.where = append(c.filter.where, sqlAnd{})
+			}
 			c.filter.where = append(c.filter.where, sqlLParen{})
 		case fql.RPAREN:
 			c.filter.where = append(c.filter.where, sqlRParen{})

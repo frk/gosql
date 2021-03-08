@@ -204,6 +204,15 @@ func TestFilter(t *testing.T) {
 			` OR t."tsvec" @@ to_tsquery('simple', $2)`,
 			params: []interface{}{"foo:*", "bar:*"}},
 	}, {
+		name: "test_text_search_3",
+		run: func(c *Constructor) error {
+			c.TextSearch("foo bar")
+			c.UnmarshalFQL("(a:>123;b:!null)")
+			return nil
+		},
+		want: result{where: ` WHERE t."tsvec" @@ to_tsquery('simple', $1) AND (col_a > $2 AND col_b IS NOT NULL)`,
+			params: []interface{}{"foo:* & bar:*", int64(123)}},
+	}, {
 		name: "test_and",
 		run: func(c *Constructor) error {
 			c.Col("col_a", "=", 123)
