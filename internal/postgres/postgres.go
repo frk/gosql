@@ -439,7 +439,8 @@ func typeCheckQueryRelField(c *checker, qs *analysis.QueryStruct) error {
 		}
 	} else if qs.Kind == analysis.QueryKindInsert || qs.Kind == analysis.QueryKindUpdate {
 		for _, f := range qs.Rel.Type.Fields {
-			if err := typeCheckFieldWrite(c, f, true); err != nil {
+			strict := (f.ReadOnly == false)
+			if err := typeCheckFieldWrite(c, f, strict); err != nil {
 				return err
 			}
 		}
