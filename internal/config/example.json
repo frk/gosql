@@ -1,5 +1,4 @@
 {
-	"database_dsn": "postgres:///?sslmode=disable",
 	"working_directory": "/path/to/project",
 	"recursive": true,
 	"input_files": [
@@ -10,9 +9,13 @@
 		"\/sql\/\w+\.go$"
 	],
 	"output_file_name_format": "%s_gosql.go",
+
+	"database_dsn": "postgres:///?sslmode=disable",
 	"quote_identifiers": true,
 	"filter_column_key_tag": "json",
 	"filter_column_key_base": false,
 	"filter_column_key_separator": ".",
+	"method_name": "Exec",
+	"method_with_context": true,
 	"method_argument_type": "module/path.QuerierType"
 }

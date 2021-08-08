@@ -6,7 +6,7 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *DeleteWithWhereBlock2Query) Exec(c gosql.Conn) error {
+func (q *DeleteWithWhereBlock2Query) ExecQuery(c gosql.Conn) error {
 	const queryString = `DELETE FROM "test_user"
 	WHERE "created_at" > $1
 	AND "created_at" < $2

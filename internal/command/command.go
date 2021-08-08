@@ -10,16 +10,17 @@ import (
 	"strings"
 
 	"github.com/frk/gosql/internal/analysis"
+	"github.com/frk/gosql/internal/config"
 	"github.com/frk/gosql/internal/generator"
 	"github.com/frk/gosql/internal/postgres"
 	"github.com/frk/gosql/internal/search"
 )
 
 type Command struct {
-	Config
+	config.Config
 }
 
-func New(cfg Config) (*Command, error) {
+func New(cfg config.Config) (*Command, error) {
 	// update the working directory to its absolute path
 	abs, err := filepath.Abs(cfg.WorkingDirectory.Value)
 	if err != nil {
@@ -35,7 +36,7 @@ func New(cfg Config) (*Command, error) {
 	}
 
 	// check the config for errors
-	if err := cfg.validate(); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -43,13 +44,6 @@ func New(cfg Config) (*Command, error) {
 }
 
 func (cmd *Command) Run() error {
-	var gcfg generator.Config
-	gcfg.FilterColumnKeyTag = cmd.FilterColumnKeyTag.Value
-	gcfg.FilterColumnKeyBase = cmd.FilterColumnKeyBase.Value
-	gcfg.FilterColumnKeySeparator = cmd.FilterColumnKeySeparator.Value
-	gcfg.QuoteIdentifiers = cmd.QuoteIdentifiers.Value
-	gcfg.ConnType = cmd.customConnType
-
 	db, err := postgres.Open(cmd.DatabaseDSN.Value)
 	if err != nil {
 		return err
@@ -89,7 +83,7 @@ func (cmd *Command) Run() error {
 			}
 
 			// 4. generate
-			if err := generator.Write(&out.buf, pkg.Name, out.targInfos, gcfg); err != nil {
+			if err := generator.Write(&out.buf, pkg.Name, out.targInfos, cmd.Config); err != nil {
 				return err
 			}
 

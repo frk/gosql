@@ -1,4 +1,4 @@
-package command
+package config
 
 import (
 	"database/sql"
@@ -11,10 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 
-	"github.com/frk/gosql/internal/generator"
 	"github.com/frk/gosql/internal/typesutil"
 
 	"golang.org/x/tools/go/packages"
@@ -24,9 +22,6 @@ import (
 
 // The Config struct is used to configure the gosql tool.
 type Config struct {
-	// The connection string of the database that will be used for type checking.
-	// This value is required.
-	DatabaseDSN String `json:"database_dsn"`
 	// The directory in which the tool will search for files to process.
 	// If not provided, the current working directory will be used by default.
 	WorkingDirectory String `json:"working_directory"`
@@ -48,6 +43,9 @@ type Config struct {
 	//
 	// If not provided, the format "%s_gosql.go" will be used by default.
 	OutputFileNameFormat String `json:"output_file_name_format"`
+	// The connection string of the database that will be used for type checking.
+	// This value is required.
+	DatabaseDSN String `json:"database_dsn"`
 	// If set to true, the generator will quote postgres identifiers like
 	// column names, table names, etc.
 	QuoteIdentifiers Bool `json:"quote_identifiers"`
@@ -71,7 +69,17 @@ type Config struct {
 	//
 	// If not provided, the separator "." will be used by default.
 	FilterColumnKeySeparator String `json:"filter_column_key_separator"`
-	// The Go type to be used as the argument for the generated methods.
+	// The name to be used for the generated method.
+	//
+	// If not provided, the name "Exec" will be used by default.
+	MethodName String `json:"method_name"`
+	// If set, the generator will produce methods that take context.Context
+	// as its first argument and they will pass that argument to the XxxContext
+	// query executing methods of the Conn type.
+	//
+	// If not provided, `false` will be used by default.
+	MethodWithContext Bool `json:"method_with_context"`
+	// The Go type to be used as the "querier" argument for the generated methods.
 	//
 	// The string value must be of the format "[*]package/path.TypeName" and
 	// the type represented by it must implement the following interface:
@@ -84,73 +92,88 @@ type Config struct {
 	// 	     QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
 	// 	}
 	//
-	// If not provided, the type gosql.Conn will be used by default.
-	MethodArgumentType String `json:"method_argument_type"`
+	// If not provided, the type github.com/frk/gosql.Conn will be used by default.
+	MethodArgumentType GoType `json:"method_argument_type"`
 
 	// holds the compiled expressions of the InputFileRegexps slice.
 	compiledInputFileRegexps []*regexp.Regexp
-
-	// parsed MethodArgumentType value.
-	customConnType generator.ConnType
 }
 
 var DefaultConfig = Config{
-	DatabaseDSN:              String{Value: ""},
 	WorkingDirectory:         String{Value: "."},
 	Recursive:                Bool{Value: false},
 	InputFiles:               StringSlice{},
 	InputFileRegexps:         StringSlice{},
 	OutputFileNameFormat:     String{Value: "%s_gosql.go"},
+	DatabaseDSN:              String{Value: ""},
 	QuoteIdentifiers:         Bool{Value: false},
 	FilterColumnKeyTag:       String{Value: "json"},
 	FilterColumnKeyBase:      Bool{Value: false},
 	FilterColumnKeySeparator: String{Value: "."},
-	MethodArgumentType:       String{Value: "gosql.Conn"},
+	MethodName:               String{Value: "Exec"},
+	MethodWithContext:        Bool{Value: false},
+	MethodArgumentType: GoType{
+		Name:    "Conn",
+		PkgPath: "github.com/frk/gosql",
+		PkgName: "gosql",
+	},
 }
 
 // ParseFlags unmarshals the cli flags into the receiver.
-func (c *Config) ParseFlags() {
+func (c *Config) ParseFlags(printUsage func()) {
 	fs := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fs.Usage = printUsage
-	fs.Var(&c.DatabaseDSN, "db", "")
 	fs.Var(&c.WorkingDirectory, "wd", "")
 	fs.Var(&c.Recursive, "r", "")
 	fs.Var(&c.InputFiles, "f", "")
 	fs.Var(&c.InputFileRegexps, "rx", "")
 	fs.Var(&c.OutputFileNameFormat, "o", "")
+	fs.Var(&c.DatabaseDSN, "db", "")
 	fs.Var(&c.QuoteIdentifiers, "qid", "")
 	fs.Var(&c.FilterColumnKeyTag, "fcktag", "")
 	fs.Var(&c.FilterColumnKeyBase, "fckbase", "")
 	fs.Var(&c.FilterColumnKeySeparator, "fcksep", "")
+	fs.Var(&c.MethodWithContext, "with-ctx", "")
 	fs.Var(&c.MethodArgumentType, "argtype", "")
+	fs.StringVar(&ConfigFile, "config", "", "The filepath to a specific configuration file")
 	_ = fs.Parse(os.Args[1:])
 }
+
+// The filepath to the config file which will be used by ParseFile to load the configuration.
+// If not provided ParseFile will look for a config file in the caller's git project root.
+//
+// NOTE This value is set by the ParseFlags method.
+var ConfigFile string
 
 // ParseFile looks for a gosql config file in the git project's root of the receiver's
 // working directory, if it finds such a file it will then unmarshal it into the receiver.
 func (c *Config) ParseFile() error {
-	dir, err := filepath.Abs(c.WorkingDirectory.Value)
-	if err != nil {
-		return err
-	}
-
-	var isRoot bool
-	var confName string
-	for len(dir) > 1 && dir[0] == '/' {
-		isRoot, confName, err = examineDir(dir)
+	if ConfigFile == "" {
+		dir, err := filepath.Abs(c.WorkingDirectory.Value)
 		if err != nil {
 			return err
 		}
-		if isRoot {
-			break
+
+		var isRoot bool
+		var configName string
+		for len(dir) > 1 && dir[0] == '/' {
+			isRoot, configName, err = examineDir(dir)
+			if err != nil {
+				return err
+			}
+			if isRoot {
+				break
+			}
+			dir = filepath.Dir(dir) // parent dir will be examined next
 		}
-		dir = filepath.Dir(dir) // parent dir will be examined next
+		if configName != "" {
+			ConfigFile = filepath.Join(dir, configName)
+		}
 	}
 
-	// if found, unamrshal the config file
-	if confName != "" {
-		confpath := filepath.Join(dir, confName)
-		f, err := os.Open(confpath)
+	// if explicitly set or found in project's root, unamrshal the config file
+	if ConfigFile != "" {
+		f, err := os.Open(ConfigFile)
 		if err != nil {
 			return err
 		}
@@ -191,8 +214,8 @@ func (c *Config) FileFilterFunc() (filter func(filePath string) bool) {
 	}
 }
 
-// validate checks the config for errors and updates some of the values to a more "normalized" format.
-func (c *Config) validate() (err error) {
+// Validate checks the config for errors and updates some of the values to a more "normalized" format.
+func (c *Config) Validate() (err error) {
 	// check that the working directory can be openned
 	f, err := os.Open(c.WorkingDirectory.Value)
 	if err != nil {
@@ -252,8 +275,8 @@ func (c *Config) validate() (err error) {
 	}
 
 	// check that the method argument type implements the required interface
-	if c.MethodArgumentType.Value != "gosql.Conn" {
-		if err := checkMethodArgumentType(c.MethodArgumentType.Value, c); err != nil {
+	if c.MethodArgumentType.String() != "github.com/frk/gosql.Conn" {
+		if err := checkMethodArgumentType(&c.MethodArgumentType, c); err != nil {
 			return err
 		}
 	}
@@ -295,20 +318,7 @@ func examineDir(path string) (isRoot bool, confName string, err error) {
 	return isRoot, confName, nil
 }
 
-func checkMethodArgumentType(argtype string, c *Config) (err error) {
-	// split into package path and type name
-	var isPtr bool
-	var pkgPath, typeName string
-	if i := strings.LastIndex(argtype, "."); i < 0 {
-		return fmt.Errorf("bad method argument type: %q", argtype)
-	} else {
-		pkgPath, typeName = argtype[:i], argtype[i+1:]
-		if len(pkgPath) > 0 && pkgPath[0] == '*' {
-			pkgPath = pkgPath[1:]
-			isPtr = true
-		}
-	}
-
+func checkMethodArgumentType(t *GoType, c *Config) (err error) {
 	cfg := &packages.Config{Mode: packages.NeedName |
 		packages.NeedFiles |
 		packages.NeedCompiledGoFiles |
@@ -317,9 +327,9 @@ func checkMethodArgumentType(argtype string, c *Config) (err error) {
 		packages.NeedImports |
 		packages.NeedDeps |
 		packages.NeedTypesInfo}
-	pkgs, err := packages.Load(cfg, pkgPath)
+	pkgs, err := packages.Load(cfg, t.PkgPath)
 	if err != nil {
-		return fmt.Errorf("failed to load package of method argument type: %q -- %v", argtype, err)
+		return fmt.Errorf("failed to load package of method argument type: %q -- %v", t, err)
 	}
 
 	for _, syn := range pkgs[0].Syntax {
@@ -331,180 +341,37 @@ func checkMethodArgumentType(argtype string, c *Config) (err error) {
 
 			for _, spec := range gd.Specs {
 				typeSpec, ok := spec.(*ast.TypeSpec)
-				if !ok || typeSpec.Name.Name != typeName {
+				if !ok || typeSpec.Name.Name != t.Name {
 					continue
 				}
 
 				obj, ok := pkgs[0].TypesInfo.Defs[typeSpec.Name]
 				if !ok {
-					return fmt.Errorf("bad method argument type: %q", argtype)
+					return fmt.Errorf("bad method argument type: %q", t)
 				}
 
 				typeName, ok := obj.(*types.TypeName)
 				if !ok {
-					return fmt.Errorf("bad method argument type: %q", argtype)
+					return fmt.Errorf("bad method argument type: %q", t)
 				}
 
 				named, ok := typeName.Type().(*types.Named)
 				if !ok {
-					return fmt.Errorf("bad method argument type: %q", argtype)
+					return fmt.Errorf("bad method argument type: %q", t)
 				}
 
 				if !typesutil.ImplementsGosqlConn(named) {
 					return fmt.Errorf("bad method argument type: %q --"+
-						" does not implement the \"github.com/frk/gosql.Conn\" interface.", argtype)
+						" does not implement the \"github.com/frk/gosql.Conn\" interface.", t)
 				}
 
-				// all good
-				c.customConnType.Name = typeSpec.Name.Name
-				c.customConnType.PkgPath = pkgPath
-				c.customConnType.PkgName = pkgs[0].Name
-				c.customConnType.IsPtr = isPtr
+				// Use the package name from the AST since it may be
+				// different from the last segment of the package's path.
+				t.PkgName = pkgs[0].Name
 				return nil
 			}
 		}
 	}
 
-	return fmt.Errorf("could not find method argument type: %q", argtype)
-}
-
-// String implements both the flag.Value and the json.Unmarshal interfaces
-// enforcing priority of flags over json, meaning that json.Unmarshal will
-// not override the value if it was previously set by flag.Var.
-type String struct {
-	Value string
-	IsSet bool
-}
-
-// Get implements the flag.Getter interface.
-func (s String) Get() interface{} {
-	return s.Value
-}
-
-// String implements the flag.Value interface.
-func (s String) String() string {
-	return s.Value
-}
-
-// Set implements the flag.Value interface.
-func (s *String) Set(value string) error {
-	s.Value = value
-	s.IsSet = true
-	return nil
-}
-
-// UnmarshalJSON implements the json.Unmarshaler interface.
-func (s *String) UnmarshalJSON(data []byte) error {
-	if !s.IsSet {
-		if len(data) == 0 || string(data) == `null` {
-			return nil
-		}
-
-		var value string
-		if err := json.Unmarshal(data, &value); err != nil {
-			return err
-		}
-		s.Value = value
-		s.IsSet = true
-	}
-	return nil
-}
-
-// Bool implements both the flag.Value and the json.Unmarshal interfaces
-// enforcing priority of flags over json, meaning that json.Unmarshal will
-// not override the value if it was previously set by flag.Var.
-type Bool struct {
-	Value bool
-	IsSet bool
-}
-
-// IsBoolFlag indicates that the Bool type can be used as a boolean flag.
-func (b Bool) IsBoolFlag() bool {
-	return true
-}
-
-// Get implements the flag.Getter interface.
-func (b Bool) Get() interface{} {
-	return b.String()
-}
-
-// String implements the flag.Value interface.
-func (b Bool) String() string {
-	return strconv.FormatBool(b.Value)
-}
-
-// Set implements the flag.Value interface.
-func (b *Bool) Set(value string) error {
-	if len(value) > 0 {
-		v, err := strconv.ParseBool(value)
-		if err != nil {
-			return err
-		}
-		b.Value = v
-		b.IsSet = true
-	}
-	return nil
-}
-
-// UnmarshalJSON implements the json.Unmarshaler interface.
-func (b *Bool) UnmarshalJSON(data []byte) error {
-	if !b.IsSet {
-		if len(data) == 0 || string(data) == `null` {
-			return nil
-		}
-
-		var value bool
-		if err := json.Unmarshal(data, &value); err != nil {
-			return err
-		}
-		b.Value = value
-		b.IsSet = true
-	}
-	return nil
-}
-
-// StringSlice implements both the flag.Value and the json.Unmarshal interfaces
-// enforcing priority of flags over json, meaning that json.Unmarshal will
-// not override the value if it was previously set by flag.Var.
-type StringSlice struct {
-	Value []string
-	IsSet bool
-}
-
-// Get implements the flag.Getter interface.
-func (ss StringSlice) Get() interface{} {
-	return ss.String()
-}
-
-// String implements the flag.Value interface.
-func (ss StringSlice) String() string {
-	return strings.Join(ss.Value, ",")
-}
-
-// Set implements the flag.Value interface.
-func (ss *StringSlice) Set(value string) error {
-	if len(value) > 0 {
-		ss.Value = append(ss.Value, value)
-		ss.IsSet = true
-	}
-	return nil
-}
-
-// UnmarshalJSON implements the json.Unmarshaler interface.
-func (ss *StringSlice) UnmarshalJSON(data []byte) error {
-	if !ss.IsSet {
-		if len(data) == 0 || string(data) == `null` {
-			return nil
-		}
-
-		var value []string
-		if err := json.Unmarshal(data, &value); err != nil {
-			return err
-		}
-		if len(value) > 0 {
-			ss.Value = value
-			ss.IsSet = true
-		}
-	}
-	return nil
+	return fmt.Errorf("could not find method argument type: %q", t)
 }

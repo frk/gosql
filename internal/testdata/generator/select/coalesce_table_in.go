@@ -2,8 +2,6 @@ package testdata
 
 import (
 	"time"
-
-	"github.com/frk/gosql"
 )
 
 type SelectCoalesceTableQuery struct {

@@ -5,12 +5,12 @@ import (
 	"os"
 )
 
-func printUsage() {
+func PrintUsage() {
 	fmt.Fprint(os.Stderr, usage)
 }
 
 const usage = `usage: gosql [-db] [-wd] [-r] [-f] [-rx] [-o] [-qid] [-argtype]
-	[-fcktag] [-fckbase] [-fcksep]
+	[-fcktag] [-fckbase] [-fcksep] [-with-ctx] [--config]
 
 gosql generates SQL queries based .... (todo: write doc)
 

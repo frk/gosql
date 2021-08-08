@@ -1,0 +1,26 @@
+add support for WHERE struct in UpdateSlice queries where the WHERE struct's
+members will be used to qualify the generate WHERE clause, e.g.
+
+	`UPDATE my_table AS t SET (
+		col_1
+		, col_2
+	) = (
+		x.col_1
+		, x.col_2
+	)
+	FROM (VALUES` +
+
+		... [GO CODE] ...
+
+	+ `) AS x (
+		col_1
+		, col_2
+		, id
+	)
+	WHERE t.id = x.id
+	AND t.some_other_id = $N
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+provide a way to write function calling queries

@@ -11,6 +11,7 @@ import (
 
 	"github.com/frk/compare"
 	"github.com/frk/gosql/internal/analysis"
+	"github.com/frk/gosql/internal/config"
 	"github.com/frk/gosql/internal/postgres"
 	"github.com/frk/gosql/internal/search"
 )
@@ -22,15 +23,9 @@ func TestGenerator(t *testing.T) {
 	}
 	defer db.Close()
 
-	type gconf struct {
-		fcktag  string
-		fcksep  string
-		fckbase bool
-		quote   bool
-	}
 	type testcase struct {
 		filename string
-		gconf    *gconf
+		withCfg  func(*config.Config)
 	}
 
 	tests := []struct {
@@ -72,7 +67,9 @@ func TestGenerator(t *testing.T) {
 			{filename: "using_join_block_1"},
 			{filename: "using_join_block_2"},
 			{filename: "where_block_1"},
-			{filename: "where_block_2"},
+			{filename: "where_block_2", withCfg: func(cfg *config.Config) {
+				cfg.MethodName.Value = "ExecQuery"
+			}},
 		},
 	}, {
 		//skip:    true,
@@ -82,7 +79,9 @@ func TestGenerator(t *testing.T) {
 			{filename: "afterscan_slice"},
 			{filename: "coalesce_table"},
 			{filename: "count_basic"},
-			{filename: "count_filter"},
+			{filename: "count_filter", withCfg: func(cfg *config.Config) {
+				cfg.MethodWithContext.Value = true
+			}},
 			{filename: "count_where"},
 			{filename: "exists_filter"},
 			{filename: "exists_where"},
@@ -195,7 +194,11 @@ func TestGenerator(t *testing.T) {
 		testcases: []testcase{
 			{filename: "alias"},
 			{filename: "basic"},
-			{filename: "basic2", gconf: &gconf{"json", ".", false, true}},
+			{filename: "basic2", withCfg: func(cfg *config.Config) {
+				cfg.FilterColumnKeyTag.Value = "json"
+				cfg.FilterColumnKeySeparator.Value = "."
+				cfg.QuoteIdentifiers.Value = true
+			}},
 			{filename: "nested"},
 			{filename: "textsearch"},
 		},
@@ -249,14 +252,16 @@ func TestGenerator(t *testing.T) {
 				}
 
 				buf := new(bytes.Buffer)
-				conf := Config{FilterColumnKeySeparator: ".", QuoteIdentifiers: true} // default
-				if tc.gconf != nil {
-					conf.FilterColumnKeyTag = tc.gconf.fcktag
-					conf.FilterColumnKeySeparator = tc.gconf.fcksep
-					conf.FilterColumnKeyBase = tc.gconf.fckbase
-					conf.QuoteIdentifiers = tc.gconf.quote
+
+				// default config for tests
+				cfg := config.DefaultConfig
+				cfg.FilterColumnKeyTag.Value = ""
+				cfg.FilterColumnKeySeparator.Value = "."
+				cfg.QuoteIdentifiers.Value = true
+				if tc.withCfg != nil {
+					tc.withCfg(&cfg)
 				}
-				if err := Write(buf, pkg.Name, tinfos, conf); err != nil {
+				if err := Write(buf, pkg.Name, tinfos, cfg); err != nil {
 					t.Error(err)
 					return
 				}

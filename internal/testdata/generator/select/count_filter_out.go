@@ -3,16 +3,18 @@
 package testdata
 
 import (
+	"context"
+
 	"github.com/frk/gosql"
 )
 
-func (q *SelectCountWithFilterQuery) Exec(c gosql.Conn) error {
+func (q *SelectCountWithFilterQuery) Exec(ctx context.Context, c gosql.Conn) error {
 	var queryString = `SELECT COUNT(*) FROM "test_user" AS u
 	` // `
 
 	filterString, params := q.Filter.ToSQL(0)
 	queryString += filterString
 
-	row := c.QueryRow(queryString, params...)
+	row := c.QueryRowContext(ctx, queryString, params...)
 	return row.Scan(&q.Count)
 }

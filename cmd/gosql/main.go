@@ -6,11 +6,12 @@ import (
 	"os"
 
 	"github.com/frk/gosql/internal/command"
+	"github.com/frk/gosql/internal/config"
 )
 
 func main() {
-	cfg := command.DefaultConfig
-	cfg.ParseFlags()
+	cfg := config.DefaultConfig
+	cfg.ParseFlags(command.PrintUsage)
 	if err := cfg.ParseFile(); err != nil {
 		fmt.Fprintf(os.Stderr, "gosql: failed parsing config file ...\n - %v\n", err)
 		os.Exit(2)

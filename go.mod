@@ -7,6 +7,7 @@ require (
 	github.com/frk/compare v0.0.6
 	github.com/frk/fql v0.0.1
 	github.com/frk/tagutil v0.0.0-20190626082652-a41f4c5605cc
-	github.com/lib/pq v1.2.0
+	github.com/jackc/pgx/v4 v4.13.0 // indirect
+	github.com/lib/pq v1.10.2
 	golang.org/x/tools v0.0.0-20200921181913-ccabf82fa1ae
 )
