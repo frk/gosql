@@ -18,6 +18,7 @@ var _ = log.Println
 
 const (
 	gosqlPkgPath = `github.com/frk/gosql`
+	gosqlPkgName = `gosql`
 	pgsqlPkgPath = `github.com/frk/gosql/pgsql`
 	pgsqlPkgName = `pgsql`
 
@@ -776,6 +777,8 @@ func buildFilterMethodsForColumns(g *generator, fs *analysis.FilterStruct, mapid
 		// add import if necessary
 		if typ := ff.Field.Type; typ.IsImported {
 			_ = addimport(g.file, typ.PkgPath, typ.PkgName)
+		} else if typ.Kind == analysis.TypeKindPtr && typ.Elem.IsImported {
+			_ = addimport(g.file, typ.Elem.PkgPath, typ.Elem.PkgName)
 		}
 
 		// the method's input and output arguments
@@ -1433,6 +1436,7 @@ func buildQueryStringForSliceInsertOrUpdate(g *generator, qs *analysis.QueryStru
 		strConcatExprList = make([]GO.ExprNode, valueCount+1) // +1 for the final `),`
 	)
 
+	var importGosql bool
 	inputVals := append(g.inputVals, g.inputValsPKeys...)
 	for i, val := range inputVals {
 		sep := `, `
@@ -1444,6 +1448,8 @@ func buildQueryStringForSliceInsertOrUpdate(g *generator, qs *analysis.QueryStru
 			defaultCount += 1
 			strConcatExprList[i] = GO.RawStringLit(sep + `DEFAULT`)
 		} else {
+			importGosql = true
+
 			// produce:
 			//	`, ` + gosql.OrdinalParameters[pos+<i - defaultCount>] +
 			binExpr := GO.BinaryExpr{Op: GO.BinaryAdd}
@@ -1454,21 +1460,24 @@ func buildQueryStringForSliceInsertOrUpdate(g *generator, qs *analysis.QueryStru
 			concatExpr.X = GO.RawStringLit(sep)
 			concatExpr.Y = GO.IndexExpr{X: ordinalParams, Index: binExpr}
 
-			if _, ok := val.(SQL.NULLIF); ok {
+			if ni, ok := val.(SQL.NULLIF); ok {
 				concatExpr.X = GO.RawStringLit(sep + `NULLIF(`)
 				concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
-				concatExpr.Y = GO.RawStringLit(`)`)
+				concatExpr.Y = GO.RawStringLit(`, ` + SQL.MustToString(ni.Expr) + `)`)
 			} else if cast, ok := val.(SQL.CastExpr); ok {
-				if _, ok := cast.Expr.(SQL.NULLIF); ok {
+				if ni, ok := cast.Expr.(SQL.NULLIF); ok {
 					concatExpr.X = GO.RawStringLit(sep + `NULLIF(`)
 					concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
-					concatExpr.Y = GO.RawStringLit(`)::` + cast.Type)
+					concatExpr.Y = GO.RawStringLit(`, ` + SQL.MustToString(ni.Expr) + `)::` + cast.Type)
 				}
 			}
 
 			strConcatExprList[i] = concatExpr
 
 		}
+	}
+	if importGosql {
+		addimport(g.file, gosqlPkgPath, gosqlPkgName)
 	}
 
 	strConcatExprList[len(strConcatExprList)-1] = GO.RawStringLit(`),`)
@@ -2060,11 +2069,11 @@ func makeErrorReturnStmt(g *generator, qs *analysis.QueryStruct, errExpr GO.Expr
 		//	return <fieldSelector>.HandleErrorInfo(&gosql.ErrorInfo{ ... })
 		literal := GO.StructLit{Type: errorInfoType, Compact: true}
 		literal.Elems = []GO.FieldElement{
-			{"Error", errVar},
-			{"QueryString", queryStringVar},
-			{"QueryKind", GO.StringLit(qs.Kind.String())},
-			{"QueryName", GO.StringLit(qs.TypeName)},
-			{"QueryValue", GO.Ident{"q"}},
+			{false, "Error", errVar},
+			{false, "QueryString", queryStringVar},
+			{false, "QueryKind", GO.StringLit(qs.Kind.String())},
+			{false, "QueryName", GO.StringLit(qs.TypeName)},
+			{false, "QueryValue", GO.Ident{"q"}},
 		}
 
 		callExpr := GO.CallExpr{}
@@ -2121,7 +2130,11 @@ func makeInputArgsList(g *generator, qs *analysis.QueryStruct) GO.ArgsList {
 
 	argsList.AddExprs(g.inputArgs...)
 	if argsList.Len() > 3 {
-		argsList.OnePerLine = 2
+		if g.cfg.MethodWithContext.Value {
+			argsList.OnePerLine = 3
+		} else {
+			argsList.OnePerLine = 2
+		}
 	}
 	return argsList
 }

@@ -1,5 +1,5 @@
 add support for WHERE struct in UpdateSlice queries where the WHERE struct's
-members will be used to qualify the generate WHERE clause, e.g.
+members will be used to qualify the generated WHERE clause, e.g.
 
 	`UPDATE my_table AS t SET (
 		col_1
@@ -21,6 +21,37 @@ members will be used to qualify the generate WHERE clause, e.g.
 	AND t.some_other_id = $N
 
 ////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
 
 provide a way to write function calling queries
+- consider using @ in the `rel` tag, for example:
+
+type SelectSomeFuncNameQuery struct {
+	// The SomeFuncNameOutputStruct would have to match the structure of the
+	// function's output. If the function has no output, then gosql.Void
+	// directive should be used instead...
+	Output *SomeFuncNameOutputStruct `rel:"@some_func_name"`
+
+	// "Args" (not "Where") would be the expected field name that contains
+	// the arguments to be passed to the function.
+	//
+	// - the type checker needs to lookup all functions with that name and
+	// try as best as possible to figure out which one to call based on the
+	// arguments' types...
+	Args struct {
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+
+add support for calling procedures:
+- struct types starting with name "CallXxx" should be used to define procedure calls
+- Args field should be used to supply arguments to the procedure
+- ...
+
+////////////////////////////////////////////////////////////////////////////////
+
+Constraints that are DEFERRABLE cannot be used as conflict arbitrators in
+an INSERT ... ON CONFLICT clause.
+- so add code in the type checker to check if a constraint is deferrable or not
+and if it is then return an error to the user.

@@ -2144,7 +2144,12 @@ func (t *TypeInfo) literal(pkgLocal, elidePtr bool) LiteralType {
 			return "rune"
 		}
 		return "int32"
-	case TypeKindStruct, TypeKindInterface, TypeKindChan, TypeKindFunc:
+	case TypeKindInterface:
+		if t.IsEmptyInterface {
+			return "interface{}"
+		}
+		return "<unsupported>"
+	case TypeKindStruct, TypeKindChan, TypeKindFunc:
 		return "<unsupported>"
 	}
 	return "<unknown>"

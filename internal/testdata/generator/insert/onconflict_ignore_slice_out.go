@@ -23,10 +23,10 @@ func (q *InsertOnConflictIgnoreSliceQuery) Exec(c gosql.Conn) error {
 		params[pos+2] = v.Fruit
 		params[pos+3] = v.Value
 
-		queryString += `(NULLIF(` + gosql.OrdinalParameters[pos+0] + `)::integer` +
-			`, NULLIF(` + gosql.OrdinalParameters[pos+1] + `)::text` +
-			`, NULLIF(` + gosql.OrdinalParameters[pos+2] + `)::text` +
-			`, NULLIF(` + gosql.OrdinalParameters[pos+3] + `)::double precision` +
+		queryString += `(NULLIF(` + gosql.OrdinalParameters[pos+0] + `, 0)::integer` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+1] + `, '')::text` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+2] + `, '')::text` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+3] + `, 0)::double precision` +
 			`),`
 	}
 
