@@ -69,11 +69,12 @@ type (
 
 	// The TargetStruct interface is implemented by the QueryStruct and FilterStruct types.
 	TargetStruct interface {
+		targetStruct()
+
 		// GetRelField should return the RelField of the target relation.
 		GetRelField() *RelField
 		// GetRelIdent should return the RelIdent of the target relation.
 		GetRelIdent() RelIdent
-		targetStruct()
 	}
 )
 
@@ -198,11 +199,14 @@ type (
 		Tag tagutil.Tag
 		// The column identifier parsed from the field's `sql` tag.
 		ColIdent ColIdent
-		// If set, indicates the the "nullempty" option was used in the field's `sql` tag.
+		// If set, holds key to be used in the filter-column-key map
+		// that's produced by the generator.
+		FilterColumnKey string
+		// If set, indicates that the "nullempty" option was used in the field's `sql` tag.
 		NullEmpty bool
-		// If set, indicates the the "ro" option was used in the field's `sql` tag.
+		// If set, indicates that the "ro" option was used in the field's `sql` tag.
 		ReadOnly bool
-		// If set, indicates the the "wo" option was used in the field's `sql` tag.
+		// If set, indicates that the "wo" option was used in the field's `sql` tag.
 		WriteOnly bool
 		// If set, indicates the the "default" option was used in the field's `sql` tag.
 		UseDefault bool
@@ -239,6 +243,10 @@ type (
 		IsExported bool
 		// Indicates whether or not the field type is a pointer type.
 		IsPointer bool
+		// If set, indicates the the "ro" option was used in the field's `sql` tag.
+		ReadOnly bool
+		// If set, indicates the the "wo" option was used in the field's `sql` tag.
+		WriteOnly bool
 	}
 )
 
@@ -632,6 +640,41 @@ func (t TypeInfo) ImplementsScanner() bool {
 
 func (t TypeInfo) ImplementsValuer() bool {
 	return t.IsValuer || (t.Kind == TypeKindPtr && t.Elem.IsValuer)
+}
+
+func (t TypeInfo) ImportedTypes() (out []TypeInfo) {
+	if t.IsImported {
+		return []TypeInfo{t}
+	} else if t.Kind == TypeKindPtr || t.Kind == TypeKindSlice || t.Kind == TypeKindArray {
+		return t.Elem.ImportedTypes()
+	} else if t.Kind == TypeKindMap {
+		if key := t.Key.ImportedTypes(); len(key) > 0 {
+			out = append(out, key...)
+		}
+		if elem := t.Elem.ImportedTypes(); len(elem) > 0 {
+			out = append(out, elem...)
+		}
+		return out
+	}
+	return nil
+}
+
+func (f FieldInfo) IsReadOnly() bool {
+	for i := range f.Selector {
+		if f.Selector[i].ReadOnly {
+			return true
+		}
+	}
+	return f.ReadOnly
+}
+
+func (f FieldInfo) IsWriteOnly() bool {
+	for i := range f.Selector {
+		if f.Selector[i].WriteOnly {
+			return true
+		}
+	}
+	return f.WriteOnly
 }
 
 func (id ColIdent) IsEmpty() bool { return id == ColIdent{} }

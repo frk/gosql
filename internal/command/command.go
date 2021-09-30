@@ -67,14 +67,13 @@ func (cmd *Command) Run() error {
 
 			for k, match := range file.Matches {
 				// 2. analyze
-				anInfo := new(analysis.Info)
-				targStruct, err := analysis.Run(pkg.Fset, match.Named, match.Pos, anInfo)
+				anInfo, err := analysis.Run(pkg.Fset, match.Named, match.Pos, cmd.Config)
 				if err != nil {
 					return err
 				}
 
 				// 3. type check
-				targInfo, err := postgres.Check(db, targStruct, anInfo)
+				targInfo, err := postgres.Check(db, anInfo.Struct, anInfo)
 				if err != nil {
 					return err
 				}

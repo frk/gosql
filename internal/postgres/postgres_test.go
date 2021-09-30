@@ -7,6 +7,7 @@ import (
 
 	"github.com/frk/compare"
 	"github.com/frk/gosql/internal/analysis"
+	"github.com/frk/gosql/internal/config"
 	"github.com/frk/gosql/internal/postgres/oid"
 	"github.com/frk/gosql/internal/testutil"
 
@@ -27,13 +28,12 @@ func testCheck(name string, t *testing.T) (*TargetInfo, error) {
 		return nil, nil
 	}
 
-	info := new(analysis.Info)
-	ts, err := analysis.Run(tdata.Fset, named, pos, info)
+	info, err := analysis.Run(tdata.Fset, named, pos, config.Config{})
 	if err != nil {
 		return nil, err
 	}
 
-	return Check(testdb.DB, ts, info)
+	return Check(testdb.DB, info.Struct, info)
 }
 
 func TestOpen(t *testing.T) {
@@ -1497,13 +1497,12 @@ func _analyzeTargetStruct(name string) anTargetStruct {
 		panic(name + " not found")
 	}
 
-	info := new(analysis.Info)
-	ts, err := analysis.Run(tdata.Fset, named, pos, info)
+	info, err := analysis.Run(tdata.Fset, named, pos, config.Config{})
 	if err != nil {
 		panic(err)
 	}
 
-	return anTargetStruct{ts}
+	return anTargetStruct{info.Struct}
 }
 
 func (a anTargetStruct) relField() *analysis.RelField {

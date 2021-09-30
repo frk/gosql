@@ -55,3 +55,7 @@ Constraints that are DEFERRABLE cannot be used as conflict arbitrators in
 an INSERT ... ON CONFLICT clause.
 - so add code in the type checker to check if a constraint is deferrable or not
 and if it is then return an error to the user.
+
+////////////////////////////////////////////////////////////////////////////////
+
+- better handling of empty/null uuids

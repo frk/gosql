@@ -232,17 +232,25 @@ func TestGenerator(t *testing.T) {
 					t.Fatal(err)
 				}
 
+				// default config for tests
+				cfg := config.DefaultConfig
+				cfg.FilterColumnKeyTag.Value = ""
+				cfg.FilterColumnKeySeparator.Value = "."
+				cfg.QuoteIdentifiers.Value = true
+				if tc.withCfg != nil {
+					tc.withCfg(&cfg)
+				}
+
 				for _, match := range f.Matches {
 					// analyze
-					ainfo := &analysis.Info{}
-					tstruct, err := analysis.Run(pkg.Fset, match.Named, match.Pos, ainfo)
+					ainfo, err := analysis.Run(pkg.Fset, match.Named, match.Pos, cfg)
 					if err != nil {
 						t.Error(err)
 						return
 					}
 
 					// type check
-					targInfo, err := postgres.Check(db.DB, tstruct, ainfo)
+					targInfo, err := postgres.Check(db.DB, ainfo.Struct, ainfo)
 					if err != nil {
 						t.Error(err)
 						return
@@ -252,15 +260,6 @@ func TestGenerator(t *testing.T) {
 				}
 
 				buf := new(bytes.Buffer)
-
-				// default config for tests
-				cfg := config.DefaultConfig
-				cfg.FilterColumnKeyTag.Value = ""
-				cfg.FilterColumnKeySeparator.Value = "."
-				cfg.QuoteIdentifiers.Value = true
-				if tc.withCfg != nil {
-					tc.withCfg(&cfg)
-				}
 				if err := Write(buf, pkg.Name, tinfos, cfg); err != nil {
 					t.Error(err)
 					return

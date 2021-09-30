@@ -439,7 +439,7 @@ func typeCheckQueryRelField(c *checker, qs *analysis.QueryStruct) error {
 		}
 	} else if qs.Kind == analysis.QueryKindInsert || qs.Kind == analysis.QueryKindUpdate {
 		for _, f := range qs.Rel.Type.Fields {
-			strict := (f.ReadOnly == false)
+			strict := (f.IsReadOnly() == false)
 			if err := typeCheckFieldWrite(c, f, strict); err != nil {
 				return err
 			}
@@ -924,6 +924,10 @@ func typeCheckComparison(c *checker, ltyp *Type, rtyp *Type, pred analysis.Predi
 			return errPredicateOperandQuantifier
 		}
 		rtyp = c.db.catalog.Types[rtyp.Elem]
+	}
+
+	if ltyp.OID == rtyp.OID {
+		return 0
 	}
 
 	if (ltyp.Category == TypeCategoryString || ltyp.Type == TypeTypeEnum) && rtyp.OID == oid.Unknown {
@@ -1948,12 +1952,12 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 
 // skipFieldWrite reports whether or not the given FieldWrite should be skipped.
 func skipFieldWrite(c *checker, fw *FieldWrite) bool {
-	return fw.Field.ReadOnly && (c.force == nil || !c.force.Contains(fw.ColIdent))
+	return fw.Field.IsReadOnly() && (c.force == nil || !c.force.Contains(fw.ColIdent))
 }
 
 // skipFieldRead reports whether or not the given FieldRead should be skipped.
 func skipFieldRead(c *checker, fr *FieldRead) bool {
-	return fr.Field.WriteOnly && (c.force == nil || !c.force.Contains(fr.ColIdent))
+	return fr.Field.IsWriteOnly() && (c.force == nil || !c.force.Contains(fr.ColIdent))
 }
 
 // typeCompatibility

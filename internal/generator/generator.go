@@ -27,9 +27,8 @@ const (
 
 func Write(f io.Writer, pkgName string, targets []*postgres.TargetInfo, cfg config.Config) error {
 	var (
-		file         = new(file)
-		fmtFilterKey = makeFilterKeyFormatter(cfg)
-		fmtColIdent  = makeColIdentFormatter(cfg)
+		file        = new(file)
+		fmtColIdent = makeColIdentFormatter(cfg)
 	)
 
 	for _, info := range targets {
@@ -37,7 +36,6 @@ func Write(f io.Writer, pkgName string, targets []*postgres.TargetInfo, cfg conf
 		g.cfg = cfg
 		g.info = info
 		g.file = file
-		g.fmtFilterKey = fmtFilterKey
 		g.fmtColIdent = fmtColIdent
 		g.queryRecv = GO.Ident{"q"}
 		g.inputPKeys = inputPKeys(info)
@@ -85,9 +83,6 @@ type generator struct {
 	info *postgres.TargetInfo
 	// The target file to be build by the generator.
 	file *file
-	// fmtFilterKey returns a string representation of the given field
-	// filter to be used as the key for a filter's column map.
-	fmtFilterKey func(*postgres.FieldFilter) (key string, ok bool)
 	// fmtColIdent returns a string representation of the given column identifier.
 	fmtColIdent func(analysis.ColIdent) string
 	// The set of parameter numbers mapped by their fields. (lazily initialized by makeParamSpec)
@@ -686,8 +681,8 @@ func buildFilterColumnMap(g *generator, fs *analysis.FilterStruct) (mapid GO.Ide
 	elems := make([]GO.KeyElement, 0)
 	keyset := make(map[string]struct{}) // use to ensure unique map keys
 	for _, filter := range g.info.Filters {
-		key, ok := g.fmtFilterKey(filter)
-		if !ok {
+		key := filter.Field.FilterColumnKey
+		if key == "" {
 			continue
 		} else if _, exists := keyset[key]; exists {
 			continue
@@ -775,10 +770,10 @@ func buildFilterMethodsForColumns(g *generator, fs *analysis.FilterStruct, mapid
 		}
 
 		// add import if necessary
-		if typ := ff.Field.Type; typ.IsImported {
-			_ = addimport(g.file, typ.PkgPath, typ.PkgName)
-		} else if typ.Kind == analysis.TypeKindPtr && typ.Elem.IsImported {
-			_ = addimport(g.file, typ.Elem.PkgPath, typ.Elem.PkgName)
+		if imported := ff.Field.Type.ImportedTypes(); len(imported) > 0 {
+			for _, typ := range imported {
+				_ = addimport(g.file, typ.PkgPath, typ.PkgName)
+			}
 		}
 
 		// the method's input and output arguments
@@ -2230,71 +2225,6 @@ func canSkipRelInit(qs *analysis.QueryStruct) bool {
 // canDeclareConst reports whether or not the queryString value can be declared as a const.
 func canDeclareConst(g *generator, qs *analysis.QueryStruct) bool {
 	return qs.Filter == nil && len(g.inputSliceArgs) == 0 && !qs.IsInsertOrUpdateSlice()
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Filter Key Formatter Functions
-//
-
-// makeFilterKeyFormatter
-func makeFilterKeyFormatter(cfg config.Config) (fn func(*postgres.FieldFilter) (key string, ok bool)) {
-	if len(cfg.FilterColumnKeyTag.Value) > 0 {
-		if !cfg.FilterColumnKeyBase.Value {
-			return func(ff *postgres.FieldFilter) (string, bool) {
-				return fmtFieldTagJoinedKey(ff, cfg.FilterColumnKeyTag.Value, cfg.FilterColumnKeySeparator.Value)
-			}
-		}
-		return func(ff *postgres.FieldFilter) (string, bool) {
-			return fmtFieldTagBaseKey(ff, cfg.FilterColumnKeyTag.Value)
-		}
-	}
-
-	if !cfg.FilterColumnKeyBase.Value {
-		return func(ff *postgres.FieldFilter) (string, bool) {
-			return fmtFieldNameJoinedKey(ff, cfg.FilterColumnKeySeparator.Value)
-		}
-	}
-	return fmtFieldNameBaseKey
-}
-
-// fmtFieldNameBaseKey
-func fmtFieldNameBaseKey(ff *postgres.FieldFilter) (string, bool) {
-	return ff.Field.Name, true
-}
-
-// fmtFieldNameJoinedKey
-func fmtFieldNameJoinedKey(ff *postgres.FieldFilter, sep string) (key string, ok bool) {
-	for _, node := range ff.Field.Selector {
-		key += node.Name + sep
-	}
-	return key + ff.Field.Name, true
-}
-
-// fmtFieldTagBaseKey
-func fmtFieldTagBaseKey(ff *postgres.FieldFilter, tag string) (string, bool) {
-	key := ff.Field.Tag.First(tag)
-	if key == "-" || key == "" {
-		return "", false
-	}
-	return key, true
-}
-
-// fmtFieldTagJoinedKey
-func fmtFieldTagJoinedKey(ff *postgres.FieldFilter, tag, sep string) (key string, ok bool) {
-	for _, node := range ff.Field.Selector {
-		k := node.Tag.First(tag)
-		if k == "-" || k == "" {
-			return "", false
-		}
-
-		key += k + sep
-	}
-
-	k := ff.Field.Tag.First(tag)
-	if k == "-" || k == "" {
-		return "", false
-	}
-	return key + k, true
 }
 
 ////////////////////////////////////////////////////////////////////////////////

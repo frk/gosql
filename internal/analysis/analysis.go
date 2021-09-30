@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/frk/gosql/internal/config"
 	"github.com/frk/gosql/internal/typesutil"
 	"github.com/frk/tagutil"
 )
@@ -46,6 +47,7 @@ var (
 
 // analysis holds the state of the analyzer.
 type analysis struct {
+	cfg  config.Config
 	fset *token.FileSet
 	// The named type under analysis.
 	named *types.Named
@@ -79,23 +81,26 @@ type Info struct {
 	// RelSpace maintains a set of *unique* relation names or aliases that map
 	// onto their respective RelIdent values that were parsed from struct tags.
 	RelSpace map[string]RelIdent
+	// The analyzed struct.
+	Struct TargetStruct
 }
 
 // Run analyzes the given named type which is expected to be a struct type whose name
 // prefix matches one of the allowed prefixes. It panics if the named type is not actually
 // a struct type or if its name does not start with one of the predefined prefixes.
-func Run(fset *token.FileSet, named *types.Named, pos token.Pos, info *Info) (TargetStruct, error) {
+func Run(fset *token.FileSet, named *types.Named, pos token.Pos, cfg config.Config) (*Info, error) {
 	structType, ok := named.Underlying().(*types.Struct)
 	if !ok {
 		panic(named.Obj().Name() + " must be a struct type.") // this shouldn't happen
 	}
 
 	a := new(analysis)
+	a.cfg = cfg
 	a.fset = fset
 	a.named = named
 	a.pkgPath = named.Obj().Pkg().Path()
 
-	a.info = info
+	a.info = new(Info)
 	a.info.FileSet = fset
 	a.info.PkgPath = a.pkgPath
 	a.info.TypeName = named.Obj().Name()
@@ -104,9 +109,19 @@ func Run(fset *token.FileSet, named *types.Named, pos token.Pos, info *Info) (Ta
 	a.info.RelSpace = make(map[string]RelIdent)
 
 	if strings.HasPrefix(strings.ToLower(named.Obj().Name()), "filter") {
-		return analyzeFilterStruct(a, structType)
+		s, err := analyzeFilterStruct(a, structType)
+		if err != nil {
+			return nil, err
+		}
+		a.info.Struct = s
+	} else {
+		s, err := analyzeQueryStruct(a, structType)
+		if err != nil {
+			return nil, err
+		}
+		a.info.Struct = s
 	}
-	return analyzeQueryStruct(a, structType)
+	return a.info, nil
 }
 
 func (a *analysis) error(code errorCode, f *types.Var, blockName, tagString, tagExpr, tagError string) error {
@@ -584,6 +599,8 @@ stackloop:
 				node.TypePkgLocal = typ.PkgLocal
 				node.IsImported = typ.IsImported
 				node.IsPointer = (f.Type.Kind == TypeKindPtr)
+				node.ReadOnly = tag.HasOption("sql", "ro")
+				node.WriteOnly = tag.HasOption("sql", "wo")
 				loop2.selector = append(loop2.selector, node)
 
 				stack = append(stack, loop2)
@@ -611,6 +628,10 @@ stackloop:
 			f.UseAdd = tag.HasOption("sql", "add")
 			f.UseDefault = tag.HasOption("sql", "default")
 			f.UseCoalesce, f.CoalesceValue = parseCoalesceInfo(tag)
+
+			if err := parseFilterColumnKey(a, f); err != nil {
+				return err
+			}
 
 			// Add the field to the list.
 			rt.Fields = append(rt.Fields, f)
@@ -1986,6 +2007,90 @@ func parseFuncName(tagvals []string) FuncName {
 		}
 	}
 	return ""
+}
+
+// parseFilterColumnKey
+func parseFilterColumnKey(a *analysis, f *FieldInfo) error {
+	tag := a.cfg.FilterColumnKeyTag.Value
+	sep := a.cfg.FilterColumnKeySeparator.Value
+	base := a.cfg.FilterColumnKeyBase.Value
+
+	selector := f.Selector
+	fcktag := f.Tag["fck"]
+	if len(fcktag) == 0 {
+		for i, node := range selector {
+			if fcktag = node.Tag["fck"]; len(fcktag) > 0 {
+				selector = selector[i:]
+				break
+			}
+		}
+	}
+
+	// if present, use the fck tag to override the global config
+	if len(fcktag) > 0 {
+		for _, opt := range fcktag {
+			// TODO(mkopriva): add error reporting for invalid
+			// "fck" option keys and/or values.
+			var optKey, optVal string
+			if i := strings.IndexByte(opt, ':'); i > -1 {
+				optKey, optVal = opt[:i], opt[i+1:]
+			}
+
+			switch optKey {
+			case "tag":
+				tag = optVal
+			case "sep":
+				sep = optVal
+			case "base":
+				base, _ = strconv.ParseBool(optVal)
+			}
+		}
+	}
+
+	// use field tag
+	if len(tag) > 0 {
+		if !base {
+			f.FilterColumnKey = joinFieldTag(f, selector, tag, sep)
+		} else {
+			if key := f.Tag.First(tag); key != "-" {
+				f.FilterColumnKey = key
+			}
+		}
+	} else {
+		// use field name
+		if !base {
+			f.FilterColumnKey = joinFieldName(f, selector, sep)
+		} else {
+			f.FilterColumnKey = f.Name
+		}
+	}
+	return nil
+}
+
+// joinFieldName
+func joinFieldName(f *FieldInfo, sel []*FieldSelectorNode, sep string) (key string) {
+	for _, node := range sel {
+		key += node.Name + sep
+	}
+	return key + f.Name
+}
+
+// joinFieldTag
+func joinFieldTag(f *FieldInfo, sel []*FieldSelectorNode, tag, sep string) (key string) {
+	for _, node := range sel {
+		k := node.Tag.First(tag)
+		if k == "-" || k == "" {
+			return ""
+		}
+
+		key += k + sep
+	}
+
+	k := f.Tag.First(tag)
+	if k == "-" || k == "" {
+		return ""
+	}
+	return key + k
 }
 
 ////////////////////////////////////////////////////////////////////////////////
