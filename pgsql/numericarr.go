@@ -632,7 +632,7 @@ func (v numericArrayFromFloat32Slice) Value() (driver.Value, error) {
 	out := []byte{'{'}
 
 	for _, f := range v.val {
-		out = strconv.AppendInt(out, int64(f), 10)
+		out = strconv.AppendFloat(out, float64(f), 'f', -1, 32)
 		out = append(out, ',')
 	}
 
@@ -656,7 +656,7 @@ func (v numericArrayToFloat32Slice) Scan(src interface{}) error {
 	elems := pgParseCommaArray(arr)
 	float32s := make([]float32, len(elems))
 	for i := 0; i < len(elems); i++ {
-		f64, err := strconv.ParseFloat(string(elems[i]), 64)
+		f64, err := strconv.ParseFloat(string(elems[i]), 32)
 		if err != nil {
 			return err
 		}
@@ -681,7 +681,7 @@ func (v numericArrayFromFloat64Slice) Value() (driver.Value, error) {
 	out := []byte{'{'}
 
 	for _, f := range v.val {
-		out = strconv.AppendInt(out, int64(f), 10)
+		out = strconv.AppendFloat(out, f, 'f', -1, 64)
 		out = append(out, ',')
 	}
 
