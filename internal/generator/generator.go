@@ -9,6 +9,7 @@ import (
 	"github.com/frk/gosql/internal/analysis"
 	"github.com/frk/gosql/internal/config"
 	"github.com/frk/gosql/internal/postgres"
+	"github.com/frk/gosql/internal/postgres/oid"
 
 	GO "github.com/frk/ast/golang"
 	SQL "github.com/frk/ast/sqlang"
@@ -633,6 +634,24 @@ func addCoalesceCallExpr(x SQL.ValueExpr, val string, c *postgres.Column) SQL.Va
 		coalesce.B = cast
 		return coalesce
 	}
+
+	if c.Type.OID == oid.UUID {
+		// NOTE(mkopriva): the following produces an expression that is
+		// useful when scanning UUID columns into plain string fields.
+		//
+		// COALESCE(x::text, '')
+		coalesce := SQL.Coalesce{}
+		coalesce.A = SQL.CastExpr{Expr: x, Type: `text`}
+		coalesce.B = SQL.Literal{`''`}
+		return coalesce
+
+		// TODO(mkopriva): This needs to be made context-aware to avoid
+		// issues, like for example, if the COALESCE is generated as part
+		// of a sub-query whose result is fed to a column of type UUID,
+		// then the above, when `''` is returned, will cause the whole
+		// query to fail.
+	}
+
 	if lit, ok := c.Type.ZeroValueLiteral(); ok {
 		cast := SQL.CastExpr{}
 		cast.Expr = SQL.Literal{lit}
@@ -648,6 +667,25 @@ func addCoalesceCallExpr(x SQL.ValueExpr, val string, c *postgres.Column) SQL.Va
 
 // addNULLIFCallExpr
 func addNULLIFCallExpr(x SQL.ValueExpr, c *postgres.Column) SQL.ValueExpr {
+	if c.Type.OID == oid.UUID {
+		// NULLIF(x, '')::uuid
+		// - where x is $N (an ordinal parameter spec)
+		// NULLIF(x::text, '')::uuid
+		// - where x is anything but $N
+
+		nullif := SQL.NULLIF{}
+		nullif.Value = x
+		nullif.Expr = SQL.Literal{`''`}
+		if _, ok := x.(SQL.OrdinalParameterSpec); !ok {
+			nullif.Value = SQL.CastExpr{Expr: nullif.Value, Type: `text`}
+		}
+
+		cast := SQL.CastExpr{}
+		cast.Expr = nullif
+		cast.Type = c.Type.NameFmt
+		return cast
+	}
+
 	if lit, ok := c.Type.ZeroValueLiteral(); ok {
 		nullif := SQL.NULLIF{}
 		nullif.Value = x

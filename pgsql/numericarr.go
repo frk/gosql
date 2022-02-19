@@ -632,7 +632,7 @@ func (v numericArrayFromFloat32Slice) Value() (driver.Value, error) {
 	out := []byte{'{'}
 
 	for _, f := range v.val {
-		out = strconv.AppendInt(out, int64(f), 10)
+		out = strconv.AppendFloat(out, float64(f), 'f', -1, 32)
 		out = append(out, ',')
 	}
 
@@ -681,7 +681,7 @@ func (v numericArrayFromFloat64Slice) Value() (driver.Value, error) {
 	out := []byte{'{'}
 
 	for _, f := range v.val {
-		out = strconv.AppendInt(out, int64(f), 10)
+		out = strconv.AppendFloat(out, f, 'f', -1, 64)
 		out = append(out, ',')
 	}
 
