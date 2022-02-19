@@ -656,7 +656,7 @@ func (v numericArrayToFloat32Slice) Scan(src interface{}) error {
 	elems := pgParseCommaArray(arr)
 	float32s := make([]float32, len(elems))
 	for i := 0; i < len(elems); i++ {
-		f64, err := strconv.ParseFloat(string(elems[i]), 64)
+		f64, err := strconv.ParseFloat(string(elems[i]), 32)
 		if err != nil {
 			return err
 		}
