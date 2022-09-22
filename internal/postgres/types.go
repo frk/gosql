@@ -384,6 +384,13 @@ func (t Type) ZeroValueLiteral() (lit string, ok bool) {
 	return lit, ok
 }
 
+func (t *Type) GetNameFmt() string {
+	if t == nil {
+		return "<nil>"
+	}
+	return t.NameFmt
+}
+
 func (c *Column) IsNULLable() bool {
 	return c.Relation != nil && c.Relation.RelKind == RelKindOrdinaryTable &&
 		c.HasNotNull == false

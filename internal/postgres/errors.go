@@ -420,19 +420,19 @@ Column error templates
 
 {{ define "` + errColumnFieldTypeWrite.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Column not compatible with field."}}
-    The "{{R .Col.Name}}" column's type "{{R .Col.Type.NameFmt}}" is not compatible for {{wu "writing"}}` +
+    The "{{R .Col.Name}}" column's type "{{R .Col.Type.GetNameFmt}}" is not compatible for {{wu "writing"}}` +
 	` with the "{{R .Field.Name}}" field's type "{{R .Field.Type}}".
 {{ end }}
 
 {{ define "` + errColumnFieldTypeRead.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Column not compatible with field."}}
-    The "{{R .Col.Name}}" column's type "{{R .Col.Type.NameFmt}}" is not compatible for {{wu "reading"}}` +
+    The "{{R .Col.Name}}" column's type "{{R .Col.Type.GetNameFmt}}" is not compatible for {{wu "reading"}}` +
 	` with the "{{R .Field.Name}}" field's type "{{R .Field.Type}}".
 {{ end }}
 
 {{ define "` + errColumnTextSearchType.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Bad column type for text search."}}
-    The column "{{R .Col.IdRef}}" referenced in "{{R .Field.Definition}}" is of type "{{R .Col.Type.NameFmt}}".
+    The column "{{R .Col.IdRef}}" referenced in "{{R .Field.Definition}}" is of type "{{R .Col.Type.GetNameFmt}}".
     - a column referenced by a {{W .Field.TypeShort}} directive MUST be of type {{Ci "tsvector"}} to support {{wu "full text search"}}.
 {{ end }}
 
@@ -460,11 +460,11 @@ Pred error templates
 {{Wb .Field.File.NameAndLine}}: {{Y "Bad operand type in quantified predicate."}}
     {{if .RHSCol.Id.Name -}}
     The predicate "{{R .PredString}}" used in "{{R .Field.Definition}}" is not valid.
-    - the column "{{R .RHSCol.IdRef}}" on the right side is of type {{Wi .RHSCol.Type.NameFmt}}.
+    - the column "{{R .RHSCol.IdRef}}" on the right side is of type {{Wi .RHSCol.Type.GetNameFmt}}.
     - the quantifier {{R .Quant.String}} requires an {{Wi "array"}} on the right side.
     {{else -}}
     The predicate "{{R .PredString}}" used in "{{R .Field.Definition}}" is not valid.
-    - the expression "{{R .RHSLit.Expr}}" on the right side is of type {{Wi .RHSLit.Type.NameFmt}}.
+    - the expression "{{R .RHSLit.Expr}}" on the right side is of type {{Wi .RHSLit.Type.GetNameFmt}}.
     - the quantifier {{R .Quant.String}} requires an {{Wi "array"}} on the right side.
     {{end -}}
 {{ end }}
@@ -473,11 +473,11 @@ Pred error templates
 {{Wb .Field.File.NameAndLine}}: {{Y "Bad operand type in array predicate."}}
     {{if .RHSCol.Id.Name -}}
     The predicate "{{R .PredString}}" used in "{{R .Field.Definition}}" is not valid.
-    - the column "{{R .RHSCol.IdRef}}" on the right side is of type {{Wi .RHSCol.Type.NameFmt}}.
+    - the column "{{R .RHSCol.IdRef}}" on the right side is of type {{Wi .RHSCol.Type.GetNameFmt}}.
     - the operator {{R .Pred.String}} requires an {{Wi "array"}} on the right side.
     {{else -}}
     The predicate "{{R .PredString}}" used in "{{R .Field.Definition}}" is not valid.
-    - the expression "{{R .RHSLit.Expr}}" on the right side is of type {{Wi .RHSLit.Type.NameFmt}}.
+    - the expression "{{R .RHSLit.Expr}}" on the right side is of type {{Wi .RHSLit.Type.GetNameFmt}}.
     - the operator {{R .Pred.String}} requires an {{Wi "array"}} on the right side.
     {{end -}}
 {{ end }}
@@ -485,7 +485,7 @@ Pred error templates
 {{ define "` + errPredicateOperandBool.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Bad operand type in boolean predicate."}}
     The predicate "{{R .PredString}}" used in "{{R .Field.Definition}}" is not valid.
-    - the column "{{R .Col.IdRef}}" is of type {{Wi .Col.Type.NameFmt}}.
+    - the column "{{R .Col.IdRef}}" is of type {{Wi .Col.Type.GetNameFmt}}.
     - the operator {{R .Pred.String}} requires a {{Wi "boolean"}} operand.
 {{ end }}
 
@@ -499,21 +499,21 @@ Pred error templates
 {{ define "` + errColumnComparison.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Bad column comparison."}}
     {{if .RHSCol.Id.Name -}}
-    The operator "{{R .Col.Type.NameFmt .Pred.String .RHSCol.Type.NameFmt}}" referenced in "{{R .Field.Definition}}" does not exist.
-    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.NameFmt}}".
-    - column "{{R .RHSCol.IdRef}}" is of type "{{R .RHSCol.Type.NameFmt}}".
+    The operator "{{R .Col.Type.GetNameFmt .Pred.String .RHSCol.Type.GetNameFmt}}" referenced in "{{R .Field.Definition}}" does not exist.
+    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.GetNameFmt}}".
+    - column "{{R .RHSCol.IdRef}}" is of type "{{R .RHSCol.Type.GetNameFmt}}".
     {{else if .RHSLit.Expr -}}
-    The operator "{{R .Col.Type.NameFmt .Pred.String .RHSLit.Type.NameFmt}}" referenced in "{{R .Field.Definition}}" does not exist.
-    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.NameFmt}}".
-    - expression "{{R .RHSLit.Expr}}" is of type "{{R .RHSLit.Type.NameFmt}}".
+    The operator "{{R .Col.Type.GetNameFmt .Pred.String .RHSLit.Type.GetNameFmt}}" referenced in "{{R .Field.Definition}}" does not exist.
+    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.GetNameFmt}}".
+    - expression "{{R .RHSLit.Expr}}" is of type "{{R .RHSLit.Type.GetNameFmt}}".
     {{end -}}
 {{ end }}
 
 {{ define "` + errColumnFieldComparison.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Bad column field comparison."}}
-    The operator "{{R .Field.TypeShort .Pred.String .Col.Type.NameFmt}}" referenced in "{{R .Field.Definition}}" does not exist.
+    The operator "{{R .Field.TypeShort .Pred.String .Col.Type.GetNameFmt}}" referenced in "{{R .Field.Definition}}" does not exist.
     - field "{{R .Field.Name}}" is of type "{{R .Field.TypeShort}}".
-    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.NameFmt}}".
+    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.GetNameFmt}}".
 {{ end }}
 
 {{ define "` + errPredicateLiteralExpr.name() + `" -}}
@@ -527,15 +527,15 @@ Between error templates
 
 {{ define "` + errBetweenColumnComparison.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Bad column between comparison."}}
-    The operator "{{R .Col.Type.NameFmt .Pred.String .RHSCol.Type.NameFmt}}" represented by "{{R .WBFieldDefinition}}" does not exist.
-    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.NameFmt}}".
-    - column "{{R .RHSCol.IdRef}}" is of type "{{R .RHSCol.Type.NameFmt}}".
+    The operator "{{R .Col.Type.GetNameFmt .Pred.String .RHSCol.Type.GetNameFmt}}" represented by "{{R .WBFieldDefinition}}" does not exist.
+    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.GetNameFmt}}".
+    - column "{{R .RHSCol.IdRef}}" is of type "{{R .RHSCol.Type.GetNameFmt}}".
 {{ end }}
 
 {{ define "` + errBetweenFieldComparison.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Bad column field between comparison."}}
-    The operator "{{R .Field.TypeShort .Pred.String .Col.Type.NameFmt}}" represented by "{{R .WBFieldDefinition}}" does not exist.
-    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.NameFmt}}".
+    The operator "{{R .Field.TypeShort .Pred.String .Col.Type.GetNameFmt}}" represented by "{{R .WBFieldDefinition}}" does not exist.
+    - column "{{R .Col.IdRef}}" is of type "{{R .Col.Type.GetNameFmt}}".
     - field "{{R .Field.Name}}" is of type "{{R .Field.TypeShort}}".
 {{ end }}
 
@@ -545,7 +545,7 @@ Procedure error templates
 
 {{ define "` + errProcedureUnknown.name() + `" -}}
 {{Wb .Field.File.NameAndLine}}: {{Y "Procedure not found."}}
-    No function with the name "{{R .FuncName}}" and argument type "{{R .Col.Type.NameFmt}}" as referenced in "{{R .Field.Definition}}"
+    No function with the name "{{R .FuncName}}" and argument type "{{R .Col.Type.GetNameFmt}}" as referenced in "{{R .Field.Definition}}"
     exists in the database "{{W .DB.Name}}" (search_path: {{Wb .DB.SearchPath}}).
 {{ end }}
 

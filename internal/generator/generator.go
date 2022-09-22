@@ -645,6 +645,9 @@ func addCoalesceCallExpr(x SQL.ValueExpr, val string, c *postgres.Column) SQL.Va
 		coalesce.B = SQL.Literal{`''`}
 		return coalesce
 
+		// TODO(mkopriva): many non-text literals don't need an explicit
+		// cast, like for example: 0::interger is unnecessary, 0 should suffice
+
 		// TODO(mkopriva): This needs to be made context-aware to avoid
 		// issues, like for example, if the COALESCE is generated as part
 		// of a sub-query whose result is fed to a column of type UUID,

@@ -710,6 +710,8 @@ func typeCheckFieldConditional(c *checker, cond *FieldConditional) dbErrorCode {
 	}
 
 	if cond.Predicate.IsArray() || cond.Quantifier > 0 {
+		// FIXME(mkopriva): this currently breaks for custom types like
+		// enums. Must figure out how to find the oid of a custom type...
 		id, ok := oid.TypeToArray[cond.Column.Type.OID]
 		if ok {
 			ctyp, ok = c.db.catalog.Types[id]
@@ -717,6 +719,7 @@ func typeCheckFieldConditional(c *checker, cond *FieldConditional) dbErrorCode {
 		if !ok && cond.Predicate.IsArray() {
 			return errPredicateOperandArray
 		} else if !ok && cond.Quantifier > 0 {
+			log.Println("EHHEHEHEHE")
 			return errPredicateOperandQuantifier
 		}
 	}
