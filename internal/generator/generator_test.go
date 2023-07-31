@@ -200,6 +200,11 @@ func TestGenerator(t *testing.T) {
 				cfg.QuoteIdentifiers.Value = true
 			}},
 			{filename: "nested"},
+			{filename: "embedded", withCfg: func(cfg *config.Config) {
+				cfg.FilterColumnKeyTag.Value = "json"
+				cfg.FilterColumnKeySeparator.Value = "."
+				cfg.QuoteIdentifiers.Value = true
+			}},
 			{filename: "textsearch"},
 		},
 	}, {

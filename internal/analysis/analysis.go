@@ -1226,9 +1226,12 @@ func analyzeJoinStructJoinDirective(a *analysis, j *JoinStruct, dirName string, 
 // ✅ The type of the given field MUST be a struct type.
 // ✅ The struct type MUST contain exactly 1 "conflict_action" directive.
 // ✅ The struct type MUST contain exactly 1 "conflict_target" directive, if it
-//    contains the gosql.Update "conflict_action" directive.
+//
+//	contains the gosql.Update "conflict_action" directive.
+//
 // ✅ The struct type MAY contain, at most, 1 "conflict_target" directive, if it
-//    contains the gosql.Ignore "conflict_action" directive.
+//
+//	contains the gosql.Ignore "conflict_action" directive.
 func analyzeOnConflictStruct(a *analysis, f *types.Var, tag string) (err error) {
 	if a.query.Kind != QueryKindInsert {
 		return a.error(errIllegalQueryField, f, "", tag, "", "")
@@ -2077,20 +2080,28 @@ func joinFieldName(f *FieldInfo, sel []*FieldSelectorNode, sep string) (key stri
 
 // joinFieldTag
 func joinFieldTag(f *FieldInfo, sel []*FieldSelectorNode, tag, sep string) (key string) {
+	items := make([]string, 0)
 	for _, node := range sel {
 		k := node.Tag.First(tag)
-		if k == "-" || k == "" {
+		if k == "-" {
 			return ""
 		}
+		if k == "" {
+			continue
+		}
 
-		key += k + sep
+		items = append(items, k)
 	}
 
 	k := f.Tag.First(tag)
-	if k == "-" || k == "" {
+	if k == "-" {
 		return ""
 	}
-	return key + k
+	if k != "" {
+		items = append(items, k)
+	}
+
+	return strings.Join(items, sep)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2334,9 +2345,8 @@ func (t *TypeInfo) IsXMLIllegal() bool {
 	return t.Is(TypeKindChan, TypeKindFunc, TypeKindMap)
 }
 
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
 // Cache
-//
 var relTypeCache = struct {
 	sync.RWMutex
 	m map[string]*RelType

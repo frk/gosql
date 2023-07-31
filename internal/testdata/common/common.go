@@ -124,6 +124,29 @@ type Baz struct {
 	Val string `sql:"val"`
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// for testing embedded struct fields with *tag* FCKeys
+
+type Embedded struct {
+	FOO  *EFoo `json:"fooField" sql:">foo_"`
+	EFoo `sql:">foo2_"`
+}
+
+type EFoo struct {
+	Bar EBar  `json:"barField" sql:">bar_"`
+	Baz *EBaz `json:"bazField" sql:">baz_"`
+}
+
+type EBar struct {
+	EBaz `sql:">baz_"`
+}
+
+type EBaz struct {
+	Val string `json:"value" sql:"val"`
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 type BadIterator interface { // unexported method
 	fn(*User) error
 }
