@@ -8,7 +8,7 @@ import (
 	"github.com/frk/gosql/internal/testdata/common"
 )
 
-//OK: simple select
+// OK: simple select
 type SelectPostgresTestOK_Simple struct {
 	Columns struct {
 		A int       `sql:"col_a"`
@@ -39,4 +39,16 @@ type SelectPostgresTestOK_CustomTypePointer struct {
 
 type InsertPostgresTestOK_CustomTypePointer struct {
 	Rel []*CT3b `rel:"column_tests_3"`
+}
+
+type SelectPostgresTestOK_CompositeType struct {
+	Rel CT4 `rel:"column_tests_4"`
+}
+
+type SelectPostgresTestOK_CompositeTypePointer struct {
+	Rel *CT4 `rel:"column_tests_4"`
+}
+
+type InsertPostgresTestOK_CompositeTypeSlice struct {
+	Rel []*CT4 `rel:"column_tests_4"`
 }

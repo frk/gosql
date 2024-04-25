@@ -111,6 +111,18 @@ func TestCheck(t *testing.T) {
 		printerr: true,
 		err:      nil,
 	}, {
+		name:     "SelectPostgresTestOK_CompositeType",
+		printerr: true,
+		err:      nil,
+	}, {
+		name:     "SelectPostgresTestOK_CompositeTypePointer",
+		printerr: true,
+		err:      nil,
+	}, {
+		name:     "InsertPostgresTestOK_CompositeTypeSlice",
+		printerr: true,
+		err:      nil,
+	}, {
 		name: "SelectPostgresTestBAD_NoRelation",
 		err: &dbError{
 			Code: errRelationUnknown,

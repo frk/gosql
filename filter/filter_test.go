@@ -229,6 +229,23 @@ func TestFilter(t *testing.T) {
 		want: result{where: ` WHERE col_a = $1 AND (col_b = $2 AND (col_c = $3) AND col_d = $4) AND col_e = $5`,
 			params: []interface{}{123, 123, 123, 123, 123}},
 	}, {
+		name: "test_and_2",
+		run: func(c *Constructor) error {
+			c.And(func() {
+				c.Col("col_a", "=", 123)
+				c.Or(nil)
+				c.Col("col_a", "=", 0)
+			})
+			c.And(func() {
+				c.Col("col_b", "=", 876)
+				c.Or(nil)
+				c.Col("col_b", "=", 0)
+			})
+			return nil
+		},
+		want: result{where: ` WHERE (col_a = $1 OR col_a = $2) AND (col_b = $3 OR col_b = $4)`,
+			params: []interface{}{123, 0, 876, 0}},
+	}, {
 		name: "test_or",
 		run: func(c *Constructor) error {
 			c.Col("col_a", "=", 123)

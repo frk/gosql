@@ -2347,6 +2347,7 @@ var sqlOverridingClause = map[analysis.OverridingKind]SQL.OverridingClause{
 }
 
 var sqlJoinType = map[analysis.JoinType]SQL.JoinType{
+	analysis.JoinTypeInner: SQL.JoinInner,
 	analysis.JoinTypeLeft:  SQL.JoinLeft,
 	analysis.JoinTypeRight: SQL.JoinRight,
 	analysis.JoinTypeFull:  SQL.JoinFull,

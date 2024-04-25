@@ -68,9 +68,29 @@ CREATE TYPE color_enum AS ENUM (
 	, 'blue'
 );
 
+CREATE TYPE css_styles AS (
+    height text
+    , width text
+    , border_radius text
+    , background_color text
+    , color text
+    , font_family text
+    , font_weight text
+    , font_size text
+    , line_height text
+    , letter_spacing text
+);
+
 CREATE TABLE column_tests_3 (
 	color_text text
 	, color_enum color_enum
+	, some_time timestamp not null
+);
+
+CREATE TABLE column_tests_4 (
+	color_text text
+	, color_enum color_enum
+	, h1_styles css_styles
 	, some_time timestamp not null
 );
 

@@ -14,7 +14,7 @@ func (q *SelectWithJoinBlockSliceQuery) Exec(c gosql.Conn) error {
 	, u."full_name"
 	, u."created_at"
 	FROM "test_user" AS u
-	LEFT JOIN "test_post" AS p ON p."user_id" = u."id"
+	INNER JOIN "test_post" AS p ON p."user_id" = u."id"
 	LEFT JOIN "test_join1" AS j1 ON j1."post_id" = p."id"
 	RIGHT JOIN "test_join2" AS j2 ON j2."join1_id" = j1."id"
 	FULL JOIN "test_join3" AS j3 ON j3."join2_id" = j2."id"

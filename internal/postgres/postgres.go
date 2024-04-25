@@ -294,7 +294,8 @@ func typeCheckQueryStruct(c *checker, qs *analysis.QueryStruct) error {
 // typeCheckQueryForceDirective checks the columns listed in the gosql.Force directive's tag.
 //
 // CHECKLIST:
-//  ✅ Each column MUST be present in one of the loaded relations.
+//
+//	✅ Each column MUST be present in one of the loaded relations.
 func typeCheckQueryForceDirective(c *checker, qs *analysis.QueryStruct) error {
 	if qs.Force == nil {
 		return nil
@@ -312,10 +313,11 @@ func typeCheckQueryForceDirective(c *checker, qs *analysis.QueryStruct) error {
 // typeCheckQueryDefaultDirective checks the columns listed in the gosql.Default directive's tag.
 //
 // CHECKLIST:
-//  ✅ Each column MUST be present in the TARGET relation.
-//  ✅ Each column MUST have a DEFAULT set.
-//  ✅ If a column has a qualifier it MUST match the alias,
-//     or name, of the target relation.
+//
+//	✅ Each column MUST be present in the TARGET relation.
+//	✅ Each column MUST have a DEFAULT set.
+//	✅ If a column has a qualifier it MUST match the alias,
+//	   or name, of the target relation.
 func typeCheckQueryDefaultDirective(c *checker, qs *analysis.QueryStruct) error {
 	if qs.Default == nil {
 		return nil
@@ -336,7 +338,8 @@ func typeCheckQueryDefaultDirective(c *checker, qs *analysis.QueryStruct) error 
 // typeCheckQueryOrderByDirective checks the columns listed in the gosql.OrderBy directive's tag.
 //
 // CHECKLIST:
-//  ✅ Each column MUST be present in one of the loaded relations.
+//
+//	✅ Each column MUST be present in one of the loaded relations.
 func typeCheckQueryOrderByDirective(c *checker, qs *analysis.QueryStruct) error {
 	if qs.OrderBy == nil {
 		return nil
@@ -353,18 +356,19 @@ func typeCheckQueryOrderByDirective(c *checker, qs *analysis.QueryStruct) error 
 // typeCheckQueryReturnDirective checks the columns listed in the gosql.Return directive's tag.
 //
 // CHECKLIST:
-// - If "*" tag was used:
-//  ✅ Each field of the target data type MAY have a corresponding column
+//
+//   - If "*" tag was used:
+//     ✅ Each field of the target data type MAY have a corresponding column
 //     in one of the loaded relations (denoted by the field's tag).
-//  ✅ Each field of the target data type that has a corresponding column MUST
+//     ✅ Each field of the target data type that has a corresponding column MUST
 //     be of a type that is readable from a value of that column.
 //
-// - If "<column_list>" tag was used:
-//  ✅ Each listed column MUST be present in the TARGET relation.
-//  ✅ Each listed column MUST have a corresponding field in the target data type.
-//  ✅ Each listed column's qualifier, if it has one, MUST match the alias, or name,
+//   - If "<column_list>" tag was used:
+//     ✅ Each listed column MUST be present in the TARGET relation.
+//     ✅ Each listed column MUST have a corresponding field in the target data type.
+//     ✅ Each listed column's qualifier, if it has one, MUST match the alias, or name,
 //     of the TARGET relation.
-//  ✅ Each listed column's corresponding field MUST be of a type that IS READABLE
+//     ✅ Each listed column's corresponding field MUST be of a type that IS READABLE
 //     from a value of that column's type.
 func typeCheckQueryReturnDirective(c *checker, qs *analysis.QueryStruct) error {
 	if qs.Return == nil {
@@ -399,10 +403,11 @@ func typeCheckQueryReturnDirective(c *checker, qs *analysis.QueryStruct) error {
 // typeCheckQueryResultField checks the fields of the resultField struct data type.
 //
 // CHECKLIST:
-//  ✅ Each field of the result data type MUST have a corresponding column in
-//     one of the loaded relations.
-//  ✅ Each field of the result data type MUST be of a type that is readable
-//     from a value of the corresponding column.
+//
+//	✅ Each field of the result data type MUST have a corresponding column in
+//	   one of the loaded relations.
+//	✅ Each field of the result data type MUST be of a type that is readable
+//	   from a value of the corresponding column.
 func typeCheckQueryResultField(c *checker, qs *analysis.QueryStruct) error {
 	if qs.Result == nil {
 		return nil
@@ -419,11 +424,11 @@ func typeCheckQueryResultField(c *checker, qs *analysis.QueryStruct) error {
 // typeCheckQueryRelField checks the fields of the query's struct data type.
 //
 // CHECKLIST:
-// - If the query represents a SELECT:
-//  ✅ Each field of the query's struct data type MUST be of a type that
+//   - If the query represents a SELECT:
+//     ✅ Each field of the query's struct data type MUST be of a type that
 //     is readable from a value of the corresponding column.
-// - If the query represents an INSERT or UPDATE:
-//  ✅ Each field of the query's struct data type MUST be of a type that
+//   - If the query represents an INSERT or UPDATE:
+//     ✅ Each field of the query's struct data type MUST be of a type that
 //     is writeable to the corresponding column.
 func typeCheckQueryRelField(c *checker, qs *analysis.QueryStruct) error {
 	if qs.Rel == nil || qs.Rel.IsDirective {
@@ -582,12 +587,13 @@ func typeCheckWhereItem(c *checker, item analysis.WhereItem) (WhereConditional, 
 // typeCheckWhereBetweenStruct
 //
 // CHECKLIST:
-//  ✅ The column denoting the primary predicand MUST be present in one of the loaded relations.
-//  ✅ Both range-bound predicands MUST be comparable to the primary column predicand.
 //
-// - If the bound is a *analysis.BetweenColumnDirective:
-//  ✅ The denoted column MUST be present in one of the loaded relations.
-//  ✅ The found column MUST be comparable to the provided acol column.
+//		✅ The column denoting the primary predicand MUST be present in one of the loaded relations.
+//		✅ Both range-bound predicands MUST be comparable to the primary column predicand.
+//
+//	  - If the bound is a *analysis.BetweenColumnDirective:
+//	    ✅ The denoted column MUST be present in one of the loaded relations.
+//	    ✅ The found column MUST be comparable to the provided acol column.
 //
 // - If the bound is a *analysis.BetweenStructField:
 func typeCheckWhereBetweenStruct(c *checker, wb *analysis.WhereBetweenStruct) (*BetweenConditional, error) {
@@ -673,17 +679,18 @@ func typeCheckWhereBetweenStruct(c *checker, wb *analysis.WhereBetweenStruct) (*
 // typeCheckFieldConditional
 //
 // CHECKLIST:
-//  ✅ The column denoted by the ColIdent MUST be present in one of the loaded relations.
-//  ☑️  TODO If the column HasNotNull=true the predicate MUST NOT be a NULL predicate.
-//  ✅ The pg_operator table MUST contain an entry for the combination of the column's type,
-//     the predicate's operator, and a pg type compatible with the field's type. (Note that,
-//     if a quantifier [ANY, ALL, etc.] was provided, or the predicate is an array predicate,
-//     then the field is expected to be a slice/array and its element type will be used for
-//     the pg_operator lookup).
-//  ☑️  If a modifier function (lower, upper, etc.) was provided the column's type MUST
-//     match the function's argument type, the field's type MUST be compatible with the
-//     function's argument type, and the result type of both instances of the function
-//     MUST be comparable given the predicate operator, (be mindful of function overloading).
+//
+//	✅ The column denoted by the ColIdent MUST be present in one of the loaded relations.
+//	☑️  TODO If the column HasNotNull=true the predicate MUST NOT be a NULL predicate.
+//	✅ The pg_operator table MUST contain an entry for the combination of the column's type,
+//	   the predicate's operator, and a pg type compatible with the field's type. (Note that,
+//	   if a quantifier [ANY, ALL, etc.] was provided, or the predicate is an array predicate,
+//	   then the field is expected to be a slice/array and its element type will be used for
+//	   the pg_operator lookup).
+//	☑️  If a modifier function (lower, upper, etc.) was provided the column's type MUST
+//	   match the function's argument type, the field's type MUST be compatible with the
+//	   function's argument type, and the result type of both instances of the function
+//	   MUST be comparable given the predicate operator, (be mindful of function overloading).
 func typeCheckFieldConditional(c *checker, cond *FieldConditional) dbErrorCode {
 	if len(cond.FuncName) > 0 {
 		return typeCheckFieldConditionalWithFunc(c, cond)
@@ -827,22 +834,23 @@ func typeCheckFieldConditionalWithFunc(c *checker, cond *FieldConditional) dbErr
 // typeCheckColumnConditional
 //
 // CHECKLIST:
-// - If the *Relation argument is not nil:
-//  ✅ The LHS column MUST be present in given relation.
 //
-// - If the *Relation argument is nil:
-//  ✅ The LHS column MUST be present in one of the loaded relations.
+//   - If the *Relation argument is not nil:
+//     ✅ The LHS column MUST be present in given relation.
 //
-// - If the predicate of the condition argument is unary:
-//  ✅ If the unary predicate is one of the "IS [NOT] { FALSE | TRUE | UNKNOWN }"
+//   - If the *Relation argument is nil:
+//     ✅ The LHS column MUST be present in one of the loaded relations.
+//
+//   - If the predicate of the condition argument is unary:
+//     ✅ If the unary predicate is one of the "IS [NOT] { FALSE | TRUE | UNKNOWN }"
 //     predicates then the type of the LHS column/expression MUST be boolean.
-//  ✅ If the unary predicate is one of the "IS [NOT] NULL" predicates then
+//     ✅ If the unary predicate is one of the "IS [NOT] NULL" predicates then
 //     the LHS column MUST NOT have the "NOT NULL" constraint.
 //
-// - If a predicate quantifier was provided:
-//  ✅ The RHS column or literal expression MUST be quantifiable.
+//   - If a predicate quantifier was provided:
+//     ✅ The RHS column or literal expression MUST be quantifiable.
 //
-//  ✅ The LHS and RHS types MUST be comparable with the given predicate and quantifier.
+//     ✅ The LHS and RHS types MUST be comparable with the given predicate and quantifier.
 func typeCheckColumnConditional(c *checker, cond *ColumnConditional, rel *Relation, rid analysis.RelIdent, ptr analysis.FieldPtr) error {
 	if cond.LHSColumn == nil {
 		if rel != nil {
@@ -913,11 +921,12 @@ func typeCheckColumnConditional(c *checker, cond *ColumnConditional, rel *Relati
 // expression can be generated from the provided arguments.
 //
 // CHECKLIST:
-//  ✅ If the predicate together with the quantifier constitute an array comparison
-//     the check MUST use the RHS's element type instead of the RHS type.
-//  ✅ ACCEPT if the LHS type belongs to the string category and the RHS type is unknown.
-//  ✅ ACCEPT if the combination of LHS type, RHS type, and the predicate has
-//     an entry in the pg_operator table.
+//
+//	✅ If the predicate together with the quantifier constitute an array comparison
+//	   the check MUST use the RHS's element type instead of the RHS type.
+//	✅ ACCEPT if the LHS type belongs to the string category and the RHS type is unknown.
+//	✅ ACCEPT if the combination of LHS type, RHS type, and the predicate has
+//	   an entry in the pg_operator table.
 func typeCheckComparison(c *checker, ltyp *Type, rtyp *Type, pred analysis.Predicate, qua analysis.Quantifier) dbErrorCode {
 	if pred.IsArray() || qua > 0 {
 		if rtyp.Category != TypeCategoryArray {
@@ -969,17 +978,18 @@ func typeCheckComparison(c *checker, ltyp *Type, rtyp *Type, pred analysis.Predi
 // typeCheckQueryOnConflictStruct
 //
 // CHECKLIST:
-//  ✅ If a gosql.Column directive was used in the OnConflict block, the columns
-//     listed in the directive's tag MUST be present in the target table, they
-//     also MUST constitute a unique index of the target table.
-//  ✅ If a gosql.Index directive was used in the OnConflict block, the index
-//     specified in the directive's tag MUST be present on the target table
-//     and it MUST be a unique index.
-//  ✅ If a gosql.Constraint directive was used in the OnConflict block, the
-//     constraint specified in the directive's tag MUST be present on the target
-//     table and it MUST be a unique constraint.
-//  ✅ If a gosql.Update directive was used in the OnConflict block, the columns
-//     listed in the directive's tag MUST be present in the target table.
+//
+//	✅ If a gosql.Column directive was used in the OnConflict block, the columns
+//	   listed in the directive's tag MUST be present in the target table, they
+//	   also MUST constitute a unique index of the target table.
+//	✅ If a gosql.Index directive was used in the OnConflict block, the index
+//	   specified in the directive's tag MUST be present on the target table
+//	   and it MUST be a unique index.
+//	✅ If a gosql.Constraint directive was used in the OnConflict block, the
+//	   constraint specified in the directive's tag MUST be present on the target
+//	   table and it MUST be a unique constraint.
+//	✅ If a gosql.Update directive was used in the OnConflict block, the columns
+//	   listed in the directive's tag MUST be present in the target table.
 func typeCheckQueryOnConflictStruct(c *checker, qs *analysis.QueryStruct) error {
 	if qs.OnConflict == nil {
 		return nil
@@ -1093,23 +1103,24 @@ func typeCheckQueryOnConflictStruct(c *checker, qs *analysis.QueryStruct) error 
 // to the reads field of the *TargetInfo result.
 //
 // CHECKLIST:
-//  ✅ The field's type MUST NOT be a non-empty interface type.
-//  ✅ The field's type MAY be a non-interface type that implements sql.Scanner.
 //
-// - If the column's type is json or jsonb:
-//  ✅ The field's type MUST NOT be a chan, func, or a complex type IF it does
-//     not implement the json.Unmarshaler interface,
-//  ✅ otherwise the field's type MAY be any other type.
+//		✅ The field's type MUST NOT be a non-empty interface type.
+//		✅ The field's type MAY be a non-interface type that implements sql.Scanner.
 //
-//  ✅ The field's type MAY be the empty-interface type.
+//	  - If the column's type is json or jsonb:
+//	    ✅ The field's type MUST NOT be a chan, func, or a complex type IF it does
+//	    not implement the json.Unmarshaler interface,
+//	    ✅ otherwise the field's type MAY be any other type.
 //
-// - If the column's type is xml:
-//  ✅ The field's type MUST NOT be a func, chan, or map type IF it does not
-//     implement the xml.Unmarshaler interface,
-//  ✅ otherwise the field's type MAY be any other type.
+//	    ✅ The field's type MAY be the empty-interface type.
 //
-//  ✅ The field's type MUST be a type that, together with the column's type,
-//     has an entry in the compatibility table.
+//	  - If the column's type is xml:
+//	    ✅ The field's type MUST NOT be a func, chan, or map type IF it does not
+//	    implement the xml.Unmarshaler interface,
+//	    ✅ otherwise the field's type MAY be any other type.
+//
+//	    ✅ The field's type MUST be a type that, together with the column's type,
+//	    has an entry in the compatibility table.
 func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 	col := findRelColumn(c.rel, f.ColIdent.Name)
 	if col == nil && strict {
@@ -1227,24 +1238,25 @@ func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 // to the writes field of the *tagetInfo instance.
 //
 // CHECKLIST:
-//  ✅ If strict=true; the column denoted by the given field MUST be present
-//     in the target relation.
-//  ✅ If the given field has the "default" tag, the target column MUST have
-//     a default data value assigned.
-//  ✅ The field's type MAY implement the driver.Valuer interface.
 //
-// - If the column's type is json or jsonb:
-//  ✅ The field's type MUST NOT be a chan, func, or a complex type IF it does
-//     not implement the json.Marshaler interface,
-//  ✅ otherwise the field's type MAY be any other type.
+//		✅ If strict=true; the column denoted by the given field MUST be present
+//		   in the target relation.
+//		✅ If the given field has the "default" tag, the target column MUST have
+//		   a default data value assigned.
+//		✅ The field's type MAY implement the driver.Valuer interface.
 //
-// - If the column's type is xml:
-//  ✅ The field's type MUST NOT be a func, chan, or map type IF it does not
-//     implement the xml.Marshaler interface,
-//  ✅ otherwise the field's type MAY be any other type.
+//	  - If the column's type is json or jsonb:
+//	    ✅ The field's type MUST NOT be a chan, func, or a complex type IF it does
+//	    not implement the json.Marshaler interface,
+//	    ✅ otherwise the field's type MAY be any other type.
 //
-//  ✅ The field's type MUST be a type that, together with the column's type,
-//     has an entry in the compatibility table.
+//	  - If the column's type is xml:
+//	    ✅ The field's type MUST NOT be a func, chan, or map type IF it does not
+//	    implement the xml.Marshaler interface,
+//	    ✅ otherwise the field's type MAY be any other type.
+//
+//	    ✅ The field's type MUST be a type that, together with the column's type,
+//	    has an entry in the compatibility table.
 func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 	col := findRelColumn(c.rel, f.ColIdent.Name)
 	if col == nil && strict {
@@ -1350,22 +1362,23 @@ func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 // typeCheckFieldFilter
 //
 // CHECKLIST:
-//  ✅ If strict=true; the column denoted by the given field MUST be present
-//     in the target relation.
-//  ✅ The field's type MAY implement the driver.Valuer interface.
 //
-// - If the column's type is json or jsonb:
-//  ✅ The field's type MUST NOT be a chan, func, or a complex type IF it does
-//     not implement the json.Marshaler interface,
-//  ✅ otherwise the field's type MAY be any other type.
+//		✅ If strict=true; the column denoted by the given field MUST be present
+//		   in the target relation.
+//		✅ The field's type MAY implement the driver.Valuer interface.
 //
-// - If the column's type is xml:
-//  ✅ The field's type MUST NOT be a func, chan, or map type IF it does not
-//     implement the xml.Marshaler interface,
-//  ✅ otherwise the field's type MAY be any other type.
+//	  - If the column's type is json or jsonb:
+//	    ✅ The field's type MUST NOT be a chan, func, or a complex type IF it does
+//	    not implement the json.Marshaler interface,
+//	    ✅ otherwise the field's type MAY be any other type.
 //
-//  ✅ The field's type MUST be a type that, together with the column's type,
-//     has an entry in the compatibility table.
+//	  - If the column's type is xml:
+//	    ✅ The field's type MUST NOT be a func, chan, or map type IF it does not
+//	    implement the xml.Marshaler interface,
+//	    ✅ otherwise the field's type MAY be any other type.
+//
+//	    ✅ The field's type MUST be a type that, together with the column's type,
+//	    has an entry in the compatibility table.
 func typeCheckFieldFilter(c *checker, f *analysis.FieldInfo, strict bool) error {
 	col := findRelColumn(c.rel, f.ColIdent.Name)
 	if col == nil && strict {
@@ -1563,9 +1576,8 @@ func findQueryColumnField(c *checker, qs *analysis.QueryStruct, cid analysis.Col
 	return nil, 0
 }
 
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
 // Load Functions
-//
 func loadCatalog(db *DB, key string) (*Catalog, error) {
 	catalogCache.Lock()
 	defer catalogCache.Unlock()
@@ -1590,8 +1602,7 @@ func loadCatalog(db *DB, key string) (*Catalog, error) {
 		, t.typispreferred
 		, t.typelem
 	FROM pg_type t
-	WHERE t.typrelid = 0
-	AND pg_catalog.pg_type_is_visible(t.oid)
+	WHERE pg_catalog.pg_type_is_visible(t.oid)
 	AND t.typcategory <> 'P'` //`
 	rows, err := db.Query(selectTypes)
 	if err != nil {
