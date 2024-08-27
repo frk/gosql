@@ -123,6 +123,10 @@ func TestCheck(t *testing.T) {
 		printerr: true,
 		err:      nil,
 	}, {
+		name:     "SelectPostgresTestOK_WhereJoinedUnaryNullColumn",
+		printerr: true,
+		err:      nil,
+	}, {
 		name: "SelectPostgresTestBAD_NoRelation",
 		err: &dbError{
 			Code: errRelationUnknown,

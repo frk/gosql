@@ -877,9 +877,20 @@ func typeCheckColumnConditional(c *checker, cond *ColumnConditional, rel *Relati
 			return c.dbError(dbError{Code: errPredicateOperandBool,
 				Col: colInfo{Id: cond.LHSColIdent, Column: cond.LHSColumn}, Pred: cond.Predicate}, ptr)
 		}
-		if cond.Predicate.IsNull() && cond.LHSColumn.HasNotNull {
-			return c.dbError(dbError{Code: errPredicateOperandNull,
-				Col: colInfo{Id: cond.LHSColIdent, Column: cond.LHSColumn}, Pred: cond.Predicate}, ptr)
+
+		if cond.Predicate.IsNull() {
+			// if this is a WHERE condition and the referenced column is from a joined table,
+			// then allow IS [NOT] NULL even if that column has the NOT NULL constraint since
+			// the table's join condition could have been unsuccessful in which case the
+			// referenced non-nullable column would be NULL.
+			var isWhereJoined bool
+			if _, ok := ptr.(*analysis.WhereColumnDirective); ok {
+				isWhereJoined = (c.rel != cond.LHSColumn.Relation)
+			}
+			if cond.LHSColumn.HasNotNull && !isWhereJoined {
+				return c.dbError(dbError{Code: errPredicateOperandNull,
+					Col: colInfo{Id: cond.LHSColIdent, Column: cond.LHSColumn}, Pred: cond.Predicate}, ptr)
+			}
 		}
 		return nil
 	}

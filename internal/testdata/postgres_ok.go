@@ -5,6 +5,7 @@ package testdata
 import (
 	"time"
 
+	"github.com/frk/gosql"
 	"github.com/frk/gosql/internal/testdata/common"
 )
 
@@ -51,4 +52,14 @@ type SelectPostgresTestOK_CompositeTypePointer struct {
 
 type InsertPostgresTestOK_CompositeTypeSlice struct {
 	Rel []*CT4 `rel:"column_tests_4"`
+}
+
+type SelectPostgresTestOK_WhereJoinedUnaryNullColumn struct {
+	Columns CT1 `rel:"column_tests_1:a"`
+	Join    struct {
+		_ gosql.LeftJoin `sql:"column_tests_2:b"`
+	}
+	Where struct {
+		_ gosql.Column `sql:"b.col_baz isnull"`
+	}
 }
