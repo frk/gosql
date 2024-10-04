@@ -19,12 +19,12 @@ type T struct {
 	F string `sql:"f"`
 }
 
-//OK: user datatype
+// OK: user datatype
 type InsertAnalysisTestOK1 struct {
 	UserRec *common.User `rel:"users_table"`
 }
 
-//OK: ignored datatype fields
+// OK: ignored datatype fields
 type InsertAnalysisTestOK2 struct {
 	UserRec struct {
 		_     string `sql:"name"` // ignore blank fields
@@ -34,19 +34,19 @@ type InsertAnalysisTestOK2 struct {
 	} `rel:"users_table"`
 }
 
-//OK: unnamed iterator func
+// OK: unnamed iterator func
 type SelectAnalysisTestOK3 struct {
 	User func(*common.User) error `rel:"users_table"`
 }
 
 type namedIteratorFunc func(*common.User) error
 
-//OK: named iterator func
+// OK: named iterator func
 type SelectAnalysisTestOK4 struct {
 	User namedIteratorFunc `rel:"users_table"`
 }
 
-//OK: unnamed iterator interface
+// OK: unnamed iterator interface
 type SelectAnalysisTestOK5 struct {
 	User interface {
 		Fn(*common.User) error
@@ -57,12 +57,12 @@ type namedIterator interface {
 	Fn(*common.User) error
 }
 
-//OK: named iterator interface
+// OK: named iterator interface
 type SelectAnalysisTestOK6 struct {
 	User namedIterator `rel:"users_table"`
 }
 
-//OK: tag options with boolean operators
+// OK: tag options with boolean operators
 type SelectAnalysisTestOK7 struct {
 	Rel struct {
 		a int `sql:"a,pk"`
@@ -75,14 +75,14 @@ type SelectAnalysisTestOK7 struct {
 	} `rel:"relation_a"`
 }
 
-//OK: nested fields
+// OK: nested fields
 type InsertAnalysisTestOK8 struct {
 	Rel struct {
 		Foobar common.Foo `sql:">foo_"`
 	} `rel:"relation_a"`
 }
 
-//OK: where block
+// OK: where block
 type DeleteAnalysisTestOK9 struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -90,7 +90,7 @@ type DeleteAnalysisTestOK9 struct {
 	}
 }
 
-//OK: where block with gosql.Column directive and all possible predicates
+// OK: where block with gosql.Column directive and all possible predicates
 type DeleteAnalysisTestOK10 struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -106,7 +106,7 @@ type DeleteAnalysisTestOK10 struct {
 	}
 }
 
-//OK: nested where blocks
+// OK: nested where blocks
 type DeleteAnalysisTestOK11 struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -129,7 +129,7 @@ type DeleteAnalysisTestOK11 struct {
 	}
 }
 
-//OK: where block with field items and specific comparison operators
+// OK: where block with field items and specific comparison operators
 type DeleteAnalysisTestOK12 struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -143,7 +143,7 @@ type DeleteAnalysisTestOK12 struct {
 	}
 }
 
-//OK: where block with gosql.Column directive and comparison expressions
+// OK: where block with gosql.Column directive and comparison expressions
 type DeleteAnalysisTestOK13 struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -155,7 +155,7 @@ type DeleteAnalysisTestOK13 struct {
 	}
 }
 
-//OK: where block with "between" predicates
+// OK: where block with "between" predicates
 type DeleteAnalysisTestOK14 struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -182,7 +182,7 @@ type DeleteAnalysisTestOK14 struct {
 	}
 }
 
-//OK: where block with "distinct from" predicates
+// OK: where block with "distinct from" predicates
 type DeleteAnalysisTestOK_DistinctFrom struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -194,7 +194,7 @@ type DeleteAnalysisTestOK_DistinctFrom struct {
 	}
 }
 
-//OK: where block with array predicates
+// OK: where block with array predicates
 type DeleteAnalysisTestOK_ArrayPredicate struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -206,7 +206,7 @@ type DeleteAnalysisTestOK_ArrayPredicate struct {
 	}
 }
 
-//OK: where block with pattern matching
+// OK: where block with pattern matching
 type DeleteAnalysisTestOK_PatternMatching struct {
 	Rel   struct{} `rel:"relation_a"`
 	Where struct {
@@ -221,7 +221,7 @@ type DeleteAnalysisTestOK_PatternMatching struct {
 	}
 }
 
-//OK: DELETE with Using joinblock
+// OK: DELETE with Using joinblock
 type DeleteAnalysisTestOK_Using struct {
 	Rel   struct{} `rel:"relation_a:a"`
 	Using struct {
@@ -236,7 +236,7 @@ type DeleteAnalysisTestOK_Using struct {
 	}
 }
 
-//OK: UPDATE with From joinblock
+// OK: UPDATE with From joinblock
 type UpdateAnalysisTestOK_From struct {
 	Rel  struct{} `rel:"relation_a:a"`
 	From struct {
@@ -251,7 +251,7 @@ type UpdateAnalysisTestOK_From struct {
 	}
 }
 
-//OK: SELECT with Join joinblock
+// OK: SELECT with Join joinblock
 type SelectAnalysisTestOK_Join struct {
 	Rel  struct{} `rel:"relation_a:a"`
 	Join struct {
@@ -266,55 +266,55 @@ type SelectAnalysisTestOK_Join struct {
 	}
 }
 
-//OK: Update with All directive
+// OK: Update with All directive
 type UpdateAnalysisTestOK_All struct {
 	Rel struct{} `rel:"relation_a:a"`
 	_   gosql.All
 }
 
-//OK: Delete with All directive
+// OK: Delete with All directive
 type DeleteAnalysisTestOK_All struct {
 	Rel struct{} `rel:"relation_a:a"`
 	_   gosql.All
 }
 
-//OK: Delete with Return directive
+// OK: Delete with Return directive
 type DeleteAnalysisTestOK_Return struct {
 	Rel T            `rel:"relation_a:a"`
 	_   gosql.Return `sql:"*"`
 }
 
-//OK: Insert with Return directive
+// OK: Insert with Return directive
 type InsertAnalysisTestOK_Return struct {
 	Rel T2           `rel:"relation_a:a"`
 	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
 }
 
-//OK: Update with Return directive
+// OK: Update with Return directive
 type UpdateAnalysisTestOK_Return struct {
 	Rel T2           `rel:"relation_a:a"`
 	_   gosql.Return `sql:"a.foo,a.bar,a.baz"`
 }
 
-//OK: Insert with Default directive
+// OK: Insert with Default directive
 type InsertAnalysisTestOK_Default struct {
 	Rel struct{}      `rel:"relation_a:a"`
 	_   gosql.Default `sql:"*"`
 }
 
-//OK: Update with Default directive
+// OK: Update with Default directive
 type UpdateAnalysisTestOK_Default struct {
 	Rel struct{}      `rel:"relation_a:a"`
 	_   gosql.Default `sql:"a.foo,a.bar,a.baz"`
 }
 
-//OK: Insert with Force directive
+// OK: Insert with Force directive
 type InsertAnalysisTestOK_Force struct {
 	Rel struct{}    `rel:"relation_a:a"`
 	_   gosql.Force `sql:"*"`
 }
 
-//OK: Update with Force directive
+// OK: Update with Force directive
 type UpdateAnalysisTestOK_Force struct {
 	Rel T2          `rel:"relation_a:a"`
 	_   gosql.Force `sql:"a.foo,a.bar,a.baz"`
@@ -324,13 +324,13 @@ type myerrorhandler struct{}
 
 func (myerrorhandler) HandleError(e error) error { return e }
 
-//OK: Select with ErrorHandler field
+// OK: Select with ErrorHandler field
 type SelectAnalysisTestOK_ErrorHandler struct {
 	Rel struct{} `rel:"relation_a:a"`
 	eh  myerrorhandler
 }
 
-//OK: Insert with embedded ErrorHandler field
+// OK: Insert with embedded ErrorHandler field
 type InsertAnalysisTestOK_ErrorHandler struct {
 	Rel struct{} `rel:"relation_a:a"`
 	myerrorhandler
@@ -340,82 +340,82 @@ type myerrorinfohandler struct{}
 
 func (myerrorinfohandler) HandleErrorInfo(info *gosql.ErrorInfo) error { return nil }
 
-//OK: Select with ErrorInfoHandler field
+// OK: Select with ErrorInfoHandler field
 type SelectAnalysisTestOK_ErrorInfoHandler struct {
 	Rel struct{} `rel:"relation_a:a"`
 	eh  myerrorinfohandler
 }
 
-//OK: Insert with embedded ErrorInfoHandler field
+// OK: Insert with embedded ErrorInfoHandler field
 type InsertAnalysisTestOK_ErrorInfoHandler struct {
 	Rel struct{} `rel:"relation_a:a"`
 	myerrorinfohandler
 }
 
-//OK: Select with Count field
+// OK: Select with Count field
 type SelectAnalysisTestOK_Count struct {
 	Count int `rel:"relation_a:a"`
 }
 
-//OK: Select with Exists field
+// OK: Select with Exists field
 type SelectAnalysisTestOK_Exists struct {
 	Exists bool `rel:"relation_a:a"`
 }
 
-//OK: Select with NotExists field
+// OK: Select with NotExists field
 type SelectAnalysisTestOK_NotExists struct {
 	NotExists bool `rel:"relation_a:a"`
 }
 
-//OK: Delete with Relation directive
+// OK: Delete with Relation directive
 type DeleteAnalysisTestOK_Relation struct {
 	_ gosql.Relation `rel:"relation_a:a"`
 }
 
-//OK: Select with Limit directive
+// OK: Select with Limit directive
 type SelectAnalysisTestOK_LimitDirective struct {
 	Rel []T         `rel:"relation_a:a"`
 	_   gosql.Limit `sql:"25"`
 }
 
-//OK: Select with Limit field
+// OK: Select with Limit field
 type SelectAnalysisTestOK_LimitField struct {
 	Rel   []T `rel:"relation_a:a"`
 	Limit int `sql:"10"`
 }
 
-//OK: Select with Offset directive
+// OK: Select with Offset directive
 type SelectAnalysisTestOK_OffsetDirective struct {
 	Rel []T          `rel:"relation_a:a"`
 	_   gosql.Offset `sql:"25"`
 }
 
-//OK: Select with Offset field
+// OK: Select with Offset field
 type SelectAnalysisTestOK_OffsetField struct {
 	Rel    []T `rel:"relation_a:a"`
 	Offset int `sql:"10"`
 }
 
-//OK: Select with OrderBy directive
+// OK: Select with OrderBy directive
 type SelectAnalysisTestOK_OrderByDirective struct {
 	Rel []T           `rel:"relation_a:a"`
 	_   gosql.OrderBy `sql:"a.foo:nullsfirst,-a.bar:nullsfirst,-a.baz,a.quux:nullslast"`
 }
 
-//OK: Insert with Override directive
+// OK: Insert with Override directive
 type InsertAnalysisTestOK_OverrideDirective struct {
 	Rel []T            `rel:"relation_a:a"`
 	_   gosql.Override `sql:"system"`
 }
 
-//OK: Filter with constructor & TextSearch directive
+// OK: Filter with constructor & TextSearch directive
 type FilterAnalysisTestOK_TextSearchDirective struct {
 	_ T                `rel:"relation_a:a"`
 	_ gosql.TextSearch `sql:"a.ts_document"`
 	common.FilterMaker
 }
 
-//OK: Insert with onconflict block
+// OK: Insert with onconflict block
 type InsertAnalysisTestOK_OnConflict struct {
 	Rel        []T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -423,7 +423,7 @@ type InsertAnalysisTestOK_OnConflict struct {
 	}
 }
 
-//OK: Insert with onconflict block with column target
+// OK: Insert with onconflict block with column target
 type InsertAnalysisTestOK_OnConflictColumn struct {
 	Rel        []T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -432,7 +432,7 @@ type InsertAnalysisTestOK_OnConflictColumn struct {
 	}
 }
 
-//OK: Insert with onconflict block with constraint target and update action
+// OK: Insert with onconflict block with constraint target and update action
 type InsertAnalysisTestOK_OnConflictConstraint struct {
 	Rel        []T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -441,7 +441,7 @@ type InsertAnalysisTestOK_OnConflictConstraint struct {
 	}
 }
 
-//OK: Insert with onconflict block with index target and update action
+// OK: Insert with onconflict block with index target and update action
 type InsertAnalysisTestOK_OnConflictIndex struct {
 	Rel        []T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -450,7 +450,7 @@ type InsertAnalysisTestOK_OnConflictIndex struct {
 	}
 }
 
-//OK: Delete with Result field
+// OK: Delete with Result field
 type DeleteAnalysisTestOK_ResultField struct {
 	_     gosql.Relation `rel:"relation_a:a"`
 	Where struct {
@@ -459,7 +459,7 @@ type DeleteAnalysisTestOK_ResultField struct {
 	Result []T
 }
 
-//OK: Delete with RowsAffected field
+// OK: Delete with RowsAffected field
 type DeleteAnalysisTestOK_RowsAffected struct {
 	_     gosql.Relation `rel:"relation_a:a"`
 	Where struct {
@@ -468,13 +468,13 @@ type DeleteAnalysisTestOK_RowsAffected struct {
 	RowsAffected int
 }
 
-//OK: Select with Filter field
+// OK: Select with Filter field
 type SelectAnalysisTestOK_FilterField struct {
 	Rel    []T `rel:"relation_a:a"`
 	Filter gosql.Filter
 }
 
-//OK: test field types basic
+// OK: test field types basic
 type SelectAnalysisTestOK_FieldTypesBasic struct {
 	Rel struct {
 		f1  bool       `sql:"c1"`
@@ -499,7 +499,7 @@ type SelectAnalysisTestOK_FieldTypesBasic struct {
 	} `rel:"relation_a:a"`
 }
 
-//OK: test field types slices, arrays, maps, and pointers
+// OK: test field types slices, arrays, maps, and pointers
 type SelectAnalysisTestOK_FieldTypesSlices struct {
 	Rel struct {
 		f1  []bool                    `sql:"c1"`
@@ -518,7 +518,7 @@ type SelectAnalysisTestOK_FieldTypesSlices struct {
 	} `rel:"relation_a:a"`
 }
 
-//OK: test field types interfaces
+// OK: test field types interfaces
 type SelectAnalysisTestOK_FieldTypesInterfaces struct {
 	Rel struct {
 		f1 json.Marshaler   `sql:"c1"`
@@ -530,7 +530,7 @@ type SelectAnalysisTestOK_FieldTypesInterfaces struct {
 	} `rel:"relation_a:a"`
 }
 
-//OK: test typeinfo.string()
+// OK: test typeinfo.string()
 type SelectAnalysisTestOK_typeinfo_string struct {
 	Rel struct {
 		f01 bool                        `sql:"c01"`
@@ -611,7 +611,7 @@ type SelectAnalysisTestOK_typeinfo_string struct {
 
 type donothing interface{}
 
-//OK: test field types empty interfaces
+// OK: test field types empty interfaces
 type SelectAnalysisTestOK_FieldTypesEmptyInterfaces struct {
 	Rel struct {
 		f1 interface{}  `sql:"c1"`
@@ -621,13 +621,13 @@ type SelectAnalysisTestOK_FieldTypesEmptyInterfaces struct {
 	} `rel:"relation_a:a"`
 }
 
-//OK: test of context.Context field analysis
+// OK: test of context.Context field analysis
 type SelectAnalysisTestOK_WithContext struct {
 	context.Context
 	UserRec *common.User `rel:"users_table"`
 }
 
-//OK: test of context.Context field analysis
+// OK: test of context.Context field analysis
 type SelectAnalysisTestOK_WithContextNamed struct {
 	Ctx     context.Context
 	UserRec *common.User `rel:"users_table"`

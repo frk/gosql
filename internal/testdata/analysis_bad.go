@@ -9,65 +9,65 @@ import (
 	"github.com/frk/gosql/internal/testdata/common"
 )
 
-//BAD: missing relation field
+// BAD: missing relation field
 type InsertAnalysisTestBAD_NoDataField struct {
 	User *common.User
 }
 
-//BAD: invalid datatype kind
+// BAD: invalid datatype kind
 type InsertAnalysisTestBAD3 struct {
 	User string `rel:"users_table"`
 }
 
-//BAD: Delete with invalid relid
+// BAD: Delete with invalid relid
 type DeleteAnalysisTestBAD_BadRelId struct {
 	Rel T `rel:"foo.123:bar"`
 }
 
-//BAD: Select with multiple rel tags
+// BAD: Select with multiple rel tags
 type SelectAnalysisTestBAD_MultipleRelTags struct {
 	Rel1 T `rel:"relation_a:a"`
 	Rel2 T `rel:""`
 }
 
-//BAD: Delete with illegal count field
+// BAD: Delete with illegal count field
 type DeleteAnalysisTestBAD_IllegalCountField struct {
 	Count int `rel:"relation_a:a"`
 }
 
-//BAD: Update with illegal exists field
+// BAD: Update with illegal exists field
 type UpdateAnalysisTestBAD_IllegalExistsField struct {
 	Exists bool `rel:"relation_a:a"`
 }
 
-//BAD: Insert with illegal notexists field
+// BAD: Insert with illegal notexists field
 type InsertAnalysisTestBAD_IllegalNotExistsField struct {
 	NotExists bool `rel:"relation_a:a"`
 }
 
-//BAD: Select with illegal gosql.Relation directive
+// BAD: Select with illegal gosql.Relation directive
 type SelectAnalysisTestBAD_IllegalRelationDirective struct {
 	_ gosql.Relation `rel:"relation_a:a"`
 }
 
-//BAD: Select with unnamed base struct type
+// BAD: Select with unnamed base struct type
 type SelectAnalysisTestBAD_UnnamedBaseStructType struct {
 	Rel []*struct{} `rel:"relation_a:a"`
 }
 
-//BAD: Select with All directive
+// BAD: Select with All directive
 type SelectAnalysisTestBAD_IllegalAllDirective struct {
 	Rel []T `rel:"relation_a:a"`
 	_   gosql.All
 }
 
-//BAD: Insert with All directive
+// BAD: Insert with All directive
 type InsertAnalysisTestBAD_IllegalAllDirective struct {
 	Rel T `rel:"relation_a:a"`
 	_   gosql.All
 }
 
-//BAD: Update with conflicting where producer
+// BAD: Update with conflicting where producer
 type UpdateAnalysisTestBAD_ConflictWhereProducer struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -76,86 +76,86 @@ type UpdateAnalysisTestBAD_ConflictWhereProducer struct {
 	_ gosql.All
 }
 
-//BAD: Delete with illegal gosql.Default directive
+// BAD: Delete with illegal gosql.Default directive
 type DeleteAnalysisTestBAD_IllegalDefaultDirective struct {
 	Rel T             `rel:"relation_a:a"`
 	_   gosql.Default `sql:"*"`
 }
 
-//BAD: Update with empty gosql.Default directive collist
+// BAD: Update with empty gosql.Default directive collist
 type UpdateAnalysisTestBAD_EmptyDefaultDirectiveCollist struct {
 	Rel T `rel:"relation_a:a"`
 	_   gosql.Default
 }
 
-//BAD: Select with illegal gosql.Force directive
+// BAD: Select with illegal gosql.Force directive
 type SelectAnalysisTestBAD_IllegalForceDirective struct {
 	Rel T           `rel:"relation_a:a"`
 	_   gosql.Force `sql:"*"`
 }
 
-//BAD: Update with bad gosql.Force directive colid
+// BAD: Update with bad gosql.Force directive colid
 type UpdateAnalysisTestBAD_BadForceDirectiveColId struct {
 	Rel T           `rel:"relation_a:a"`
 	_   gosql.Force `sql:"a.id,1234"`
 }
 
-//BAD: Filter with illegal gosql.Return directive
+// BAD: Filter with illegal gosql.Return directive
 type FilterAnalysisTestBAD_IllegalReturnDirective struct {
 	Rel T            `rel:"relation_a:a"`
 	_   gosql.Return `sql:"*"`
 }
 
-//BAD: Delete with conflicting result producer
+// BAD: Delete with conflicting result producer
 type DeleteAnalysisTestBAD_ConflictResultProducer struct {
 	Rel T            `rel:"relation_a:a"`
 	_   gosql.Return `sql:"*"`
 	_   gosql.Return `sql:"a.id"`
 }
 
-//BAD: Update with empty gosql.Return directive collist
+// BAD: Update with empty gosql.Return directive collist
 type UpdateAnalysisTestBAD_EmptyReturnDirectiveCollist struct {
 	Rel T `rel:"relation_a:a"`
 	_   gosql.Return
 }
 
-//BAD: Insert with Limit field
+// BAD: Insert with Limit field
 type InsertAnalysisTestBAD_IllegalLimitField struct {
 	Rel T           `rel:"relation_a:a"`
 	_   gosql.Limit `sql:"10"`
 }
 
-//BAD: Update with Offset field
+// BAD: Update with Offset field
 type UpdateAnalysisTestBAD_IllegalOffsetField struct {
 	Rel T            `rel:"relation_a:a"`
 	_   gosql.Offset `sql:"2"`
 }
 
-//BAD: Insert with illegal gosql.OrderBy directive
+// BAD: Insert with illegal gosql.OrderBy directive
 type InsertAnalysisTestBAD_IllegalOrderByDirective struct {
 	Rel T             `rel:"relation_a:a"`
 	_   gosql.OrderBy `sql:"a.id"`
 }
 
-//BAD: Delete with illegal gosql.Override directive
+// BAD: Delete with illegal gosql.Override directive
 type DeleteAnalysisTestBAD_IllegalOverrideDirective struct {
 	Rel T              `rel:"relation_a:a"`
 	_   gosql.Override `sql:"user"`
 }
 
-//BAD: Select with illegal gosql.TextSearch directive
+// BAD: Select with illegal gosql.TextSearch directive
 type SelectAnalysisTestBAD_IllegalTextSearchDirective struct {
 	Rel T                `rel:"relation_a:a"`
 	_   gosql.TextSearch `sql:"a._document"`
 }
 
-//BAD: Select with illegal gosql.Column directive
+// BAD: Select with illegal gosql.Column directive
 type SelectAnalysisTestBAD_IllegalColumnDirective struct {
 	Rel T            `rel:"relation_a:a"`
 	_   gosql.Column `sql:"a.id"`
 }
 
-//BAD: Insert with illegal Where block
+// BAD: Insert with illegal Where block
 type InsertAnalysisTestBAD_IllegalWhereBlock struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -163,7 +163,7 @@ type InsertAnalysisTestBAD_IllegalWhereBlock struct {
 	}
 }
 
-//BAD: Update with illegal Join block
+// BAD: Update with illegal Join block
 type UpdateAnalysisTestBAD_IllegalJoinBlock struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -171,7 +171,7 @@ type UpdateAnalysisTestBAD_IllegalJoinBlock struct {
 	}
 }
 
-//BAD: Delete with illegal From block
+// BAD: Delete with illegal From block
 type DeleteAnalysisTestBAD_IllegalFromBlock struct {
 	Rel  T `rel:"relation_a:a"`
 	From struct {
@@ -179,7 +179,7 @@ type DeleteAnalysisTestBAD_IllegalFromBlock struct {
 	}
 }
 
-//BAD: Select with illegal Using block
+// BAD: Select with illegal Using block
 type SelectAnalysisTestBAD_IllegalUsingBlock struct {
 	Rel   T `rel:"relation_a:a"`
 	Using struct {
@@ -187,7 +187,7 @@ type SelectAnalysisTestBAD_IllegalUsingBlock struct {
 	}
 }
 
-//BAD: Update with illegal OnConflict block
+// BAD: Update with illegal OnConflict block
 type UpdateAnalysisTestBAD_IllegalOnConflictBlock struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -195,39 +195,39 @@ type UpdateAnalysisTestBAD_IllegalOnConflictBlock struct {
 	}
 }
 
-//BAD: Select with illegal result field
+// BAD: Select with illegal result field
 type SelectAnalysisTestBAD_IllegalResultField struct {
 	Rel    T `rel:"relation_a:a"`
 	Result T
 }
 
-//BAD: Select with conflicting limit producers
+// BAD: Select with conflicting limit producers
 type SelectAnalysisTestBAD_ConflictLimitProducer struct {
 	Rel   []T         `rel:"relation_a:a"`
 	_     gosql.Limit `sql:"10"`
 	Limit int
 }
 
-//BAD: Select with conflicting offset producers
+// BAD: Select with conflicting offset producers
 type SelectAnalysisTestBAD_ConflictOffsetProducer struct {
 	Rel    []T `rel:"relation_a:a"`
 	Offset int
 	_      gosql.Offset `sql:"2"`
 }
 
-//BAD: Select with illegal rowsaffected field
+// BAD: Select with illegal rowsaffected field
 type SelectAnalysisTestBAD_IllegalRowsAffectedField struct {
 	Rel          []T `rel:"relation_a:a"`
 	RowsAffected int
 }
 
-//BAD: Insert with illegal filter field
+// BAD: Insert with illegal filter field
 type InsertAnalysisTestBAD_IllegalFilterField struct {
 	Rel []T `rel:"relation_a:a"`
 	F   gosql.Filter
 }
 
-//BAD: Select with conflicting where producer
+// BAD: Select with conflicting where producer
 type SelectAnalysisTestBAD_ConflictWhereProducer struct {
 	Rel   []T `rel:"relation_a:a"`
 	Where struct {
@@ -236,7 +236,7 @@ type SelectAnalysisTestBAD_ConflictWhereProducer struct {
 	F gosql.Filter
 }
 
-//BAD: Delete with conflicting error handlers
+// BAD: Delete with conflicting error handlers
 type DeleteAnalysisTestBAD_ConflictErrorHandler struct {
 	Rel          T `rel:"relation_a:a"`
 	ErrorHandler myerrorhandler
@@ -252,51 +252,51 @@ type badIterator2 interface { // bad signature
 	Fn(*common.User) int
 }
 
-//BAD: Select with iterator with too many methods
+// BAD: Select with iterator with too many methods
 type SelectAnalysisTestBAD_IteratorWithTooManyMethods struct {
 	Rel badIterator `rel:"relation_a:a"`
 }
 
-//BAD: Select with iterator with bad signature
+// BAD: Select with iterator with bad signature
 type SelectAnalysisTestBAD_IteratorWithBadSignature struct {
 	Rel func(*common.User) int `rel:"relation_a:a"`
 }
 
-//BAD: Select with iterator with bad signature (interface)
+// BAD: Select with iterator with bad signature (interface)
 type SelectAnalysisTestBAD_IteratorWithBadSignatureIface struct {
 	Rel badIterator2 `rel:"relation_a:a"`
 }
 
-//BAD: Select with imported iterator that has unexported method
+// BAD: Select with imported iterator that has unexported method
 type SelectAnalysisTestBAD_IteratorWithUnexportedMethod struct {
 	Rel common.BadIterator `rel:"relation_a:a"`
 }
 
-//BAD: Select with iterator with unnamed argument
+// BAD: Select with iterator with unnamed argument
 type SelectAnalysisTestBAD_IteratorWithUnnamedArgument struct {
 	Rel func(*struct{}) error `rel:"relation_a:a"`
 }
 
-//BAD: Select with iterator with non-struct argument
+// BAD: Select with iterator with non-struct argument
 type SelectAnalysisTestBAD_IteratorWithNonStructArgument struct {
 	Rel func(*notstruct) error `rel:"relation_a:a"`
 }
 
 type notstruct string
 
-//BAD: Insert with bad struct base type
+// BAD: Insert with bad struct base type
 type InsertAnalysisTestBAD_BadRelfiedlStructBaseType struct {
 	Rel []*notstruct `rel:"relation_a:a"`
 }
 
-//BAD: Update with bad dataType field's colid
+// BAD: Update with bad dataType field's colid
 type UpdateAnalysisTestBAD_BadRelTypeFieldColId struct {
 	Rel struct {
 		Foo string `sql:"1234"`
 	} `rel:"relation_a:a"`
 }
 
-//BAD: Update with conflicting where produceer
+// BAD: Update with conflicting where produceer
 type UpdateAnalysisTestBAD_ConflictWhereProducer2 struct {
 	Rel   T `rel:"relation_a:a"`
 	_     gosql.All
@@ -305,13 +305,13 @@ type UpdateAnalysisTestBAD_ConflictWhereProducer2 struct {
 	}
 }
 
-//BAD: Delete with bad where block type
+// BAD: Delete with bad where block type
 type DeleteAnalysisTestBAD_BadWhereBlockType struct {
 	Rel   T `rel:"relation_a:a"`
 	Where []string
 }
 
-//BAD: Select with bad bool tag value
+// BAD: Select with bad bool tag value
 type SelectAnalysisTestBAD_BadBoolTagValue struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -320,7 +320,7 @@ type SelectAnalysisTestBAD_BadBoolTagValue struct {
 	}
 }
 
-//BAD: Select with bad nested where block type
+// BAD: Select with bad nested where block type
 type SelectAnalysisTestBAD_BadNestedWhereBlockType struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -329,7 +329,7 @@ type SelectAnalysisTestBAD_BadNestedWhereBlockType struct {
 	}
 }
 
-//BAD: Select with bad gosql.Column expression LHS
+// BAD: Select with bad gosql.Column expression LHS
 type SelectAnalysisTestBAD_BadColumnExpressionLHS struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -337,7 +337,7 @@ type SelectAnalysisTestBAD_BadColumnExpressionLHS struct {
 	}
 }
 
-//BAD: Select with bad gosql.Column predicate combo
+// BAD: Select with bad gosql.Column predicate combo
 type SelectAnalysisTestBAD_BadColumnPredicateCombo struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -345,7 +345,7 @@ type SelectAnalysisTestBAD_BadColumnPredicateCombo struct {
 	}
 }
 
-//BAD: Delete with bad gosql.Column expression LHS
+// BAD: Delete with bad gosql.Column expression LHS
 type DeleteAnalysisTestBAD_BadColumnExpressionLHS struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -353,7 +353,7 @@ type DeleteAnalysisTestBAD_BadColumnExpressionLHS struct {
 	}
 }
 
-//BAD: Update with bad unary op
+// BAD: Update with bad unary op
 type UpdateAnalysisTestBAD_BadUnaryOp struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -361,7 +361,7 @@ type UpdateAnalysisTestBAD_BadUnaryOp struct {
 	}
 }
 
-//BAD: Update with extra quantifier
+// BAD: Update with extra quantifier
 type UpdateAnalysisTestBAD_ExtraQuantifier struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -369,7 +369,7 @@ type UpdateAnalysisTestBAD_ExtraQuantifier struct {
 	}
 }
 
-//BAD: Select with bad between field type
+// BAD: Select with bad between field type
 type SelectAnalysisTestBAD_BadBetweenFieldType struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -377,7 +377,7 @@ type SelectAnalysisTestBAD_BadBetweenFieldType struct {
 	}
 }
 
-//BAD: Select with bad number of fields in "between" struct
+// BAD: Select with bad number of fields in "between" struct
 type SelectAnalysisTestBAD_BadBetweenFieldType2 struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -387,7 +387,7 @@ type SelectAnalysisTestBAD_BadBetweenFieldType2 struct {
 	}
 }
 
-//BAD: Select with bad colid in "between" struct field's tag
+// BAD: Select with bad colid in "between" struct field's tag
 type SelectAnalysisTestBAD_BadBetweenArgColId struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -398,7 +398,7 @@ type SelectAnalysisTestBAD_BadBetweenArgColId struct {
 	}
 }
 
-//BAD: Select with missing x / y in "between"
+// BAD: Select with missing x / y in "between"
 type SelectAnalysisTestBAD_NoBetweenXYArg struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -409,7 +409,7 @@ type SelectAnalysisTestBAD_NoBetweenXYArg struct {
 	}
 }
 
-//BAD: Select with bad "between" target colid
+// BAD: Select with bad "between" target colid
 type SelectAnalysisTestBAD_BadBetweenColId struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -420,7 +420,7 @@ type SelectAnalysisTestBAD_BadBetweenColId struct {
 	}
 }
 
-//BAD: Delete with bad where field colid
+// BAD: Delete with bad where field colid
 type DeleteAnalysisTestBAD_BadWhereFieldColId struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -428,7 +428,7 @@ type DeleteAnalysisTestBAD_BadWhereFieldColId struct {
 	}
 }
 
-//BAD: Delete with bad where field predicate combo
+// BAD: Delete with bad where field predicate combo
 type DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -436,7 +436,7 @@ type DeleteAnalysisTestBAD_BadWhereFieldPredicateCombo struct {
 	}
 }
 
-//BAD: Delete with illegal where field unary comparison
+// BAD: Delete with illegal where field unary comparison
 type DeleteAnalysisTestBAD_IllegalWhereFieldUnaryPredicate struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -444,7 +444,7 @@ type DeleteAnalysisTestBAD_IllegalWhereFieldUnaryPredicate struct {
 	}
 }
 
-//BAD: Update with bad where field type for quantifier
+// BAD: Update with bad where field type for quantifier
 type UpdateAnalysisTestBAD_BadWhereFieldTypeForQuantifier struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -452,13 +452,13 @@ type UpdateAnalysisTestBAD_BadWhereFieldTypeForQuantifier struct {
 	}
 }
 
-//BAD: Select with bad join block type
+// BAD: Select with bad join block type
 type SelectAnalysisTestBAD_BadJoinBlockType struct {
 	Rel  T `rel:"relation_a:a"`
 	Join notstruct
 }
 
-//BAD: Select with illegal join gosql.Relation directive
+// BAD: Select with illegal join gosql.Relation directive
 type SelectAnalysisTestBAD_IllegalJoinBlockRelationDirective struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -466,7 +466,7 @@ type SelectAnalysisTestBAD_IllegalJoinBlockRelationDirective struct {
 	}
 }
 
-//BAD: Delete with conflicting using block gosql.Relation directive
+// BAD: Delete with conflicting using block gosql.Relation directive
 type DeleteAnalysisTestBAD_ConflictRelationDirective struct {
 	Rel   T `rel:"relation_a:a"`
 	Using struct {
@@ -475,7 +475,7 @@ type DeleteAnalysisTestBAD_ConflictRelationDirective struct {
 	}
 }
 
-//BAD: Update with bad from block gosql.Relation directive relid
+// BAD: Update with bad from block gosql.Relation directive relid
 type UpdateAnalysisTestBAD_BadFromRelationRelId struct {
 	Rel  T `rel:"relation_a:a"`
 	From struct {
@@ -483,7 +483,7 @@ type UpdateAnalysisTestBAD_BadFromRelationRelId struct {
 	}
 }
 
-//BAD: Select with bad join block gosql.JoinXxx directive relid
+// BAD: Select with bad join block gosql.JoinXxx directive relid
 type SelectAnalysisTestBAD_BadJoinDirectiveRelId struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -491,7 +491,7 @@ type SelectAnalysisTestBAD_BadJoinDirectiveRelId struct {
 	}
 }
 
-//BAD: Select with bad gosql.JoinXxx directive expression colid
+// BAD: Select with bad gosql.JoinXxx directive expression colid
 type SelectAnalysisTestBAD_BadJoinDirectiveExpressionColId struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -499,7 +499,7 @@ type SelectAnalysisTestBAD_BadJoinDirectiveExpressionColId struct {
 	}
 }
 
-//BAD: Select with bad gosql.JoinXxx directive expression predicate
+// BAD: Select with bad gosql.JoinXxx directive expression predicate
 type SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicate struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -507,7 +507,7 @@ type SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicate struct {
 	}
 }
 
-//BAD: Select with bad gosql.JoinXxx directive expression extra quantifier
+// BAD: Select with bad gosql.JoinXxx directive expression extra quantifier
 type SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -515,7 +515,7 @@ type SelectAnalysisTestBAD_BadJoinDirectiveExpressionExtraQuantifier struct {
 	}
 }
 
-//BAD: Select with bad gosql.JoinXxx directive expression predicate combo
+// BAD: Select with bad gosql.JoinXxx directive expression predicate combo
 type SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicateCombo struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -523,7 +523,7 @@ type SelectAnalysisTestBAD_BadJoinDirectiveExpressionPredicateCombo struct {
 	}
 }
 
-//BAD: Delete with illegal join block directive
+// BAD: Delete with illegal join block directive
 type DeleteAnalysisTestBAD_IllegalJoinBlockDirective struct {
 	Rel   T `rel:"relation_a:a"`
 	Using struct {
@@ -531,13 +531,13 @@ type DeleteAnalysisTestBAD_IllegalJoinBlockDirective struct {
 	}
 }
 
-//BAD: Insert with bad onconflict block type
+// BAD: Insert with bad onconflict block type
 type InsertAnalysisTestBAD_BadOnConflictBlockType struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict notstruct
 }
 
-//BAD: Insert with conflicting onconflict block target
+// BAD: Insert with conflicting onconflict block target
 type InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -546,7 +546,7 @@ type InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer struct {
 	}
 }
 
-//BAD: Insert with conflicting onconflict block target
+// BAD: Insert with conflicting onconflict block target
 type InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer2 struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -555,7 +555,7 @@ type InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer2 struct {
 	}
 }
 
-//BAD: Insert with conflicting onconflict block target
+// BAD: Insert with conflicting onconflict block target
 type InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer3 struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -564,7 +564,7 @@ type InsertAnalysisTestBAD_ConflictOnConflictBlockTargetProducer3 struct {
 	}
 }
 
-//BAD: Insert with conflicting onconflict block action
+// BAD: Insert with conflicting onconflict block action
 type InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -574,7 +574,7 @@ type InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer struct {
 	}
 }
 
-//BAD: Insert with conflicting onconflict block action
+// BAD: Insert with conflicting onconflict block action
 type InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer2 struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -584,7 +584,7 @@ type InsertAnalysisTestBAD_ConflictOnConflictBlockActionProducer2 struct {
 	}
 }
 
-//BAD: Insert with bad onconflict column target value
+// BAD: Insert with bad onconflict column target value
 type InsertAnalysisTestBAD_BadOnConflictColumnTargetValue struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -592,7 +592,7 @@ type InsertAnalysisTestBAD_BadOnConflictColumnTargetValue struct {
 	}
 }
 
-//BAD: Insert with bad onconflict index target identifier
+// BAD: Insert with bad onconflict index target identifier
 type InsertAnalysisTestBAD_BadOnConflictIndexTargetIdent struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -600,7 +600,7 @@ type InsertAnalysisTestBAD_BadOnConflictIndexTargetIdent struct {
 	}
 }
 
-//BAD: Insert with bad onconflict constraint target identifier
+// BAD: Insert with bad onconflict constraint target identifier
 type InsertAnalysisTestBAD_BadOnConflictConstraintTargetIdent struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -608,7 +608,7 @@ type InsertAnalysisTestBAD_BadOnConflictConstraintTargetIdent struct {
 	}
 }
 
-//BAD: Insert with bad onconflict update action collist
+// BAD: Insert with bad onconflict update action collist
 type InsertAnalysisTestBAD_BadOnConflictUpdateActionCollist struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -617,7 +617,7 @@ type InsertAnalysisTestBAD_BadOnConflictUpdateActionCollist struct {
 	}
 }
 
-//BAD: Insert with illegal onconflict directive
+// BAD: Insert with illegal onconflict directive
 type InsertAnalysisTestBAD_IllegalOnConflictDirective struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -625,7 +625,7 @@ type InsertAnalysisTestBAD_IllegalOnConflictDirective struct {
 	}
 }
 
-//BAD: Insert with illegal onconflict directive
+// BAD: Insert with illegal onconflict directive
 type InsertAnalysisTestBAD_NoOnConflictTarget struct {
 	Rel        T `rel:"relation_a:a"`
 	OnConflict struct {
@@ -633,105 +633,105 @@ type InsertAnalysisTestBAD_NoOnConflictTarget struct {
 	}
 }
 
-//BAD: Select with bad limit field type
+// BAD: Select with bad limit field type
 type SelectAnalysisTestBAD_BadLimitFieldType struct {
 	Rel   []T    `rel:"relation_a:a"`
 	Limit string `sql:"123"`
 }
 
-//BAD: Select with no limit directive value
+// BAD: Select with no limit directive value
 type SelectAnalysisTestBAD_NoLimitDirectiveValue struct {
 	Rel []T         `rel:"relation_a:a"`
 	_   gosql.Limit `sql:""`
 }
 
-//BAD: Select with bad limit directive value
+// BAD: Select with bad limit directive value
 type SelectAnalysisTestBAD_BadLimitDirectiveValue struct {
 	Rel []T         `rel:"relation_a:a"`
 	_   gosql.Limit `sql:"abc"`
 }
 
-//BAD: Select with bad offset field type
+// BAD: Select with bad offset field type
 type SelectAnalysisTestBAD_BadOffsetFieldType struct {
 	Rel    []T    `rel:"relation_a:a"`
 	Offset string `sql:"123"`
 }
 
-//BAD: Select with no offset directive value
+// BAD: Select with no offset directive value
 type SelectAnalysisTestBAD_NoOffsetDirectiveValue struct {
 	Rel []T          `rel:"relation_a:a"`
 	_   gosql.Offset `sql:""`
 }
 
-//BAD: Select with bad offset directive value
+// BAD: Select with bad offset directive value
 type SelectAnalysisTestBAD_BadOffsetDirectiveValue struct {
 	Rel []T          `rel:"relation_a:a"`
 	_   gosql.Offset `sql:"abc"`
 }
 
-//BAD: Select with empty gosql.OrderBy directive list
+// BAD: Select with empty gosql.OrderBy directive list
 type SelectAnalysisTestBAD_EmptyOrderByDirectiveCollist struct {
 	Rel []T `rel:"relation_a:a"`
 	_   gosql.OrderBy
 }
 
-//BAD: Select with bad gosql.OrderBy directive nulls order option value
+// BAD: Select with bad gosql.OrderBy directive nulls order option value
 type SelectAnalysisTestBAD_BadOrderByDirectiveNullsOrderValue struct {
 	Rel []T           `rel:"relation_a:a"`
 	_   gosql.OrderBy `sql:"a.id:nullsthird"`
 }
 
-//BAD: Select with bad gosql.OrderBy directive colid
+// BAD: Select with bad gosql.OrderBy directive colid
 type SelectAnalysisTestBAD_BadOrderByDirectiveCollist struct {
 	Rel []T           `rel:"relation_a:a"`
 	_   gosql.OrderBy `sql:"-a.id:nullsfirst,a.1234"`
 }
 
-//BAD: Insert with bad gosql.Override directive kind value
+// BAD: Insert with bad gosql.Override directive kind value
 type InsertAnalysisTestBAD_BadOverrideDirectiveKindValue struct {
 	Rel []T            `rel:"relation_a:a"`
 	_   gosql.Override `sql:"foo"`
 }
 
-//BAD: Update with conflicting result producer
+// BAD: Update with conflicting result producer
 type UpdateAnalysisTestBAD_ConflictResultProducer struct {
 	Rel    T            `rel:"relation_a:a"`
 	_      gosql.Return `sql:"*"`
 	Result []T
 }
 
-//BAD: Update with bad result field type
+// BAD: Update with bad result field type
 type UpdateAnalysisTestBAD_BadResultFieldType struct {
 	Rel    T `rel:"relation_a:a"`
 	Result []notstruct
 }
 
-//BAD: Delete with conflicting result producer
+// BAD: Delete with conflicting result producer
 type DeleteAnalysisTestBAD_ConflictResultProducer2 struct {
 	Rel          T `rel:"relation_a:a"`
 	Result       []T
 	RowsAffected int
 }
 
-//BAD: Delete with bad rowsaffected field type
+// BAD: Delete with bad rowsaffected field type
 type DeleteAnalysisTestBAD_BadRowsAffecteFieldType struct {
 	Rel          T `rel:"relation_a:a"`
 	RowsAffected string
 }
 
-//BAD: Filter with bad gosql.TextSearch directive colid
+// BAD: Filter with bad gosql.TextSearch directive colid
 type FilterAnalysisTestBAD_BadTextSearchDirectiveColId struct {
 	Rel T                `rel:"relation_a:a"`
 	_   gosql.TextSearch `sql:"123"`
 }
 
-//BAD: Update slice with All directive
+// BAD: Update slice with All directive
 type UpdateAnalysisTestBAD_IllegalAllDirective struct {
 	Rel []T `rel:"relation_a:a"`
 	_   gosql.All
 }
 
-//BAD: Update slice with Where struct
+// BAD: Update slice with Where struct
 type UpdateAnalysisTestBAD_IllegalWhereStruct struct {
 	Rel   []T `rel:"relation_a:a"`
 	Where struct {
@@ -739,13 +739,13 @@ type UpdateAnalysisTestBAD_IllegalWhereStruct struct {
 	}
 }
 
-//BAD: Update slice with Filter field
+// BAD: Update slice with Filter field
 type UpdateAnalysisTestBAD_IllegalFilterField struct {
 	Rel []T `rel:"relation_a:a"`
 	F   gosql.Filter
 }
 
-//BAD: Delete with illegal unary predicate in expression
+// BAD: Delete with illegal unary predicate in expression
 type DeleteAnalysisTestBAD_IllegalUnaryPredicateInExpression struct {
 	Rel   T `rel:"relation_a:a"`
 	Where struct {
@@ -753,7 +753,7 @@ type DeleteAnalysisTestBAD_IllegalUnaryPredicateInExpression struct {
 	}
 }
 
-//BAD: Select with illegal unary predicate in gosql.JoinXxx directive expression
+// BAD: Select with illegal unary predicate in gosql.JoinXxx directive expression
 type SelectAnalysisTestBAD_IllegalUnaryPredicateInJoinDirectiveExpression struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -761,7 +761,7 @@ type SelectAnalysisTestBAD_IllegalUnaryPredicateInJoinDirectiveExpression struct
 	}
 }
 
-//BAD: where block with list predicate on field of non-sequence type
+// BAD: where block with list predicate on field of non-sequence type
 type DeleteAnalysisTestBAD_ListPredicate struct {
 	Rel   T `rel:"relation_a"`
 	Where struct {
@@ -769,7 +769,7 @@ type DeleteAnalysisTestBAD_ListPredicate struct {
 	}
 }
 
-//BAD: DELETE with conflicting relation name
+// BAD: DELETE with conflicting relation name
 type DeleteAnalysisTestBAD_ConflictingRelationName struct {
 	Rel   T `rel:"relation_a"`
 	Using struct {
@@ -781,7 +781,7 @@ type DeleteAnalysisTestBAD_ConflictingRelationName struct {
 	}
 }
 
-//BAD: DELETE with conflicting relation alias
+// BAD: DELETE with conflicting relation alias
 type DeleteAnalysisTestBAD_ConflictingRelationAlias struct {
 	Rel   T `rel:"relation_a:a"`
 	Using struct {
@@ -793,19 +793,19 @@ type DeleteAnalysisTestBAD_ConflictingRelationAlias struct {
 	}
 }
 
-//BAD: Filter with conflicting rel tag
+// BAD: Filter with conflicting rel tag
 type FilterAnalysisTestBAD_ConflictingRelTag struct {
 	_ T                `rel:"relation_a:a"`
 	_ gosql.TextSearch `rel:"a.ts_document"`
 }
 
-//BAD: Filter with illegal iterator type for rel field
+// BAD: Filter with illegal iterator type for rel field
 type FilterAnalysisTestBAD_IllegalIteratorType struct {
 	_ func(*T) error   `rel:"relation_a:a"`
 	_ gosql.TextSearch `sql:"a.ts_document"`
 }
 
-//BAD: Select with conflicting relation name
+// BAD: Select with conflicting relation name
 type SelectAnalysisTestBAD_ConflictingRelName struct {
 	Join struct {
 		_ gosql.LeftJoin `sql:"relation_a,relation_a.foo istrue"`
@@ -813,7 +813,7 @@ type SelectAnalysisTestBAD_ConflictingRelName struct {
 	Rel T `rel:"relation_a"`
 }
 
-//BAD: Select with conflicting relation alias
+// BAD: Select with conflicting relation alias
 type SelectAnalysisTestBAD_ConflictingRelAlias struct {
 	Join struct {
 		_ gosql.LeftJoin `sql:"relation_b:a,a.foo istrue"`
@@ -821,7 +821,7 @@ type SelectAnalysisTestBAD_ConflictingRelAlias struct {
 	Rel T `rel:"relation_a:a"`
 }
 
-//BAD: Update with conflicting relation name
+// BAD: Update with conflicting relation name
 type UpdateAnalysisTestBAD_ConflictingRelationName struct {
 	Rel  T `rel:"relation_a"`
 	From struct {
@@ -833,7 +833,7 @@ type UpdateAnalysisTestBAD_ConflictingRelationName struct {
 	}
 }
 
-//BAD: Update with conflicting relation alias
+// BAD: Update with conflicting relation alias
 type UpdateAnalysisTestBAD_ConflictingRelationAlias struct {
 	Rel  T `rel:"relation_a:a"`
 	From struct {
@@ -845,7 +845,7 @@ type UpdateAnalysisTestBAD_ConflictingRelationAlias struct {
 	}
 }
 
-//BAD: Select with join condition containing unknown qualifier
+// BAD: Select with join condition containing unknown qualifier
 type SelectAnalysisTestBAD_UnknownColumnQualifier struct {
 	Rel  T `rel:"relation_a:a"`
 	Join struct {
@@ -853,7 +853,7 @@ type SelectAnalysisTestBAD_UnknownColumnQualifier struct {
 	}
 }
 
-//BAD: Select with join condition containing unknown qualifier
+// BAD: Select with join condition containing unknown qualifier
 type SelectAnalysisTestBAD_UnknownColumnQualifier2 struct {
 	Rel  T `rel:"relation_a"`
 	Join struct {
@@ -861,19 +861,19 @@ type SelectAnalysisTestBAD_UnknownColumnQualifier2 struct {
 	}
 }
 
-//BAD: textsearch relation not found (bad alias)
+// BAD: textsearch relation not found (bad alias)
 type FilterAnalysisTestBAD_UnknownColumnQualifierInTextSearch struct {
 	_ CT1              `rel:"column_tests_1:c"`
 	_ gosql.TextSearch `sql:"x.col_b"`
 }
 
-//BAD: Unknown column qualifier in gosql.Return directive
+// BAD: Unknown column qualifier in gosql.Return directive
 type UpdateAnalysisTestBAD_UnknownColumnQualifierInReturn struct {
 	Rel CT1          `rel:"column_tests_1:c"`
 	_   gosql.Return `sql:"x.col_a"`
 }
 
-//BAD: Unknown column qualifier in gosql.LeftJoin directive
+// BAD: Unknown column qualifier in gosql.LeftJoin directive
 type SelectAnalysisTestBAD_UnknownColumnQualifierInJoin struct {
 	Columns CT1 `rel:"column_tests_1:a"`
 	Join    struct {
@@ -881,7 +881,7 @@ type SelectAnalysisTestBAD_UnknownColumnQualifierInJoin struct {
 	}
 }
 
-//BAD: Unknown column qualifier in gosql.LeftJoin directive (2)
+// BAD: Unknown column qualifier in gosql.LeftJoin directive (2)
 type SelectAnalysisTestBAD_UnknownColumnQualifierInJoin2 struct {
 	Columns CT1 `rel:"column_tests_1:a"`
 	Join    struct {
@@ -889,13 +889,13 @@ type SelectAnalysisTestBAD_UnknownColumnQualifierInJoin2 struct {
 	}
 }
 
-//BAD: Unknown column qualifier in gosql.Force directive
+// BAD: Unknown column qualifier in gosql.Force directive
 type InsertAnalysisTestBAD_UnknownColumnQualifierInForce struct {
 	Rel CT1         `rel:"column_tests_1:c"`
 	_   gosql.Force `sql:"x.col_a"`
 }
 
-//BAD: Unknown column qualifier in Where field
+// BAD: Unknown column qualifier in Where field
 type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereField struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
@@ -903,7 +903,7 @@ type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereField struct {
 	}
 }
 
-//BAD: Unknown column qualifier in Where gosql.Column directive
+// BAD: Unknown column qualifier in Where gosql.Column directive
 type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
@@ -911,7 +911,7 @@ type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn struct {
 	}
 }
 
-//BAD: Unknown column qualifier in Where gosql.Column directive (2)
+// BAD: Unknown column qualifier in Where gosql.Column directive (2)
 type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn2 struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
@@ -919,13 +919,13 @@ type SelectAnalysisTestBAD_UnknownColumnQualifierInWhereColumn2 struct {
 	}
 }
 
-//BAD: Unknown column qualifier in gosql.OrderBy directive
+// BAD: Unknown column qualifier in gosql.OrderBy directive
 type SelectAnalysisTestBAD_UnknownColumnQualifierInOrderBy struct {
 	Rel CT1           `rel:"column_tests_1:c"`
 	_   gosql.OrderBy `sql:"x.col_a"`
 }
 
-//BAD: Unknown column qualifier in Between struct tag
+// BAD: Unknown column qualifier in Between struct tag
 type SelectAnalysisTestBAD_UnknownColumnQualifierInBetween struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
@@ -936,7 +936,7 @@ type SelectAnalysisTestBAD_UnknownColumnQualifierInBetween struct {
 	}
 }
 
-//BAD: Unknown column qualifier in Between struct gosql.Column
+// BAD: Unknown column qualifier in Between struct gosql.Column
 type SelectAnalysisTestBAD_UnknownColumnQualifierInBetweenColumn struct {
 	Rel   CT1 `rel:"column_tests_1:c"`
 	Where struct {
@@ -947,13 +947,13 @@ type SelectAnalysisTestBAD_UnknownColumnQualifierInBetweenColumn struct {
 	}
 }
 
-//BAD: Unknown column qualifier in gosql.Default alias
+// BAD: Unknown column qualifier in gosql.Default alias
 type InsertAnalysisTestBAD_UnknownColumnQualifierInDefault struct {
 	Rel CT1           `rel:"column_tests_1:c"`
 	_   gosql.Default `sql:"x.col_b"`
 }
 
-//BAD: Join conditional operand on the wrong side
+// BAD: Join conditional operand on the wrong side
 type SelectAnalysisTestBAD_JoinConditionalLHSOperand struct {
 	Columns CT1 `rel:"column_tests_1:a"`
 	Join    struct {
@@ -961,32 +961,32 @@ type SelectAnalysisTestBAD_JoinConditionalLHSOperand struct {
 	}
 }
 
-//BAD: Insert with "field-less" column in Return directive
+// BAD: Insert with "field-less" column in Return directive
 type InsertAnalysisTestBAD_ReturnColumnNoField struct {
 	Rel T2           `rel:"relation_a:a"`
 	_   gosql.Return `sql:"a.foo,a.bar,a.baz,a.quux"`
 }
 
-//BAD: Update with "field-less" column in Force directive
+// BAD: Update with "field-less" column in Force directive
 type UpdateAnalysisTestBAD_ForceColumnNoField struct {
 	Rel T2          `rel:"relation_a:a"`
 	_   gosql.Force `sql:"a.foo,a.bar,a.baz,a.quux"`
 }
 
-//BAD: conflicting context field
+// BAD: conflicting context field
 type InsertAnalysisTestBAD_WithContextConflict struct {
 	context.Context
 	Rel []T `rel:"relation_a:a"`
 	ctx context.Context
 }
 
-//OK: Filter with missing constructor
+// OK: Filter with missing constructor
 type FilterAnalysisTestBAD_NoFilterConstructor struct {
 	_ T                `rel:"relation_a:a"`
 	_ gosql.TextSearch `sql:"a.ts_document"`
 }
 
-//OK: Filter with conflicting constructors
+// OK: Filter with conflicting constructors
 type FilterAnalysisTestBAD_ConflictingFilterConstructor struct {
 	_ T                `rel:"relation_a:a"`
 	_ gosql.TextSearch `sql:"a.ts_document"`
