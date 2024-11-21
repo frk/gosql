@@ -187,6 +187,7 @@ func TestGenerator(t *testing.T) {
 			{filename: "whereblock_basic_single_2"},
 			{filename: "whereblock_result_slice"},
 			{filename: "whereblock_returning_all_single"},
+			{filename: "nullif_slice"},
 		},
 	}, {
 		//skip:    true,

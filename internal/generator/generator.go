@@ -303,10 +303,15 @@ func buildQueryInputTargetValues(g *generator, qs *analysis.QueryStruct) {
 			col.Name = SQL.Name(fw.Column.Name)
 			col.Qual = "x"
 
-			cast := SQL.CastExpr{}
-			cast.Expr = col
-			cast.Type = fw.Column.Type.NameFmt
-			g.inputVals = append(g.inputVals, cast)
+			if fw.NeedsNULLIF() {
+				expr := addNULLIFCallExpr(col, fw.Column)
+				g.inputVals = append(g.inputVals, expr)
+			} else {
+				cast := SQL.CastExpr{}
+				cast.Expr = col
+				cast.Type = fw.Column.Type.NameFmt
+				g.inputVals = append(g.inputVals, cast)
+			}
 			continue
 		}
 
@@ -1496,12 +1501,12 @@ func buildQueryStringForSliceInsertOrUpdate(g *generator, qs *analysis.QueryStru
 			concatExpr.X = GO.RawStringLit(sep)
 			concatExpr.Y = GO.IndexExpr{X: ordinalParams, Index: binExpr}
 
-			if ni, ok := val.(SQL.NULLIF); ok {
+			if ni, ok := val.(SQL.NULLIF); ok && !qs.IsUpdateSlice() {
 				concatExpr.X = GO.RawStringLit(sep + `NULLIF(`)
 				concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
 				concatExpr.Y = GO.RawStringLit(`, ` + SQL.MustToString(ni.Expr) + `)`)
 			} else if cast, ok := val.(SQL.CastExpr); ok {
-				if ni, ok := cast.Expr.(SQL.NULLIF); ok {
+				if ni, ok := cast.Expr.(SQL.NULLIF); ok && !qs.IsUpdateSlice() {
 					concatExpr.X = GO.RawStringLit(sep + `NULLIF(`)
 					concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
 					concatExpr.Y = GO.RawStringLit(`, ` + SQL.MustToString(ni.Expr) + `)::` + cast.Type)

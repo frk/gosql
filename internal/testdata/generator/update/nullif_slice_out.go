@@ -6,15 +6,15 @@ import (
 	"github.com/frk/gosql"
 )
 
-func (q *UpdatePKeyCompositeSliceQuery) Exec(c gosql.Conn) error {
-	var queryString = `UPDATE "test_composite_pkey" AS p SET (
+func (q *UpdateNullIfSliceQuery) Exec(c gosql.Conn) error {
+	var queryString = `UPDATE "test_onconflict" AS k SET (
 		"key"
 		, "name"
 		, "fruit"
 		, "value"
 	) = (
-		x."key"::integer
-		, x."name"::text
+		NULLIF(x."key", 0)::integer
+		, NULLIF(x."name", '')::text
 		, NULLIF(x."fruit", '')::text
 		, NULLIF(x."value", 0)::double precision
 	)
@@ -46,7 +46,7 @@ func (q *UpdatePKeyCompositeSliceQuery) Exec(c gosql.Conn) error {
 		, "value"
 		, "id"
 	)
-	WHERE p."id" = x."id"::integer AND p."key" = x."key"::integer AND p."name" = x."name"::text` // `
+	WHERE k."id" = x."id"::integer` // `
 
 	_, err := c.Exec(queryString, params...)
 	return err
