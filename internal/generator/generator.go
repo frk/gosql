@@ -818,7 +818,8 @@ func buildFilterMethodsForColumns(g *generator, fs *analysis.FilterStruct, mapid
 		// add import if necessary
 		if imported := ff.Field.Type.ImportedTypes(); len(imported) > 0 {
 			for _, typ := range imported {
-				_ = addimport(g.file, typ.PkgPath, typ.PkgName)
+				imp := addimport(g.file, typ.PkgPath, typ.PkgName)
+				ff.Field.Type.PkgName = imp.name
 			}
 		}
 
