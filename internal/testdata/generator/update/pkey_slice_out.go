@@ -13,10 +13,10 @@ func (q *UpdatePKeySliceQuery) Exec(c gosql.Conn) error {
 		, "created_at"
 		, "updated_at"
 	) = (
-		x."email"::text
-		, x."password"::bytea
-		, x."created_at"::timestamp with time zone
-		, x."updated_at"::timestamp with time zone
+		x."email"
+		, x."password"
+		, x."created_at"
+		, x."updated_at"
 	)
 	FROM (VALUES` // `
 
@@ -30,10 +30,10 @@ func (q *UpdatePKeySliceQuery) Exec(c gosql.Conn) error {
 		params[pos+3] = v.UpdatedAt
 		params[pos+4] = v.Id
 
-		queryString += `(` + gosql.OrdinalParameters[pos+0] +
-			`, ` + gosql.OrdinalParameters[pos+1] +
-			`, ` + gosql.OrdinalParameters[pos+2] +
-			`, ` + gosql.OrdinalParameters[pos+3] +
+		queryString += `(` + gosql.OrdinalParameters[pos+0] + `::text` +
+			`, ` + gosql.OrdinalParameters[pos+1] + `::bytea` +
+			`, ` + gosql.OrdinalParameters[pos+2] + `::timestamp with time zone` +
+			`, ` + gosql.OrdinalParameters[pos+3] + `::timestamp with time zone` +
 			`, ` + gosql.OrdinalParameters[pos+4] +
 			`),`
 	}

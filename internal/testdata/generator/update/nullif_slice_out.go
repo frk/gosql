@@ -13,10 +13,10 @@ func (q *UpdateNullIfSliceQuery) Exec(c gosql.Conn) error {
 		, "fruit"
 		, "value"
 	) = (
-		NULLIF(x."key", 0)::integer
-		, NULLIF(x."name", '')::text
-		, NULLIF(x."fruit", '')::text
-		, NULLIF(x."value", 0)::double precision
+		x."key"
+		, x."name"
+		, x."fruit"
+		, x."value"
 	)
 	FROM (VALUES` // `
 
@@ -30,10 +30,10 @@ func (q *UpdateNullIfSliceQuery) Exec(c gosql.Conn) error {
 		params[pos+3] = v.Value
 		params[pos+4] = v.Id
 
-		queryString += `(` + gosql.OrdinalParameters[pos+0] +
-			`, ` + gosql.OrdinalParameters[pos+1] +
-			`, ` + gosql.OrdinalParameters[pos+2] +
-			`, ` + gosql.OrdinalParameters[pos+3] +
+		queryString += `(NULLIF(` + gosql.OrdinalParameters[pos+0] + `, 0)::integer` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+1] + `, '')::text` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+2] + `, '')::text` +
+			`, NULLIF(` + gosql.OrdinalParameters[pos+3] + `, 0)::double precision` +
 			`, ` + gosql.OrdinalParameters[pos+4] +
 			`),`
 	}

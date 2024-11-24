@@ -113,6 +113,7 @@ type generator struct {
 	// columns by the sql query (INSERT|UPDATE).
 	inputVals      SQL.ValueExprList
 	inputValsPKeys SQL.ValueExprList
+	updateCols     SQL.ValueExprList
 
 	// The root node for the fields to be passed as output destination (Scan).
 	outputRoot GO.ExprNode
@@ -302,16 +303,19 @@ func buildQueryInputTargetValues(g *generator, qs *analysis.QueryStruct) {
 			col := SQL.ColumnIdent{}
 			col.Name = SQL.Name(fw.Column.Name)
 			col.Qual = "x"
+			g.updateCols = append(g.updateCols, col)
 
+			var expr SQL.ValueExpr
+			expr = makeParamSpec(g, fw.Field)
 			if fw.NeedsNULLIF() {
-				expr := addNULLIFCallExpr(col, fw.Column)
-				g.inputVals = append(g.inputVals, expr)
+				expr = addNULLIFCallExpr(expr, fw.Column)
 			} else {
 				cast := SQL.CastExpr{}
-				cast.Expr = col
+				cast.Expr = expr
 				cast.Type = fw.Column.Type.NameFmt
-				g.inputVals = append(g.inputVals, cast)
+				expr = cast
 			}
+			g.inputVals = append(g.inputVals, expr)
 			continue
 		}
 
@@ -960,7 +964,11 @@ func buildSQLUpdateStatement(g *generator, qs *analysis.QueryStruct) {
 	stmt := SQL.UpdateStatement{}
 	stmt.Head.Table = makeRelIdent(qs.Rel.Id)
 	stmt.Head.Set.Targets = g.inputCols
-	stmt.Head.Set.Values.Exprs = g.inputVals
+	if qs.IsUpdateSlice() {
+		stmt.Head.Set.Values.Exprs = g.updateCols
+	} else {
+		stmt.Head.Set.Values.Exprs = g.inputVals
+	}
 	if qs.Join != nil {
 		stmt.Head.From.List = []SQL.TableExpr{makeRelIdent(qs.Join.Relation.RelIdent)}
 		stmt.Head.From.List = append(stmt.Head.From.List, g.tableExprSlice()...)
@@ -1502,15 +1510,18 @@ func buildQueryStringForSliceInsertOrUpdate(g *generator, qs *analysis.QueryStru
 			concatExpr.X = GO.RawStringLit(sep)
 			concatExpr.Y = GO.IndexExpr{X: ordinalParams, Index: binExpr}
 
-			if ni, ok := val.(SQL.NULLIF); ok && !qs.IsUpdateSlice() {
+			if ni, ok := val.(SQL.NULLIF); ok {
 				concatExpr.X = GO.RawStringLit(sep + `NULLIF(`)
 				concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
 				concatExpr.Y = GO.RawStringLit(`, ` + SQL.MustToString(ni.Expr) + `)`)
 			} else if cast, ok := val.(SQL.CastExpr); ok {
-				if ni, ok := cast.Expr.(SQL.NULLIF); ok && !qs.IsUpdateSlice() {
+				if ni, ok := cast.Expr.(SQL.NULLIF); ok {
 					concatExpr.X = GO.RawStringLit(sep + `NULLIF(`)
 					concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
 					concatExpr.Y = GO.RawStringLit(`, ` + SQL.MustToString(ni.Expr) + `)::` + cast.Type)
+				} else {
+					concatExpr = GO.BinaryExpr{X: concatExpr, Op: GO.BinaryAdd}
+					concatExpr.Y = GO.RawStringLit(`::` + cast.Type)
 				}
 			}
 
