@@ -206,6 +206,7 @@ func TestGenerator(t *testing.T) {
 				cfg.FilterColumnKeySeparator.Value = "."
 				cfg.QuoteIdentifiers.Value = true
 			}},
+			{filename: "exclude"},
 			{filename: "textsearch"},
 		},
 	}, {

@@ -1391,6 +1391,10 @@ func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 //	    ✅ The field's type MUST be a type that, together with the column's type,
 //	    has an entry in the compatibility table.
 func typeCheckFieldFilter(c *checker, f *analysis.FieldInfo, strict bool) error {
+	if f.ExcludeFromFilter() {
+		return nil
+	}
+
 	col := findRelColumn(c.rel, f.ColIdent.Name)
 	if col == nil && strict {
 		// NOTE(mkopriva): at the moment strict is always false so this

@@ -208,11 +208,13 @@ type (
 		ReadOnly bool
 		// If set, indicates that the "wo" option was used in the field's `sql` tag.
 		WriteOnly bool
-		// If set, indicates the the "default" option was used in the field's `sql` tag.
+		// If set, indicates that the "xf" option was used in the field's `sql` tag.
+		ExcludeFilter bool
+		// If set, indicates that the "default" option was used in the field's `sql` tag.
 		UseDefault bool
-		// If set, indicates the the "add" option was used in the field's `sql` tag.
+		// If set, indicates that the "add" option was used in the field's `sql` tag.
 		UseAdd bool
-		// If set, indicates the the "coalesce" option was used in the field's `sql` tag.
+		// If set, indicates that the "coalesce" option was used in the field's `sql` tag.
 		UseCoalesce bool
 		// Will hold the "alternative" value as parsed from the "coalesce" option of the field's `sql` tag.
 		CoalesceValue string
@@ -243,10 +245,12 @@ type (
 		IsExported bool
 		// Indicates whether or not the field type is a pointer type.
 		IsPointer bool
-		// If set, indicates the the "ro" option was used in the field's `sql` tag.
+		// If set, indicates that the "ro" option was used in the field's `sql` tag.
 		ReadOnly bool
-		// If set, indicates the the "wo" option was used in the field's `sql` tag.
+		// If set, indicates that the "wo" option was used in the field's `sql` tag.
 		WriteOnly bool
+		// If set, indicates that the "xf" option was used in the field's `sql` tag.
+		ExcludeFilter bool
 	}
 )
 
@@ -675,6 +679,15 @@ func (f FieldInfo) IsWriteOnly() bool {
 		}
 	}
 	return f.WriteOnly
+}
+
+func (f FieldInfo) ExcludeFromFilter() bool {
+	for i := range f.Selector {
+		if f.Selector[i].ExcludeFilter {
+			return true
+		}
+	}
+	return f.ExcludeFilter
 }
 
 func (id ColIdent) IsEmpty() bool { return id == ColIdent{} }

@@ -35,11 +35,11 @@ func (u *User2) AfterScan() {
 	// ...
 }
 
-// for testing ro and wo tags
+// for testing "ro", "wo", and "xf" tags
 type User3 struct {
 	Id        int       `sql:"id,pk,ro"`
 	Email     string    `sql:"email"`
-	Password  []byte    `sql:"password,wo"`
+	Password  []byte    `sql:"password,wo,xf"`
 	CreatedAt time.Time `sql:"created_at"`
 	UpdatedAt time.Time `sql:"updated_at"`
 }
