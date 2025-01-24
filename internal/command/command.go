@@ -56,6 +56,10 @@ func (cmd *Command) Run() error {
 		return err
 	}
 
+	if err := analysis.AnalyzeFilterValueConverters(cmd.Config); err != nil {
+		return err
+	}
+
 	result := make([][]*outFile, len(pkgs))
 	for i, pkg := range pkgs {
 		outFiles := make([]*outFile, len(pkg.Files))

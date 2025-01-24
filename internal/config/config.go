@@ -95,8 +95,19 @@ type Config struct {
 	// If not provided, the type github.com/frk/gosql.Conn will be used by default.
 	MethodArgumentType GoType `json:"method_argument_type"`
 
+	// A list of filter value converters that will be used to map
+	// filter value converting functions to specific types.
+	FilterValueConverters []FilterValueConverter `json:"filter_value_converters"`
+
 	// holds the compiled expressions of the InputFileRegexps slice.
 	compiledInputFileRegexps []*regexp.Regexp
+}
+
+type FilterValueConverter struct {
+	// Go type for which to use the filter value converter.
+	Type ObjectIdent `json:"type"`
+	// Go func which should be used as the filter value converter.
+	Func ObjectIdent `json:"func"`
 }
 
 var DefaultConfig = Config{
@@ -280,6 +291,15 @@ func (c *Config) Validate() (err error) {
 			return err
 		}
 	}
+
+	//
+	// TODO: needs to confirm the validity of the types & functions
+	//
+	// for i, fvc := range c.FilterValueConverters {
+	// 	if err := checkFilterValueConverter(fvc, c); err != nil {
+	// 		return err
+	// 	}
+	// }
 	return nil
 }
 

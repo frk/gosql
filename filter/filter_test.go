@@ -15,17 +15,26 @@ func i64s(ii ...int64) (out []interface{}) {
 	return out
 }
 
-var test_colmap = map[string]string{
-	"a": "col_a",
-	"b": "col_b",
-	"c": "col_c",
-	"d": "col_d",
-	"e": "col_e",
-	"f": "col_f",
-	"g": "col_g",
-	"h": "col_h",
-	"i": "col_i",
-	"j": "col_j",
+type myString string
+
+func convertToMyString(v any) (any, error) {
+	if s, ok := v.(string); ok {
+		return myString(s), nil
+	}
+	return v, nil
+}
+
+var test_colmap = map[string]Column{
+	"a": {Name: "col_a"},
+	"b": {Name: "col_b"},
+	"c": {Name: "col_c"},
+	"d": {Name: "col_d"},
+	"e": {Name: "col_e", ConvertValue: convertToMyString},
+	"f": {Name: "col_f"},
+	"g": {Name: "col_g"},
+	"h": {Name: "col_h"},
+	"i": {Name: "col_i"},
+	"j": {Name: "col_j"},
 }
 
 func TestFilter(t *testing.T) {
@@ -93,7 +102,7 @@ func TestFilter(t *testing.T) {
 		run: func(c *Constructor) error {
 			return c.UnmarshalFQL(`e:!"John Doe"`)
 		},
-		want: result{where: ` WHERE col_e <> $1`, params: []interface{}{"John Doe"}},
+		want: result{where: ` WHERE col_e <> $1`, params: []interface{}{myString("John Doe")}},
 	}, {
 		name: "test_fql_10",
 		run: func(c *Constructor) error {

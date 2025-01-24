@@ -410,9 +410,9 @@ type InsertAnalysisTestOK_OverrideDirective struct {
 
 // OK: Filter with constructor & TextSearch directive
 type FilterAnalysisTestOK_TextSearchDirective struct {
-	_ T                `rel:"relation_a:a"`
-	_ gosql.TextSearch `sql:"a.ts_document"`
-	common.FilterMaker
+	_                  T                `rel:"relation_a:a"`
+	_                  gosql.TextSearch `sql:"a.ts_document"`
+	common.FilterMaker `filter:"v2"`
 }
 
 // OK: Insert with onconflict block

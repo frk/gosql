@@ -1509,6 +1509,7 @@ func analyzeFilterConstructorField(a *analysis, f *types.Var, tag string) error 
 
 	a.filter.FilterConstructor = new(FilterConstructorField)
 	a.filter.FilterConstructor.Name = f.Name()
+	a.filter.FilterConstructor.IsV2 = tagutil.New(tag).Contains("filter", "v2")
 	a.info.FieldMap[a.filter.FilterConstructor] = FieldVar{Var: f, Tag: tag}
 	return nil
 }
@@ -2347,9 +2348,25 @@ func (t *TypeInfo) IsXMLIllegal() bool {
 	return t.Is(TypeKindChan, TypeKindFunc, TypeKindMap)
 }
 
-// //////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // Cache
+
 var relTypeCache = struct {
 	sync.RWMutex
 	m map[string]*RelType
 }{m: make(map[string]*RelType)}
+
+////////////////////////////////////////////////////////////////////////////////
+
+var filterValueConverters = map[string]*Identifier{}
+
+func AnalyzeFilterValueConverters(cfg config.Config) error {
+	for _, fvc := range cfg.FilterValueConverters {
+		key := fvc.Type.PkgPath + "." + fvc.Type.Name
+		filterValueConverters[key] = &Identifier{
+			Name:    fvc.Func.Name,
+			PkgPath: fvc.Func.PkgPath,
+		}
+	}
+	return nil
+}

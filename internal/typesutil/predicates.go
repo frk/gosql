@@ -29,6 +29,21 @@ func IsStringMap(typ types.Type) bool {
 	return true
 }
 
+// IsStringColumnMap reports whether or not the given type is the "map[string]filter.Column" type.
+func IsStringColumnMap(typ types.Type) bool {
+	m, ok := typ.(*types.Map)
+	if !ok {
+		return false
+	}
+	if k, ok := m.Key().(*types.Basic); !ok || k.Kind() != types.String || k.Name() != "string" {
+		return false
+	}
+	if !IsFilterColumn(m.Elem()) {
+		return false
+	}
+	return true
+}
+
 // IsNiladicFunc reports whether or not the given type is the "func()" type.
 func IsNiladicFunc(typ types.Type) bool {
 	sig, ok := typ.(*types.Signature)
@@ -189,6 +204,26 @@ func IsSqlDriverValue(typ types.Type) bool {
 		return path == "database/sql/driver" && name == "Value"
 	}
 	return false
+}
+
+// IsFilterColumn reports whether or not the given type is the "github.com/frk/gosql/filter.Column" type.
+func IsFilterColumn(typ types.Type) bool {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return false
+	}
+
+	name := named.Obj().Name()
+	path := named.Obj().Pkg().Path()
+
+	if name != "Column" {
+		return false
+	}
+	if !strings.HasSuffix(path, "github.com/frk/gosql/filter") {
+		return false
+	}
+
+	return true
 }
 
 // IsDirective reports whether or not the given type is a "github.com/frk/gosql" directive type.
@@ -385,7 +420,7 @@ func ImplementsGosqlFilterConstructor(typ types.Type) bool {
 		mm = iface
 	}
 
-	var hasInit, hasCol, hasAnd, hasOr bool
+	var hasInit, hasInitV2, hasCol, hasAnd, hasOr bool
 
 	for i := 0; i < mm.NumMethods(); i++ {
 		m := mm.Method(i)
@@ -400,6 +435,16 @@ func ImplementsGosqlFilterConstructor(typ types.Type) bool {
 				return false
 			}
 			hasInit = true
+		case "InitV2": // InitV2(colmap map[string]filter.Column, tscol string)
+			sig := m.Type().(*types.Signature)
+			p, r := sig.Params(), sig.Results()
+			if p.Len() != 2 || r.Len() != 0 {
+				return false
+			}
+			if !IsStringColumnMap(p.At(0).Type()) || !IsString(p.At(1).Type()) {
+				return false
+			}
+			hasInitV2 = true
 		case "Col": // Col(column string, op string, value interface{})
 			sig := m.Type().(*types.Signature)
 			p, r := sig.Params(), sig.Results()
@@ -435,7 +480,7 @@ func ImplementsGosqlFilterConstructor(typ types.Type) bool {
 		}
 	}
 
-	return hasInit && hasCol && hasAnd && hasOr
+	return hasInit && hasInitV2 && hasCol && hasAnd && hasOr
 }
 
 // ImplementsScanner reports whether or not the given named type implements the

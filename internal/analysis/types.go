@@ -1,6 +1,7 @@
 package analysis
 
 import (
+	"go/token"
 	"go/types"
 
 	"github.com/frk/tagutil"
@@ -483,6 +484,8 @@ type (
 	FilterConstructorField struct {
 		// Name of the field (case preserved).
 		Name string
+		// IsV2 indicates that the field has a `filter:"v2"` struct tag.
+		IsV2 bool
 	}
 )
 
@@ -637,6 +640,21 @@ type (
 	}
 )
 
+type Identifier struct {
+	// The name of a declared object.
+	Name string
+	// The import path of the package in which the object is declared.
+	PkgPath string
+}
+
+func (id Identifier) IsExported() bool {
+	return token.IsExported(id.Name)
+}
+
+func (id Identifier) NeedsImport(info *Info) bool {
+	return id.PkgPath != info.PkgPath
+}
+
 func (t TypeInfo) ImplementsScanner() bool {
 	return (t.IsScanner && t.Kind != TypeKindInterface) ||
 		(t.Kind == TypeKindPtr && t.Elem.IsScanner && t.Elem.Kind != TypeKindInterface)
@@ -688,6 +706,14 @@ func (f FieldInfo) ExcludeFromFilter() bool {
 		}
 	}
 	return f.ExcludeFilter
+}
+
+func (f FieldInfo) FilterValueConverter() *Identifier {
+	key := f.Type.PkgPath + "." + f.Type.Name
+	if id, ok := filterValueConverters[key]; ok {
+		return id
+	}
+	return nil
 }
 
 func (id ColIdent) IsEmpty() bool { return id == ColIdent{} }
@@ -766,6 +792,16 @@ func (s *QueryStruct) OutputRelType() RelType {
 // output type implements the AfterScanner interface.
 func (s *QueryStruct) OutputIsAfterScanner() bool {
 	return s.OutputRelType().IsAfterScanner
+}
+
+// IsV1 indicates that the FilterStruct's FilterConstructor should be treated as "v1".
+func (s *FilterStruct) IsV1() bool {
+	return s.FilterConstructor == nil || s.FilterConstructor.IsV2 != true
+}
+
+// IsV2 indicates that the FilterStruct's FilterConstructor was tagged as "v2".
+func (s *FilterStruct) IsV2() bool {
+	return s.FilterConstructor != nil && s.FilterConstructor.IsV2 == true
 }
 
 // IsSingle reports whether or not the RelType represents a non-collection type.

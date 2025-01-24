@@ -113,12 +113,21 @@ type Constructor struct {
 	// The colmap field maps "public facing keys" to valid column identifiers
 	// of the relation with which the Filter instance is associated.
 	// Note that colmap, once set by Init, is NOT to be modified, it is read-only.
-	colmap map[string]string
+	colmap map[string]Column
 	// The identifier of the ts_vector column that can be used for full text search.
 	tscol string
 	// Indicates whether or not an error should be returned if any of the
 	// Constructor's methods encounter a column that has no entry in the colmap.
 	strict bool
+}
+
+// The Column type XXX
+type Column struct {
+	// Name is the name of the column.
+	Name string
+	// ConvertValue, when set, will be used convert
+	// the column's FQL-parsed value.
+	ConvertValue func(any) (any, error)
 }
 
 var (
@@ -159,8 +168,19 @@ func (c *Constructor) StrictSwitch() { c.strict = !c.strict }
 //
 // The Init method implements part of the gosql.FilterConstructor interface.
 func (c *Constructor) Init(colmap map[string]string, tscol string) {
-	c.colmap = colmap
 	c.tscol = tscol
+	c.colmap = make(map[string]Column, len(colmap))
+	for k, v := range colmap {
+		c.colmap[k] = Column{Name: v}
+	}
+}
+
+// InitV2 initializes the Constructor's colmap and tscol fields using the given values.
+//
+// The Init method implements part of the gosql.FilterConstructor interface.
+func (c *Constructor) InitV2(colmap map[string]Column, tscol string) {
+	c.tscol = tscol
+	c.colmap = colmap
 }
 
 // Col prepares a new, column-specific predicate for the WHERE clause.
@@ -321,7 +341,15 @@ func (c *Constructor) UnmarshalFQL(str string) error {
 					val = nil
 				}
 
-				c.Col(col, cmpop2string[rule.Cmp], val)
+				if col.ConvertValue != nil {
+					v, err := col.ConvertValue(val)
+					if err != nil {
+						return err
+					}
+					val = v
+				}
+
+				c.Col(col.Name, cmpop2string[rule.Cmp], val)
 			} else if c.strict {
 				return UnknownColumnKeyError{Key: rule.Key}
 			}
@@ -340,7 +368,6 @@ func (c *Constructor) UnmarshalFQL(str string) error {
 // Example value:
 //
 //	"-created_at,label"
-//
 func (c *Constructor) UnmarshalSort(str string) error {
 	start, end := 0, len(str)
 	for start < end {
@@ -356,7 +383,7 @@ func (c *Constructor) UnmarshalSort(str string) error {
 
 		if key := str[start:pos]; len(key) > 0 {
 			if col, ok := c.colmap[key]; ok {
-				c.OrderBy(col, desc, false)
+				c.OrderBy(col.Name, desc, false)
 			} else if c.strict {
 				return UnknownColumnKeyError{Key: key}
 			}
@@ -380,10 +407,10 @@ func (c *Constructor) CountFilter() gosql.Filter {
 
 // filter is the result of the Constructor. The currently supported SQL clauses
 // that the filter type can produce are:
-//     - WHERE
-//     - ORDER BY
-//     - LIMIT
-//     - OFFSET
+//   - WHERE
+//   - ORDER BY
+//   - LIMIT
+//   - OFFSET
 type filter struct {
 	// The arguments for the WHERE clause as a list of sqlNodes.
 	where []sqlNode

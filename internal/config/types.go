@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -205,6 +206,63 @@ func (t *GoType) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		return t.Set(value)
+	}
+	return nil
+}
+
+// ObjectIdent represents a Go type or function identifier. It implements
+// both the flag.Value and the json.Unmarshaler interfaces.
+type ObjectIdent struct {
+	PkgPath string // the package path of the Go object
+	Name    string // the name of the Go object
+	IsSet   bool
+}
+
+// Get implements the flag.Getter interface.
+func (id ObjectIdent) Get() interface{} {
+	return id.String()
+}
+
+// String implements the flag.Value interface.
+func (id ObjectIdent) String() string {
+	v := id.PkgPath
+	if len(id.Name) > 0 {
+		v += "." + id.Name
+	}
+	return v
+}
+
+var rxObjId = regexp.MustCompile(`^\w[\w\.-/]*\w\.[A-Za-z_]\w*$`)
+
+// Set implements the flag.Value interface.
+func (id *ObjectIdent) Set(value string) error {
+	if len(value) > 0 {
+		if !rxObjId.MatchString(value) {
+			return fmt.Errorf("config.ObjectIdent.Set: %q invalid object_identifier", value)
+		}
+
+		i := strings.LastIndex(value, ".")
+		id.PkgPath = value[:i]
+		id.Name = value[i+1:]
+		id.IsSet = true
+	}
+	return nil
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (id *ObjectIdent) UnmarshalJSON(data []byte) error {
+	if !id.IsSet {
+		if string(data) == "null" {
+			return nil
+		}
+
+		var value string
+		if err := json.Unmarshal(data, &value); err != nil {
+			return err
+		}
+		if err := id.Set(value); err != nil {
+			return err
+		}
 	}
 	return nil
 }

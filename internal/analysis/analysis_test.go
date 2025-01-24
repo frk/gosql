@@ -4007,7 +4007,7 @@ func TestAnalysis_filterStruct(t *testing.T) {
 				Type:      reltypeT,
 			},
 			TextSearch:        &TextSearchDirective{ColIdent{Qualifier: "a", Name: "ts_document"}},
-			FilterConstructor: &FilterConstructorField{"FilterMaker"},
+			FilterConstructor: &FilterConstructorField{Name: "FilterMaker", IsV2: true},
 		},
 	}}
 

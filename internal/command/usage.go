@@ -1,12 +1,12 @@
 package command
 
 import (
-	"fmt"
+	"io"
 	"os"
 )
 
 func PrintUsage() {
-	fmt.Fprint(os.Stderr, usage)
+	io.WriteString(os.Stderr, usage)
 }
 
 const usage = `usage: gosql [-db] [-wd] [-r] [-f] [-rx] [-o] [-qid] [-argtype]
