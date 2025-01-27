@@ -4218,9 +4218,10 @@ func makeReltypeCT1() RelType {
 			Type:            TypeInfo{Kind: TypeKindString},
 			Name:            "B",
 			IsExported:      true,
-			Tag:             tagutil.Tag{"sql": {"col_b"}},
+			Tag:             tagutil.Tag{"sql": {"col_b", "nn"}},
 			ColIdent:        ColIdent{Name: "col_b"},
 			FilterColumnKey: "B",
+			TreatAsNotNULL:  true,
 		}, {
 			Type:            TypeInfo{Kind: TypeKindBool},
 			Name:            "C",
@@ -4232,9 +4233,10 @@ func makeReltypeCT1() RelType {
 			Type:            TypeInfo{Kind: TypeKindFloat64},
 			Name:            "D",
 			IsExported:      true,
-			Tag:             tagutil.Tag{"sql": {"col_d"}},
+			Tag:             tagutil.Tag{"sql": {"col_d", "nn"}},
 			ColIdent:        ColIdent{Name: "col_d"},
 			FilterColumnKey: "D",
+			TreatAsNotNULL:  true,
 		}, {
 			Type: TypeInfo{
 				Name:              "Time",

@@ -7,9 +7,8 @@ import (
 	"github.com/frk/gosql/internal/postgres/oid"
 )
 
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
 // Result Types
-//
 type (
 	// FieldWrite holds the information needed by the generator to produce the
 	// expression nodes that constitute a field-to-column write operation.
@@ -144,9 +143,8 @@ type (
 	}
 )
 
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
 // PostgreSQL Catalog
-//
 type (
 	// Catalog holds information on various objects of the database.
 	Catalog struct {
@@ -177,9 +175,8 @@ type (
 	}
 )
 
-////////////////////////////////////////////////////////////////////////////////
+// //////////////////////////////////////////////////////////////////////////////
 // PostgreSQL Catalog Objects
-//
 type (
 	// Relation holds the info of a "pg_class" entry that represents
 	// a table, view, or materialized view.
@@ -394,6 +391,10 @@ func (t *Type) GetNameFmt() string {
 func (c *Column) IsNULLable() bool {
 	return c.Relation != nil && c.Relation.RelKind == RelKindOrdinaryTable &&
 		c.HasNotNull == false
+}
+
+func (f *FieldFilter) TreatAsNULLable() bool {
+	return !f.Field.TreatAsNotNULL && !f.Column.HasNotNull
 }
 
 // TableJoinConditional implementations

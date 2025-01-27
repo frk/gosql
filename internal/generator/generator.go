@@ -758,6 +758,11 @@ func buildFilterColumnMap(g *generator, fs *analysis.FilterStruct) (mapid GO.Ide
 				felems = append(felems, fe)
 			}
 
+			if filter.TreatAsNULLable() {
+				fe := GO.FieldElement{Field: "IsNULLable", Value: GO.Ident{"true"}}
+				felems = append(felems, fe)
+			}
+
 			elem.Value = GO.StructLit{Elems: felems, Compact: true}
 		}
 

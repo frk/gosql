@@ -208,6 +208,7 @@ func TestGenerator(t *testing.T) {
 			}},
 			{filename: "exclude"},
 			{filename: "textsearch"},
+			{filename: "notnull"},
 		},
 	}, {
 		//skip:    true,

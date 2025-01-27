@@ -128,6 +128,8 @@ type Column struct {
 	// ConvertValue, when set, will be used convert
 	// the column's FQL-parsed value.
 	ConvertValue func(any) (any, error)
+	// IsNULLable indicates whether or not the column's NULLable.
+	IsNULLable bool
 }
 
 var (
@@ -139,26 +141,6 @@ var (
 // given the current state of the sqlNode list.
 func (c *Constructor) canAndOr() bool {
 	return len(c.filter.where) > 0 && c.filter.where[len(c.filter.where)-1].canAndOr()
-}
-
-// orderBy adds a new argument to the ORDER BY clause.
-func (c *Constructor) orderBy(column string, desc, nullsfirst bool) {
-	if len(c.filter.orderby) > 0 {
-		c.filter.orderby += ", "
-	}
-	c.filter.orderby += column
-
-	if desc {
-		c.filter.orderby += " DESC"
-	} else {
-		c.filter.orderby += " ASC"
-	}
-
-	if nullsfirst {
-		c.filter.orderby += " NULLS FIRST"
-	} else {
-		c.filter.orderby += " NULLS LAST"
-	}
 }
 
 // StrictSwitch switches the strict mode on and off.
@@ -263,6 +245,7 @@ func (c *Constructor) Or(nest func()) {
 }
 
 // OrderBy adds a new argument to the ORDER BY clause.
+//
 // The column is assumed to already be vetted.
 func (c *Constructor) OrderBy(column string, desc, nullsfirst bool) {
 	if len(c.filter.orderby) > 0 {
@@ -280,6 +263,30 @@ func (c *Constructor) OrderBy(column string, desc, nullsfirst bool) {
 		c.filter.orderby += " NULLS FIRST"
 	} else {
 		c.filter.orderby += " NULLS LAST"
+	}
+}
+
+// OrderByV2 adds a new argument to the ORDER BY clause.
+//
+// The column is assumed to already be vetted.
+func (c *Constructor) OrderByV2(column string, desc, nullable, nullsfirst bool) {
+	if len(c.filter.orderby) > 0 {
+		c.filter.orderby += ", "
+	}
+	c.filter.orderby += column
+
+	if desc {
+		c.filter.orderby += " DESC"
+	} else {
+		c.filter.orderby += " ASC"
+	}
+
+	if nullable {
+		if nullsfirst {
+			c.filter.orderby += " NULLS FIRST"
+		} else {
+			c.filter.orderby += " NULLS LAST"
+		}
 	}
 }
 
@@ -383,7 +390,7 @@ func (c *Constructor) UnmarshalSort(str string) error {
 
 		if key := str[start:pos]; len(key) > 0 {
 			if col, ok := c.colmap[key]; ok {
-				c.OrderBy(col.Name, desc, false)
+				c.OrderByV2(col.Name, desc, col.IsNULLable, false)
 			} else if c.strict {
 				return UnknownColumnKeyError{Key: key}
 			}

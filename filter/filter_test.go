@@ -25,7 +25,7 @@ func convertToMyString(v any) (any, error) {
 }
 
 var test_colmap = map[string]Column{
-	"a": {Name: "col_a"},
+	"a": {Name: "col_a", IsNULLable: true},
 	"b": {Name: "col_b"},
 	"c": {Name: "col_c"},
 	"d": {Name: "col_d"},
@@ -174,13 +174,13 @@ func TestFilter(t *testing.T) {
 		run: func(c *Constructor) error {
 			return c.UnmarshalSort("a,b,-c")
 		},
-		want: result{where: ` ORDER BY col_a ASC NULLS LAST, col_b ASC NULLS LAST, col_c DESC NULLS LAST`},
+		want: result{where: ` ORDER BY col_a ASC NULLS LAST, col_b ASC, col_c DESC`},
 	}, {
 		name: "test_sort_3",
 		run: func(c *Constructor) error {
 			return c.UnmarshalSort("-c,b,a")
 		},
-		want: result{where: ` ORDER BY col_c DESC NULLS LAST, col_b ASC NULLS LAST, col_a ASC NULLS LAST`},
+		want: result{where: ` ORDER BY col_c DESC, col_b ASC, col_a ASC NULLS LAST`},
 	}, {
 		name: "test_sort_error_1",
 		run: func(c *Constructor) error {
@@ -334,7 +334,7 @@ func TestFilter(t *testing.T) {
 		want: result{where: ` WHERE col_a > $1 AND col_b IS NOT NULL` +
 			` AND col_d <= $2 OR (col_e > $3 AND col_e < $4)` +
 			` OR t."tsvec" @@ to_tsquery('simple', $5)` +
-			` ORDER BY col_c DESC NULLS LAST` +
+			` ORDER BY col_c DESC` +
 			` LIMIT 5` +
 			` OFFSET 10`,
 			params: []interface{}{int64(123), 123, 10, 20, "foo:* & bar:* & baz:*"}},

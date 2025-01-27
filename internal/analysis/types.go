@@ -211,6 +211,8 @@ type (
 		WriteOnly bool
 		// If set, indicates that the "xf" option was used in the field's `sql` tag.
 		ExcludeFilter bool
+		// If set, indicates that the "nn" option was used in the field's `sql` tag.
+		TreatAsNotNULL bool
 		// If set, indicates that the "default" option was used in the field's `sql` tag.
 		UseDefault bool
 		// If set, indicates that the "add" option was used in the field's `sql` tag.
@@ -252,6 +254,8 @@ type (
 		WriteOnly bool
 		// If set, indicates that the "xf" option was used in the field's `sql` tag.
 		ExcludeFilter bool
+		// If set, indicates that the "nn" option was used in the field's `sql` tag.
+		TreatAsNotNULL bool
 	}
 )
 

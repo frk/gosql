@@ -602,6 +602,7 @@ stackloop:
 				node.ReadOnly = tag.HasOption("sql", "ro")
 				node.WriteOnly = tag.HasOption("sql", "wo")
 				node.ExcludeFilter = tag.HasOption("sql", "xf")
+				node.TreatAsNotNULL = tag.HasOption("sql", "nn")
 				loop2.selector = append(loop2.selector, node)
 
 				stack = append(stack, loop2)
@@ -627,6 +628,7 @@ stackloop:
 			f.ReadOnly = tag.HasOption("sql", "ro")
 			f.WriteOnly = tag.HasOption("sql", "wo")
 			f.ExcludeFilter = tag.HasOption("sql", "xf")
+			f.TreatAsNotNULL = tag.HasOption("sql", "nn")
 			f.UseAdd = tag.HasOption("sql", "add")
 			f.UseDefault = tag.HasOption("sql", "default")
 			f.UseCoalesce, f.CoalesceValue = parseCoalesceInfo(tag)

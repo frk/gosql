@@ -11,9 +11,9 @@ import (
 // column_tests_1 record
 type CT1 struct {
 	A int       `sql:"col_a"`
-	B string    `sql:"col_b"`
+	B string    `sql:"col_b,nn"`
 	C bool      `sql:"col_c"`
-	D float64   `sql:"col_d"`
+	D float64   `sql:"col_d,nn"`
 	E time.Time `sql:"col_e"`
 }
 
