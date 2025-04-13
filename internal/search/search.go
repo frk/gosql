@@ -16,9 +16,15 @@ const loadMode = packages.NeedName |
 	packages.NeedCompiledGoFiles |
 	packages.NeedImports |
 	packages.NeedDeps |
+	packages.NeedExportFile |
 	packages.NeedTypes |
 	packages.NeedSyntax |
-	packages.NeedTypesInfo
+	packages.NeedTypesInfo |
+	packages.NeedTypesSizes |
+	packages.NeedModule |
+	packages.NeedEmbedFiles |
+	packages.NeedEmbedPatterns |
+	packages.NeedTarget
 
 var (
 	// Matches names of types that are valid targets for the generator.

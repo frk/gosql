@@ -599,10 +599,7 @@ stackloop:
 				node.TypePkgLocal = typ.PkgLocal
 				node.IsImported = typ.IsImported
 				node.IsPointer = (f.Type.Kind == TypeKindPtr)
-				node.ReadOnly = tag.HasOption("sql", "ro")
-				node.WriteOnly = tag.HasOption("sql", "wo")
-				node.ExcludeFilter = tag.HasOption("sql", "xf")
-				node.TreatAsNotNULL = tag.HasOption("sql", "nn")
+				node.Mode = parseFieldMode(tag)
 				loop2.selector = append(loop2.selector, node)
 
 				stack = append(stack, loop2)
@@ -625,10 +622,7 @@ stackloop:
 			f.ColIdent = cid
 			f.Selector = loop.selector
 			f.NullEmpty = tag.HasOption("sql", "nullempty")
-			f.ReadOnly = tag.HasOption("sql", "ro")
-			f.WriteOnly = tag.HasOption("sql", "wo")
-			f.ExcludeFilter = tag.HasOption("sql", "xf")
-			f.TreatAsNotNULL = tag.HasOption("sql", "nn")
+			f.Mode = parseFieldMode(tag)
 			f.UseAdd = tag.HasOption("sql", "add")
 			f.UseDefault = tag.HasOption("sql", "default")
 			f.UseCoalesce, f.CoalesceValue = parseCoalesceInfo(tag)

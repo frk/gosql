@@ -339,14 +339,22 @@ func examineDir(path string) (isRoot bool, confName string, err error) {
 }
 
 func checkMethodArgumentType(t *GoType, c *Config) (err error) {
-	cfg := &packages.Config{Mode: packages.NeedName |
-		packages.NeedFiles |
-		packages.NeedCompiledGoFiles |
-		packages.NeedSyntax |
-		packages.NeedTypes |
-		packages.NeedImports |
-		packages.NeedDeps |
-		packages.NeedTypesInfo}
+	cfg := &packages.Config{
+		Mode: packages.NeedName |
+			packages.NeedFiles |
+			packages.NeedCompiledGoFiles |
+			packages.NeedImports |
+			packages.NeedDeps |
+			packages.NeedExportFile |
+			packages.NeedTypes |
+			packages.NeedSyntax |
+			packages.NeedTypesInfo |
+			packages.NeedTypesSizes |
+			packages.NeedModule |
+			packages.NeedEmbedFiles |
+			packages.NeedEmbedPatterns |
+			packages.NeedTarget,
+	}
 	pkgs, err := packages.Load(cfg, t.PkgPath)
 	if err != nil {
 		return fmt.Errorf("failed to load package of method argument type: %q -- %v", t, err)

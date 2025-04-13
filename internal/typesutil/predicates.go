@@ -66,6 +66,16 @@ func IsError(typ types.Type) bool {
 
 // IsEmptyInterface reports whether or not the given type is the "interface{}" type.
 func IsEmptyInterface(typ types.Type) bool {
+	// handle builtin "any" alias
+	if alias, ok := typ.(*types.Alias); ok {
+		pkg := alias.Obj().Pkg()
+		name := alias.Obj().Name()
+		if name != "any" || pkg != nil {
+			return false
+		}
+		typ = alias.Underlying()
+	}
+
 	iface, ok := typ.(*types.Interface)
 	if !ok {
 		return false

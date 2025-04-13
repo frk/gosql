@@ -51,6 +51,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		ColIdent:        ColIdent{Name: "id"},
 		Tag:             tagutil.Tag{"sql": {"id"}},
 		FilterColumnKey: "Id",
+		Mode:            mode_default,
 	}, {
 		Name:            "Email",
 		Type:            TypeInfo{Kind: TypeKindString},
@@ -58,6 +59,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		ColIdent:        ColIdent{Name: "email"},
 		Tag:             tagutil.Tag{"sql": {"email"}},
 		FilterColumnKey: "Email",
+		Mode:            mode_default,
 	}, {
 		Name:            "FullName",
 		Type:            TypeInfo{Kind: TypeKindString},
@@ -65,6 +67,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		ColIdent:        ColIdent{Name: "full_name"},
 		Tag:             tagutil.Tag{"sql": {"full_name"}},
 		FilterColumnKey: "FullName",
+		Mode:            mode_default,
 	}, {
 		Name: "CreatedAt",
 		Type: TypeInfo{
@@ -81,6 +84,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 		ColIdent:        ColIdent{Name: "created_at"},
 		Tag:             tagutil.Tag{"sql": {"created_at"}},
 		FilterColumnKey: "CreatedAt",
+		Mode:            mode_default,
 	}}
 
 	reldummyslice := &RelField{
@@ -102,6 +106,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 				Tag:             tagutil.Tag{"sql": {"f"}},
 				ColIdent:        ColIdent{Name: "f"},
 				FilterColumnKey: "F",
+				Mode:            mode_default,
 			}},
 		},
 	}
@@ -2200,6 +2205,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "name"},
 						Tag:             tagutil.Tag{"sql": {"name"}},
 						FilterColumnKey: "Name3",
+						Mode:            mode_default,
 					}},
 				},
 			},
@@ -2288,6 +2294,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "a"},
 						FilterColumnKey: "a",
 						Tag:             tagutil.Tag{"sql": {"a", "pk"}},
+						Mode:            mode_default,
 					}, {
 						Name:            "b",
 						Type:            TypeInfo{Kind: TypeKindInt},
@@ -2295,20 +2302,21 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						FilterColumnKey: "b",
 						Tag:             tagutil.Tag{"sql": {"b", "nullempty"}},
 						NullEmpty:       true,
+						Mode:            mode_default,
 					}, {
 						Name:            "c",
 						Type:            TypeInfo{Kind: TypeKindInt},
 						ColIdent:        ColIdent{Name: "c"},
 						FilterColumnKey: "c",
 						Tag:             tagutil.Tag{"sql": {"c", "ro", "json"}},
-						ReadOnly:        true,
+						Mode:            mode_default &^ mode_write,
 					}, {
 						Name:            "d",
 						Type:            TypeInfo{Kind: TypeKindInt},
 						ColIdent:        ColIdent{Name: "d"},
 						FilterColumnKey: "d",
 						Tag:             tagutil.Tag{"sql": {"d", "wo"}},
-						WriteOnly:       true,
+						Mode:            mode_default &^ mode_read,
 					}, {
 						Name:            "e",
 						Type:            TypeInfo{Kind: TypeKindInt},
@@ -2316,6 +2324,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						FilterColumnKey: "e",
 						Tag:             tagutil.Tag{"sql": {"e", "add"}},
 						UseAdd:          true,
+						Mode:            mode_default,
 					}, {
 						Name:            "f",
 						Type:            TypeInfo{Kind: TypeKindInt},
@@ -2323,6 +2332,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						FilterColumnKey: "f",
 						Tag:             tagutil.Tag{"sql": {"f", "coalesce"}},
 						UseCoalesce:     true,
+						Mode:            mode_default,
 					}, {
 						Name:            "g",
 						Type:            TypeInfo{Kind: TypeKindInt},
@@ -2331,6 +2341,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						Tag:             tagutil.Tag{"sql": {"g", "coalesce(-1)"}},
 						UseCoalesce:     true,
 						CoalesceValue:   "-1",
+						Mode:            mode_default,
 					}},
 				},
 			},
@@ -2349,44 +2360,44 @@ func TestAnalysis_queryStruct(t *testing.T) {
 					},
 					Fields: []*FieldInfo{{
 						Name: "Val",
-						Selector: []*FieldSelectorNode{
-							{
-								Name:         "Foobar",
-								Tag:          tagutil.Tag{"sql": {">foo_"}},
-								TypeName:     "Foo",
-								TypePkgPath:  "github.com/frk/gosql/internal/testdata/common",
-								TypePkgName:  "common",
-								TypePkgLocal: "common",
-								IsExported:   true,
-								IsImported:   true,
-							},
-							{
-								Name:         "Bar",
-								Tag:          tagutil.Tag{"sql": {">bar_"}},
-								TypeName:     "Bar",
-								TypePkgPath:  "github.com/frk/gosql/internal/testdata/common",
-								TypePkgName:  "common",
-								TypePkgLocal: "common",
-								IsImported:   true,
-								IsExported:   true,
-							},
-							{
-								Name:         "Baz",
-								Tag:          tagutil.Tag{"sql": {">baz_"}},
-								TypeName:     "Baz",
-								TypePkgPath:  "github.com/frk/gosql/internal/testdata/common",
-								TypePkgName:  "common",
-								TypePkgLocal: "common",
-								IsExported:   true,
-								IsEmbedded:   true,
-								IsImported:   true,
-							},
-						},
+						Selector: []*FieldSelectorNode{{
+							Name:         "Foobar",
+							Tag:          tagutil.Tag{"sql": {">foo_"}},
+							TypeName:     "Foo",
+							TypePkgPath:  "github.com/frk/gosql/internal/testdata/common",
+							TypePkgName:  "common",
+							TypePkgLocal: "common",
+							IsExported:   true,
+							IsImported:   true,
+							Mode:         mode_default,
+						}, {
+							Name:         "Bar",
+							Tag:          tagutil.Tag{"sql": {">bar_"}},
+							TypeName:     "Bar",
+							TypePkgPath:  "github.com/frk/gosql/internal/testdata/common",
+							TypePkgName:  "common",
+							TypePkgLocal: "common",
+							IsImported:   true,
+							IsExported:   true,
+							Mode:         mode_default,
+						}, {
+							Name:         "Baz",
+							Tag:          tagutil.Tag{"sql": {">baz_"}},
+							TypeName:     "Baz",
+							TypePkgPath:  "github.com/frk/gosql/internal/testdata/common",
+							TypePkgName:  "common",
+							TypePkgLocal: "common",
+							IsExported:   true,
+							IsEmbedded:   true,
+							IsImported:   true,
+							Mode:         mode_default,
+						}},
 						IsExported:      true,
 						Type:            TypeInfo{Kind: TypeKindString},
 						ColIdent:        ColIdent{Name: "foo_bar_baz_val"},
 						FilterColumnKey: "FoobarBarBazVal",
 						Tag:             tagutil.Tag{"sql": {"val"}},
+						Mode:            mode_default,
 					}, {
 						Name: "Val",
 						Selector: []*FieldSelectorNode{{
@@ -2398,6 +2409,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 							TypePkgLocal: "common",
 							IsExported:   true,
 							IsImported:   true,
+							Mode:         mode_default,
 						}, {
 							Name:         "Baz",
 							Tag:          tagutil.Tag{"sql": {">baz_"}},
@@ -2409,12 +2421,14 @@ func TestAnalysis_queryStruct(t *testing.T) {
 							IsExported:   true,
 							IsEmbedded:   false,
 							IsPointer:    true,
+							Mode:         mode_default,
 						}},
 						IsExported:      true,
 						Type:            TypeInfo{Kind: TypeKindString},
 						ColIdent:        ColIdent{Name: "foo_baz_val"},
 						FilterColumnKey: "FoobarBazVal",
 						Tag:             tagutil.Tag{"sql": {"val"}},
+						Mode:            mode_default,
 					}},
 				},
 			},
@@ -3418,96 +3432,115 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c1"},
 						FilterColumnKey: "f1",
 						Tag:             tagutil.Tag{"sql": {"c1"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f2", Type: TypeInfo{Kind: TypeKindUint8, IsByte: true},
 						ColIdent:        ColIdent{Name: "c2"},
 						FilterColumnKey: "f2",
 						Tag:             tagutil.Tag{"sql": {"c2"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f3", Type: TypeInfo{Kind: TypeKindInt32, IsRune: true},
 						ColIdent:        ColIdent{Name: "c3"},
 						FilterColumnKey: "f3",
 						Tag:             tagutil.Tag{"sql": {"c3"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f4", Type: TypeInfo{Kind: TypeKindInt8},
 						ColIdent:        ColIdent{Name: "c4"},
 						FilterColumnKey: "f4",
 						Tag:             tagutil.Tag{"sql": {"c4"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f5", Type: TypeInfo{Kind: TypeKindInt16},
 						ColIdent:        ColIdent{Name: "c5"},
 						FilterColumnKey: "f5",
 						Tag:             tagutil.Tag{"sql": {"c5"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f6", Type: TypeInfo{Kind: TypeKindInt32},
 						ColIdent:        ColIdent{Name: "c6"},
 						FilterColumnKey: "f6",
 						Tag:             tagutil.Tag{"sql": {"c6"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f7", Type: TypeInfo{Kind: TypeKindInt64},
 						ColIdent:        ColIdent{Name: "c7"},
 						FilterColumnKey: "f7",
 						Tag:             tagutil.Tag{"sql": {"c7"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f8", Type: TypeInfo{Kind: TypeKindInt},
 						ColIdent:        ColIdent{Name: "c8"},
 						FilterColumnKey: "f8",
 						Tag:             tagutil.Tag{"sql": {"c8"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f9", Type: TypeInfo{Kind: TypeKindUint8},
 						ColIdent:        ColIdent{Name: "c9"},
 						FilterColumnKey: "f9",
 						Tag:             tagutil.Tag{"sql": {"c9"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f10", Type: TypeInfo{Kind: TypeKindUint16},
 						ColIdent:        ColIdent{Name: "c10"},
 						FilterColumnKey: "f10",
 						Tag:             tagutil.Tag{"sql": {"c10"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f11", Type: TypeInfo{Kind: TypeKindUint32},
 						ColIdent:        ColIdent{Name: "c11"},
 						FilterColumnKey: "f11",
 						Tag:             tagutil.Tag{"sql": {"c11"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f12", Type: TypeInfo{Kind: TypeKindUint64},
 						ColIdent:        ColIdent{Name: "c12"},
 						FilterColumnKey: "f12",
 						Tag:             tagutil.Tag{"sql": {"c12"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f13", Type: TypeInfo{Kind: TypeKindUint},
 						ColIdent:        ColIdent{Name: "c13"},
 						FilterColumnKey: "f13",
 						Tag:             tagutil.Tag{"sql": {"c13"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f14", Type: TypeInfo{Kind: TypeKindUintptr},
 						ColIdent:        ColIdent{Name: "c14"},
 						FilterColumnKey: "f14",
 						Tag:             tagutil.Tag{"sql": {"c14"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f15", Type: TypeInfo{Kind: TypeKindFloat32},
 						ColIdent:        ColIdent{Name: "c15"},
 						FilterColumnKey: "f15",
 						Tag:             tagutil.Tag{"sql": {"c15"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f16", Type: TypeInfo{Kind: TypeKindFloat64},
 						ColIdent:        ColIdent{Name: "c16"},
 						FilterColumnKey: "f16",
 						Tag:             tagutil.Tag{"sql": {"c16"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f17", Type: TypeInfo{Kind: TypeKindComplex64},
 						ColIdent:        ColIdent{Name: "c17"},
 						FilterColumnKey: "f17",
 						Tag:             tagutil.Tag{"sql": {"c17"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f18", Type: TypeInfo{Kind: TypeKindComplex128},
 						ColIdent:        ColIdent{Name: "c18"},
 						FilterColumnKey: "f18",
 						Tag:             tagutil.Tag{"sql": {"c18"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f19", Type: TypeInfo{Kind: TypeKindString},
 						ColIdent:        ColIdent{Name: "c19"},
 						FilterColumnKey: "f19",
 						Tag:             tagutil.Tag{"sql": {"c19"}},
+						Mode:            mode_default,
 					}},
 				},
 			},
@@ -3530,6 +3563,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c1"},
 						FilterColumnKey: "f1",
 						Tag:             tagutil.Tag{"sql": {"c1"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f2", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3538,6 +3572,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c2"},
 						FilterColumnKey: "f2",
 						Tag:             tagutil.Tag{"sql": {"c2"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f3", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3546,6 +3581,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c3"},
 						FilterColumnKey: "f3",
 						Tag:             tagutil.Tag{"sql": {"c3"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f4", Type: TypeInfo{
 							Name:       "HardwareAddr",
@@ -3559,6 +3595,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c4"},
 						FilterColumnKey: "f4",
 						Tag:             tagutil.Tag{"sql": {"c4"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f5", Type: TypeInfo{
 							Name:              "RawMessage",
@@ -3574,6 +3611,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c5"},
 						FilterColumnKey: "f5",
 						Tag:             tagutil.Tag{"sql": {"c5"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f6", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3590,6 +3628,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c6"},
 						FilterColumnKey: "f6",
 						Tag:             tagutil.Tag{"sql": {"c6"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f7", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3608,6 +3647,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c7"},
 						FilterColumnKey: "f7",
 						Tag:             tagutil.Tag{"sql": {"c7"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f8", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3619,6 +3659,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c8"},
 						FilterColumnKey: "f8",
 						Tag:             tagutil.Tag{"sql": {"c8"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f9", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3635,6 +3676,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c9"},
 						FilterColumnKey: "f9",
 						Tag:             tagutil.Tag{"sql": {"c9"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f10", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3650,6 +3692,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c10"},
 						FilterColumnKey: "f10",
 						Tag:             tagutil.Tag{"sql": {"c10"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f11", Type: TypeInfo{
 							Kind: TypeKindMap,
@@ -3668,6 +3711,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c11"},
 						FilterColumnKey: "f11",
 						Tag:             tagutil.Tag{"sql": {"c11"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f12", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3683,6 +3727,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c12"},
 						FilterColumnKey: "f12",
 						Tag:             tagutil.Tag{"sql": {"c12"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f13", Type: TypeInfo{
 							Kind: TypeKindSlice,
@@ -3707,6 +3752,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c13"},
 						FilterColumnKey: "f13",
 						Tag:             tagutil.Tag{"sql": {"c13"}},
+						Mode:            mode_default,
 					}},
 				},
 			},
@@ -3734,6 +3780,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c1"},
 						FilterColumnKey: "f1",
 						Tag:             tagutil.Tag{"sql": {"c1"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f2", Type: TypeInfo{
 							Name:              "Unmarshaler",
@@ -3747,6 +3794,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c2"},
 						FilterColumnKey: "f2",
 						Tag:             tagutil.Tag{"sql": {"c2"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f3", Type: TypeInfo{
 							Kind: TypeKindInterface,
@@ -3754,6 +3802,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c3"},
 						FilterColumnKey: "f3",
 						Tag:             tagutil.Tag{"sql": {"c3"}},
+						Mode:            mode_default,
 					}},
 				},
 			},
@@ -3776,6 +3825,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c1"},
 						FilterColumnKey: "f1",
 						Tag:             tagutil.Tag{"sql": {"c1"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f2", Type: TypeInfo{
 							Kind: TypeKindPtr,
@@ -3787,6 +3837,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c2"},
 						FilterColumnKey: "f2",
 						Tag:             tagutil.Tag{"sql": {"c2"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f3", Type: TypeInfo{
 							Name:             "donothing",
@@ -3799,6 +3850,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c3"},
 						FilterColumnKey: "f3",
 						Tag:             tagutil.Tag{"sql": {"c3"}},
+						Mode:            mode_default,
 					}, {
 						Name: "f4", Type: TypeInfo{
 							Kind: TypeKindPtr,
@@ -3814,6 +3866,7 @@ func TestAnalysis_queryStruct(t *testing.T) {
 						ColIdent:        ColIdent{Name: "c4"},
 						FilterColumnKey: "f4",
 						Tag:             tagutil.Tag{"sql": {"c4"}},
+						Mode:            mode_default,
 					}},
 				},
 			},
@@ -4160,6 +4213,7 @@ func makeReltypeT() RelType {
 			Tag:             tagutil.Tag{"sql": {"f"}},
 			ColIdent:        ColIdent{Name: "f"},
 			FilterColumnKey: "F",
+			Mode:            mode_default,
 		}},
 	}
 }
@@ -4180,6 +4234,7 @@ func makeReltypeT2() RelType {
 			Tag:             tagutil.Tag{"sql": {"foo"}},
 			ColIdent:        ColIdent{Name: "foo"},
 			FilterColumnKey: "Foo",
+			Mode:            mode_default,
 		}, {
 			Type:            TypeInfo{Kind: TypeKindString},
 			Name:            "Bar",
@@ -4187,6 +4242,7 @@ func makeReltypeT2() RelType {
 			Tag:             tagutil.Tag{"sql": {"bar"}},
 			ColIdent:        ColIdent{Name: "bar"},
 			FilterColumnKey: "Bar",
+			Mode:            mode_default,
 		}, {
 			Type:            TypeInfo{Kind: TypeKindBool},
 			Name:            "Baz",
@@ -4194,6 +4250,7 @@ func makeReltypeT2() RelType {
 			Tag:             tagutil.Tag{"sql": {"baz"}},
 			ColIdent:        ColIdent{Name: "baz"},
 			FilterColumnKey: "Baz",
+			Mode:            mode_default,
 		}},
 	}
 }
@@ -4214,6 +4271,7 @@ func makeReltypeCT1() RelType {
 			Tag:             tagutil.Tag{"sql": {"col_a"}},
 			ColIdent:        ColIdent{Name: "col_a"},
 			FilterColumnKey: "A",
+			Mode:            mode_default,
 		}, {
 			Type:            TypeInfo{Kind: TypeKindString},
 			Name:            "B",
@@ -4221,7 +4279,7 @@ func makeReltypeCT1() RelType {
 			Tag:             tagutil.Tag{"sql": {"col_b", "nn"}},
 			ColIdent:        ColIdent{Name: "col_b"},
 			FilterColumnKey: "B",
-			TreatAsNotNULL:  true,
+			Mode:            mode_default | mode_notnull,
 		}, {
 			Type:            TypeInfo{Kind: TypeKindBool},
 			Name:            "C",
@@ -4229,6 +4287,7 @@ func makeReltypeCT1() RelType {
 			Tag:             tagutil.Tag{"sql": {"col_c"}},
 			ColIdent:        ColIdent{Name: "col_c"},
 			FilterColumnKey: "C",
+			Mode:            mode_default,
 		}, {
 			Type:            TypeInfo{Kind: TypeKindFloat64},
 			Name:            "D",
@@ -4236,7 +4295,7 @@ func makeReltypeCT1() RelType {
 			Tag:             tagutil.Tag{"sql": {"col_d", "nn"}},
 			ColIdent:        ColIdent{Name: "col_d"},
 			FilterColumnKey: "D",
-			TreatAsNotNULL:  true,
+			Mode:            mode_default | mode_notnull,
 		}, {
 			Type: TypeInfo{
 				Name:              "Time",
@@ -4253,6 +4312,7 @@ func makeReltypeCT1() RelType {
 			Tag:             tagutil.Tag{"sql": {"col_e"}},
 			ColIdent:        ColIdent{Name: "col_e"},
 			FilterColumnKey: "E",
+			Mode:            mode_default,
 		}},
 	}
 

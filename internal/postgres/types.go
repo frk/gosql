@@ -7,8 +7,9 @@ import (
 	"github.com/frk/gosql/internal/postgres/oid"
 )
 
-// //////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // Result Types
+
 type (
 	// FieldWrite holds the information needed by the generator to produce the
 	// expression nodes that constitute a field-to-column write operation.
@@ -394,7 +395,7 @@ func (c *Column) IsNULLable() bool {
 }
 
 func (f *FieldFilter) TreatAsNULLable() bool {
-	return !f.Field.TreatAsNotNULL && !f.Column.HasNotNull
+	return !f.Field.Mode.TreatAsNotNULL() && !f.Column.HasNotNull
 }
 
 // TableJoinConditional implementations

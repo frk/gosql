@@ -203,16 +203,10 @@ type (
 		// If set, holds key to be used in the filter-column-key map
 		// that's produced by the generator.
 		FilterColumnKey string
+		// TODO documentation
+		Mode FieldMode
 		// If set, indicates that the "nullempty" option was used in the field's `sql` tag.
 		NullEmpty bool
-		// If set, indicates that the "ro" option was used in the field's `sql` tag.
-		ReadOnly bool
-		// If set, indicates that the "wo" option was used in the field's `sql` tag.
-		WriteOnly bool
-		// If set, indicates that the "xf" option was used in the field's `sql` tag.
-		ExcludeFilter bool
-		// If set, indicates that the "nn" option was used in the field's `sql` tag.
-		TreatAsNotNULL bool
 		// If set, indicates that the "default" option was used in the field's `sql` tag.
 		UseDefault bool
 		// If set, indicates that the "add" option was used in the field's `sql` tag.
@@ -248,14 +242,8 @@ type (
 		IsExported bool
 		// Indicates whether or not the field type is a pointer type.
 		IsPointer bool
-		// If set, indicates that the "ro" option was used in the field's `sql` tag.
-		ReadOnly bool
-		// If set, indicates that the "wo" option was used in the field's `sql` tag.
-		WriteOnly bool
-		// If set, indicates that the "xf" option was used in the field's `sql` tag.
-		ExcludeFilter bool
-		// If set, indicates that the "nn" option was used in the field's `sql` tag.
-		TreatAsNotNULL bool
+		// TODO documentation
+		Mode FieldMode
 	}
 )
 
@@ -687,29 +675,29 @@ func (t TypeInfo) ImportedTypes() (out []TypeInfo) {
 
 func (f FieldInfo) IsReadOnly() bool {
 	for i := range f.Selector {
-		if f.Selector[i].ReadOnly {
+		if f.Selector[i].Mode.IsReadOnly() {
 			return true
 		}
 	}
-	return f.ReadOnly
+	return f.Mode.IsReadOnly()
 }
 
 func (f FieldInfo) IsWriteOnly() bool {
 	for i := range f.Selector {
-		if f.Selector[i].WriteOnly {
+		if f.Selector[i].Mode.IsWriteOnly() {
 			return true
 		}
 	}
-	return f.WriteOnly
+	return f.Mode.IsWriteOnly()
 }
 
 func (f FieldInfo) ExcludeFromFilter() bool {
 	for i := range f.Selector {
-		if f.Selector[i].ExcludeFilter {
+		if f.Selector[i].Mode.CanExcludeFilter() {
 			return true
 		}
 	}
-	return f.ExcludeFilter
+	return f.Mode.CanExcludeFilter()
 }
 
 func (f FieldInfo) FilterValueConverter() *Identifier {

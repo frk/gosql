@@ -444,9 +444,29 @@ func typeCheckQueryRelField(c *checker, qs *analysis.QueryStruct) error {
 		}
 	} else if qs.Kind == analysis.QueryKindInsert || qs.Kind == analysis.QueryKindUpdate {
 		for _, f := range qs.Rel.Type.Fields {
-			strict := (f.IsReadOnly() == false)
-			if err := typeCheckFieldWrite(c, f, strict); err != nil {
+			w, err := typeCheckFieldWrite(c, f)
+			if err != nil {
 				return err
+			}
+
+			// ✅ If strict=true; the column denoted by the
+			// given field MUST be present in the target relation.
+			strict := (f.IsReadOnly() == false)
+			if w == nil && strict {
+				return c.dbError(dbError{Code: errColumnUnknown,
+					Col: colInfo{Id: f.ColIdent}, Rel: relInfo{Relation: c.rel}}, f)
+			}
+
+			if w != nil {
+				if w.Column.IsPrimary {
+					c.res.PKeys = append(c.res.PKeys, w)
+				}
+				switch {
+				case qs.Kind == analysis.QueryKindInsert && !skipFieldInsert(c, w):
+					c.res.Writes = append(c.res.Writes, w)
+				case qs.Kind == analysis.QueryKindUpdate && !skipFieldUpdate(c, w):
+					c.res.Writes = append(c.res.Writes, w)
+				}
 			}
 		}
 	}
@@ -1250,8 +1270,6 @@ func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 //
 // CHECKLIST:
 //
-//		✅ If strict=true; the column denoted by the given field MUST be present
-//		   in the target relation.
 //		✅ If the given field has the "default" tag, the target column MUST have
 //		   a default data value assigned.
 //		✅ The field's type MAY implement the driver.Valuer interface.
@@ -1268,13 +1286,10 @@ func typeCheckFieldRead(c *checker, f *analysis.FieldInfo, strict bool) error {
 //
 //	    ✅ The field's type MUST be a type that, together with the column's type,
 //	    has an entry in the compatibility table.
-func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
+func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo) (*FieldWrite, error) {
 	col := findRelColumn(c.rel, f.ColIdent.Name)
-	if col == nil && strict {
-		return c.dbError(dbError{Code: errColumnUnknown,
-			Col: colInfo{Id: f.ColIdent}, Rel: relInfo{Relation: c.rel}}, f)
-	} else if col == nil && !strict {
-		return nil
+	if col == nil {
+		return nil, nil
 	}
 
 	check := func(f *analysis.FieldInfo, col *Column) (valuer string, ecode dbErrorCode) {
@@ -1350,24 +1365,17 @@ func typeCheckFieldWrite(c *checker, f *analysis.FieldInfo, strict bool) error {
 
 	valuer, ecode := check(f, col)
 	if ecode > 0 {
-		return c.dbError(dbError{Code: ecode, Rel: relInfo{Relation: c.rel},
+		return nil, c.dbError(dbError{Code: ecode, Rel: relInfo{Relation: c.rel},
 			Col: colInfo{Id: f.ColIdent, Column: col}}, f) // TODO test
 	}
 
-	write := new(FieldWrite)
-	write.Field = f
-	write.Column = col
-	write.ColIdent = f.ColIdent
-	write.ColIdent.Qualifier = c.rid.Alias
-	write.Valuer = valuer
-
-	if col.IsPrimary {
-		c.res.PKeys = append(c.res.PKeys, write)
-	}
-	if !skipFieldWrite(c, write) {
-		c.res.Writes = append(c.res.Writes, write)
-	}
-	return nil
+	w := new(FieldWrite)
+	w.Field = f
+	w.Column = col
+	w.ColIdent = f.ColIdent
+	w.ColIdent.Qualifier = c.rid.Alias
+	w.Valuer = valuer
+	return w, nil
 }
 
 // typeCheckFieldFilter
@@ -1979,9 +1987,14 @@ func loadRelation(c *checker, db *DB, rid analysis.RelIdent, ptr analysis.FieldP
 // Helper Functions
 //
 
-// skipFieldWrite reports whether or not the given FieldWrite should be skipped.
-func skipFieldWrite(c *checker, fw *FieldWrite) bool {
-	return fw.Field.IsReadOnly() && (c.force == nil || !c.force.Contains(fw.ColIdent))
+// skipFieldInsert reports whether or not the given FieldWrite should be skipped for INSERTs.
+func skipFieldInsert(c *checker, fw *FieldWrite) bool {
+	return !fw.Field.Mode.CanInsert() && (c.force == nil || !c.force.Contains(fw.ColIdent))
+}
+
+// skipFieldUpdate reports whether or not the given FieldWrite should be skipped for UPDATEs.
+func skipFieldUpdate(c *checker, fw *FieldWrite) bool {
+	return !fw.Field.Mode.CanUpdate() && (c.force == nil || !c.force.Contains(fw.ColIdent))
 }
 
 // skipFieldRead reports whether or not the given FieldRead should be skipped.
