@@ -38,27 +38,9 @@ func (sqlBinary) canAndOr() bool { return true }
 func (n sqlBinary) write(w *sqlWriter) {
 	w.WriteString(n.col)
 	w.WriteString(" ")
-	w.WriteString(n.op) // can be: "=ANY" / "= ANY"
+	w.WriteString(n.op)
 	w.WriteString(" ")
-	if n.isany {
-		w.WriteString("(")
-	}
 	w.WriteString(gosql.OrdinalParameters[w.p])
-	if n.isany {
-		// NOTE: temp. & incomplete solution
-		cast := ""
-		switch n.val.(type) {
-		case []int:
-			cast = "::int4[]"
-		case []int64:
-			cast = "::int8[]"
-		case []int16:
-			cast = "::int2[]"
-		case []string:
-			cast = "::text[]"
-		}
-		w.WriteString(cast + ")")
-	}
 
 	w.params = append(w.params, n.val)
 	w.p += 1
@@ -189,38 +171,67 @@ func (c *Constructor) InitV2(colmap map[string]Column, tscol string) {
 //
 // The Col method implements part of the gosql.FilterConstructor interface.
 func (c *Constructor) Col(column string, op string, value interface{}) {
-	if c.canAndOr() {
-		c.filter.where = append(c.filter.where, sqlAnd{})
-	}
-	switch value {
-	case nil:
-		switch op {
-		case "=":
-			c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NULL"})
-		case "<>":
-			c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NOT NULL"})
+	switch strings.ToUpper(op) {
+	case "ANY":
+		switch v := value.(type) {
+		case []int64:
+			c.ColAnyInt64s(column, v)
+		case []int:
+			c.ColAnyInts(column, v)
+		case []int16:
+			c.ColAnyInt16s(column, v)
+		case []string:
+			c.ColAnyStrings(column, v)
+		default:
+			// XXX ignore if unsupported type
 		}
-	case true:
-		switch op {
-		case "=":
-			c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS TRUE"})
-		case "<>":
-			c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NOT TRUE"})
+	case "IN":
+		switch v := value.(type) {
+		case []int64:
+			c.ColInInt64s(column, v)
+		case []int:
+			c.ColInInts(column, v)
+		case []int16:
+			c.ColInInt16s(column, v)
+		case []string:
+			c.ColInStrings(column, v)
+		default:
+			// XXX ignore if unsupported type
 		}
-	case false:
-		switch op {
-		case "=":
-			c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS FALSE"})
-		case "<>":
-			c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NOT FALSE"})
-		}
+
 	default:
-		c.filter.where = append(c.filter.where, sqlBinary{
-			col:   column,
-			op:    op,
-			val:   value,
-			isany: strings.HasSuffix(strings.ToLower(op), "any"),
-		})
+		if c.canAndOr() {
+			c.filter.where = append(c.filter.where, sqlAnd{})
+		}
+		switch value {
+		case nil:
+			switch op {
+			case "=":
+				c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NULL"})
+			case "<>":
+				c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NOT NULL"})
+			}
+		case true:
+			switch op {
+			case "=":
+				c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS TRUE"})
+			case "<>":
+				c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NOT TRUE"})
+			}
+		case false:
+			switch op {
+			case "=":
+				c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS FALSE"})
+			case "<>":
+				c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NOT FALSE"})
+			}
+		default:
+			c.filter.where = append(c.filter.where, sqlBinary{
+				col: column,
+				op:  op,
+				val: value,
+			})
+		}
 	}
 }
 

@@ -348,19 +348,26 @@ func TestFilter(t *testing.T) {
 				return err
 			}
 			c.And(func() {
-				c.Col("kyb_assignee_id", "= ANY", []int{123, 3543, 920348, 28})
+				c.Col("col_d", "any", []int{123, 3543, 920348, 28})
 				c.Or(nil)
-				c.Col("sponsor_assignee_id", "= ANY", []int{123, 3543, 920348, 28})
+				c.Col("col_e", "any", []int{123, 3543, 920348, 28})
+				c.Or(nil)
+				c.Col("col_f", "in", []string{"foo", "bar", "baz"})
 			})
 			c.Limit(5)
 			c.Offset(10)
 			return nil
 		},
 		want: result{where: ` WHERE col_a > $1 AND col_b IS NOT NULL ` +
-			`AND (kyb_assignee_id = ANY ($2::int4[]) ` +
-			`OR sponsor_assignee_id = ANY ($3::int4[])) ` +
+			`AND (col_d = ANY($2::int4[]) ` +
+			`OR col_e = ANY($3::int4[]) ` +
+			`OR col_f IN ($4,$5,$6)) ` +
 			`ORDER BY col_c DESC LIMIT 5 OFFSET 10`,
-			params: []interface{}{int64(123), []int{123, 3543, 920348, 28}, []int{123, 3543, 920348, 28}}},
+			params: []interface{}{int64(123),
+				[]int{123, 3543, 920348, 28},
+				[]int{123, 3543, 920348, 28},
+				"foo", "bar", "baz",
+			}},
 	}}
 
 	for _, tt := range tests {
