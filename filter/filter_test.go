@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/frk/compare"
+	"github.com/frk/gosql/pgsql"
 )
 
 // helper
@@ -364,8 +365,8 @@ func TestFilter(t *testing.T) {
 			`OR col_f IN ($4,$5,$6)) ` +
 			`ORDER BY col_c DESC LIMIT 5 OFFSET 10`,
 			params: []interface{}{int64(123),
-				[]int{123, 3543, 920348, 28},
-				[]int{123, 3543, 920348, 28},
+				pgsql.Int4ArrayFromIntSlice([]int{123, 3543, 920348, 28}),
+				pgsql.Int4ArrayFromIntSlice([]int{123, 3543, 920348, 28}),
 				"foo", "bar", "baz",
 			}},
 	}}

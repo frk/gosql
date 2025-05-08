@@ -2,6 +2,7 @@ package filter
 
 import (
 	"github.com/frk/gosql"
+	"github.com/frk/gosql/pgsql"
 )
 
 // An sqlNode representing a IN comparison.
@@ -94,7 +95,7 @@ func (c *Constructor) ColAnyInt64s(column string, values []int64) {
 	}
 	c.filter.where = append(c.filter.where, sqlAny{
 		col:  column,
-		vals: values,
+		vals: pgsql.Int8ArrayFromInt64Slice(values),
 		cast: "::int8[]",
 	})
 }
@@ -105,7 +106,7 @@ func (c *Constructor) ColAnyInts(column string, values []int) {
 	}
 	c.filter.where = append(c.filter.where, sqlAny{
 		col:  column,
-		vals: values,
+		vals: pgsql.Int4ArrayFromIntSlice(values),
 		cast: "::int4[]",
 	})
 }
@@ -116,7 +117,7 @@ func (c *Constructor) ColAnyInt16s(column string, values []int16) {
 	}
 	c.filter.where = append(c.filter.where, sqlAny{
 		col:  column,
-		vals: values,
+		vals: pgsql.Int2ArrayFromInt16Slice(values),
 		cast: "::int2[]",
 	})
 }
@@ -127,7 +128,7 @@ func (c *Constructor) ColAnyStrings(column string, values []string) {
 	}
 	c.filter.where = append(c.filter.where, sqlAny{
 		col:  column,
-		vals: values,
+		vals: pgsql.TextArrayFromStringSlice(values),
 		cast: "::text[]",
 	})
 }
