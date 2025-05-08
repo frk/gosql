@@ -338,6 +338,29 @@ func TestFilter(t *testing.T) {
 			` LIMIT 5` +
 			` OFFSET 10`,
 			params: []interface{}{int64(123), 123, 10, 20, "foo:* & bar:* & baz:*"}},
+	}, {
+		name: "test_=any",
+		run: func(c *Constructor) error {
+			if err := c.UnmarshalFQL("a:>123;b:!null"); err != nil {
+				return err
+			}
+			if err := c.UnmarshalSort("-c"); err != nil {
+				return err
+			}
+			c.And(func() {
+				c.Col("kyb_assignee_id", "= ANY", []int{123, 3543, 920348, 28})
+				c.Or(nil)
+				c.Col("sponsor_assignee_id", "= ANY", []int{123, 3543, 920348, 28})
+			})
+			c.Limit(5)
+			c.Offset(10)
+			return nil
+		},
+		want: result{where: ` WHERE col_a > $1 AND col_b IS NOT NULL ` +
+			`AND (kyb_assignee_id = ANY ($2::int4[]) ` +
+			`OR sponsor_assignee_id = ANY ($3::int4[])) ` +
+			`ORDER BY col_c DESC LIMIT 5 OFFSET 10`,
+			params: []interface{}{int64(123), []int{123, 3543, 920348, 28}, []int{123, 3543, 920348, 28}}},
 	}}
 
 	for _, tt := range tests {

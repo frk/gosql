@@ -27,9 +27,10 @@ type sqlNode interface {
 
 // An sqlNode representing a binary expression.
 type sqlBinary struct {
-	col string      // the LHS column
-	op  string      // the binary comparison operator
-	val interface{} // the RHS value
+	col   string      // the LHS column
+	op    string      // the binary comparison operator
+	val   interface{} // the RHS value
+	isany bool
 }
 
 func (sqlBinary) canAndOr() bool { return true }
@@ -37,9 +38,27 @@ func (sqlBinary) canAndOr() bool { return true }
 func (n sqlBinary) write(w *sqlWriter) {
 	w.WriteString(n.col)
 	w.WriteString(" ")
-	w.WriteString(n.op)
+	w.WriteString(n.op) // can be: "=ANY" / "= ANY"
 	w.WriteString(" ")
+	if n.isany {
+		w.WriteString("(")
+	}
 	w.WriteString(gosql.OrdinalParameters[w.p])
+	if n.isany {
+		// NOTE: temp. & incomplete solution
+		cast := ""
+		switch n.val.(type) {
+		case []int:
+			cast = "::int4[]"
+		case []int64:
+			cast = "::int8[]"
+		case []int16:
+			cast = "::int2[]"
+		case []string:
+			cast = "::text[]"
+		}
+		w.WriteString(cast + ")")
+	}
 
 	w.params = append(w.params, n.val)
 	w.p += 1
@@ -196,7 +215,12 @@ func (c *Constructor) Col(column string, op string, value interface{}) {
 			c.filter.where = append(c.filter.where, sqlUnary{col: column, pred: "IS NOT FALSE"})
 		}
 	default:
-		c.filter.where = append(c.filter.where, sqlBinary{col: column, op: op, val: value})
+		c.filter.where = append(c.filter.where, sqlBinary{
+			col:   column,
+			op:    op,
+			val:   value,
+			isany: strings.HasSuffix(strings.ToLower(op), "any"),
+		})
 	}
 }
 
